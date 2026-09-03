@@ -1,0 +1,19 @@
+# https://lefthook.dev/configuration/
+pre-commit:
+  parallel: false
+  commands:
+    format:
+      glob: '*.{ts,vue,js,json,css,md,html}'
+      run: npx prettier --write {staged_files}
+      stage_fixed: true
+    lint:
+      glob: '*.{ts,vue,js}'
+      run: npx eslint --cache {staged_files}
+    typecheck:
+      # vue-tsc uses project references — must run on the whole project, not staged files
+      run: npm run typecheck
+
+pre-push:
+  commands:
+    test:
+      run: npm test

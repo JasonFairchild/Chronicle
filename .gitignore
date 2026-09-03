@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.claude/settings.local.json
+.claude/*.tmp.*
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test / coverage
+coverage/
+.nyc_output/
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+# Vitest
+__screenshots__/
+
+# PWA dev
+dev-dist/
+
+# TypeScript
+*.tsbuildinfo
+
+# Lint cache
+.eslintcache

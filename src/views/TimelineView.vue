@@ -9,10 +9,6 @@ const store = useEntriesStore()
 onMounted(() => {
   void store.loadRootEntries()
 })
-
-async function handleCreate(content: string): Promise<void> {
-  await store.createTextEntry(content)
-}
 </script>
 
 <template>
@@ -20,10 +16,10 @@ async function handleCreate(content: string): Promise<void> {
     <section>
       <h1 class="mb-2 text-2xl font-semibold tracking-tight">Timeline</h1>
       <p class="mb-6 text-sm text-[var(--color-text-muted)]">
-        Root entries appear here, newest first. Each record is immutable — changes become related
-        entries in later phases.
+        Root entries appear here, newest first. Each record is immutable: edits append a new version
+        and notes become related entries.
       </p>
-      <EntryForm :disabled="store.loading" @submit="handleCreate" />
+      <EntryForm :disabled="store.loading" />
     </section>
 
     <section>

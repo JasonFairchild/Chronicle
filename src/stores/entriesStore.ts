@@ -21,6 +21,7 @@ import {
   type NarrativeRelation,
   type RevisionMode,
 } from '@/types/entry'
+import { toErrorMessage } from '@/utils/format'
 
 export interface CreateChildOptions {
   parentId: string
@@ -62,7 +63,7 @@ export const useEntriesStore = defineStore('entries', () => {
     try {
       rootEntries.value = await aggregateRoots()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to load entries'
+      error.value = toErrorMessage(err, 'Failed to load entries')
       throw err
     } finally {
       loading.value = false

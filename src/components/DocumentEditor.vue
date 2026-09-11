@@ -46,6 +46,7 @@ import {
   type AnchorSpan,
 } from '@/editor/anchorCommands'
 import { entryExtensions } from '@/editor/extensions'
+import { toErrorMessage } from '@/utils/format'
 
 const props = withDefaults(
   defineProps<{
@@ -355,7 +356,7 @@ async function handleFiles(event: Event): Promise<void> {
       .insertContent({ type: MEDIA_NODE, attrs: { mediaRef, alt: file.name } })
       .run()
   } catch (error) {
-    attachError.value = error instanceof Error ? error.message : 'Could not attach that image'
+    attachError.value = toErrorMessage(error, 'Could not attach that image')
   }
 }
 
@@ -486,7 +487,9 @@ defineExpose({
       </button>
     </div>
 
-    <p v-if="attachError" class="px-3 pt-2 text-sm text-red-500" role="alert">{{ attachError }}</p>
+    <p v-if="attachError" class="px-3 pt-2 text-sm text-[var(--color-error)]" role="alert">
+      {{ attachError }}
+    </p>
 
     <EditorContent :editor="editor" class="px-3 py-2 text-sm leading-relaxed" />
   </div>

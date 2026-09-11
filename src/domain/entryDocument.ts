@@ -108,6 +108,20 @@ export function docToPlainText(content: string | EntryDocument): string {
     .join('\n')
 }
 
+/**
+ * A document's body as one line, trimmed to `limit`, for a card, a list row, or a picker label.
+ *
+ * Built on `docToPlainText` like everything else, so a preview and a search hit measure the same
+ * text — which also means anchor-carried wording never leaks into a summary of the parent. `limit`
+ * is all call sites disagree on: a timeline card has a paragraph's worth of room, a picker option
+ * has part of a line. An empty document previews as the empty string rather than inventing a name
+ * for itself, leaving the caller to supply wording that fits where it is being shown.
+ */
+export function previewText(content: string | EntryDocument, limit = 160): string {
+  const singleLine = docToPlainText(content).replace(/\s+/g, ' ').trim()
+  return singleLine.length > limit ? `${singleLine.slice(0, limit - 3)}...` : singleLine
+}
+
 /** Whether the document has a title node at all, regardless of whether it holds any text. */
 export function hasTitleNode(content: string | EntryDocument): boolean {
   return parseDocument(content).content.some((node) => node.type === TITLE_NODE)

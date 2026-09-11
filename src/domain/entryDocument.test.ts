@@ -6,6 +6,7 @@ import {
   isEmptyDocument,
   parseDocument,
   plainTextDocument,
+  previewText,
   sameContent,
   serializeDocument,
   type EntryDocument,
@@ -67,6 +68,40 @@ describe('docToPlainText', () => {
     }
 
     expect(docToPlainText(withBreak)).toBe('Roses\nViolets')
+  })
+})
+
+describe('previewText', () => {
+  it('collapses the body onto one line and leaves the title out of it', () => {
+    expect(previewText(document)).toBe('We drove up on Friday. Snow Pines')
+  })
+
+  it('trims to the limit it is given, counting the ellipsis within it', () => {
+    const long = plainTextDocument('a'.repeat(200))
+
+    expect(previewText(long, 10)).toBe('aaaaaaa...')
+    expect(previewText(plainTextDocument('Short enough'), 60)).toBe('Short enough')
+  })
+
+  it('previews an empty document as nothing, leaving the caller to name it', () => {
+    expect(previewText(plainTextDocument('   \n  '))).toBe('')
+  })
+
+  it('shows only what the entry itself says, not wording an anchor proposes', () => {
+    const annotated: EntryDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'We drove up on Friday.' },
+            { type: 'anchorInsert', attrs: { anchorId: 'a1', text: 'Saturday, actually' } },
+          ],
+        },
+      ],
+    }
+
+    expect(previewText(annotated)).toBe('We drove up on Friday.')
   })
 })
 

@@ -1,4 +1,5 @@
 import { setDraftRepository, setEntryRepository, setMediaRepository } from '@/repositories'
+import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
 import { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
@@ -22,17 +23,39 @@ function uniqueName(label: string): string {
   return `chronicle-test-${label}-${Date.now()}-${counter++}`
 }
 
+/**
+ * The one database entries and drafts share within a test, matching what `repositories/index.ts`
+ * does in production. They must share it: sealing an anchor-mode draft is meant to commit a parent
+ * revision and its child in a single transaction, and a transaction cannot span two connections.
+ * Two databases here would let such a test pass — or fail — for a reason production never sees.
+ *
+ * Opened on first use, so a spec needing only one of the two still opens only one connection, and
+ * cleared by its own disposer so the next test starts from nothing.
+ */
+let database: ChronicleDatabase | null = null
+
+function sharedDatabase(): ChronicleDatabase {
+  if (database) return database
+
+  const opened = new ChronicleDatabase(uniqueName('db'))
+  database = opened
+  disposers.push(async () => {
+    database = null
+    await opened.delete()
+  })
+
+  return opened
+}
+
 export function freshEntryRepository(): DexieEntryRepository {
-  const repository = new DexieEntryRepository(uniqueName('entries'))
+  const repository = new DexieEntryRepository(sharedDatabase())
   setEntryRepository(repository)
-  disposers.push(() => repository.dispose())
   return repository
 }
 
 export function freshDraftRepository(): DexieDraftRepository {
-  const repository = new DexieDraftRepository(uniqueName('drafts'))
+  const repository = new DexieDraftRepository(sharedDatabase())
   setDraftRepository(repository)
-  disposers.push(() => repository.dispose())
   return repository
 }
 

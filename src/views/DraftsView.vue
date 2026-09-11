@@ -2,10 +2,14 @@
 import { onMounted, ref } from 'vue'
 import DocumentEditor from '@/components/DocumentEditor.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
-import { docToPlainText, isEmptyDocument } from '@/domain/entryDocument'
+import { isEmptyDocument, previewText } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { Draft, DraftTarget } from '@/types/draft'
+import { formatDate, toErrorMessage } from '@/utils/format'
+
+/** A draft's own text is shown at full width here, so it gets more room than a picker label would. */
+const PREVIEW_LIMIT = 120
 
 const drafts = useDraftsStore()
 const store = useEntriesStore()
@@ -27,7 +31,7 @@ async function refresh(): Promise<void> {
     await drafts.loadDrafts()
     await loadParentLabels()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load drafts'
+    error.value = toErrorMessage(err, 'Failed to load drafts')
   }
 }
 
@@ -40,7 +44,8 @@ async function loadParentLabels(): Promise<void> {
 
   const labels: Record<string, string> = {}
   parents.forEach((parent, index) => {
-    if (parent) labels[parentIds[index]!] = parent.title ?? preview(docToPlainText(parent.content))
+    if (!parent) return
+    labels[parentIds[index]!] = parent.title ?? previewText(parent.content, PREVIEW_LIMIT)
   })
 
   parentLabels.value = labels
@@ -83,7 +88,7 @@ async function seal(): Promise<void> {
     const saved = await session.save()
     if (saved) await refresh()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to save entry'
+    error.value = toErrorMessage(err, 'Failed to save entry')
   }
 }
 
@@ -103,19 +108,8 @@ async function discard(sessionId: string): Promise<void> {
     }
     await refresh()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to discard draft'
+    error.value = toErrorMessage(err, 'Failed to discard draft')
   }
-}
-
-function preview(text: string): string {
-  const singleLine = text.replace(/\s+/g, ' ').trim()
-  return singleLine.length > 120 ? `${singleLine.slice(0, 117)}...` : singleLine
-}
-
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(iso),
-  )
 }
 </script>
 
@@ -129,7 +123,7 @@ function formatDate(iso: string): string {
       </p>
     </section>
 
-    <p v-if="error" class="text-sm text-red-500" role="alert">{{ error }}</p>
+    <p v-if="error" class="text-sm text-[var(--color-error)]" role="alert">{{ error }}</p>
 
     <p
       v-if="drafts.drafts.length === 0"
@@ -183,7 +177,7 @@ function formatDate(iso: string): string {
 
         <template v-else>
           <p class="whitespace-pre-wrap text-sm leading-relaxed">
-            {{ preview(docToPlainText(draft.content)) }}
+            {{ previewText(draft.content, PREVIEW_LIMIT) }}
           </p>
 
           <div class="mt-3 flex justify-end gap-2">

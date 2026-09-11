@@ -5,6 +5,7 @@ import { isEmptyDocument } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import type { Draft, DraftTarget } from '@/types/draft'
 import { newEntryId, newEntryTimestamp, type Entry, type TickReason } from '@/types/entry'
+import { toErrorMessage } from '@/utils/format'
 import { useEntriesStore } from './entriesStore'
 
 /**
@@ -268,7 +269,7 @@ export const useDraftsStore = defineStore('drafts', () => {
 
       return created
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to save entry'
+      error.value = toErrorMessage(err, 'Failed to save entry')
       throw err
     }
   }
@@ -314,7 +315,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     try {
       drafts.value = await draftRepository.list()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to load drafts'
+      error.value = toErrorMessage(err, 'Failed to load drafts')
       throw err
     }
   }

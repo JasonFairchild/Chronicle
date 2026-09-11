@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { isEmptyDocument } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
+import { toErrorMessage } from '@/utils/format'
 
 const props = defineProps<{
   disabled?: boolean
@@ -42,7 +43,7 @@ async function handleSubmit(): Promise<void> {
     sessionId.value = drafts.beginDraft({ kind: 'new_root' })
     content.value = ''
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to save entry'
+    error.value = toErrorMessage(err, 'Failed to save entry')
   } finally {
     saving.value = false
   }
@@ -71,7 +72,7 @@ onBeforeUnmount(() => {
       @change="handleChange"
     />
 
-    <p v-if="error" class="mt-2 text-sm text-red-500" role="alert">{{ error }}</p>
+    <p v-if="error" class="mt-2 text-sm text-[var(--color-error)]" role="alert">{{ error }}</p>
 
     <div class="mt-3 flex items-center justify-between gap-3">
       <p class="text-xs text-[var(--color-text-muted)]">

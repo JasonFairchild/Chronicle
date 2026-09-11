@@ -1,27 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { docToPlainText } from '@/domain/entryDocument'
+import { previewText } from '@/domain/entryDocument'
 import type { AggregatedEntry } from '@/types/entry'
+import { formatDate } from '@/utils/format'
 
 const props = defineProps<{
   entry: AggregatedEntry
 }>()
 
 /** The same flattening the detail view and search use, so a card never shows raw serialized JSON. */
-const summary = computed(() => preview(docToPlainText(props.entry.content)))
-
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(iso))
-}
-
-function preview(text: string): string {
-  const singleLine = text.replace(/\s+/g, ' ').trim()
-  return singleLine.length > 160 ? `${singleLine.slice(0, 157)}...` : singleLine
-}
+const summary = computed(() => previewText(props.entry.content))
 
 /** Shown only once an entry has actually been revised, so an untouched entry stays quiet. */
 const revisionCount = computed(() => props.entry.version.total - 1)

@@ -167,47 +167,44 @@ Genuinely deferred rather than rejected — worth another look later, but not no
   shared `nodeText` helper `docToPlainText` already called, so `sameContent` itself never changed —
   but the walk-per-keystroke cost itself is unaddressed and still worth revisiting sometime.
 
-### Still to do from the September 2026 review pass
+### The September 2026 review pass — closed
 
-A code-review pass (2026-09-11) found these; the correctness/race-condition half of its findings is
-already fixed and committed. This half — dedup and finishing gaps, none of it touching anchors — was
-queued next but not yet done when work paused to clear the session:
+A code-review pass (2026-09-11) found two halves of work. The correctness/race-condition half was
+fixed and committed first; this half — dedup and finishing gaps, none of it touching anchors — is
+now done too. What it came to:
 
-- **`ConnectionForm.vue` has the same dead `submitting` guard** as `ChildEntryForm` above, but
-  `ConnectionForm` is not being rebuilt, so this one should actually be removed: the state can never
-  be observed true (`handleSubmit` sets it, emits synchronously, resets it in `finally`, all before
-  Vue flushes a render), so it and its `:disabled` bindings are dead weight.
-- **Missing tests for `src/composables/useMedia.ts`.** Still true. `editor/` is no longer bare:
-  the anchor-mode mechanism it added (`Anchor`, `AnchorInsert` in `extensions.ts`; `isAnchorEdit`,
-  `addAnchorMark`, `addAnchorInsert`, `anchorSpans`/`mapAnchorSpans` in `anchorCommands.ts`) now
-  has coverage in `DocumentEditor.browser.test.ts`'s "anchor mode" suite (and its `.cy.ts`
-  mirror), and pure logic moved out to node-tested `domain/anchors.ts` / `domain/anchorWarnings.ts`
-  where it could be.
-- **Hard-coded `text-red-500`** in `DocumentEditor.vue`, `EntryForm.vue`, `DraftsView.vue`, and
-  `EntryDetailView.vue` — every other color in these files routes through the `--color-*` token
-  system; this is the one thing that doesn't. Needs a `--color-error` token (with a `.dark` variant)
-  in `src/assets/main.css`, then swap all four call sites.
-- **`preview()`, `formatDate()`, and the `err instanceof Error ? err.message : …` pattern are each
-  copy-pasted three-plus times** across `TimelineCard.vue`, `EntryDetailView.vue`, and `DraftsView.vue`
-  (`preview`/`formatDate` already disagree on their limits/styles between copies). Consolidate
-  `preview`/`formatDate` near `entryDocument.ts` (they always wrap `docToPlainText` output) and the
-  error-message pattern into a small `toErrorMessage(err, fallback)` helper.
-- **`EntryDetailView.vue` and `DraftsView.vue` duplicate the whole "edit an open draft session"
-  scaffold** (mirror a `draftsStore` session's content into a local ref, track a saving flag, forward
-  `DocumentEditor`'s `@change`, wrap save/discard in the same try/catch) and have already drifted —
-  `DraftsView` guards on `isEmptyDocument` before sealing, `EntryDetailView` doesn't. This predicted
-  its own worsening correctly: `EntryDetailView.vue` now carries a _third_ copy of the pattern for
-  the anchor-mode session (`childSession`/`childParentContent`/`childNoteContent`/`savingChild`,
-  plus a fourth thread of state for the revision warning), landed inline rather than through a shared
-  composable for lack of turnaround time. `useDraftSession` (or similar) is more overdue now than
-  when this was first written, not less.
-- **`src/testing/realRepositories.ts` gives entries and drafts two separate Dexie connections**
-  (`freshEntryRepository()` / `freshDraftRepository()` each open their own uniquely-named database),
-  while `src/repositories/index.ts` deliberately shares one `ChronicleDatabase` between them in
-  production. No current test exercises a transaction spanning both, so nothing fails today — but a
-  future one added as part of the anchor-mode atomic seal (parent revision + child, one commit) would
-  work in production and silently diverge in any test using both repositories together. Fix by
-  sharing one `ChronicleDatabase` instance in the test helper, matching the composition root.
+- **`ConnectionForm.vue`'s dead `submitting` guard is gone.** It could never be observed true
+  (`handleSubmit` set it, emitted synchronously, and reset it in `finally`, all before Vue flushed a
+  render), so it and its `:disabled` bindings were dead weight. Whether a save is actually in flight
+  is the parent's to know, and it already says so through the `disabled` prop, which stays.
+- **`src/composables/useMedia.ts` now has tests** — `useMedia.browser.test.ts`, covering URL reuse
+  per id, a missing blob resolving to null rather than a broken URL, `applyTo` filling in only
+  unresolved images and labelling the ones whose blob has gone, and revocation on scope disposal.
+  Vitest Browser Mode only, and no Cypress mirror: a composable is not a component, the same reason
+  `DexieEntryRepository` is proven in one runner (TESTING.md, "Not everything belongs in Cypress").
+- **`--color-error` exists** in `src/assets/main.css` with a `.dark` variant, and every
+  `text-red-500` is gone — the four call sites the review named plus `TimelineView.vue`, which has
+  the same store-error paragraph and would otherwise have been the one hard-coded colour left.
+- **`preview()`, `formatDate()`, and the error-message ternary are each written once.**
+  `previewText(content, limit)` lives in `domain/entryDocument.ts`, taking stored content rather
+  than pre-flattened text so the `docToPlainText` call is inside it too; `formatDate(iso, dateStyle)`
+  and `toErrorMessage(err, fallback)` live in the new `src/utils/format.ts`, which is display
+  formatting and deliberately not domain. The copies disagreed, so consolidating had to make
+  choices: preview limits stayed per-call-site as an argument (160 on a timeline card, 120 on a
+  draft row, 60 for a picker label), `previewText` returns the empty string for an empty document
+  instead of naming it, and `EntryDetailView`'s `entryLabel` supplies "Untitled entry" where a blank
+  row would otherwise appear. `toErrorMessage` also falls back on an `Error` with an empty message,
+  which no copy did. The two stores were swapped over as well, since leaving three hand-rolled
+  copies behind is the drift this item was about.
+- **The duplicated "edit an open draft session" scaffold** was resolved earlier, by the
+  `useDraftSession` composable in the 2026-09-11 simplification commit. The one thread still tracked
+  by hand is `EntryDetailView`'s `childParentContent` — the parent document gaining provisional
+  anchors, which is a second document the composable does not model and which is documented as such
+  at its declaration.
+- **`src/testing/realRepositories.ts` shares one `ChronicleDatabase`** between entries and drafts,
+  matching the composition root. It is opened on first use, so a spec needing only one of the two
+  still opens only one connection. This is what lets a future test of the anchor-mode atomic seal
+  (parent revision + child, one transaction) run against the shape production actually has.
 
 ## Implementation Rules for the AI
 

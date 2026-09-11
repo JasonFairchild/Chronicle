@@ -26,7 +26,7 @@ onMounted(() => {
       <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
         Entries
       </h2>
-      <p v-if="store.error" class="mb-4 text-sm text-red-500" role="alert">
+      <p v-if="store.error" class="mb-4 text-sm text-[var(--color-error)]" role="alert">
         {{ store.error }}
       </p>
       <EntryList :entries="store.rootEntries" />

@@ -128,14 +128,17 @@ merely shortens an assertion does not.
   helpers in `src/testing/realRepositories.ts`:
 
   ```ts
-  entries = freshEntryRepository() // DexieEntryRepository, unique database, real IndexedDB
+  entries = freshEntryRepository() // DexieEntryRepository, real IndexedDB
   freshDraftRepository()
   freshMediaRepository()
   ```
 
   Call only the ones a given spec actually needs — `ChildEntryForm`/`ConnectionForm` call none of
-  them, since neither touches storage. Each helper mints a unique database name / OPFS directory
-  and registers it for cleanup; `cypress/support/component.ts` and `src/testing/browserSetup.ts`
+  them, since neither touches storage. Entries and drafts share one uniquely-named database per
+  test, exactly as `src/repositories/index.ts` shares one in production — a transaction cannot span
+  two connections, so a spec covering the anchor-mode atomic seal has to be given the shape it will
+  actually run against. Media gets its own OPFS directory. Everything created registers itself for
+  cleanup; `cypress/support/component.ts` and `src/testing/browserSetup.ts`
   each dispose everything created in one global `afterEach`, so a spec that creates nothing pays
   nothing. Plain-Node `*.test.ts` unit tests are the exception: IndexedDB/OPFS don't exist in Node,
   so those still swap in `InMemoryEntryRepository` / `InMemoryDraftRepository` /
@@ -173,13 +176,16 @@ Don't introduce a helper purely to reduce vertical size. Readability beats densi
 
 VS Code sets `ELECTRON_RUN_AS_NODE=1` in its terminals and extension host. `Cypress.exe` is an
 Electron binary, and that variable makes it launch as plain Node, so it reports Node's version and
-rejects Cypress's own flags (`bad option: --smoke-test`). Unset it for the run:
+rejects Cypress's own flags (`bad option: --smoke-test`, or npm dying with `Illegal instruction`).
+Unset it for the run, wrapping the whole command — `npm run cy:run` under that variable still dies,
+so go straight to the binary:
 
 ```sh
-env -u ELECTRON_RUN_AS_NODE npx cypress run --component
+env -u ELECTRON_RUN_AS_NODE npx cypress run --component --browser=chrome
 ```
 
-Nothing is wrong with the install when that happens, so don't clear the binary cache over it.
+Nothing is wrong with the install when that happens, so don't clear the binary cache over it. The
+suite passes this way; a crash here is the variable, never a reason to skip running Cypress.
 
 ## Coverage
 

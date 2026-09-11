@@ -9,10 +9,11 @@ import ConnectionForm, {
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useMedia } from '@/composables/useMedia'
-import { docToPlainText, hasTitleNode } from '@/domain/entryDocument'
+import { docToPlainText, hasTitleNode, previewText } from '@/domain/entryDocument'
 import type { AggregatedEntry, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
+import { formatDate, toErrorMessage } from '@/utils/format'
 
 const props = defineProps<{
   id: string
@@ -74,10 +75,7 @@ const revisionWarnings = computed<string[]>(() => {
   const owners = new Map<string, string>()
   for (const child of aggregated.value?.children ?? []) {
     for (const anchor of child.anchors) {
-      owners.set(
-        anchor.anchor_id,
-        child.entry.title ?? preview(docToPlainText(child.entry.content)),
-      )
+      owners.set(anchor.anchor_id, entryLabel(child.entry))
     }
   }
 
@@ -89,11 +87,20 @@ const revisionWarnings = computed<string[]>(() => {
 const connectionCandidates = computed<ConnectionCandidate[]>(() =>
   store.rootEntries
     .filter((entry) => entry.id !== props.id)
-    .map((entry) => ({
-      id: entry.id,
-      label: entry.title ?? preview(docToPlainText(entry.content)),
-    })),
+    .map((entry) => ({ id: entry.id, label: entryLabel(entry) })),
 )
+
+/**
+ * How to name another entry where only one line fits — a picker option, or the note a revision
+ * warning is about. Its title if it has one, otherwise the opening of what it says; an entry with
+ * neither still needs naming rather than appearing as a blank row.
+ *
+ * Structurally typed on the two fields it reads, because it names both stored entries and the
+ * aggregated form the timeline hands back, and neither is a subtype of the other.
+ */
+function entryLabel(entry: { title: string | null; content: string }): string {
+  return entry.title || previewText(entry.content, 60) || 'Untitled entry'
+}
 
 async function loadEntry(entryId: string): Promise<void> {
   loading.value = true
@@ -106,7 +113,7 @@ async function loadEntry(entryId: string): Promise<void> {
     // entry (from before navigating here) is cleared rather than left on screen under a
     // mismatched id.
     aggregated.value = null
-    error.value = err instanceof Error ? err.message : 'Failed to load entry'
+    error.value = toErrorMessage(err, 'Failed to load entry')
   } finally {
     loading.value = false
   }
@@ -162,7 +169,7 @@ async function handleAddChild(submission: ChildEntrySubmission): Promise<void> {
     })
     await loadEntry(props.id)
   } catch (err) {
-    actionError.value = err instanceof Error ? err.message : 'Failed to add entry'
+    actionError.value = toErrorMessage(err, 'Failed to add entry')
   }
 }
 
@@ -178,7 +185,7 @@ async function handleAddConnection(submission: ConnectionSubmission): Promise<vo
     })
     await loadEntry(props.id)
   } catch (err) {
-    actionError.value = err instanceof Error ? err.message : 'Failed to add connection'
+    actionError.value = toErrorMessage(err, 'Failed to add connection')
   }
 }
 
@@ -206,7 +213,7 @@ async function saveRevision(): Promise<void> {
     const saved = await revisionSession.save()
     if (saved) await loadEntry(props.id)
   } catch (err) {
-    actionError.value = err instanceof Error ? err.message : 'Failed to save revision'
+    actionError.value = toErrorMessage(err, 'Failed to save revision')
   }
 }
 
@@ -249,24 +256,12 @@ async function saveChildEntry(): Promise<void> {
     const saved = await childSession.save()
     if (saved) await loadEntry(props.id)
   } catch (err) {
-    actionError.value = err instanceof Error ? err.message : 'Failed to add entry'
+    actionError.value = toErrorMessage(err, 'Failed to add entry')
   }
 }
 
 async function cancelChildEntry(): Promise<void> {
   await childSession.discard()
-}
-
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'full',
-    timeStyle: 'short',
-  }).format(new Date(iso))
-}
-
-function preview(text: string): string {
-  const singleLine = text.replace(/\s+/g, ' ').trim()
-  return singleLine.length > 60 ? `${singleLine.slice(0, 57)}...` : singleLine || 'Untitled entry'
 }
 
 /**
@@ -306,14 +301,16 @@ function describeAnchor(resolved: ResolvedAnchor): string {
 
     <div v-if="loading" class="text-sm text-[var(--color-text-muted)]">Loading entry...</div>
 
-    <div v-else-if="error" class="text-sm text-red-500" role="alert">{{ error }}</div>
+    <div v-else-if="error" class="text-sm text-[var(--color-error)]" role="alert">{{ error }}</div>
 
     <div v-else-if="!aggregated" class="text-sm text-[var(--color-text-muted)]">
       Entry not found.
     </div>
 
     <template v-else>
-      <p v-if="actionError" class="text-sm text-red-500" role="alert">{{ actionError }}</p>
+      <p v-if="actionError" class="text-sm text-[var(--color-error)]" role="alert">
+        {{ actionError }}
+      </p>
 
       <article class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
         <header
@@ -322,7 +319,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           <div>
             <h1 class="text-xl font-semibold">{{ heading }}</h1>
             <p class="mt-1 text-sm text-[var(--color-text-muted)]">
-              Created {{ formatDate(aggregated.created_at) }}
+              Created {{ formatDate(aggregated.created_at, 'full') }}
               <span v-if="versionLabel"> · {{ versionLabel }}</span>
             </p>
           </div>

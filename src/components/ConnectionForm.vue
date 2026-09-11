@@ -29,28 +29,26 @@ const emit = defineEmits<{
 const toId = ref('')
 const label = ref('')
 const content = ref('')
-const submitting = ref(false)
 
 // Direction is meaningful, so a connection needs a destination and nothing else is optional about
 // it. The note and the wording are both allowed to be empty: the edge itself is the claim.
-const canSubmit = computed(() => Boolean(toId.value) && !props.disabled && !submitting.value)
+//
+// There is no in-flight flag of this form's own: `submit` is emitted synchronously and this
+// function has returned before Vue renders again, so such a flag could never be observed true.
+// Whether a save is actually running is the parent's to know, and it says so through `disabled`.
+const canSubmit = computed(() => Boolean(toId.value) && !props.disabled)
 
 function handleSubmit(): void {
   if (!canSubmit.value) return
 
-  submitting.value = true
-  try {
-    emit('submit', {
-      toId: toId.value,
-      label: label.value.trim(),
-      content: content.value.trim(),
-    })
-    toId.value = ''
-    label.value = ''
-    content.value = ''
-  } finally {
-    submitting.value = false
-  }
+  emit('submit', {
+    toId: toId.value,
+    label: label.value.trim(),
+    content: content.value.trim(),
+  })
+  toId.value = ''
+  label.value = ''
+  content.value = ''
 }
 </script>
 
@@ -69,7 +67,7 @@ function handleSubmit(): void {
         id="connection-target"
         v-model="toId"
         class="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)] px-3 py-2 text-sm"
-        :disabled="disabled || submitting"
+        :disabled="disabled"
       >
         <option value="">Choose an entry</option>
         <option v-for="candidate in candidates" :key="candidate.id" :value="candidate.id">
@@ -86,7 +84,7 @@ function handleSubmit(): void {
         type="text"
         class="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20"
         placeholder="led to, answers, contradicts..."
-        :disabled="disabled || submitting"
+        :disabled="disabled"
       />
 
       <label for="connection-note" class="mt-3 mb-2 block text-sm font-medium">
@@ -98,7 +96,7 @@ function handleSubmit(): void {
         rows="2"
         class="w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20"
         placeholder="Optional. A connection is an entry too, so it can be annotated later."
-        :disabled="disabled || submitting"
+        :disabled="disabled"
       />
 
       <div class="mt-3 flex justify-end">

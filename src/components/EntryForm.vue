@@ -1,29 +1,57 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import { isEmptyDocument } from '@/domain/entryDocument'
+import { useDraftsStore } from '@/stores/draftsStore'
 
-const emit = defineEmits<{
-  submit: [content: string]
-}>()
-
-const content = ref('')
-const submitting = ref(false)
-
-defineProps<{
+const props = defineProps<{
   disabled?: boolean
 }>()
 
-async function handleSubmit(): Promise<void> {
-  const trimmed = content.value.trim()
-  if (!trimmed || submitting.value) return
+const drafts = useDraftsStore()
 
-  submitting.value = true
+/**
+ * Typing here is a draft session, not an entry. Nothing reaches the entries table until someone
+ * presses Save, and nothing is lost in the meantime: the buffer flushes on a short debounce, so a
+ * closed laptop costs a fraction of a sentence rather than the whole thought.
+ */
+const sessionId = ref(drafts.beginDraft({ kind: 'new_root' }))
+const content = ref('')
+const saving = ref(false)
+const error = ref<string | null>(null)
+
+const canSave = computed(() => !isEmptyDocument(content.value) && !props.disabled && !saving.value)
+
+function handleChange(change: EditorChange): void {
+  content.value = change.content
+  drafts.recordChange(sessionId.value, change)
+}
+
+async function handleSubmit(): Promise<void> {
+  if (!canSave.value) return
+
+  saving.value = true
+  error.value = null
+
   try {
-    emit('submit', trimmed)
+    // Sealing refreshes the timeline through the entries store, so there is nothing to tell a
+    // parent about: the outcome is already visible wherever entries are read.
+    await drafts.sealDraft(sessionId.value)
+    // A sealed session is finished. The next entry is a new one, and re-keying the editor is what
+    // gives it a genuinely empty document rather than a cleared-out old one.
+    sessionId.value = drafts.beginDraft({ kind: 'new_root' })
     content.value = ''
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to save entry'
   } finally {
-    submitting.value = false
+    saving.value = false
   }
 }
+
+// Whatever is pending has to reach disk before this component goes away.
+onBeforeUnmount(() => {
+  void drafts.flush(sessionId.value)
+})
 </script>
 
 <template>
@@ -31,20 +59,26 @@ async function handleSubmit(): Promise<void> {
     class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm"
     @submit.prevent="handleSubmit"
   >
-    <label for="entry-content" class="mb-2 block text-sm font-medium"> New entry </label>
-    <textarea
-      id="entry-content"
-      v-model="content"
-      rows="4"
-      class="w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20"
-      placeholder="Write something worth remembering..."
-      :disabled="disabled || submitting"
+    <p class="mb-2 text-sm font-medium">New entry</p>
+
+    <DocumentEditor
+      :key="sessionId"
+      label="New entry"
+      with-title
+      :disabled="disabled || saving"
+      @change="handleChange"
     />
-    <div class="mt-3 flex justify-end">
+
+    <p v-if="error" class="mt-2 text-sm text-red-500" role="alert">{{ error }}</p>
+
+    <div class="mt-3 flex items-center justify-between gap-3">
+      <p class="text-xs text-[var(--color-text-muted)]">
+        Saved as a draft while you write. Nothing joins the timeline until you save it.
+      </p>
       <button
         type="submit"
         class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="disabled || submitting || !content.trim()"
+        :disabled="!canSave"
       >
         Save entry
       </button>

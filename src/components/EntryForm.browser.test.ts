@@ -1,23 +1,84 @@
-import { describe, expect, it } from 'vitest'
-import { render } from 'vitest-browser-vue'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { userEvent } from 'vitest/browser'
 import EntryForm from '@/components/EntryForm.vue'
+import { docToPlainText } from '@/domain/entryDocument'
+import { draftRepository } from '@/repositories'
+import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
+import { renderComponent } from '@/testing/renderComponent'
+import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
 describe('EntryForm (browser)', () => {
-  it('emits submit with trimmed content', async () => {
-    const submitted: string[] = []
-    const screen = render(EntryForm, {
-      props: {
-        onSubmit: (content: string) => {
-          submitted.push(content)
-        },
-      },
-    })
+  let entries: DexieEntryRepository
 
-    const textarea = screen.getByPlaceholder('Write something worth remembering...')
-    await textarea.fill('  Hello from browser test  ')
+  beforeEach(() => {
+    entries = freshEntryRepository()
+    freshDraftRepository()
+  })
+
+  function mountForm(props: { disabled?: boolean } = {}) {
+    return renderComponent(EntryForm, { props })
+  }
+
+  it('holds a session as a draft and commits one entry only when it is saved', async () => {
+    const screen = mountForm()
+
+    await screen.getByRole('heading').click()
+    await userEvent.keyboard('Lake Tahoe{Enter}We drove up on Friday.')
+
+    // Still a draft: nothing a person has not finished belongs in the timeline.
+    expect(await entries.listRootEntries()).toEqual([])
 
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
-    expect(submitted).toEqual(['Hello from browser test'])
+    await vi.waitFor(async () => {
+      expect(await entries.listRootEntries()).toHaveLength(1)
+    })
+
+    const [saved] = await entries.listRootEntries()
+    expect(saved?.title).toBe('Lake Tahoe')
+    expect(docToPlainText(saved!.content)).toBe('We drove up on Friday.')
+    expect(saved?.authoring_trace?.steps.length).toBeGreaterThan(0)
+    // The buffer is working space, so sealing discards it rather than leaving a duplicate behind.
+    expect(await draftRepository.list()).toEqual([])
+  })
+
+  it('starts a fresh empty session after a save rather than reopening the last one', async () => {
+    const screen = mountForm()
+
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('First entry')
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+
+    await vi.waitFor(async () => {
+      expect(await entries.listRootEntries()).toHaveLength(1)
+    })
+
+    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeDisabled()
+    await vi.waitFor(() => {
+      expect(screen.getByText('First entry').query()).toBeNull()
+    })
+  })
+
+  it('leaves no draft behind for a composer that was only opened', async () => {
+    const screen = mountForm({ disabled: true })
+
+    // What the timeline finishing its load looks like from here. An editor becoming editable is
+    // not an edit, and treating it as one used to start a writing session nobody began — one
+    // empty draft per visit to the page.
+    await screen.rerender({ disabled: false })
+    screen.unmount()
+
+    await vi.waitFor(async () => {
+      expect(await draftRepository.list()).toEqual([])
+    })
+  })
+
+  it('will not save an empty document', async () => {
+    const screen = mountForm()
+
+    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeDisabled()
+
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('   ')
+
+    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeDisabled()
   })
 })

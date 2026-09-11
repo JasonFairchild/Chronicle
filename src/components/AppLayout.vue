@@ -7,7 +7,10 @@ import { RouterLink } from 'vue-router'
     <header class="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
       <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
         <RouterLink to="/" class="text-lg font-semibold tracking-tight"> Chronicle </RouterLink>
-        <p class="text-sm text-[var(--color-text-muted)]">Local-first life mapping</p>
+        <nav class="flex items-center gap-4 text-sm">
+          <RouterLink to="/" class="hover:text-[var(--color-accent)]">Timeline</RouterLink>
+          <RouterLink to="/drafts" class="hover:text-[var(--color-accent)]">Drafts</RouterLink>
+        </nav>
       </div>
     </header>
 

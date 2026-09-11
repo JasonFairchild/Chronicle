@@ -1,0 +1,235 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { plainTextDocument, serializeDocument } from '@/domain/entryDocument'
+import {
+  draftRepository,
+  entryRepository,
+  setDraftRepository,
+  setEntryRepository,
+} from '@/repositories'
+import { InMemoryDraftRepository } from '@/repositories/inMemoryDraftRepository'
+import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
+import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
+import { useEntriesStore } from '@/stores/entriesStore'
+
+describe('useDraftsStore', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    // Fresh in-memory adapters per test. The Dexie ones get their own persistence proof in
+    // dexieDraftRepository.browser.test.ts; the store only needs to prove it talks to whatever
+    // the composition root points at.
+    setEntryRepository(new InMemoryEntryRepository())
+    setDraftRepository(new InMemoryDraftRepository())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('writes nothing for a composer that was opened and walked away from', async () => {
+    const store = useDraftsStore()
+
+    store.beginDraft({ kind: 'new_root' })
+    await store.loadDrafts()
+
+    expect(store.drafts).toEqual([])
+  })
+
+  it('coalesces a burst of typing into one write, then keeps the words after a reload', async () => {
+    vi.useFakeTimers()
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+
+    store.recordChange(sessionId, { content: 'It rai', steps: [{ stepType: 'replace' }] })
+    store.recordChange(sessionId, { content: 'It rained', steps: [{ stepType: 'replace' }] })
+    store.recordChange(sessionId, {
+      content: 'It rained all day.',
+      steps: [{ stepType: 'replace' }],
+    })
+
+    expect(await draftRepository.getById(sessionId)).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+
+    const flushed = await draftRepository.getById(sessionId)
+    expect(flushed?.content).toBe('It rained all day.')
+    expect(flushed?.steps).toHaveLength(3)
+  })
+
+  it('seals a draft into one immutable entry carrying the trace, and clears the buffer', async () => {
+    const store = useDraftsStore()
+    const entries = useEntriesStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+    const content = serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe'))
+
+    store.recordChange(sessionId, {
+      content,
+      steps: [{ stepType: 'replace' }],
+      insertedText: 'We drove up on Friday.',
+    })
+    const sealed = await store.sealDraft(sessionId)
+
+    const stored = await entries.getEntry(sealed.id)
+    expect(stored?.title).toBe('Lake Tahoe')
+    expect(stored?.authoring_trace?.session_id).toBe(sessionId)
+    expect(stored?.authoring_trace?.ticks.map((tick) => tick.reason)).toEqual(['punctuation'])
+    expect(await draftRepository.getById(sessionId)).toBeNull()
+    expect(store.drafts).toEqual([])
+  })
+
+  it('seals a child draft onto its parent, keeping the anchors it was composing', async () => {
+    const store = useDraftsStore()
+    const parent = await entryRepository.create({
+      parent_id: null,
+      relation_type: null,
+      target_id: null,
+      title: null,
+      content: 'The meeting went badly',
+      anchors: [],
+      authoring_trace: null,
+      media_refs: [],
+      metadata: {},
+    })
+
+    const sessionId = store.beginDraft(
+      { kind: 'new_child', parent_id: parent.id, relation_type: 'annotation' },
+      {
+        anchors: [
+          {
+            kind: 'comment',
+            at: {
+              from: 4,
+              to: 11,
+              base_version_id: null,
+              quote: 'meeting',
+              prefix: 'The ',
+              suffix: ' went',
+            },
+          },
+        ],
+      },
+    )
+    store.recordChange(sessionId, {
+      content: 'It was salvaged later.',
+      steps: [{ stepType: 'replace' }],
+    })
+    const sealed = await store.sealDraft(sessionId)
+
+    const child = await entryRepository.getById(sealed.id)
+    expect(child?.parent_id).toBe(parent.id)
+    expect(child?.relation_type).toBe('annotation')
+    expect(child?.anchors[0]).toMatchObject({ kind: 'comment', at: { quote: 'meeting' } })
+  })
+
+  it('seals a revision draft as a new version rather than touching the entry it edits', async () => {
+    const store = useDraftsStore()
+    const entries = useEntriesStore()
+    const original = await entries.createTextEntry('I recieved the offer')
+
+    const sessionId = store.beginDraft({
+      kind: 'revision',
+      parent_id: original.id,
+      base_version_id: null,
+    })
+    store.recordChange(sessionId, {
+      content: 'I received the offer',
+      steps: [{ stepType: 'replace' }],
+    })
+    await store.sealDraft(sessionId)
+
+    const aggregated = await entries.getAggregatedEntry(original.id)
+    expect(aggregated?.content).toBe('I received the offer')
+    expect(aggregated?.version.total).toBe(2)
+    expect((await entries.getEntry(original.id))?.content).toBe('I recieved the offer')
+  })
+
+  it('resumes a draft left behind by a reload with its history intact', async () => {
+    const store = useDraftsStore()
+    await draftRepository.save({
+      session_id: 'interrupted',
+      target: { kind: 'new_root' },
+      started_at: '2026-09-05T10:00:00.000Z',
+      updated_at: '2026-09-05T10:00:02.000Z',
+      content: 'Half a thought',
+      anchors: [],
+      steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
+      ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
+    })
+
+    const resumed = await store.resumeDraft('interrupted')
+    store.recordChange('interrupted', {
+      content: 'Half a thought, finished.',
+      steps: [{ stepType: 'replace' }],
+    })
+    const sealed = await store.sealDraft('interrupted')
+
+    expect(resumed?.content).toBe('Half a thought')
+    const trace = (await useEntriesStore().getEntry(sealed.id))?.authoring_trace
+    expect(trace?.started_at).toBe('2026-09-05T10:00:00.000Z')
+    expect(trace?.steps).toHaveLength(2)
+  })
+
+  it('lists unsealed drafts most recently touched first', async () => {
+    const store = useDraftsStore()
+    const older = store.beginDraft({ kind: 'new_root' })
+    store.recordChange(older, { content: 'Older', steps: [{ stepType: 'replace' }] })
+    await store.flush(older)
+
+    const newer = store.beginDraft({ kind: 'new_root' })
+    store.recordChange(newer, { content: 'Newer', steps: [{ stepType: 'replace' }] })
+    await store.flush(newer)
+
+    await store.loadDrafts()
+
+    expect(store.drafts.map((draft) => draft.content)).toEqual(['Newer', 'Older'])
+  })
+
+  it('discards a draft on request, the only thing that ever removes work', async () => {
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+    store.recordChange(sessionId, { content: 'Never mind', steps: [{ stepType: 'replace' }] })
+    await store.flush(sessionId)
+
+    await store.discardDraft(sessionId)
+
+    expect(store.drafts).toEqual([])
+    expect(await draftRepository.getById(sessionId)).toBeNull()
+  })
+
+  it('never writes an empty document, however the session came to hold one', async () => {
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+
+    // An editor can report a change that leaves the document empty — housekeeping, a stray
+    // transaction, or a writer clearing the line. None of those is a draft.
+    store.recordChange(sessionId, { content: '   ', steps: [] })
+    await store.flush(sessionId)
+
+    expect(await draftRepository.list()).toEqual([])
+  })
+
+  it('removes a draft that has been emptied rather than leaving a stale snapshot', async () => {
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+
+    store.recordChange(sessionId, { content: 'It rained', steps: [{ stepType: 'replace' }] })
+    await store.flush(sessionId)
+    expect(await draftRepository.list()).toHaveLength(1)
+
+    store.recordChange(sessionId, { content: '', steps: [{ stepType: 'replace' }] })
+    await store.flush(sessionId)
+
+    // Skipping the write would leave "It rained" on disk, showing a draft that no longer matches
+    // anything the writer can see.
+    expect(await draftRepository.list()).toEqual([])
+  })
+
+  it('refuses to seal an empty draft and leaves the session open', async () => {
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+    store.recordChange(sessionId, { content: '   ', steps: [{ stepType: 'replace' }] })
+
+    await expect(store.sealDraft(sessionId)).rejects.toThrow('Entry content cannot be empty')
+    expect(store.currentDraft(sessionId)?.content).toBe('   ')
+  })
+})

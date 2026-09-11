@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import TimelineCard from '@/components/TimelineCard.vue'
-import type { Entry } from '@/types/entry'
+import type { AggregatedEntry } from '@/types/entry'
 
 defineProps<{
-  entries: Entry[]
+  entries: AggregatedEntry[]
   emptyMessage?: string
 }>()
 </script>

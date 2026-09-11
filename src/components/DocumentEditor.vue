@@ -8,6 +8,18 @@ export interface EditorChange {
   /** Text this change added. Empty for a deletion or a formatting change. */
   insertedText: string
   isFormatting: boolean
+  /**
+   * Anchors placed since this editor mounted, in `anchor-mode` only. Derived by diffing against
+   * the document this editor started from, so undoing an anchor drops back out on its own —
+   * nothing here has to notice an undo and subtract it.
+   */
+  anchorIds?: string[]
+  /**
+   * Pre-existing anchors whose covered text this session has disturbed so far, outside anchor
+   * mode. Cumulative across the whole session: once an edit changes what an anchor covers, that
+   * anchor stays flagged even if a later edit moves the surrounding text back (PRODUCT.md §5.3).
+   */
+  affectedAnchorIds?: string[]
 }
 </script>
 
@@ -15,6 +27,8 @@ export interface EditorChange {
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import type { Transaction } from '@tiptap/pm/state'
+import { addedAnchorIds } from '@/domain/anchors'
+import { anchorsAffectedBy } from '@/domain/anchorWarnings'
 import { useMedia } from '@/composables/useMedia'
 import {
   emptyDocument,
@@ -24,7 +38,14 @@ import {
   MEDIA_NODE,
   type EntryDocument,
 } from '@/domain/entryDocument'
-import { entryExtensions } from '@/editor/extensions'
+import {
+  addAnchorInsert,
+  addAnchorMark,
+  anchorSpans,
+  entryExtensions,
+  mapAnchorSpans,
+  type AnchorSpan,
+} from '@/editor/extensions'
 
 const props = withDefaults(
   defineProps<{
@@ -35,8 +56,14 @@ const props = withDefaults(
     /** Root entries get a title node; children and revisions do not. */
     withTitle?: boolean
     disabled?: boolean
+    /**
+     * The other creation experience (ENTRY_MODEL.md, "Two creation experiences, kept separate").
+     * Surrounding text becomes unreachable — only the anchor toolbar below can change the
+     * document — and the ordinary formatting toolbar is replaced by it.
+     */
+    anchorMode?: boolean
   }>(),
-  { content: '', withTitle: false, disabled: false },
+  { content: '', withTitle: false, disabled: false, anchorMode: false },
 )
 
 const emit = defineEmits<{
@@ -56,9 +83,25 @@ function seedDocument() {
   return props.withTitle ? ensureTitle(doc) : doc
 }
 
+// Captured once, so anchor mode can tell "placed this session" apart from "was already there" for
+// as long as this editor instance lives — the same document this editor opened, never reassigned.
+const initialDocument = seedDocument()
+
+/**
+ * The anchors already in the document, moved forward one transaction at a time — text mode only.
+ * Reassigned after every edit so the next one resumes tracking from where this one left off,
+ * rather than needing to compose every step's `Mapping` since the session began.
+ */
+let liveAnchorSpans: AnchorSpan[] = []
+/** Anchors this session has disturbed so far. Sticky: once flagged, an anchor stays flagged. */
+const affectedAnchorIds = new Set<string>()
+
 const editor = useEditor({
-  extensions: entryExtensions({ withTitle: props.withTitle }),
-  content: seedDocument(),
+  // In anchor mode, `entryExtensions` installs the guard that lets through only the anchor
+  // commands below and undo/redo of them — see `isAnchorEdit`. That is what makes "no child entry
+  // is destructive" a property of the editor rather than a rule the UI is trusted to follow.
+  extensions: entryExtensions({ withTitle: props.withTitle, anchorMode: props.anchorMode }),
+  content: initialDocument,
   editable: !props.disabled,
   editorProps: {
     attributes: {
@@ -79,6 +122,17 @@ const editor = useEditor({
 
     const document = instance.getJSON() as EntryDocument
 
+    if (!props.anchorMode) {
+      const mapped = mapAnchorSpans(liveAnchorSpans, transaction.mapping)
+      for (const affected of anchorsAffectedBy(mapped)) affectedAnchorIds.add(affected.anchor_id)
+      liveAnchorSpans = mapped.map(({ anchor_id, quote, from, to }) => ({
+        anchor_id,
+        quote,
+        from,
+        to,
+      }))
+    }
+
     emit('change', {
       content: JSON.stringify(document),
       steps,
@@ -87,11 +141,14 @@ const editor = useEditor({
       // a list, or an alignment leaves every word in place while producing steps that look
       // nothing like a mark's.
       isFormatting: sameContent(transaction.before.toJSON() as EntryDocument, document),
+      anchorIds: props.anchorMode ? addedAnchorIds(initialDocument, document) : undefined,
+      affectedAnchorIds: props.anchorMode ? undefined : [...affectedAnchorIds],
     })
 
     void nextTick(() => media.applyTo(instance.view.dom))
   },
   onCreate: ({ editor: instance }) => {
+    if (!props.anchorMode) liveAnchorSpans = anchorSpans(instance.state.doc)
     void media.applyTo(instance.view.dom)
   },
 })
@@ -127,6 +184,35 @@ function insertedTextOf(transaction: Transaction): string {
   }
 
   return inserted
+}
+
+/**
+ * Anchor mode's whole action set: select then comment or strike, or place the cursor and propose
+ * wording. Nothing else is reachable here — see `filterTransaction` above.
+ */
+const hasSelection = computed(() => Boolean(editor.value && !editor.value.state.selection.empty))
+const anchorText = ref('')
+/** The strike just placed, if any, so wording typed next pairs with it rather than standing alone. */
+const pendingStrikeId = ref<string | null>(null)
+
+function commentSelection(): void {
+  if (!editor.value) return
+  addAnchorMark(editor.value, 'comment')
+  pendingStrikeId.value = null
+}
+
+function strikeSelection(): void {
+  if (!editor.value) return
+  pendingStrikeId.value = addAnchorMark(editor.value, 'strike')
+}
+
+function insertWording(): void {
+  const text = anchorText.value.trim()
+  if (!editor.value || !text) return
+
+  addAnchorInsert(editor.value, text, pendingStrikeId.value ?? undefined)
+  anchorText.value = ''
+  pendingStrikeId.value = null
 }
 
 const linkOpen = ref(false)
@@ -282,7 +368,56 @@ defineExpose({
 <template>
   <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)]">
     <div
-      v-if="editor"
+      v-if="editor && anchorMode"
+      class="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-2 py-1.5"
+      role="toolbar"
+      :aria-label="`${label} anchor actions`"
+    >
+      <button
+        type="button"
+        class="rounded px-2 py-1 text-sm hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+        :disabled="disabled || !hasSelection"
+        @mousedown.prevent
+        @click="commentSelection"
+      >
+        Comment on selection
+      </button>
+      <button
+        type="button"
+        class="rounded px-2 py-1 text-sm hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+        :disabled="disabled || !hasSelection"
+        @mousedown.prevent
+        @click="strikeSelection"
+      >
+        Strike selection
+      </button>
+
+      <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
+
+      <label :for="`${label}-anchor-insert`" class="text-sm text-[var(--color-text-muted)]">
+        {{ pendingStrikeId ? 'Replacement wording' : 'Insert wording here' }}
+      </label>
+      <input
+        :id="`${label}-anchor-insert`"
+        v-model="anchorText"
+        type="text"
+        :disabled="disabled || (hasSelection && !pendingStrikeId)"
+        class="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+        @keyup.enter="insertWording"
+      />
+      <button
+        type="button"
+        class="rounded px-2 py-1 text-sm hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+        :disabled="disabled || (hasSelection && !pendingStrikeId) || !anchorText.trim()"
+        @mousedown.prevent
+        @click="insertWording"
+      >
+        Insert
+      </button>
+    </div>
+
+    <div
+      v-else-if="editor"
       class="flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-2 py-1"
       role="toolbar"
       :aria-label="`${label} formatting`"
@@ -427,5 +562,30 @@ defineExpose({
 :deep(.chronicle-document img) {
   max-width: 100%;
   border-radius: 0.5rem;
+}
+
+/*
+  Anchor highlight colours come from the system scheme (main.css) rather than anything stored on
+  the mark — see ENTRY_MODEL.md, "Colour". Comment and strike share the mark and differ only by the
+  `data-anchor-kind` attribute the mark renders.
+*/
+:deep(.chronicle-document .chronicle-anchor) {
+  border-radius: 0.15rem;
+  padding: 0 0.05rem;
+}
+
+:deep(.chronicle-document .chronicle-anchor[data-anchor-kind='comment']) {
+  background-color: color-mix(in srgb, var(--color-anchor-comment) 45%, transparent);
+}
+
+:deep(.chronicle-document .chronicle-anchor[data-anchor-kind='strike']) {
+  background-color: color-mix(in srgb, var(--color-anchor-strike) 45%, transparent);
+  text-decoration: line-through;
+}
+
+:deep(.chronicle-document .chronicle-anchor-insert) {
+  color: var(--color-anchor-insert);
+  text-decoration: none;
+  font-style: italic;
 }
 </style>

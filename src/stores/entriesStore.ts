@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
+import { anchorRefsFor } from '@/domain/anchors'
 import {
   collectMediaRefs,
   docTitle,
@@ -13,7 +14,6 @@ import type { Draft } from '@/types/draft'
 import {
   createEntryInput,
   type AggregatedEntry,
-  type AnchorOp,
   type AuthoringTrace,
   type CreateEntryInput,
   type Entry,
@@ -25,8 +25,6 @@ export interface CreateChildOptions {
   parentId: string
   relationType: NarrativeRelation
   content: string
-  /** Places in the parent this child is about. Empty means the parent at large. */
-  anchors?: AnchorOp[]
 }
 
 export interface CreateConnectionOptions {
@@ -77,11 +75,15 @@ export const useEntriesStore = defineStore('entries', () => {
     return entry
   }
 
-  /** An annotation or an update. Neither ever alters the parent's stored text. */
+  /**
+   * An annotation or an update about the parent at large, with no anchors. A child that points at a
+   * specific passage goes through an anchor-mode draft instead (`createFromDraft`), since placing
+   * an anchor means revising the parent's own document.
+   */
   async function createChildEntry(options: CreateChildOptions): Promise<Entry> {
     return entryRepository.create(
       childInput(requireContent(options.content), options.parentId, options.relationType, {
-        anchors: options.anchors ?? [],
+        anchors: [],
       }),
     )
   }
@@ -121,6 +123,7 @@ export const useEntriesStore = defineStore('entries', () => {
         content,
         parent_id: options.entryId,
         relation_type: 'revision',
+        revision_mode: 'text',
         media_refs: options.mediaRefs ?? mediaRefsFor(content, current.media_refs),
         metadata: options.metadata ?? current.metadata,
       }),
@@ -137,17 +140,38 @@ export const useEntriesStore = defineStore('entries', () => {
    *
    * Sealing is where the authoring trace lands, and it lands on whatever was typed: a first draft
    * as much as a later revision, because both are links in the same chain.
+   *
+   * `parentTrace` is the parent document's own step chain, present only for an anchor-mode `new_child`
+   * draft — see ENTRY_MODEL.md, "Drafts". It is a second, independent trace because the parent and
+   * the child are two different documents with two different authoring histories, sealed together.
    */
-  async function createFromDraft(draft: Draft, trace: AuthoringTrace | null): Promise<Entry> {
+  async function createFromDraft(
+    draft: Draft,
+    trace: AuthoringTrace | null,
+    parentTrace: AuthoringTrace | null = null,
+  ): Promise<Entry> {
     const content = requireContent(draft.content)
     const { target } = draft
 
     if (target.kind === 'new_child') {
-      return entryRepository.create(
-        childInput(content, target.parent_id, target.relation_type, {
-          anchors: draft.anchors,
-          authoring_trace: trace,
-        }),
+      if (draft.anchor_ids.length === 0) {
+        // Nothing was placed on the parent, so this is a note about the entry at large: one entry,
+        // no revision, exactly like `createChildEntry`.
+        return entryRepository.create(
+          childInput(content, target.parent_id, target.relation_type, {
+            anchors: [],
+            authoring_trace: trace,
+          }),
+        )
+      }
+
+      return sealAnchorChild(
+        draft,
+        target.parent_id,
+        target.relation_type,
+        content,
+        trace,
+        parentTrace,
       )
     }
 
@@ -165,6 +189,7 @@ export const useEntriesStore = defineStore('entries', () => {
           content,
           parent_id: target.parent_id,
           relation_type: 'revision',
+          revision_mode: 'text',
           media_refs: mediaRefsFor(content, current.media_refs),
           metadata: current.metadata,
           authoring_trace: trace,
@@ -179,6 +204,49 @@ export const useEntriesStore = defineStore('entries', () => {
 
     await addRoot(entry.id)
     return entry
+  }
+
+  /**
+   * The atomic half of sealing an anchor-mode draft: a parent revision carrying the new anchors,
+   * plus the child referencing them, written together via `createMany` so the pair can never land
+   * half-written (ENTRY_MODEL.md, "Drafts").
+   */
+  async function sealAnchorChild(
+    draft: Draft,
+    parentId: string,
+    relationType: NarrativeRelation,
+    content: string,
+    trace: AuthoringTrace | null,
+    parentTrace: AuthoringTrace | null,
+  ): Promise<Entry> {
+    const parentContent = draft.parent_content
+    if (parentContent === null) {
+      throw new Error('An anchor-mode draft is missing its parent document')
+    }
+
+    const current = await getAggregatedEntry(parentId)
+    if (!current) {
+      throw new Error('Cannot annotate an entry that does not exist')
+    }
+
+    const [, child] = await entryRepository.createMany([
+      createEntryInput({
+        content: parentContent,
+        parent_id: parentId,
+        relation_type: 'revision',
+        revision_mode: 'anchor',
+        media_refs: mediaRefsFor(parentContent, current.media_refs),
+        metadata: current.metadata,
+        authoring_trace: parentTrace,
+      }),
+      childInput(content, parentId, relationType, {
+        anchors: anchorRefsFor(draft.anchor_ids, parentContent),
+        authoring_trace: trace,
+      }),
+    ])
+
+    await refreshRoot(parentId)
+    return child!
   }
 
   async function getEntry(id: string): Promise<Entry | null> {

@@ -22,34 +22,36 @@ export type VersionRelation = 'revision'
  */
 export type RelationType = NarrativeRelation | EdgeRelation | VersionRelation
 
-/** A place in a parent document, recorded against the version it was measured in. */
-export interface DocLocation {
-  /** ProseMirror position, relative to `base_version_id`. */
-  from: number
-  /** Equal to `from` for an insertion point. */
-  to: number
-  /** The version these positions were computed against. `null` means version one. */
-  base_version_id: string | null
-  /** The spanned text. Empty string when the location is collapsed. */
+/**
+ * What a span anchor does to the passage it covers. Both are marks on the parent's own text.
+ *
+ * There is deliberately no `replace`: since nothing hides the parent's text, "I'd have written this
+ * differently" is a `strike` whose replacement wording rides along as an `anchorInsert` node
+ * sharing its `anchor_id`.
+ */
+export type AnchorKind = 'comment' | 'strike'
+
+/**
+ * A child's reference to an anchor that lives in its **parent's** document.
+ *
+ * ENTRY_MODEL.md describes this as `anchor_ids` plus one `quote` captured at seal time. It is one
+ * array of pairs rather than two parallel arrays for the obvious reason: parallel arrays can drift
+ * out of step and this cannot. The quote is not a growing history — the parent's own step chain is
+ * that — it is what lets an anchor whose mark a later revision deleted still say what it was
+ * attached to, once nothing in the current document carries its id.
+ */
+export interface AnchorRef {
+  anchor_id: string
+  /** The parent's wording under the anchor when the child was sealed. */
   quote: string
-  /** Text just before the location, used to disambiguate a repeated quote. */
-  prefix?: string
-  /** Text just after the location. */
-  suffix?: string
 }
 
 /**
- * What a child entry does to a specific place in its parent. A child carries a list of these;
- * an empty list means the child is about the parent at large.
- *
- * There is deliberately no `replace` op: since nothing hides the parent's text, "I'd have written
- * this differently" is a `strike` plus an `insert` grouped in one child entry.
+ * Which of the two creation experiences produced a revision. Not `metadata`, because it is
+ * filtered on: a card's revision count reads `'text'` revisions only, so the revisions that merely
+ * carry someone else's annotation never inflate it.
  */
-export type AnchorOp =
-  | { kind: 'comment'; at: DocLocation }
-  | { kind: 'strike'; at: DocLocation }
-  | { kind: 'insert'; at: DocLocation; text: string }
-  | { kind: 'media'; media_ref: string }
+export type RevisionMode = 'text' | 'anchor'
 
 /** Why a moment was bookmarked while writing. Ticks are navigation aids, never saves. */
 export type TickReason = 'pause' | 'punctuation' | 'interval' | 'format' | 'manual'
@@ -93,8 +95,10 @@ export interface Entry {
   title: string | null
   /** Serialized document. */
   content: string
-  /** Empty means the entry is about its parent at large. */
-  anchors: AnchorOp[]
+  /** Anchors in the parent's document. Empty means the entry is about its parent at large. */
+  anchors: AnchorRef[]
+  /** Revisions only: which creation experience wrote this version. Null for everything else. */
+  revision_mode: RevisionMode | null
   authoring_trace: AuthoringTrace | null
   /** Blob ids in the media store that this document depends on. */
   media_refs: string[]
@@ -104,14 +108,21 @@ export interface Entry {
 
 export type CreateEntryInput = Omit<Entry, 'id' | 'created_at'>
 
-/** How well an anchor could be located in the text as it stands now. */
-export type AnchorStatus = 'exact' | 'mapped' | 'fuzzy' | 'orphaned'
+/**
+ * Whether the parent's document still carries this anchor. There is no ladder of degrees any more:
+ * an anchor is a mark in the document being read, so either its id is there or it is not.
+ */
+export type AnchorStatus = 'present' | 'orphaned'
 
-export interface ResolvedOp {
-  op: AnchorOp
+export interface ResolvedAnchor {
+  anchor_id: string
   status: AnchorStatus
-  /** Where the op landed in the current text. Absent when orphaned. */
-  range?: [number, number]
+  /** What the anchor covers now, or the wording recorded at seal time once it is orphaned. */
+  quote: string
+  /** Null when the anchor is orphaned, or when it is a bare insertion with no span to mark. */
+  kind: AnchorKind | null
+  /** Wording the anchor carries in the parent's document. Null when it has none. */
+  insertion: string | null
 }
 
 /** One link in an entry's version chain. Version one has a null `revision_id`. */
@@ -126,7 +137,8 @@ export interface EntryVersion {
 export interface ResolvedChild {
   entry: AggregatedEntry
   relation_type: RelationType
-  ops: ResolvedOp[]
+  /** This child's anchors, read out of the parent's current document. */
+  anchors: ResolvedAnchor[]
   /** Grandchildren are indicated, not expanded. */
   has_children: boolean
 }
@@ -166,6 +178,7 @@ export function createEntryInput(
     target_id: null,
     title: null,
     anchors: [],
+    revision_mode: null,
     authoring_trace: null,
     media_refs: [],
     metadata: {},

@@ -5,6 +5,7 @@ import {
   type CreateEntryInput,
   type Entry,
 } from '@/types/entry'
+import { readAnchorRefs } from '@/domain/anchors'
 import { assertValidRelation } from '@/domain/entryValidation'
 import { resolveDatabase, type ChronicleDatabase, type StoredEntry } from './chronicleDatabase'
 import type { EntryRepository } from './entryRepository'
@@ -23,17 +24,33 @@ export class DexieEntryRepository implements EntryRepository {
   }
 
   async create(input: CreateEntryInput): Promise<Entry> {
-    await assertValidRelation(input, (id) => this.db.entries.get(id))
+    const [entry] = await this.createMany([input])
+    return entry!
+  }
 
-    const entry: StoredEntry = {
-      id: newEntryId(),
-      created_at: newEntryTimestamp(),
-      ...input,
-      is_root: input.relation_type === null ? 1 : 0,
-    }
+  async createMany(inputs: CreateEntryInput[]): Promise<Entry[]> {
+    // One IndexedDB transaction: either every row commits or the whole write rolls back, which is
+    // what an anchor-mode seal needs (see the interface doc) — a parent revision and the child
+    // referencing its anchors must never land as a partial pair.
+    return this.db.transaction('rw', this.db.entries, async () => {
+      const staged: StoredEntry[] = []
+      const loadParent = async (id: string) =>
+        staged.find((entry) => entry.id === id) ?? (await this.db.entries.get(id))
 
-    await this.db.entries.add(entry)
-    return stripStorage(entry)
+      for (const input of inputs) {
+        await assertValidRelation(input, loadParent)
+
+        staged.push({
+          id: newEntryId(),
+          created_at: newEntryTimestamp(),
+          ...input,
+          is_root: input.relation_type === null ? 1 : 0,
+        })
+      }
+
+      await this.db.entries.bulkAdd(staged)
+      return staged.map(stripStorage)
+    })
   }
 
   async getById(id: string): Promise<Entry | null> {
@@ -119,9 +136,16 @@ export class DexieEntryRepository implements EntryRepository {
   }
 }
 
+/**
+ * Drops the storage-only indexing flag, and sanitizes `anchors` for a row written before anchors
+ * moved into the parent's document. `readAnchorRefs` is the only place that shape is ever named
+ * again: a row like that duck-types into `AnchorRef[]` at the type level (both are just objects)
+ * but has no `anchor_id` to look up, so left alone it would resolve as a blank-looking orphan
+ * instead of the "no anchors at all" this entry actually has once its old op shape means nothing.
+ */
 function stripStorage(entry: StoredEntry): Entry {
   const { is_root: _is_root, ...rest } = entry
-  return rest
+  return { ...rest, anchors: readAnchorRefs(rest.anchors) }
 }
 
 function dedupeById(entries: StoredEntry[]): StoredEntry[] {

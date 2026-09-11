@@ -1,10 +1,11 @@
 /**
  * The document layer: one canonical way to turn an entry's stored `content` into plain text.
  *
- * `Entry.content` is a serialized ProseMirror document. Search, timeline previews, anchor offsets,
- * and diffs all need the same flat string, and they must agree to the character — an anchor
- * recorded against one flattening and resolved against another silently points at the wrong words.
- * So there is exactly one function that does it, `docToPlainText`, and everything calls it.
+ * `Entry.content` is a serialized ProseMirror document. Search, timeline previews, and diffs all
+ * need the same flat string, and they must agree to the character. So there is exactly one function
+ * that does it, `docToPlainText`, and everything calls it. Anchors no longer measure against this
+ * ruler — they are marks and nodes in the document itself — but they do depend on it ignoring what
+ * they add, which is what `ANCHOR_INSERT_NODE` below is about.
  *
  * Nothing here imports TipTap. The flattening is a walk over plain JSON, which keeps it pure,
  * runnable in node, and independent of whichever editor sits on top.
@@ -30,8 +31,24 @@ export const TITLE_NODE = 'title'
 /** An image whose bytes live in the media store; the node carries only the blob's id. */
 export const MEDIA_NODE = 'mediaImage'
 
+/**
+ * A span anchor: a mark on the parent's own text carrying `{ anchorId, kind }`. Marks are metadata
+ * riding on text that is already there, so the flattening below never has to know about this one.
+ */
+export const ANCHOR_MARK = 'anchor'
+
+/**
+ * A collapsed anchor: wording a child entry proposes, carrying `{ anchorId, text }`. A mark cannot
+ * represent a zero-width position with content of its own, so this is a node — and being a node,
+ * it holds real text that the flattening **must** skip. That skip is the mechanism that makes "no
+ * child entry is destructive" checkable rather than merely intended: with it, an anchor-mode
+ * session leaves `docToPlainText` untouched, so `sameContent(before, after)` holds by construction
+ * and previews and search never fill up with words the parent's author didn't write.
+ */
+export const ANCHOR_INSERT_NODE = 'anchorInsert'
+
 /** Nodes that sit inside a line rather than starting one. */
-const INLINE_NODES = new Set(['text', 'hardBreak'])
+const INLINE_NODES = new Set(['text', 'hardBreak', ANCHOR_INSERT_NODE])
 
 /**
  * Reads stored content as a document.
@@ -78,9 +95,9 @@ export function plainTextDocument(text: string, title?: string | null): EntryDoc
 /**
  * The canonical flattening: the document's body as plain text, one line per block.
  *
- * The title node is deliberately excluded. Anchors are offsets into this string, and a title is
- * not something a reader selects and annotates; including it would also shift every body anchor
- * the moment a title changed. `docTitle` is how the title is read instead.
+ * The title node is deliberately excluded: a title is a name for the record, not part of what it
+ * says, and a preview or a search hit made of the title alone would be noise. `docTitle` is how the
+ * title is read instead. Anchor-carried wording is excluded for its own reason — see `nodeText`.
  */
 export function docToPlainText(content: string | EntryDocument): string {
   const doc = parseDocument(content)
@@ -89,6 +106,11 @@ export function docToPlainText(content: string | EntryDocument): string {
     .filter((node) => node.type !== TITLE_NODE)
     .map(nodeText)
     .join('\n')
+}
+
+/** Whether the document has a title node at all, regardless of whether it holds any text. */
+export function hasTitleNode(content: string | EntryDocument): boolean {
+  return parseDocument(content).content.some((node) => node.type === TITLE_NODE)
 }
 
 /** The document's title, or null when it has none or it is blank. */
@@ -158,6 +180,9 @@ export function sameContent(a: string | EntryDocument, b: string | EntryDocument
 function nodeText(node: DocNode): string {
   if (node.type === 'text') return node.text ?? ''
   if (node.type === 'hardBreak') return '\n'
+  // Anchor-carried wording belongs to the child entry that proposed it, not to this document's
+  // author. See ANCHOR_INSERT_NODE above: this line is why an anchor is non-destructive.
+  if (node.type === ANCHOR_INSERT_NODE) return ''
 
   const children = node.content ?? []
   if (children.length === 0) return ''

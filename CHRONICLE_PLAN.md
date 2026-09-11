@@ -126,9 +126,81 @@ completed trace. Diff rendering and the scrubbable history UI are unblocked by i
 Still genuinely out of scope:
 
 - Diff rendering and the scrubbable per-entry history UI, now unblocked but not yet built.
-- Warning before a revision orphans a child's anchor.
 - Light/dark theme polish and preference persistence.
 - Video/audio support, optional Tauri desktop shell, encryption, multi-device sync.
+
+**The anchor model redesign is built (2026-09-11).** Anchors moved from offsets stored on a child
+entry into marks and nodes inside the parent's own document — see ENTRY_MODEL.md, "Child entries and
+anchors" and "Two creation experiences, kept separate." `resolveAnchor.ts`'s four-status ladder and
+`ChildEntryForm`'s old quote/opKind API are gone; anchor-mode child creation
+(`DocumentEditor.vue`'s `anchor-mode` prop, `EntryRepository.createMany` for the atomic
+parent-revision-plus-child seal) and the warning when a text-mode revision changes the text under an
+anchor (`domain/anchorWarnings.ts`, checked via ProseMirror's own step mapping rather than by
+re-resolving text) are what Phase 3's history UI now has to build on.
+
+Not carried over from the redesign: a per-anchor "remove just this one" UI affordance before
+sealing. `editor/extensions.ts` has the commands to add or read anchors; undoing one before sealing
+today means the browser's own undo (Ctrl+Z), which only ever undoes the most recent placement, not
+an arbitrary earlier one in the same session. A small, well-scoped follow-up once anchor-mode has
+seen real use, not a blocker.
+
+### Parked, not decided against
+
+Genuinely deferred rather than rejected — worth another look later, but not now:
+
+- **Detecting a stale revision session.** Opening an entry to revise it, leaving the tab, and
+  revising the same entry again from another tab (still one person — this app has no accounts or
+  sync) currently seals with no warning; the version chain still records both, so nothing is lost,
+  just unannounced. `DraftTarget`'s revision variant briefly carried a `base_version_id` toward this
+  and was removed (2026-09) since nothing read it; a real fix would need to actually compare it
+  against the entry's current version at seal time, which wasn't built. Worth revisiting once it's
+  clearer what the right response is (block the save? offer to rebase? just say so louder?), and
+  worth reconsidering the mechanism entirely rather than assuming the removed field was the answer.
+- **`sameContent`'s several full-tree walks per keystroke.** Fine today. The anchor redesign turned
+  out not to force a shape change here after all — the anchor-carried-wording skip landed in the
+  shared `nodeText` helper `docToPlainText` already called, so `sameContent` itself never changed —
+  but the walk-per-keystroke cost itself is unaddressed and still worth revisiting sometime.
+
+### Still to do from the September 2026 review pass
+
+A code-review pass (2026-09-11) found these; the correctness/race-condition half of its findings is
+already fixed and committed. This half — dedup and finishing gaps, none of it touching anchors — was
+queued next but not yet done when work paused to clear the session:
+
+- **`ConnectionForm.vue` has the same dead `submitting` guard** as `ChildEntryForm` above, but
+  `ConnectionForm` is not being rebuilt, so this one should actually be removed: the state can never
+  be observed true (`handleSubmit` sets it, emits synchronously, resets it in `finally`, all before
+  Vue flushes a render), so it and its `:disabled` bindings are dead weight.
+- **Missing tests for `src/composables/useMedia.ts`.** Still true. `extensions.ts` is no longer bare:
+  the anchor-mode mechanism it added (`Anchor`, `AnchorInsert`, `isAnchorEdit`, `addAnchorMark`,
+  `addAnchorInsert`, `anchorSpans`/`mapAnchorSpans`) now has coverage in
+  `DocumentEditor.browser.test.ts`'s "anchor mode" suite (and its `.cy.ts` mirror), and pure logic
+  moved out to node-tested `domain/anchors.ts` / `domain/anchorWarnings.ts` where it could be.
+- **Hard-coded `text-red-500`** in `DocumentEditor.vue`, `EntryForm.vue`, `DraftsView.vue`, and
+  `EntryDetailView.vue` — every other color in these files routes through the `--color-*` token
+  system; this is the one thing that doesn't. Needs a `--color-error` token (with a `.dark` variant)
+  in `src/assets/main.css`, then swap all four call sites.
+- **`preview()`, `formatDate()`, and the `err instanceof Error ? err.message : …` pattern are each
+  copy-pasted three-plus times** across `TimelineCard.vue`, `EntryDetailView.vue`, and `DraftsView.vue`
+  (`preview`/`formatDate` already disagree on their limits/styles between copies). Consolidate
+  `preview`/`formatDate` near `entryDocument.ts` (they always wrap `docToPlainText` output) and the
+  error-message pattern into a small `toErrorMessage(err, fallback)` helper.
+- **`EntryDetailView.vue` and `DraftsView.vue` duplicate the whole "edit an open draft session"
+  scaffold** (mirror a `draftsStore` session's content into a local ref, track a saving flag, forward
+  `DocumentEditor`'s `@change`, wrap save/discard in the same try/catch) and have already drifted —
+  `DraftsView` guards on `isEmptyDocument` before sealing, `EntryDetailView` doesn't. This predicted
+  its own worsening correctly: `EntryDetailView.vue` now carries a _third_ copy of the pattern for
+  the anchor-mode session (`childSession`/`childParentContent`/`childNoteContent`/`savingChild`,
+  plus a fourth thread of state for the revision warning), landed inline rather than through a shared
+  composable for lack of turnaround time. `useDraftSession` (or similar) is more overdue now than
+  when this was first written, not less.
+- **`src/testing/realRepositories.ts` gives entries and drafts two separate Dexie connections**
+  (`freshEntryRepository()` / `freshDraftRepository()` each open their own uniquely-named database),
+  while `src/repositories/index.ts` deliberately shares one `ChronicleDatabase` between them in
+  production. No current test exercises a transaction spanning both, so nothing fails today — but a
+  future one added as part of the anchor-mode atomic seal (parent revision + child, one commit) would
+  work in production and silently diverge in any test using both repositories together. Fix by
+  sharing one `ChronicleDatabase` instance in the test helper, matching the composition root.
 
 ## Implementation Rules for the AI
 

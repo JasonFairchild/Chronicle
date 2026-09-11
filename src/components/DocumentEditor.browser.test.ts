@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import { collectAnchors } from '@/domain/anchors'
 import {
   collectMediaRefs,
   docTitle,
@@ -11,6 +12,7 @@ import {
 import { mediaRepository } from '@/repositories'
 import { renderComponent } from '@/testing/renderComponent'
 import { freshMediaRepository } from '@/testing/realRepositories'
+import { selectTextRange } from '@/testing/selectTextRange'
 
 function pngFile(): File {
   return new File([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], 'lake.png', { type: 'image/png' })
@@ -177,5 +179,97 @@ describe('DocumentEditor (browser)', () => {
     // broken reference the moment this entry was read again.
     expect(latest.content).not.toContain('blob:')
     expect(latest.content).not.toContain('data:')
+  })
+
+  describe('anchor mode', () => {
+    function mountAnchorEditor() {
+      return mountEditor({
+        anchorMode: true,
+        content: serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad')),
+      })
+    }
+
+    it('offers the anchor toolbar instead of ordinary formatting', async () => {
+      const screen = mountAnchorEditor()
+
+      await expect
+        .element(screen.getByRole('button', { name: 'Comment on selection' }))
+        .toBeVisible()
+      expect(screen.getByRole('button', { name: 'Bold' }).query()).toBeNull()
+    })
+
+    it('blocks ordinary typing, since surrounding text cannot change in this mode', async () => {
+      const screen = mountAnchorEditor()
+
+      await screen.getByRole('textbox', { name: 'New entry' }).click()
+      await userEvent.keyboard('extra words')
+
+      expect(changes).toEqual([])
+      await expect.element(screen.getByText('I went to Lake Tahoe with Dad')).toBeVisible()
+    })
+
+    it('marks a selection as a comment anchor', async () => {
+      const screen = mountAnchorEditor()
+      const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+      await expect.element(editorLocator).toBeVisible()
+      selectTextRange(editorLocator.element(), 10, 20)
+
+      await screen.getByRole('button', { name: 'Comment on selection' }).click()
+
+      const latest = changes[changes.length - 1]!
+      expect(latest.anchorIds).toHaveLength(1)
+      const [anchor] = collectAnchors(latest.content)
+      expect(anchor).toMatchObject({ kind: 'comment', quote: 'Lake Tahoe' })
+      // A comment is a mark on existing text, not new content — the flattening never changes.
+      expect(docToPlainText(latest.content)).toBe('I went to Lake Tahoe with Dad')
+    })
+
+    it('pairs a strike with replacement wording under one anchor id', async () => {
+      const screen = mountAnchorEditor()
+      const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+      await expect.element(editorLocator).toBeVisible()
+      selectTextRange(editorLocator.element(), 10, 20)
+
+      await screen.getByRole('button', { name: 'Strike selection' }).click()
+      await screen.getByLabelText('Replacement wording').fill('Donner Lake')
+      await screen.getByRole('button', { name: 'Insert' }).click()
+
+      const latest = changes[changes.length - 1]!
+      expect(latest.anchorIds).toHaveLength(1)
+      const [anchor] = collectAnchors(latest.content)
+      expect(anchor).toMatchObject({
+        kind: 'strike',
+        quote: 'Lake Tahoe',
+        insertion: 'Donner Lake',
+      })
+      // The replacement wording is presentational, not part of what the parent's author wrote.
+      expect(docToPlainText(latest.content)).toBe('I went to Lake Tahoe with Dad')
+    })
+
+    it('places a bare insertion at the caret when nothing is selected', async () => {
+      const screen = mountAnchorEditor()
+
+      await screen.getByLabelText('Insert wording here').fill('perhaps')
+      await screen.getByRole('button', { name: 'Insert' }).click()
+
+      const latest = changes[changes.length - 1]!
+      expect(latest.anchorIds).toHaveLength(1)
+      const [anchor] = collectAnchors(latest.content)
+      expect(anchor).toMatchObject({ kind: null, insertion: 'perhaps' })
+    })
+
+    it('drops an anchor back out on undo', async () => {
+      const screen = mountAnchorEditor()
+      const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+      await expect.element(editorLocator).toBeVisible()
+      selectTextRange(editorLocator.element(), 10, 20)
+      await screen.getByRole('button', { name: 'Comment on selection' }).click()
+      expect(changes[changes.length - 1]!.anchorIds).toHaveLength(1)
+
+      await screen.getByRole('textbox', { name: 'New entry' }).click()
+      await userEvent.keyboard('{Control>}z{/Control}')
+
+      expect(changes[changes.length - 1]!.anchorIds).toEqual([])
+    })
   })
 })

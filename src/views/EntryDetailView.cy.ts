@@ -6,8 +6,9 @@ import {
   freshEntryRepository,
   freshMediaRepository,
 } from '@/testing/realRepositories'
+import { withAnchorMark } from '@/testing/anchorFixtures'
+import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText } from '@/domain/entryDocument'
-import { createDocLocation } from '@/domain/resolveAnchor'
 import { createEntryInput, type Entry } from '@/types/entry'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
@@ -57,12 +58,14 @@ describe('EntryDetailView', () => {
   })
 
   it('describes which passage an anchored child is about', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
+
+    seed({ content: marked }).then((parent) => {
       seed({
         content: 'Wrong lake',
         parent_id: parent.id,
         relation_type: 'update',
-        anchors: [{ kind: 'strike', at: createDocLocation(PARENT_TEXT, 10, 20, null) }],
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
       }).then(() => {
         mountDetail(parent.id)
 
@@ -72,17 +75,20 @@ describe('EntryDetailView', () => {
   })
 
   it('keeps the original wording visible when a revision orphans an anchor', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
+
+    seed({ content: marked }).then((parent) => {
       seed({
         content: 'Wrong lake',
         parent_id: parent.id,
         relation_type: 'update',
-        anchors: [{ kind: 'strike', at: createDocLocation(PARENT_TEXT, 10, 20, null) }],
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
       }).then(() => {
         seed({
           content: 'I stayed home that summer',
           parent_id: parent.id,
           relation_type: 'revision',
+          revision_mode: 'text',
         }).then(() => {
           mountDetail(parent.id)
 
@@ -98,6 +104,7 @@ describe('EntryDetailView', () => {
         content: 'I went to Donner Lake with Dad',
         parent_id: parent.id,
         relation_type: 'revision',
+        revision_mode: 'text',
       }).then(() => {
         mountDetail(parent.id)
 
@@ -147,27 +154,80 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('anchors a strike to the passage the user selected', () => {
+  it('anchors a strike to the passage the user selects, in one atomic seal', () => {
     seed({ content: PARENT_TEXT }).then((parent) => {
       mountDetail(parent.id)
 
-      cy.findByText(PARENT_TEXT).should('be.visible')
+      cy.findByRole('button', { name: 'Anchor an update to a passage' }).click()
 
-      selectRange(10, 20)
+      cy.findByRole('textbox', { name: 'Entry being annotated' })
+        .should('be.visible')
+        .then(($editor) => selectTextRange($editor[0]!, 10, 20))
 
-      cy.findByText('“Lake Tahoe”').should('be.visible')
+      cy.findByRole('button', { name: 'Strike selection' }).click()
+      cy.findByLabelText('Replacement wording').should('be.visible').type('Donner Lake')
+      cy.findByRole('button', { name: 'Insert' }).click()
 
-      cy.findByRole('combobox', { name: 'Anchor action' }).select('strike')
-      cy.findByLabelText('Your note').type('Wrong lake')
-      cy.findByLabelText('Replacement wording').type('Donner Lake')
+      cy.findByRole('textbox', { name: 'Your note' }).type('Wrong lake')
       cy.findByRole('button', { name: 'Add entry' }).click()
 
-      cy.findByText('Strikes “Lake Tahoe”').should('be.visible')
-      cy.findByText('Adds “Donner Lake”').should('be.visible')
+      cy.findByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”').should('be.visible')
 
+      cy.then(() => repository.listRevisions(parent.id)).then((revisions) => {
+        expect(revisions).to.have.length(1)
+        expect(revisions[0]?.revision_mode).to.equal('anchor')
+      })
       cy.then(() => repository.listChildren(parent.id)).then((children) => {
-        expect(children[0]?.anchors).to.have.length(2)
-        expect(children[0]?.anchors[0]).to.include({ kind: 'strike' })
+        expect(children[0]?.anchors).to.have.length(1)
+        expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')
+      })
+    })
+  })
+
+  it('warns before saving a revision that changes the text under an anchor', () => {
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
+
+    seed({ content: marked }).then((parent) => {
+      seed({
+        content: 'Wonderful trip',
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+      }).then(() => {
+        mountDetail(parent.id)
+
+        cy.findByRole('button', { name: 'Revise' }).click()
+        cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
+          const el = $editor[0]!
+          el.focus()
+          selectTextRange(el, 10, 20)
+        })
+        cy.focused().type('{backspace}')
+
+        cy.findByText(/This changes the passage/).should('be.visible')
+        cy.findByText('Wonderful trip').should('be.visible')
+        cy.findByRole('button', { name: 'Discard revision' }).click()
+      })
+    })
+  })
+
+  it('stays quiet when a revision only moves an anchor, not the text it covers', () => {
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
+
+    seed({ content: marked }).then((parent) => {
+      seed({
+        content: 'Wonderful trip',
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+      }).then(() => {
+        mountDetail(parent.id)
+
+        cy.findByRole('button', { name: 'Revise' }).click()
+        cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}!')
+
+        cy.findByText(/This changes the passage/).should('not.exist')
+        cy.findByRole('button', { name: 'Discard revision' }).click()
       })
     })
   })
@@ -186,6 +246,7 @@ describe('EntryDetailView', () => {
         expect(docToPlainText(revisions[0]!.content)).to.equal(
           `${PARENT_TEXT}, or so I remembered it.`,
         )
+        expect(revisions[0]?.revision_mode).to.equal('text')
         expect(revisions[0]?.authoring_trace?.steps.length).to.be.greaterThan(0)
       })
       // The entry itself is never rewritten; the version chain is what carries the change.
@@ -248,22 +309,3 @@ describe('EntryDetailView', () => {
     })
   })
 })
-
-/** Selects a character range inside the rendered entry text and tells the view about it. */
-function selectRange(from: number, to: number): void {
-  cy.findByTestId('entry-content').then(($content) => {
-    const content = $content[0]
-    const textNode = content?.firstChild
-    if (!content || !textNode) throw new Error('Entry content was not rendered')
-
-    const range = content.ownerDocument.createRange()
-    range.setStart(textNode, from)
-    range.setEnd(textNode, to)
-
-    const selection = content.ownerDocument.defaultView?.getSelection()
-    selection?.removeAllRanges()
-    selection?.addRange(range)
-
-    content.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  })
-}

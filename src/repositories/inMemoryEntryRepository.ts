@@ -12,19 +12,32 @@ export class InMemoryEntryRepository implements EntryRepository {
   private entries = new Map<string, Entry>()
 
   async create(input: CreateEntryInput): Promise<Entry> {
-    await assertValidRelation(input, (id) => this.entries.get(id))
+    const [entry] = await this.createMany([input])
+    return entry!
+  }
 
-    const entry: Entry = {
-      id: newEntryId(),
-      created_at: newEntryTimestamp(),
-      // Cloned on the way in as well as out. A plain spread is shallow, so `anchors`, `media_refs`,
-      // and `metadata` would stay shared with the caller's object and mutating an input after
-      // saving would quietly rewrite stored history.
-      ...structuredClone(input),
+  async createMany(inputs: CreateEntryInput[]): Promise<Entry[]> {
+    // Validated and built against a lookup that sees this batch's own earlier entries, but nothing
+    // is committed to the real map until every input has passed — an all-or-nothing write.
+    const staged = new Map<string, Entry>()
+    const loadParent = (id: string) => staged.get(id) ?? this.entries.get(id)
+
+    for (const input of inputs) {
+      await assertValidRelation(input, loadParent)
+
+      const entry: Entry = {
+        id: newEntryId(),
+        created_at: newEntryTimestamp(),
+        // Cloned on the way in as well as out. A plain spread is shallow, so `anchors`,
+        // `media_refs`, and `metadata` would stay shared with the caller's object and mutating an
+        // input after saving would quietly rewrite stored history.
+        ...structuredClone(input),
+      }
+      staged.set(entry.id, entry)
     }
 
-    this.entries.set(entry.id, entry)
-    return structuredClone(entry)
+    for (const entry of staged.values()) this.entries.set(entry.id, entry)
+    return [...staged.values()].map((entry) => structuredClone(entry))
   }
 
   async getById(id: string): Promise<Entry | null> {

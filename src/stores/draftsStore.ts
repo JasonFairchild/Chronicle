@@ -4,13 +4,7 @@ import { AuthoringSession } from '@/domain/authoringSession'
 import { isEmptyDocument } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import type { Draft, DraftTarget } from '@/types/draft'
-import {
-  newEntryId,
-  newEntryTimestamp,
-  type AnchorOp,
-  type Entry,
-  type TickReason,
-} from '@/types/entry'
+import { newEntryId, newEntryTimestamp, type Entry, type TickReason } from '@/types/entry'
 import { useEntriesStore } from './entriesStore'
 
 /**
@@ -31,13 +25,25 @@ export interface DraftChange {
   /** Text the change added, used only to spot a finished sentence. */
   insertedText?: string
   isFormatting?: boolean
-  /** Anchored ops being composed, for a child draft. */
-  anchors?: AnchorOp[]
+}
+
+/**
+ * What one anchor-mode edit to the **parent** tells the buffer. `anchorIds` is the full set this
+ * session has placed so far, not a delta — the caller already knows it exactly, since every id
+ * comes from `addAnchorMark`/`addAnchorInsert` it just called, and undoing one is removing it from
+ * this same list rather than the store guessing at a diff.
+ */
+export interface ParentAnchorChange {
+  content: string
+  steps?: unknown[]
+  anchorIds: string[]
 }
 
 interface ActiveSession {
   draft: Draft
   session: AuthoringSession
+  /** The parent's own step chain for an anchor-mode session. Unused by every other target. */
+  parentSession: AuthoringSession
   timer: ReturnType<typeof setTimeout> | null
   /** True once anything has actually been typed, so an opened-and-abandoned composer saves nothing. */
   dirty: boolean
@@ -64,7 +70,10 @@ export const useDraftsStore = defineStore('drafts', () => {
    * Opens a session. Nothing is written yet: a composer someone opened and walked away from is not
    * a draft, and a drafts list full of empty rows would defeat the point of having one.
    */
-  function beginDraft(target: DraftTarget, seed: { content?: string; anchors?: AnchorOp[] } = {}) {
+  function beginDraft(
+    target: DraftTarget,
+    seed: { content?: string; parentContent?: string } = {},
+  ) {
     const sessionId = newEntryId()
     const startedAt = newEntryTimestamp()
 
@@ -75,11 +84,14 @@ export const useDraftsStore = defineStore('drafts', () => {
         started_at: startedAt,
         updated_at: startedAt,
         content: seed.content ?? '',
-        anchors: seed.anchors ?? [],
+        anchor_ids: [],
+        parent_content: seed.parentContent ?? null,
         steps: [],
+        parent_steps: [],
         ticks: [],
       },
       session: new AuthoringSession({ sessionId, startedAt }),
+      parentSession: new AuthoringSession({ sessionId, startedAt }),
       timer: null,
       dirty: false,
       persisted: false,
@@ -104,6 +116,14 @@ export const useDraftsStore = defineStore('drafts', () => {
         startedAt: draft.started_at,
         steps: draft.steps,
         ticks: draft.ticks,
+      }),
+      // Its own step chain, so the parent revision gets an honest authoring trace too; ticks on
+      // this stream are pause/interval only, since `recordParentChange` reports no inserted text.
+      parentSession: AuthoringSession.resume({
+        sessionId,
+        startedAt: draft.started_at,
+        steps: draft.parent_steps,
+        ticks: [],
       }),
       timer: null,
       // Nothing new to write until this session is typed in, but the row is already on disk, so
@@ -133,10 +153,32 @@ export const useDraftsStore = defineStore('drafts', () => {
     entry.draft = {
       ...entry.draft,
       content: change.content,
-      anchors: change.anchors ?? entry.draft.anchors,
       updated_at: newEntryTimestamp(),
       steps: entry.session.steps,
       ticks: entry.session.ticks,
+    }
+    entry.dirty = true
+
+    scheduleFlush(sessionId)
+  }
+
+  /**
+   * Records a change to the **parent's** provisional document, for an anchor-mode session only.
+   * `anchorIds` replaces the draft's whole list rather than being merged into it: the caller already
+   * has the authoritative set (every id came from a command in `editor/extensions.ts` that this
+   * store never sees directly), so there is nothing here for a merge to get wrong.
+   */
+  function recordParentChange(sessionId: string, change: ParentAnchorChange): void {
+    const entry = requireActive(sessionId)
+
+    entry.parentSession.record({ steps: change.steps ?? [] })
+
+    entry.draft = {
+      ...entry.draft,
+      parent_content: change.content,
+      anchor_ids: change.anchorIds,
+      updated_at: newEntryTimestamp(),
+      parent_steps: entry.parentSession.steps,
     }
     entry.dirty = true
 
@@ -170,7 +212,9 @@ export const useDraftsStore = defineStore('drafts', () => {
     entry.dirty = false
 
     const write = (async () => {
-      if (isEmptyDocument(entry.draft.content)) {
+      // A blank child note is not yet a draft worth keeping, unless anchors have already been
+      // placed on the parent — that is real, crash-worthy work even before a word of prose exists.
+      if (isEmptyDocument(entry.draft.content) && entry.draft.anchor_ids.length === 0) {
         if (entry.persisted) {
           await draftRepository.delete(sessionId)
           entry.persisted = false
@@ -210,7 +254,11 @@ export const useDraftsStore = defineStore('drafts', () => {
     error.value = null
 
     try {
-      const created = await useEntriesStore().createFromDraft(entry.draft, entry.session.seal())
+      const created = await useEntriesStore().createFromDraft(
+        entry.draft,
+        entry.session.seal(),
+        entry.parentSession.seal(),
+      )
 
       // Only now: the draft's contents already live in a committed entry, so deleting the buffer
       // loses nothing. Sealing before the write succeeded would lose everything.
@@ -309,6 +357,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     beginDraft,
     resumeDraft,
     recordChange,
+    recordParentChange,
     markTick,
     flush,
     abandonDraft,

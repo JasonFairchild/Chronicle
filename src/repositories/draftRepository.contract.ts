@@ -8,8 +8,10 @@ function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft
     started_at: '2026-09-05T10:00:00.000Z',
     updated_at: '2026-09-05T10:00:00.000Z',
     content: '',
-    anchors: [],
+    anchor_ids: [],
+    parent_content: null,
     steps: [],
+    parent_steps: [],
     ticks: [],
     ...overrides,
   }
@@ -37,20 +39,10 @@ export function runDraftRepositoryContract(
           session_id: 'session-1',
           target: { kind: 'new_child', parent_id: 'entry-9', relation_type: 'annotation' },
           content: 'Half a thought',
-          anchors: [
-            {
-              kind: 'comment',
-              at: {
-                from: 0,
-                to: 4,
-                base_version_id: null,
-                quote: 'Half',
-                prefix: '',
-                suffix: ' a',
-              },
-            },
-          ],
+          anchor_ids: ['anchor-1'],
+          parent_content: 'The full parent document, with a provisional anchor mark',
           steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
+          parent_steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
           ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
         }),
       )
@@ -63,8 +55,12 @@ export function runDraftRepositoryContract(
         parent_id: 'entry-9',
         relation_type: 'annotation',
       })
-      expect(fetched?.anchors[0]?.kind).toBe('comment')
+      expect(fetched?.anchor_ids).toEqual(['anchor-1'])
+      expect(fetched?.parent_content).toBe(
+        'The full parent document, with a provisional anchor mark',
+      )
       expect(fetched?.steps).toHaveLength(1)
+      expect(fetched?.parent_steps).toHaveLength(1)
       expect(fetched?.ticks[0]?.reason).toBe('punctuation')
     })
 

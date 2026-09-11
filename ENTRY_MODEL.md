@@ -17,46 +17,39 @@ reworked, is a legitimate view. Ticks are not entries and so never appear.
 
 ## Child entries and anchors
 
-A child carries a list of anchored operations, each with its intent. An empty list means the child
-is about the parent at large.
-
-```ts
-type AnchorOp =
-  | { kind: 'comment'; at: DocLocation } // highlight and remark on
-  | { kind: 'strike'; at: DocLocation } // shown struck, never hidden
-  | { kind: 'insert'; at: DocLocation; text: string } // collapsed location
-  | { kind: 'media'; media_ref: string }
-
-interface DocLocation {
-  from: number // ProseMirror positions, relative to base_version_id
-  to: number // === from for an insertion point
-  base_version_id: string | null // the version these positions were measured in; null = version one
-  quote: string // the spanned text; '' when collapsed
-  prefix?: string // text just before, for disambiguation
-  suffix?: string // text just after
-}
-```
-
-One location type serves every op, including insert. An insertion point is a collapsed location
-where `from === to`, so it inherits the same migration and fallback machinery as a span rather than
-needing its own.
-
-`prefix` and `suffix` are the disambiguating context for fallback matching. If the quote is "the
-meeting" and that phrase appears four times in the document, the quote alone cannot say which one
-was meant, and a short run of text on either side pins it. For a collapsed insertion point the quote
-is empty, so prefix and suffix are the only fallback signal there is.
+A child entry doesn't store where it points — the parent's own document does. A stored anchor's
+position is a fact about the _parent's_ document, not the child that references it, so it lives
+there: a span op (`comment`, `strike`) is a **mark** on the parent's text, carrying `{ anchor_id,
+kind }`; a collapsed op (an inserted word or phrase, including a strike's replacement wording) is an
+**atom inline node**, `anchorInsert`, carrying `{ anchor_id, text }` — a mark can't represent a
+zero-width position with content of its own, so a collapsed op needs the node form ProseMirror
+already gives `MediaImage`. `anchor_id` ties a mark and a node together as one op, and is what pairs
+a strike with its replacement wording: a strike mark plus an `anchorInsert` sharing one `anchor_id`
+_is_ the strike-and-insert-in-tandem replacement gesture, declared rather than inferred from
+render-time proximity. The mark is `inclusive: false`, so typing at an anchor's edge is not silently
+absorbed into it, and `excludes: ''`, so two children anchoring the same passage can overlap freely.
 
 There is deliberately no `replace` op. Since nothing a child does hides the parent's text, "I would
-have written this differently" is a strike over the original plus an insert of the new wording, both
-in one child entry so they stay grouped under one explanation. A replace op would be sugar for that
-pair while implying a hiding behavior the model does not have.
+have written this differently" is a strike over the original plus an `anchorInsert` of the new
+wording sharing its id, both placed in one anchor-mode session so they stay grouped under one
+explanation. A replace op would be sugar for that pair while implying a hiding behavior the model
+does not have.
 
-Pairing is inferred at render time, not stored. When one child holds a strike and an insert whose
-location falls inside or adjacent to that strike, they draw as a unit: struck original followed by
-the new wording styled as an addition, the familiar diff shape. Anything else draws separately. A
-strike with no accompanying insert is meaningful on its own, a retraction, and renders as struck
-text with a gutter marker leading to the child entry whose prose explains it. The fallback when the
-heuristic does not fire is drawing both ops independently, which is always correct if less pretty.
+**What the child stores.** `anchors: AnchorRef[]`, each `{ anchor_id, quote }` — an id referencing a
+mark/node in the parent's current document, plus the wording it covered when the child was sealed.
+An empty list means the child is about the parent at large. `quote` is not a growing history, since
+the parent's own step chain already is that history; replaying it to derive original wording is a
+future upgrade once Phase 3 can replay chains, not a storage commitment now. It is what lets an
+orphaned anchor (its mark removed by a later revision) still render "was attached to: …" once
+nothing in the current document matches its id.
+
+**Where wording lives.** The parent's document holds anchor structure and any wording that has a
+position in the parent (an insert's text, a strike's replacement); the child holds the prose
+explanation. Per-op commentary is not a separate field — it's another child entry. Batching several
+ops under one explanation stays available; splitting one per child is the common case, not a rule.
+Inline wording is plain, single-line text with no formatting; a thought needing more is prose and
+belongs on the child. `docToPlainText` skips anchor-carried wording the same way it already skips
+the title node, so previews and search never fill up with words the parent's author didn't write.
 
 This subsumes the annotation/update distinction structurally. An entry carrying a strike plus an
 insert behaves like an update; one carrying a bare comment behaves like an annotation. The
@@ -67,16 +60,82 @@ Keeping them costs nothing and they cannot be backfilled if they later matter. O
 
 ## Anchor resolution
 
-Anchors are document positions with a recorded base version, plus quoted text.
+Resolving an anchor is reading structure a general-purpose editor already maintains, not
+reinterpreting stored offsets. `resolveAnchors` (`src/domain/anchors.ts`) walks the parent's current
+document for a mark or node carrying each requested `anchor_id`: found means `present`, and the
+document itself is the authority on what it covers now; not found means `orphaned`, and the child's
+own recorded `quote` is what renders as "was attached to: <quote>" — breakage stays legible history
+rather than silent loss. There is no ladder of degrees between those two, because there is no
+position to have drifted: the mark either survived the parent's edits or a revision removed it.
 
-Positions alone are meaningless without knowing which version they were measured against, hence
-`base_version_id`. Because editor steps are recorded anyway for authoring history, an anchor can be
-**migrated exactly** through later edits by mapping its positions forward through those steps, rather
-than guessed at by text search. Quote text is kept for two reasons: it is the fallback when the step
-chain is unavailable, and it is the human-readable record of what the passage originally said.
+Live editing needs no resolution pass at all. Because anchors are marks in the very document being
+edited, a text-mode revision renders them natively while the author works, the same way any other
+formatting mark would show. Resolution is what a **reader** (a different version, or someone else's
+view) does to reconstruct what a child points at without live editor state to lean on.
 
-Resolution returns `exact`, `mapped`, `fuzzy`, or `orphaned`. An orphaned anchor renders as "was
-attached to: <quote>", so breakage is legible history rather than silent loss.
+## Two creation experiences, kept separate
+
+Revising an entry's own text and creating a child entry are different modes a user cannot mix in one
+sitting. Text-mode gets ordinary editing and cannot add anchor marks; anchor-mode
+(`DocumentEditor.vue`'s `anchor-mode` prop) gets a sharply limited action set — select then
+comment/strike, or place the cursor and propose wording — and cannot touch surrounding text at all.
+
+This makes "no child entry is destructive" checkable, not just true by convention: an anchor-mode
+session's `sameContent(before, after)` holds, and it holds by construction rather than by
+convention, for two independent reasons. A `filterTransaction` guard (`isAnchorEdit` in
+`editor/extensions.ts`) rejects every transaction in an anchor-mode session except the anchor
+commands below and undoing them, so surrounding text is unreachable at the editor level before the
+question of what counts as "content" even comes up. And within what those anchor commands _can_
+produce, `docToPlainText` is blind to both shapes: a mark is metadata riding on existing text, which
+the flattening never reads at all, and an `anchorInsert` node is a real node with real text that
+`docToPlainText` is specifically required to skip, the same way it already skips the title node (see
+"Where wording lives" above). `revision_mode: 'text' | 'anchor' | null` is a real column on `Entry`
+(not `metadata`, since it's filtered on: a card's revision count reads only `revision_mode ===
+'text'` revisions, so an anchor-mode session's parent revision doesn't inflate it).
+
+**Drafts.** An anchor-mode session edits two documents — the parent (gaining provisional anchors,
+tracked in `Draft.parent_content` / `parent_steps`) and the child's own prose (`Draft.content` /
+`steps`) — sealing atomically into two entries via `EntryRepository.createMany`: a parent revision
+(`revision_mode: 'anchor'`) and the child (`anchors` pointing at what just landed). `createMany`
+writes all-or-nothing, so a half-sealed pair — a revision whose anchors no entry explains, or a child
+pointing at ids nothing in the parent carries — is never representable. If nothing was actually
+anchored (`Draft.anchor_ids` empty), sealing writes only the child, exactly as it would for an
+unanchored note — no revision for a parent nothing touched. Anchors may be freely added, changed, or
+undone before that seal; undoing is diffed against the session's starting document
+(`addedAnchorIds`), not tallied, so a placed-then-undone anchor leaves no trace to subtract. **No
+editing or deleting an anchor after sealing** — append-only for the parent's anchor history, same as
+entries generally. Pointing differently at the same passage later means adding another child entry.
+Re-opening a sealed child's anchors is possible in principle (they're ordinary document steps on the
+parent) but is deliberately not offered.
+
+**Color.** Never stored — the mark/node carries only `{ anchor_id, kind }`. Color is computed at
+render time from `(active scheme, child entry, kind)`, so a scheme can be swapped without touching
+history: a system scheme by op kind (the default, and the only one built today — see
+`--color-anchor-*` in `src/assets/main.css`), a per-child scheme assigned by a child's stable ordinal
+among its siblings, user-defined palettes, or a pinned color on one child overriding the scheme. One
+color per child, not per op, matching "one set of ops is usually one thought." A tag-linked scheme is
+a plausible future fourth option once tags exist as a real entity — see PRODUCT.md, "Making anchor
+ops unmistakable" — coloring the tag rather than the child, so an anchor on a tagged entry can adopt
+it. Not decided; noted here only so the render-time-only rule above is understood to already
+accommodate it.
+
+**Warning on an affected anchor.** Warn when the _text under_ an anchor changes — insertion inside
+its range, partial or full deletion — not when it merely shifts from an edit elsewhere. Detected by
+mapping each anchor's endpoints (`anchorSpans` / `mapAnchorSpans` in `editor/extensions.ts`) through
+the pending session's `Mapping` and reading ProseMirror's own deletion flags (`deletedAfter` on the
+start, `deletedBefore` on the end), not by comparing text; `anchorsAffectedBy`
+(`domain/anchorWarnings.ts`) is the pure judgment on top. Tracking runs one transaction at a time for
+the length of the session, sticky once an anchor is flagged, and `EntryDetailView.vue` names the note
+each affected anchor belongs to before "Save revision" is offered.
+
+**Superseded by this design:** the offset-and-quote `AnchorOp`/`DocLocation` shape that used to live
+on the child, and `resolveAnchor.ts`'s four-status ladder (`stillHolds`, `mapLocation`,
+`findByQuote`, `findCollapsed`, `isReplacementPair`) built to reinterpret it — both deleted once
+anchors became native to the parent's document rather than numbers requiring a ruler and a fallback
+search. See "Considered and rejected" below for why that shape was worth trying and worth leaving.
+`docToPlainText`, `docTitle`, `collectMediaRefs`, and `isEmptyDocument` were unaffected by the move —
+they stayed for previews, search, and validation, just without being safety-critical for anchor
+offsets anymore.
 
 ## Version chains
 
@@ -166,24 +225,30 @@ interface Draft {
   session_id: string // key
   target:
     | { kind: 'new_root' }
-    | { kind: 'new_child'; parent_id: string; relation_type: RelationType }
-    | { kind: 'revision'; parent_id: string; base_version_id: string }
+    | { kind: 'new_child'; parent_id: string; relation_type: NarrativeRelation } // anchor-mode
+    | { kind: 'revision'; parent_id: string } // text-mode
   started_at: string
   updated_at: string
-  content: string // current document snapshot
-  anchors: AnchorOp[] // ops being composed, for a child draft
+  content: string // the child's own prose, or the entry's own document for the other two targets
+  anchor_ids: string[] // ids this session has placed in parent_content, in the order placed
+  parent_content: string | null // the parent, provisionally marked. `new_child` only
   steps: AuthoringStep[]
+  parent_steps: AuthoringStep[] // the parent's own step chain. `new_child` only
   ticks: AuthoringTick[]
 }
 ```
 
-Sealing turns one draft into one entry: `content` and `anchors` carry over, `steps` and `ticks`
-become the `authoring_trace`, and the draft row is deleted. A draft is therefore very nearly the
-entry it will become, which is exactly why it must not live in the entries table. Entries are
-immutable and a draft rewrites itself every few hundred milliseconds. Keeping them apart means no
-entry query ever has to filter drafts out, and a half-written thought never appears in history or a
-timeline. The `target` field is what lets an unsealed draft know whether it will become a root, a
-child of something, or a revision, so the drafts list can show what each one is attached to.
+Sealing turns one draft into one or two entries, per "Two creation experiences" above: `new_root`
+and `revision` each become one entry, carrying `content`/`steps`/`ticks` into it as
+`authoring_trace`; `new_child` becomes the child alone when `anchor_ids` is empty, or the atomic
+parent-revision-plus-child pair when it isn't, with `parent_content`/`parent_steps` sealing into the
+revision's own `authoring_trace`. Either way the draft row is deleted once its contents live in a
+committed entry. A draft is therefore very nearly the entry (or entries) it will become, which is
+exactly why it must not live in the entries table. Entries are immutable and a draft rewrites itself
+every few hundred milliseconds. Keeping them apart means no entry query ever has to filter drafts
+out, and a half-written thought never appears in history or a timeline. The `target` field is what
+lets an unsealed draft know what it will become, so the drafts list can show what each one is
+attached to.
 
 ## Imports
 
@@ -230,6 +295,13 @@ be annotated, revised, and have children like any other entry; they simply displ
 ```ts
 type RelationType = 'annotation' | 'update' | 'connection' | 'revision'
 
+type RevisionMode = 'text' | 'anchor' // which creation experience wrote a revision
+
+interface AnchorRef {
+  anchor_id: string // references a mark/node in the parent's own document
+  quote: string // what the parent said under it at seal time; the orphaned fallback
+}
+
 interface Entry {
   id: string // UUIDv7: time-ordered and sortable as text
   created_at: string
@@ -240,7 +312,8 @@ interface Entry {
   target_id: string | null // connections only
   title: string | null // cache of the document's title node
   content: string // serialized ProseMirror document
-  anchors: AnchorOp[] // empty = about the parent at large
+  anchors: AnchorRef[] // empty = about the parent at large
+  revision_mode: RevisionMode | null // revisions only; null everywhere else
   authoring_trace: AuthoringTrace | null
   media_refs: string[] // OPFS blob ids the document depends on
   metadata: Record<string, unknown>
@@ -317,8 +390,16 @@ interface AggregatedEntry {
 interface ResolvedChild {
   entry: AggregatedEntry
   relation_type: RelationType
-  ops: ResolvedOp[]
+  anchors: ResolvedAnchor[] // this child's anchors, read out of the parent's current document
   has_children: boolean // grandchildren are indicated, not expanded
+}
+
+interface ResolvedAnchor {
+  anchor_id: string
+  status: 'present' | 'orphaned'
+  quote: string // current wording if present, the recorded quote if orphaned
+  kind: 'comment' | 'strike' | null // null for a bare insertion with no mark
+  insertion: string | null // wording the anchor carries, if any
 }
 ```
 
@@ -341,3 +422,10 @@ and only signals that deeper ones exist.
 - **ProseMirror block ids as anchors.** Node attributes are copied on paragraph split and lost on
   merge, so ids duplicate and orphan. Repairing that needs a custom extension that cannot be tested
   outside a browser, and it gives paragraph granularity where users want a sentence.
+- **Anchors as offsets stored on the child**, resolved by a fallback ladder (exact position, mapped
+  through recorded steps, quote search disambiguated by prefix/suffix, then orphaned). Worth
+  building first: it needed no editor schema change and proved the shape of the problem. But every
+  one of its failure modes traced back to the same cause — an offset is a fact about the parent's
+  document, stored somewhere that isn't the parent's document — and the fallback ladder existed
+  entirely to paper over that. Moving anchors into the parent as marks and nodes (above) deleted the
+  ladder rather than improving it: there is nothing left to fall back from.

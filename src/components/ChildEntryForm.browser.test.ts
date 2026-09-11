@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest'
 import ChildEntryForm, { type ChildEntrySubmission } from '@/components/ChildEntryForm.vue'
 import { renderComponent } from '@/testing/renderComponent'
 
-function mountForm(quote: string | null) {
+function mountForm() {
   const submissions: ChildEntrySubmission[] = []
 
   // Listeners go in `attrs`, matching how a parent uses `@submit`; `props` is for real props.
   const screen = renderComponent(ChildEntryForm, {
-    props: { quote },
     attrs: {
       onSubmit: (submission: ChildEntrySubmission) => {
         submissions.push(submission)
@@ -19,78 +18,40 @@ function mountForm(quote: string | null) {
 }
 
 describe('ChildEntryForm (browser)', () => {
-  it('says the note is about the whole entry when nothing is selected', async () => {
-    const { screen } = mountForm(null)
+  it('says the note is about the whole entry, pointing at anchoring for a specific passage', async () => {
+    const { screen } = mountForm()
 
     await expect.element(screen.getByText(/About this entry as a whole/)).toBeVisible()
   })
 
-  it('shows the selected passage when there is one', async () => {
-    const { screen } = mountForm('Lake Tahoe')
-
-    await expect.element(screen.getByText('“Lake Tahoe”')).toBeVisible()
-  })
-
-  it('offers no strike action without a selection, since there is nothing to strike', async () => {
-    const { screen } = mountForm(null)
-
-    expect(screen.getByRole('combobox', { name: 'Anchor action' }).query()).toBeNull()
-  })
-
-  it('emits an annotation comment by default', async () => {
-    const { screen, submissions } = mountForm('Lake Tahoe')
+  it('emits an annotation by default', async () => {
+    const { screen, submissions } = mountForm()
 
     await screen.getByLabelText('Your note').fill('Worth remembering')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
-    expect(submissions).toEqual([
-      {
-        relationType: 'annotation',
-        opKind: 'comment',
-        content: 'Worth remembering',
-        insertion: '',
-      },
-    ])
+    expect(submissions).toEqual([{ relationType: 'annotation', content: 'Worth remembering' }])
   })
 
-  it('carries replacement wording alongside a strike', async () => {
-    const { screen, submissions } = mountForm('Lake Tahoe')
+  it('emits the chosen relation kind', async () => {
+    const { screen, submissions } = mountForm()
 
     await screen.getByRole('combobox', { name: 'Relation type' }).selectOptions('update')
-    await screen.getByRole('combobox', { name: 'Anchor action' }).selectOptions('strike')
-    await screen.getByLabelText('Your note').fill('Wrong lake')
-    await screen.getByLabelText('Replacement wording').fill('Donner Lake')
+    await screen.getByLabelText('Your note').fill('It changed since')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
-    expect(submissions).toEqual([
-      {
-        relationType: 'update',
-        opKind: 'strike',
-        content: 'Wrong lake',
-        insertion: 'Donner Lake',
-      },
-    ])
-  })
-
-  it('asks for replacement wording only once a strike is chosen', async () => {
-    const { screen } = mountForm('Lake Tahoe')
-
-    expect(screen.getByLabelText('Replacement wording').query()).toBeNull()
-
-    await screen.getByRole('combobox', { name: 'Anchor action' }).selectOptions('strike')
-
-    await expect.element(screen.getByLabelText('Replacement wording')).toBeVisible()
+    expect(submissions).toEqual([{ relationType: 'update', content: 'It changed since' }])
   })
 
   it('refuses to submit an empty note', async () => {
-    const { screen, submissions } = mountForm(null)
+    const { screen, submissions } = mountForm()
 
     await expect.element(screen.getByRole('button', { name: 'Add entry' })).toBeDisabled()
     expect(submissions).toEqual([])
   })
 
   it('clears itself after a successful submission', async () => {
-    const { screen } = mountForm(null)
+    const { screen } = mountForm()
 
     await screen.getByLabelText('Your note').fill('Something')
     await screen.getByRole('button', { name: 'Add entry' }).click()

@@ -3,9 +3,9 @@
  *
  * Images live here rather than in the entry row for two reasons. Entries are immutable and get
  * copied forward by every revision, so inlining a photo would duplicate megabytes per edit. And a
- * document referring to a blob by id is what lets `media_refs` be derived from the document,
- * `AnchorOp { kind: 'media' }` point at an attachment, and an orphaned reference stay legible
- * instead of becoming a broken data URL.
+ * document referring to a blob by id is what lets `media_refs` be derived from the document instead
+ * of maintained alongside it, so a removed attachment leaves a dangling id rather than a broken
+ * data URL.
  */
 export interface MediaRepository {
   /** Stores the bytes and returns the id the document will refer to. */

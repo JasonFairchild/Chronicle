@@ -6,8 +6,8 @@ import {
   type ResolvedChild,
   type ResolvedConnection,
 } from '@/types/entry'
-import { docTitle, docToPlainText } from './entryDocument'
-import { resolveAnchorOps } from './resolveAnchor'
+import { resolveAnchors } from './anchors'
+import { docTitle } from './entryDocument'
 
 export interface ReconstructOptions {
   /** Reconstruct the state as it stood at this moment. Omit for current state. */
@@ -174,10 +174,6 @@ function resolveChildren(
   depth: number,
 ): ResolvedChild[] {
   const resolved: ResolvedChild[] = []
-  // Anchors are offsets into the canonical flattening, never into the serialized document. The
-  // detail view renders the same flattening, so what a reader selects and what an anchor records
-  // are measured against one identical string.
-  const text = docToPlainText(current.content)
 
   for (const child of descendants) {
     if (child.relation_type !== 'annotation' && child.relation_type !== 'update') continue
@@ -189,10 +185,9 @@ function resolveChildren(
     resolved.push({
       entry,
       relation_type: child.relation_type,
-      ops: resolveAnchorOps(child.anchors, {
-        text,
-        mediaRefs: current.media_refs,
-      }),
+      // Against the version being viewed, not the original: the anchors live in the parent's
+      // document, so "which version" is the whole question of where they are.
+      anchors: resolveAnchors(child.anchors, current.content),
       has_children: hasVisibleChildren(child.id, walk),
     })
   }

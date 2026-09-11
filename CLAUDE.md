@@ -34,6 +34,8 @@ vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser 
 - When two options are equally good, take the one that costs less context.
 - Prefer one shell command over a pipeline. Every binary in a chain must be allowlisted, so a stray
   `| sed` or `; echo` triggers a permission prompt. Use Read/Grep/Glob, not `cat`/`grep`/`find`.
+- Commit messages: a subject line, then only what the diff can't say — why a choice was made, and
+  anything a reviewer couldn't discover from the code. No tour of the changes.
 
 ## Landmarks
 
@@ -47,6 +49,9 @@ vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser 
 ## Where the work is
 
 Phase 2 is feature-complete and covered by tests; PRODUCT.md §4 is the list of what that means.
-Next: the SQLite WASM + OPFS adapter behind `EntryRepository` / `DraftRepository`, deliberately
-deferred until the Dexie path has been used in anger. Then Phase 3 — scrubbable per-entry history,
-revision diffs, and the orphaned-anchor warning (PRODUCT.md §5).
+The anchor model redesign (ENTRY_MODEL.md, "Anchors live in the parent's document") is built:
+anchors are marks/nodes in the parent, anchor-mode child creation is its own session distinct from
+a text-mode revision, and the orphaned-anchor and text-under-anchor warnings both work off it.
+Next: Phase 3's scrubbable per-entry history and revision diffs, which is what that redesign was
+for. The SQLite WASM + OPFS adapter behind `EntryRepository` / `DraftRepository` remains deferred
+until the Dexie path has been used in anger.

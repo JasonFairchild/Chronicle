@@ -8,9 +8,8 @@ import ConnectionForm, {
 } from '@/components/ConnectionForm.vue'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { useMedia } from '@/composables/useMedia'
-import { docToPlainText } from '@/domain/entryDocument'
-import { createDocLocation } from '@/domain/resolveAnchor'
-import type { AggregatedEntry, AnchorOp, DocLocation, ResolvedOp } from '@/types/entry'
+import { docToPlainText, hasTitleNode } from '@/domain/entryDocument'
+import type { AggregatedEntry, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 
@@ -26,35 +25,63 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 /** Set when an action taken from an already-loaded entry fails; shown alongside its content. */
 const actionError = ref<string | null>(null)
-const contentEl = ref<HTMLElement | null>(null)
 const mediaEl = ref<HTMLElement | null>(null)
 
-/**
- * Both of these hold immutable snapshots that are replaced wholesale, never mutated in place, so
- * a shallow ref is the right tool. It also keeps Vue's reactive proxy off this data: a proxy is
- * not structured-cloneable, and anchors built from it travel down into the repository.
- */
+// Holds an immutable snapshot, replaced wholesale and never mutated in place, so a shallow ref is
+// the right tool. It also keeps Vue's reactive proxy off this data, which matters once it travels
+// into the repository: a proxy is not structured-cloneable.
 const aggregated = shallowRef<AggregatedEntry | null>(null)
-const selection = shallowRef<DocLocation | null>(null)
 
-/** The open revision session, if the entry is being edited. Null means it is being read. */
+/** The open revision session, if the entry's own text is being edited. Null means it is being read. */
 const revisionSession = ref<string | null>(null)
 const revisionContent = ref('')
 const savingRevision = ref(false)
-
-const heading = computed(() => aggregated.value?.title ?? 'Entry detail')
+/** Anchors this revision session has disturbed so far (PRODUCT.md §5.3). Sticky across the session. */
+const revisionAffectedAnchorIds = ref<string[]>([])
 
 /**
- * The one rendering of the document, and the exact string anchors are measured against. Rendering
- * anything else here — the serialized JSON, or a differently flattened copy — would put selection
- * offsets and stored anchors on different rulers.
+ * The open anchor-mode session, if a child entry is being composed against a passage. Mutually
+ * exclusive with `revisionSession`: ENTRY_MODEL.md is explicit that the two creation experiences
+ * are never offered in the same sitting, and hiding each control while the other is open is what
+ * enforces that in the UI rather than merely documenting it.
  */
-const plainText = computed(() => docToPlainText(aggregated.value?.content ?? ''))
+const childSession = ref<string | null>(null)
+const childRelationType = ref<NarrativeRelation>('annotation')
+const childParentContent = ref('')
+const childNoteContent = ref('')
+const savingChild = ref(false)
+
+const heading = computed(() => aggregated.value?.title ?? 'Entry detail')
 
 const versionLabel = computed(() => {
   const version = aggregated.value?.version
   if (!version || version.total <= 1) return null
   return `Version ${version.index} of ${version.total}`
+})
+
+/** Whether the document being read has a title node, so an anchor-mode editor opens the same shape. */
+const parentHasTitle = computed(() => hasTitleNode(aggregated.value?.content ?? ''))
+
+/**
+ * The note each disturbed anchor belongs to, named rather than just counted (PRODUCT.md §5.3: "say
+ * so before saving, and name the note"). Anchors, not children, are what a revision can disturb, so
+ * this reads them off every child's resolved anchor list rather than the children themselves.
+ */
+const revisionWarnings = computed<string[]>(() => {
+  if (revisionAffectedAnchorIds.value.length === 0) return []
+
+  const owners = new Map<string, string>()
+  for (const child of aggregated.value?.children ?? []) {
+    for (const anchor of child.anchors) {
+      owners.set(
+        anchor.anchor_id,
+        child.entry.title ?? preview(docToPlainText(child.entry.content)),
+      )
+    }
+  }
+
+  const names = revisionAffectedAnchorIds.value.map((id) => owners.get(id) ?? 'a note')
+  return [...new Set(names)]
 })
 
 /** Everything on the timeline except this entry. Direction is chosen by which end you start from. */
@@ -70,7 +97,6 @@ const connectionCandidates = computed<ConnectionCandidate[]>(() =>
 async function loadEntry(entryId: string): Promise<void> {
   loading.value = true
   error.value = null
-  selection.value = null
 
   try {
     aggregated.value = await store.getAggregatedEntry(entryId)
@@ -85,19 +111,26 @@ async function loadEntry(entryId: string): Promise<void> {
   }
 }
 
-/**
- * Discards an in-progress revision rather than leaving it open. Only called when navigating to a
- * different entry — never from a same-entry refresh, since a revision can be open while the
- * always-visible add-child/add-connection forms below are used, and refreshing after one of those
- * must not discard unrelated in-progress work.
- */
+/** Discards an in-progress revision rather than leaving it open. */
 function resetRevisionState(): void {
   if (revisionSession.value) {
     void drafts.discardDraft(revisionSession.value)
   }
   revisionSession.value = null
   revisionContent.value = ''
+  revisionAffectedAnchorIds.value = []
   savingRevision.value = false
+}
+
+/** Discards an in-progress anchor-mode session rather than leaving it open. */
+function resetChildState(): void {
+  if (childSession.value) {
+    void drafts.discardDraft(childSession.value)
+  }
+  childSession.value = null
+  childParentContent.value = ''
+  childNoteContent.value = ''
+  savingChild.value = false
 }
 
 onMounted(() => {
@@ -109,9 +142,10 @@ onMounted(() => {
 watch(
   () => props.id,
   (entryId) => {
-    // Otherwise "Save revision" after navigating away would seal against whichever entry this
-    // session's draft still points at, not the one now on screen.
+    // Otherwise saving after navigating away would seal against whichever entry this session's
+    // draft still points at, not the one now on screen.
     resetRevisionState()
+    resetChildState()
     void loadEntry(entryId)
   },
 )
@@ -126,66 +160,6 @@ watch(
   { flush: 'post' },
 )
 
-/**
- * Converts a DOM selection into an offset in the entry's text.
- *
- * Measuring with a range from the container's start is robust to the text being split across
- * nodes, which is what happens as soon as the content stops being one flat string.
- */
-function offsetWithin(container: HTMLElement, node: Node, offset: number): number {
-  const range = document.createRange()
-  range.selectNodeContents(container)
-  range.setEnd(node, offset)
-  return range.toString().length
-}
-
-function captureSelection(): void {
-  const domSelection = window.getSelection()
-  const container = contentEl.value
-  const current = aggregated.value
-
-  if (!domSelection || !container || !current || domSelection.isCollapsed) {
-    selection.value = null
-    return
-  }
-
-  const range = domSelection.getRangeAt(0)
-  if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) {
-    selection.value = null
-    return
-  }
-
-  selection.value = createDocLocation(
-    plainText.value,
-    offsetWithin(container, range.startContainer, range.startOffset),
-    offsetWithin(container, range.endContainer, range.endOffset),
-    current.version.revision_id,
-  )
-}
-
-/**
- * A strike with replacement wording becomes two ops in one child entry, which is the replacement
- * gesture. Nothing is hidden: the original stays and the new wording sits beside it.
- */
-function buildAnchors(submission: ChildEntrySubmission, at: DocLocation | null): AnchorOp[] {
-  if (!at) return []
-
-  if (submission.opKind !== 'strike') {
-    return [{ kind: 'comment', at }]
-  }
-
-  const ops: AnchorOp[] = [{ kind: 'strike', at }]
-  if (submission.insertion) {
-    ops.push({
-      kind: 'insert',
-      at: createDocLocation(plainText.value, at.to, at.to, at.base_version_id),
-      text: submission.insertion,
-    })
-  }
-
-  return ops
-}
-
 async function handleAddChild(submission: ChildEntrySubmission): Promise<void> {
   actionError.value = null
 
@@ -194,7 +168,6 @@ async function handleAddChild(submission: ChildEntrySubmission): Promise<void> {
       parentId: props.id,
       relationType: submission.relationType,
       content: submission.content,
-      anchors: buildAnchors(submission, selection.value),
     })
     await loadEntry(props.id)
   } catch (err) {
@@ -238,6 +211,7 @@ function handleRevisionChange(change: EditorChange): void {
   if (!revisionSession.value) return
 
   revisionContent.value = change.content
+  revisionAffectedAnchorIds.value = change.affectedAnchorIds ?? []
   drafts.recordChange(revisionSession.value, change)
 }
 
@@ -267,6 +241,67 @@ async function cancelRevision(): Promise<void> {
   await drafts.discardDraft(sessionId)
 }
 
+/**
+ * Opens an anchor-mode session: two documents, the parent gaining provisional anchors and the
+ * child's own prose, sealing atomically together (ENTRY_MODEL.md, "Drafts").
+ */
+function startAnchoring(relationType: NarrativeRelation): void {
+  const current = aggregated.value
+  if (!current) return
+
+  childRelationType.value = relationType
+  childParentContent.value = current.content
+  childNoteContent.value = ''
+  childSession.value = drafts.beginDraft(
+    { kind: 'new_child', parent_id: props.id, relation_type: relationType },
+    { parentContent: current.content },
+  )
+}
+
+function handleParentAnchorChange(change: EditorChange): void {
+  if (!childSession.value) return
+
+  childParentContent.value = change.content
+  drafts.recordParentChange(childSession.value, {
+    content: change.content,
+    steps: change.steps,
+    anchorIds: change.anchorIds ?? [],
+  })
+}
+
+function handleChildNoteChange(change: EditorChange): void {
+  if (!childSession.value) return
+
+  childNoteContent.value = change.content
+  drafts.recordChange(childSession.value, change)
+}
+
+async function saveChildEntry(): Promise<void> {
+  const sessionId = childSession.value
+  if (!sessionId || savingChild.value) return
+
+  savingChild.value = true
+  actionError.value = null
+
+  try {
+    await drafts.sealDraft(sessionId)
+    childSession.value = null
+    await loadEntry(props.id)
+  } catch (err) {
+    actionError.value = err instanceof Error ? err.message : 'Failed to add entry'
+  } finally {
+    savingChild.value = false
+  }
+}
+
+async function cancelChildEntry(): Promise<void> {
+  const sessionId = childSession.value
+  if (!sessionId) return
+
+  childSession.value = null
+  await drafts.discardDraft(sessionId)
+}
+
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'full',
@@ -280,27 +315,31 @@ function preview(text: string): string {
 }
 
 /**
- * An orphaned anchor keeps the wording it was attached to, so an edit that breaks a reference
- * reads as history rather than disappearing.
+ * One line per anchor. A strike and its replacement wording are one anchor sharing one id, not two
+ * things to guess into a pair, so there is exactly one case for a strike whether or not it carries
+ * replacement wording. An orphaned anchor keeps the wording it covered, so a revision that breaks a
+ * reference reads as history rather than disappearing.
  */
-function describeOp(resolved: ResolvedOp): string {
-  const { op, status } = resolved
-
-  if (op.kind === 'media') {
-    return status === 'orphaned' ? 'Referred to a removed attachment' : 'On an attachment'
+function describeAnchor(resolved: ResolvedAnchor): string {
+  if (resolved.status === 'orphaned') {
+    return resolved.quote
+      ? `Was attached to: “${resolved.quote}”`
+      : 'Was attached to a removed passage'
   }
 
-  const quote = op.at.quote
-  if (status === 'orphaned') {
-    return quote ? `Was attached to: “${quote}”` : 'Was attached to a removed passage'
+  if (resolved.kind === 'strike') {
+    const where = resolved.quote ? `“${resolved.quote}”` : 'a point in the text'
+    return resolved.insertion
+      ? `Strikes ${where}, replaced with “${resolved.insertion}”`
+      : `Strikes ${where}`
   }
 
-  if (op.kind === 'insert') {
-    return `Adds “${op.text}”`
+  if (resolved.kind === 'comment') {
+    return resolved.quote ? `On “${resolved.quote}”` : 'On a point in the text'
   }
 
-  const where = quote ? `“${quote}”` : 'a point in the text'
-  return op.kind === 'strike' ? `Strikes ${where}` : `On ${where}`
+  // No mark at all: a bare insertion with nothing struck.
+  return resolved.insertion ? `Adds “${resolved.insertion}”` : 'On a point in the text'
 }
 </script>
 
@@ -334,7 +373,7 @@ function describeOp(resolved: ResolvedOp): string {
           </div>
 
           <button
-            v-if="!revisionSession"
+            v-if="!revisionSession && !childSession"
             type="button"
             class="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             @click="startRevising"
@@ -356,6 +395,15 @@ function describeOp(resolved: ResolvedOp): string {
             @change="handleRevisionChange"
           />
 
+          <p
+            v-if="revisionWarnings.length > 0"
+            class="mt-2 text-sm text-[var(--color-accent)]"
+            role="status"
+          >
+            This changes the passage {{ revisionWarnings.join(', ') }}
+            {{ revisionWarnings.length === 1 ? 'is' : 'are' }} about.
+          </p>
+
           <div class="mt-3 flex justify-end gap-2">
             <button
               type="button"
@@ -376,19 +424,55 @@ function describeOp(resolved: ResolvedOp): string {
           </div>
         </template>
 
+        <template v-else-if="childSession">
+          <p class="mb-2 text-sm text-[var(--color-text-muted)]">
+            Select a passage and mark it, or place the cursor and propose wording. Surrounding text
+            cannot be changed from here.
+          </p>
+
+          <DocumentEditor
+            label="Entry being annotated"
+            anchor-mode
+            :with-title="parentHasTitle"
+            :content="childParentContent"
+            :disabled="savingChild"
+            @change="handleParentAnchorChange"
+          />
+
+          <label for="child-note" class="mt-4 mb-2 block text-sm font-medium">Your note</label>
+          <DocumentEditor
+            label="Your note"
+            :content="childNoteContent"
+            :disabled="savingChild"
+            @change="handleChildNoteChange"
+          />
+
+          <div class="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
+              :disabled="savingChild"
+              @click="cancelChildEntry"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="savingChild || !childNoteContent.trim()"
+              @click="saveChildEntry"
+            >
+              Add entry
+            </button>
+          </div>
+        </template>
+
         <template v-else>
-          <!--
-            v-text rather than interpolation: it guarantees this element's text is exactly the
-            canonical flattening in a single node, so selection offsets map straight onto string
-            indices instead of picking up template whitespace.
-          -->
-          <div
-            ref="contentEl"
-            data-testid="entry-content"
-            class="whitespace-pre-wrap text-sm leading-relaxed"
-            @mouseup="captureSelection"
-            @keyup="captureSelection"
-            v-text="plainText"
+          <DocumentEditor
+            label="Entry content"
+            :with-title="parentHasTitle"
+            :content="aggregated.content"
+            disabled
           />
 
           <section v-if="aggregated.media_refs.length > 0" ref="mediaEl" class="mt-4 space-y-2">
@@ -433,14 +517,14 @@ function describeOp(resolved: ResolvedOp): string {
               {{ docToPlainText(child.entry.content) }}
             </p>
 
-            <ul v-if="child.ops.length > 0" class="mt-2 space-y-1">
+            <ul v-if="child.anchors.length > 0" class="mt-2 space-y-1">
               <li
-                v-for="(resolved, opIndex) in child.ops"
-                :key="opIndex"
+                v-for="resolved in child.anchors"
+                :key="resolved.anchor_id"
                 class="text-xs text-[var(--color-text-muted)]"
                 :class="{ italic: resolved.status === 'orphaned' }"
               >
-                {{ describeOp(resolved) }}
+                {{ describeAnchor(resolved) }}
               </li>
             </ul>
           </article>
@@ -470,14 +554,33 @@ function describeOp(resolved: ResolvedOp): string {
         </section>
       </article>
 
-      <section>
+      <section v-if="!revisionSession && !childSession">
         <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
           Add a related entry
         </h2>
-        <ChildEntryForm :quote="selection?.quote ?? null" @submit="handleAddChild" />
+        <div class="space-y-3">
+          <ChildEntryForm @submit="handleAddChild" />
+
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              @click="startAnchoring('annotation')"
+            >
+              Anchor an annotation to a passage
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              @click="startAnchoring('update')"
+            >
+              Anchor an update to a passage
+            </button>
+          </div>
+        </div>
       </section>
 
-      <section>
+      <section v-if="!revisionSession && !childSession">
         <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
           Connect to another entry
         </h2>

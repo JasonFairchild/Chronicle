@@ -9,6 +9,14 @@
   --color-text-muted: #64748b;
   --color-accent: #2563eb;
   --color-accent-hover: #1d4ed8;
+  /*
+    Anchor colours are the *system scheme* — the default of several (see ENTRY_MODEL.md, "Colour"),
+    picked at render time from the op kind and never stored on the mark. Swapping schemes later is
+    a change here and in the render, not a migration of history.
+  */
+  --color-anchor-comment: #fde68a;
+  --color-anchor-strike: #fecaca;
+  --color-anchor-insert: #15803d;
 }
 
 .dark {
@@ -20,6 +28,9 @@
   --color-text-muted: #94a3b8;
   --color-accent: #3b82f6;
   --color-accent-hover: #60a5fa;
+  --color-anchor-comment: #78350f;
+  --color-anchor-strike: #7f1d1d;
+  --color-anchor-insert: #4ade80;
 }
 
 body {

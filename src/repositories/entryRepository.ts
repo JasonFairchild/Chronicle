@@ -2,6 +2,18 @@ import type { CreateEntryInput, Entry } from '@/types/entry'
 
 export interface EntryRepository {
   create(input: CreateEntryInput): Promise<Entry>
+
+  /**
+   * Writes several entries as one unit: either all of them land or none do.
+   *
+   * This exists for exactly one shape, and it is not a convenience. Sealing an anchor-mode session
+   * produces a parent revision carrying the new anchors and a child entry referencing them by id,
+   * and a half-written pair is nonsense in both directions — a revision whose anchors no entry
+   * explains, or a child pointing at ids nothing in the parent carries. Ids are still allocated in
+   * array order, so the entries keep the order they were written in.
+   */
+  createMany(inputs: CreateEntryInput[]): Promise<Entry[]>
+
   getById(id: string): Promise<Entry | null>
 
   /**

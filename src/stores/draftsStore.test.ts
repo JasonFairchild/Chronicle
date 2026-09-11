@@ -11,6 +11,8 @@ import { InMemoryDraftRepository } from '@/repositories/inMemoryDraftRepository'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
+import { withAnchorMark } from '@/testing/anchorFixtures'
+import { createEntryInput } from '@/types/entry'
 
 describe('useDraftsStore', () => {
   beforeEach(() => {
@@ -77,38 +79,21 @@ describe('useDraftsStore', () => {
     expect(store.drafts).toEqual([])
   })
 
-  it('seals a child draft onto its parent, keeping the anchors it was composing', async () => {
+  it('seals an anchor-mode draft as a parent revision plus a child referencing its anchor', async () => {
     const store = useDraftsStore()
-    const parent = await entryRepository.create({
-      parent_id: null,
-      relation_type: null,
-      target_id: null,
-      title: null,
-      content: 'The meeting went badly',
-      anchors: [],
-      authoring_trace: null,
-      media_refs: [],
-      metadata: {},
-    })
+    const parentContent = 'The meeting went badly'
+    const parent = await entryRepository.create(createEntryInput({ content: parentContent }))
 
     const sessionId = store.beginDraft(
       { kind: 'new_child', parent_id: parent.id, relation_type: 'annotation' },
-      {
-        anchors: [
-          {
-            kind: 'comment',
-            at: {
-              from: 4,
-              to: 11,
-              base_version_id: null,
-              quote: 'meeting',
-              prefix: 'The ',
-              suffix: ' went',
-            },
-          },
-        ],
-      },
+      { parentContent },
     )
+    const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
+    store.recordParentChange(sessionId, {
+      content: markedParentContent,
+      steps: [{ stepType: 'addMark' }],
+      anchorIds: ['anchor-1'],
+    })
     store.recordChange(sessionId, {
       content: 'It was salvaged later.',
       steps: [{ stepType: 'replace' }],
@@ -118,7 +103,14 @@ describe('useDraftsStore', () => {
     const child = await entryRepository.getById(sealed.id)
     expect(child?.parent_id).toBe(parent.id)
     expect(child?.relation_type).toBe('annotation')
-    expect(child?.anchors[0]).toMatchObject({ kind: 'comment', at: { quote: 'meeting' } })
+    expect(child?.anchors).toEqual([{ anchor_id: 'anchor-1', quote: 'meeting' }])
+
+    // The parent gained a revision carrying the anchor, rather than the anchor sitting only on
+    // the child — an anchor's position is a fact about the parent's document (ENTRY_MODEL.md).
+    const revisions = await entryRepository.listRevisions(parent.id)
+    expect(revisions).toHaveLength(1)
+    expect(revisions[0]?.revision_mode).toBe('anchor')
+    expect(revisions[0]?.content).toBe(markedParentContent)
   })
 
   it('seals a revision draft as a new version rather than touching the entry it edits', async () => {
@@ -147,8 +139,10 @@ describe('useDraftsStore', () => {
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
       content: 'Half a thought',
-      anchors: [],
+      anchor_ids: [],
+      parent_content: null,
       steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
+      parent_steps: [],
       ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
     })
 

@@ -107,15 +107,25 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 
 ### 4.4 Commenting on a passage — Built
 
-- Selecting text inside an entry offers to attach a note to exactly that passage. With nothing
-  selected, a note is about the entry as a whole.
+- A quick note about the entry as a whole needs no special mode: write it and choose annotation or
+  update. Pointing at a specific passage instead opens a dedicated session — anchoring is its own
+  mode, never mixed with revising the entry's own text in the same sitting (ENTRY_MODEL.md, "Two
+  creation experiences, kept separate").
+- In that session, the entry's text is shown live: select a passage to comment on it or **strike**
+  it, or place the cursor and propose wording, then write the note explaining it. Nothing outside
+  those actions can change the entry's own text from here.
+- A strike can carry replacement wording, which renders beside the struck text — the familiar
+  correction shape, declared as belonging to that strike rather than guessed from where it landed.
+- Saving anchors a passage and the note together in one action; the entry's own text is not touched
+  except to gain the anchor, and its previous version stays exactly as it stood.
 - A note is either an **annotation** or an **update** — the user's choice, affecting how it reads
   and how it will filter, not what it does.
-- On a selected passage you can either comment on it or **strike** it. A strike shows the original
-  struck through; it never hides or removes it.
-- A strike can carry replacement wording, which appears beside the struck text — the familiar
-  correction shape. The entry's own text is not touched.
 - Notes can themselves be annotated, so a conversation with yourself can go deeper than one level.
+- An anchor is fixed once its note is saved. Pointing differently at the same passage later means
+  writing another note, not editing the first one's anchor (see §6, "Editing a child entry's
+  anchors").
+- Highlight color is a display setting, not something stored with the note — today that means one
+  system scheme by note kind; switching schemes later never touches history.
 
 ### 4.5 Revising an entry — Built
 
@@ -126,6 +136,10 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
   goes up.
 - Revising an entry that already has images keeps them.
 - Renaming is an ordinary revision — you retype the title line.
+- Existing anchors show natively while you edit, since they live in the entry's own document. If the
+  edit would change the text underneath one — inserting into it, or deleting part or all of it — a
+  warning names the note before you save. Moving an anchor by editing elsewhere is not a change and
+  stays silent. The note survives either way (§4.4), but the user deserves the chance to reconsider.
 
 ### 4.6 Connections — Built
 
@@ -175,12 +189,7 @@ are stops on the same track. It should feel like the global timeline, not like a
 When looking at a revision, show what actually changed since the version before it — additions and
 removals marked in the familiar way, rather than two blocks of text to compare by eye.
 
-### 5.3 Warning when an edit orphans a note — Next
-
-If a revision would remove a passage that a note is attached to, say so before saving, and name the
-note. The note survives either way (§4.3), but the user deserves the chance to reconsider.
-
-### 5.4 Known gaps in what exists
+### 5.3 Known gaps in what exists
 
 - **Dates.** An entry records when it was added to Chronicle, but there is no way yet to say when
   the thing actually _happened_, or when it was originally written elsewhere. The record keeps room
@@ -221,7 +230,12 @@ Now that ordinary formatting (strikethrough included) can look similar to what a
 renders, an anchor op earns its distinctness from its own presentation rather than from any mark
 being reserved for it alone.
 
-- User-controlled color coding for anchor op highlights (comment, strike, insert, media).
+- Color schemes for anchor highlights — system (by op kind), per-child auto-assigned, or
+  user-defined palettes — chosen as a display setting rather than stored with the entry, so
+  switching schemes never touches history.
+- A tag-linked scheme as a fourth option: color the tag, not the child, once tags are a real thing
+  (see "Finding things" above) — a user colors a tag, applies it to entries at will, and an anchor
+  on a tagged entry can adopt that color on command instead of the system or per-child default.
 - Numbering anchor ops visually so a passage and its explanation are obviously paired.
 - A hover state on an anchor that surfaces which child entry it belongs to.
 - A preview of a child entry's commentary sitting near the passage it anchors to, not only listed
@@ -248,7 +262,10 @@ being reserved for it alone.
 ### The writing experience
 
 - Voice to text dictating
-- Editing/adding to a child entry's Anchors after they were saved. Editing the text content of a child entry will work the same for every entry with smart edit, but perhaps editing the anchors will need special consideration unless it can be included in the smart edit tick saving process like all the rest?
+- Editing a child entry's anchors after it's sealed. Decided against for now (§4.4, ENTRY_MODEL.md):
+  anchors are fixed once sealed, and pointing differently at the same passage means adding another
+  child entry. Re-opening a sealed child's anchors is architecturally possible — they'd be ordinary
+  document steps on the parent — just not offered as a feature.
 - A distraction-free writing mode.
 - Templates or prompts for recurring kinds of entry.
 - Keyboard-first navigation throughout.

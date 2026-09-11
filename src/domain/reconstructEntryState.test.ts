@@ -10,6 +10,7 @@ function makeEntry(overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>): E
     target_id: null,
     title: null,
     anchors: [],
+    revision_mode: null,
     authoring_trace: null,
     media_refs: [],
     metadata: {},

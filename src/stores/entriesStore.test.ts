@@ -3,7 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
-import { createDocLocation } from '@/domain/resolveAnchor'
+import { withAnchorMark } from '@/testing/anchorFixtures'
+import type { Draft } from '@/types/draft'
 
 describe('useEntriesStore', () => {
   beforeEach(() => {
@@ -38,22 +39,53 @@ describe('useEntriesStore', () => {
     expect(aggregated?.content).toBe('Root content')
   })
 
-  it('attaches a child to a passage without touching the parent', async () => {
+  it('never alters the parent’s stored row when a child is created', async () => {
     const store = useEntriesStore()
     const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
 
     await store.createChildEntry({
       parentId: parent.id,
-      relationType: 'update',
-      content: 'It was actually Donner Lake',
-      anchors: [{ kind: 'strike', at: createDocLocation(parent.content, 10, 20, null) }],
+      relationType: 'annotation',
+      content: 'Miss those trips',
     })
 
-    const aggregated = await store.getAggregatedEntry(parent.id)
+    expect((await store.getEntry(parent.id))?.content).toBe('I went to Lake Tahoe with Dad')
+  })
 
-    expect(aggregated?.content).toBe('I went to Lake Tahoe with Dad')
+  it('anchors a child to a passage by sealing a parent revision and the child together', async () => {
+    const store = useEntriesStore()
+    const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
+    const marked = withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20)
+
+    const draft: Draft = {
+      session_id: 'session-1',
+      target: { kind: 'new_child', parent_id: parent.id, relation_type: 'update' },
+      started_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      content: 'It was actually Donner Lake',
+      anchor_ids: ['anchor-1'],
+      parent_content: marked,
+      steps: [],
+      parent_steps: [],
+      ticks: [],
+    }
+
+    await store.createFromDraft(draft, null)
+
+    // The anchor's position is now a fact about the parent's own document, not the child, so the
+    // parent gained a version and the child holds only a reference to it.
+    const aggregated = await store.getAggregatedEntry(parent.id)
+    expect(aggregated?.version.total).toBe(2)
     expect(aggregated?.children).toHaveLength(1)
-    expect(aggregated?.children[0]?.ops[0]?.status).toBe('exact')
+    expect(aggregated?.children[0]?.anchors).toEqual([
+      {
+        anchor_id: 'anchor-1',
+        status: 'present',
+        quote: 'Lake Tahoe',
+        kind: 'comment',
+        insertion: null,
+      },
+    ])
   })
 
   it('surfaces a connection on both entries it joins', async () => {
@@ -85,6 +117,7 @@ describe('useEntriesStore', () => {
       title: null,
       content: 'A day at the lake',
       anchors: [],
+      revision_mode: null,
       authoring_trace: null,
       media_refs: ['blob-1'],
       metadata: {},

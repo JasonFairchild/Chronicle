@@ -1,4 +1,5 @@
 import DocumentEditor from '@/components/DocumentEditor.vue'
+import { collectAnchors } from '@/domain/anchors'
 import {
   collectMediaRefs,
   docTitle,
@@ -7,10 +8,17 @@ import {
   serializeDocument,
 } from '@/domain/entryDocument'
 import { freshMediaRepository } from '@/testing/realRepositories'
+import { selectTextRange } from '@/testing/selectTextRange'
+
+interface ObservedChange {
+  content: string
+  isFormatting: boolean
+  anchorIds?: string[]
+}
 
 /** The change this component last reported, which is its whole contract with a parent. */
-function lastChange(stub: unknown) {
-  const calls = (stub as { args: [{ content: string; isFormatting: boolean }][] }).args
+function lastChange(stub: unknown): ObservedChange {
+  const calls = (stub as { args: [ObservedChange][] }).args
   return calls[calls.length - 1]![0]
 }
 
@@ -203,6 +211,104 @@ describe('DocumentEditor', () => {
       // broken reference the moment this entry was read again.
       expect(change.content).to.not.contain('blob:')
       expect(change.content).to.not.contain('data:')
+    })
+  })
+
+  describe('anchor mode', () => {
+    function mountAnchorEditor(onChange: (change: ObservedChange) => void) {
+      cy.mount(DocumentEditor, {
+        props: {
+          label: 'New entry',
+          anchorMode: true,
+          content: serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad')),
+        },
+        attrs: { onChange },
+      })
+    }
+
+    it('offers the anchor toolbar instead of ordinary formatting', () => {
+      mountAnchorEditor(() => {})
+
+      cy.findByRole('button', { name: 'Comment on selection' }).should('be.visible')
+      cy.findByRole('button', { name: 'Bold' }).should('not.exist')
+    })
+
+    it('blocks ordinary typing, since surrounding text cannot change in this mode', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      cy.findByRole('textbox', { name: 'New entry' }).type('extra words')
+
+      cy.get('@change').should('not.have.been.called')
+      cy.findByText('I went to Lake Tahoe with Dad').should('be.visible')
+    })
+
+    it('marks a selection as a comment anchor', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 10, 20),
+      )
+      cy.findByRole('button', { name: 'Comment on selection' }).click()
+
+      cy.get('@change').then((stub) => {
+        const change = lastChange(stub)
+        expect(change.anchorIds).to.have.length(1)
+        const [anchor] = collectAnchors(change.content)
+        expect(anchor).to.include({ kind: 'comment', quote: 'Lake Tahoe' })
+        expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad')
+      })
+    })
+
+    it('pairs a strike with replacement wording under one anchor id', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 10, 20),
+      )
+      cy.findByRole('button', { name: 'Strike selection' }).click()
+      cy.findByLabelText('Replacement wording').type('Donner Lake')
+      cy.findByRole('button', { name: 'Insert' }).click()
+
+      cy.get('@change').then((stub) => {
+        const change = lastChange(stub)
+        expect(change.anchorIds).to.have.length(1)
+        const [anchor] = collectAnchors(change.content)
+        expect(anchor).to.include({ kind: 'strike', quote: 'Lake Tahoe', insertion: 'Donner Lake' })
+        expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad')
+      })
+    })
+
+    it('places a bare insertion at the caret when nothing is selected', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      cy.findByLabelText('Insert wording here').type('perhaps')
+      cy.findByRole('button', { name: 'Insert' }).click()
+
+      cy.get('@change').then((stub) => {
+        const change = lastChange(stub)
+        expect(change.anchorIds).to.have.length(1)
+        const [anchor] = collectAnchors(change.content)
+        expect(anchor).to.include({ kind: null, insertion: 'perhaps' })
+      })
+    })
+
+    it('drops an anchor back out on undo', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 10, 20),
+      )
+      cy.findByRole('button', { name: 'Comment on selection' }).click()
+      cy.get('@change').then((stub) => expect(lastChange(stub).anchorIds).to.have.length(1))
+
+      cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+z}')
+
+      cy.get('@change').then((stub) => expect(lastChange(stub).anchorIds).to.deep.equal([]))
     })
   })
 })

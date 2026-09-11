@@ -11,8 +11,9 @@ import {
   freshEntryRepository,
   freshMediaRepository,
 } from '@/testing/realRepositories'
+import { withAnchorMark } from '@/testing/anchorFixtures'
+import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText } from '@/domain/entryDocument'
-import { createDocLocation } from '@/domain/resolveAnchor'
 import { createEntryInput } from '@/types/entry'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
@@ -66,13 +67,14 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('describes which passage an anchored child is about', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_TEXT }))
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
+    const parent = await repository.create(createEntryInput({ content: marked }))
     await repository.create(
       createEntryInput({
         content: 'Wrong lake',
         parent_id: parent.id,
         relation_type: 'update',
-        anchors: [{ kind: 'strike', at: createDocLocation(PARENT_TEXT, 10, 20, null) }],
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
       }),
     )
 
@@ -82,13 +84,14 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('keeps the original wording visible when a revision orphans an anchor', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_TEXT }))
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
+    const parent = await repository.create(createEntryInput({ content: marked }))
     await repository.create(
       createEntryInput({
         content: 'Wrong lake',
         parent_id: parent.id,
         relation_type: 'update',
-        anchors: [{ kind: 'strike', at: createDocLocation(PARENT_TEXT, 10, 20, null) }],
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
       }),
     )
     await repository.create(
@@ -96,6 +99,7 @@ describe('EntryDetailView (browser)', () => {
         content: 'I stayed home that summer',
         parent_id: parent.id,
         relation_type: 'revision',
+        revision_mode: 'text',
       }),
     )
 
@@ -111,6 +115,7 @@ describe('EntryDetailView (browser)', () => {
         content: 'I went to Donner Lake with Dad',
         parent_id: parent.id,
         relation_type: 'revision',
+        revision_mode: 'text',
       }),
     )
 
@@ -159,27 +164,101 @@ describe('EntryDetailView (browser)', () => {
     expect(children[0]?.anchors).toEqual([])
   })
 
-  it('anchors a strike to the passage the user selected', async () => {
+  it('anchors a strike to the passage the user selects, in one atomic seal', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_TEXT }))
 
     const screen = await mountDetail(parent.id)
-    await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
+    await screen.getByRole('button', { name: 'Anchor an update to a passage' }).click()
 
-    selectRange(screen.container, 10, 20)
+    const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
+    await expect.element(parentEditor).toBeVisible()
+    selectTextRange(parentEditor.element(), 10, 20)
 
-    await expect.element(screen.getByText('“Lake Tahoe”')).toBeVisible()
+    await screen.getByRole('button', { name: 'Strike selection' }).click()
+    await expect.element(screen.getByLabelText('Replacement wording')).toBeVisible()
 
-    await screen.getByRole('combobox', { name: 'Anchor action' }).selectOptions('strike')
-    await screen.getByLabelText('Your note').fill('Wrong lake')
     await screen.getByLabelText('Replacement wording').fill('Donner Lake')
+    await screen.getByRole('button', { name: 'Insert' }).click()
+
+    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await userEvent.keyboard('Wrong lake')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
-    await expect.element(screen.getByText('Strikes “Lake Tahoe”')).toBeVisible()
-    await expect.element(screen.getByText('Adds “Donner Lake”')).toBeVisible()
+    await expect
+      .element(screen.getByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”'))
+      .toBeVisible()
+
+    const revisions = await repository.listRevisions(parent.id)
+    expect(revisions).toHaveLength(1)
+    expect(revisions[0]?.revision_mode).toBe('anchor')
 
     const children = await repository.listChildren(parent.id)
-    expect(children[0]?.anchors).toHaveLength(2)
-    expect(children[0]?.anchors[0]).toMatchObject({ kind: 'strike' })
+    expect(children[0]?.anchors).toHaveLength(1)
+    expect(children[0]?.anchors[0]?.quote).toBe('Lake Tahoe')
+  })
+
+  it('warns before saving a revision that changes the text under an anchor', async () => {
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
+    const parent = await repository.create(createEntryInput({ content: marked }))
+    await repository.create(
+      createEntryInput({
+        content: 'Wonderful trip',
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+      }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise' }).click()
+
+    const editorLocator = screen.getByRole('textbox', { name: 'Revised entry' })
+    await expect.element(editorLocator).toBeVisible()
+    const editorEl = editorLocator.element()
+    editorEl.focus()
+    selectTextRange(editorEl, 10, 20)
+    await userEvent.keyboard('{Backspace}')
+
+    // The full sentence, not just that some warning fired: PRODUCT.md §5.3 requires naming the
+    // note, not merely counting how many were affected.
+    await expect
+      .element(screen.getByText('This changes the passage Wonderful trip is about.'))
+      .toBeVisible()
+
+    // Neither assertion above completes the session, and the draft's debounced flush would
+    // otherwise still be pending when this test ends — closing it here keeps that write from
+    // landing in whichever repository the next test's `beforeEach` happens to have installed by
+    // the time a stray timer fires.
+    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await vi.waitFor(async () => {
+      expect(await drafts.list()).toEqual([])
+    })
+  })
+
+  it('stays quiet when a revision only moves an anchor, not the text it covers', async () => {
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
+    const parent = await repository.create(createEntryInput({ content: marked }))
+    await repository.create(
+      createEntryInput({
+        content: 'Wonderful trip',
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+      }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise' }).click()
+
+    await screen.getByRole('textbox', { name: 'Revised entry' }).click()
+    await userEvent.keyboard('{Control>}{End}{/Control}!')
+
+    expect(screen.getByText(/This changes the passage/).query()).toBeNull()
+
+    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await vi.waitFor(async () => {
+      expect(await drafts.list()).toEqual([])
+    })
   })
 
   it('revises an entry by appending a version, leaving the original row untouched', async () => {
@@ -196,6 +275,7 @@ describe('EntryDetailView (browser)', () => {
 
     const revisions = await repository.listRevisions(parent.id)
     expect(docToPlainText(revisions[0]!.content)).toBe(`${PARENT_TEXT}, or so I remembered it.`)
+    expect(revisions[0]?.revision_mode).toBe('text')
     expect(revisions[0]?.authoring_trace?.steps.length).toBeGreaterThan(0)
     // The entry itself is never rewritten; the version chain is what carries the change.
     expect((await repository.getById(parent.id))?.content).toBe(PARENT_TEXT)
@@ -262,20 +342,3 @@ describe('EntryDetailView (browser)', () => {
     })
   })
 })
-
-/** Selects a character range inside the rendered entry text and tells the view about it. */
-function selectRange(container: HTMLElement, from: number, to: number): void {
-  const content = container.querySelector<HTMLElement>('[data-testid="entry-content"]')
-  const textNode = content?.firstChild
-  if (!content || !textNode) throw new Error('Entry content was not rendered')
-
-  const range = document.createRange()
-  range.setStart(textNode, from)
-  range.setEnd(textNode, to)
-
-  const selection = window.getSelection()
-  selection?.removeAllRanges()
-  selection?.addRange(range)
-
-  content.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-}

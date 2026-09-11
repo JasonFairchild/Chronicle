@@ -12,6 +12,7 @@ function entry(partial: Partial<Entry>): Entry {
     title: null,
     content: '',
     anchors: [],
+    revision_mode: null,
     authoring_trace: null,
     media_refs: [],
     metadata: {},

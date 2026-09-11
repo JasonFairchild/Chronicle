@@ -16,7 +16,7 @@
     "test:watch": "vitest --project unit",
     "test:coverage": "vitest run --project unit --project browser --coverage",
     "cy": "cypress open --component",
-    "cy:run": "cypress run --component",
+    "cy:run": "cypress run --component --browser=chrome",
     "typecheck": "vue-tsc -b",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

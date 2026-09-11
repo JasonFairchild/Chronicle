@@ -1,93 +1,259 @@
-import type { AggregatedEntry, Entry, RelationType } from '@/types/entry'
+import {
+  compareEntries,
+  type AggregatedEntry,
+  type Entry,
+  type EntryVersion,
+  type ResolvedChild,
+  type ResolvedConnection,
+} from '@/types/entry'
+import { docTitle, docToPlainText } from './entryDocument'
+import { resolveAnchorOps } from './resolveAnchor'
 
-function isDescendantOf(entry: Entry, rootId: string, entriesById: Map<string, Entry>): boolean {
-  let current: Entry | undefined = entry
-  const visited = new Set<string>()
-
-  while (current?.parent_id) {
-    if (visited.has(current.id)) return false
-    visited.add(current.id)
-
-    if (current.parent_id === rootId) return true
-    current = entriesById.get(current.parent_id)
-  }
-
-  return false
+export interface ReconstructOptions {
+  /** Reconstruct the state as it stood at this moment. Omit for current state. */
+  asOf?: Date
+  /** How many levels of descendants to expand. Deeper ones are still signalled by `has_children`. */
+  depth?: number
 }
 
-function compareByCreatedAt(a: Entry, b: Entry): number {
-  return a.created_at.localeCompare(b.created_at)
+const DEFAULT_DEPTH = 2
+
+interface EntryIndex {
+  byId: Map<string, Entry>
+  childrenOf: Map<string, Entry[]>
+  connectionsTo: Map<string, Entry[]>
 }
 
-function applyRelation(state: AggregatedEntry, relation: Entry): AggregatedEntry {
-  const relationType = relation.relation_type
-  if (!relationType) return state
+interface Walk {
+  index: EntryIndex
+  asOfIso?: string
+  /** Guards against a malformed parent cycle in stored data. */
+  seen: Set<string>
+}
 
-  switch (relationType) {
-    case 'update':
-      // An update supersedes the parent's content. Prior text is not lost —
-      // it lives on as its own Entry, reachable by replaying with an earlier asOf.
-      return {
-        ...state,
-        content: relation.content,
-        applied_relations: [...state.applied_relations, relationType],
-      }
-    case 'annotation':
-      return {
-        ...state,
-        content: state.content
-          ? `${state.content}\n\n[Annotation] ${relation.content}`
-          : `[Annotation] ${relation.content}`,
-        applied_relations: [...state.applied_relations, relationType],
-      }
-    case 'connection':
-      return {
-        ...state,
-        applied_relations: [...state.applied_relations, relationType],
-      }
-    default: {
-      const _exhaustive: never = relationType
-      return _exhaustive
-    }
-  }
+/**
+ * The ordered version chain for one entry: its original content first, then each revision.
+ *
+ * Only revisions write content. Annotations, updates, and connections never do, which is what keeps
+ * a single fold coherent and lets a revision be applied without erasing a narrative child.
+ */
+export function buildEntryHistory(
+  entryId: string,
+  entries: Entry[],
+  asOf?: Date,
+): EntryVersion[] | null {
+  const index = buildIndex(entries)
+  return historyFor(entryId, index, asOf?.toISOString())
 }
 
 export function reconstructEntryState(
-  rootId: string,
+  entryId: string,
   entries: Entry[],
-  asOf?: Date,
+  options: ReconstructOptions = {},
 ): AggregatedEntry | null {
-  const entriesById = new Map(entries.map((entry) => [entry.id, entry]))
-  const root = entriesById.get(rootId)
-  if (!root) return null
-
-  const asOfIso = asOf?.toISOString()
-  const relatedEntries = entries
-    .filter((entry) => entry.id !== rootId)
-    .filter((entry) => isDescendantOf(entry, rootId, entriesById))
-    .filter((entry) => (asOfIso ? entry.created_at <= asOfIso : true))
-    .filter((entry) => entry.relation_type !== null)
-    .sort(compareByCreatedAt)
-
-  let state: AggregatedEntry = {
-    id: root.id,
-    type: root.type,
-    content: root.content,
-    created_at: root.created_at,
-    media_refs: [...root.media_refs],
-    metadata: { ...root.metadata },
-    applied_relations: [],
+  const walk: Walk = {
+    index: buildIndex(entries),
+    asOfIso: options.asOf?.toISOString(),
+    seen: new Set<string>(),
   }
 
-  for (const relation of relatedEntries) {
-    state = applyRelation(state, relation)
-  }
-
-  return state
+  return aggregate(entryId, walk, options.depth ?? DEFAULT_DEPTH)
 }
 
-export function collectAppliedRelationTypes(entries: Entry[]): RelationType[] {
-  return entries
-    .map((entry) => entry.relation_type)
-    .filter((relation): relation is RelationType => relation !== null)
+function buildIndex(entries: Entry[]): EntryIndex {
+  const byId = new Map<string, Entry>()
+  const childrenOf = new Map<string, Entry[]>()
+  const connectionsTo = new Map<string, Entry[]>()
+
+  for (const entry of entries) {
+    byId.set(entry.id, entry)
+
+    if (entry.parent_id) {
+      push(childrenOf, entry.parent_id, entry)
+    }
+
+    // Gathered, never traversed: a connection's target does not make it that entry's child.
+    if (entry.relation_type === 'connection' && entry.target_id) {
+      push(connectionsTo, entry.target_id, entry)
+    }
+  }
+
+  for (const list of childrenOf.values()) list.sort(compareEntries)
+  for (const list of connectionsTo.values()) list.sort(compareEntries)
+
+  return { byId, childrenOf, connectionsTo }
+}
+
+function push(map: Map<string, Entry[]>, key: string, entry: Entry): void {
+  const list = map.get(key)
+  if (list) list.push(entry)
+  else map.set(key, [entry])
+}
+
+function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): EntryVersion[] | null {
+  const entry = index.byId.get(entryId)
+  if (!entry) return null
+  if (asOfIso && entry.created_at > asOfIso) return null
+
+  const versions: EntryVersion[] = [
+    {
+      revision_id: null,
+      at: entry.created_at,
+      content: entry.content,
+      media_refs: [...entry.media_refs],
+      metadata: { ...entry.metadata },
+    },
+  ]
+
+  const revisions = (index.childrenOf.get(entryId) ?? []).filter(
+    (child) => child.relation_type === 'revision' && (!asOfIso || child.created_at <= asOfIso),
+  )
+
+  for (const revision of revisions) {
+    // A revision is a full-state snapshot. Carrying content alone would silently drop the
+    // entry's media on every edit.
+    versions.push({
+      revision_id: revision.id,
+      at: revision.created_at,
+      content: revision.content,
+      media_refs: [...revision.media_refs],
+      metadata: { ...revision.metadata },
+    })
+  }
+
+  return versions
+}
+
+function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry | null {
+  const entry = walk.index.byId.get(entryId)
+  if (!entry) return null
+  if (walk.asOfIso && entry.created_at > walk.asOfIso) return null
+  if (walk.seen.has(entryId)) return null
+
+  const versions = historyFor(entryId, walk.index, walk.asOfIso)
+  if (!versions) return null
+
+  const current = versions[versions.length - 1]!
+  const descendants = walk.index.childrenOf.get(entryId) ?? []
+
+  walk.seen.add(entryId)
+
+  const children = depth > 0 ? resolveChildren(descendants, current, walk, depth) : []
+  const connections = depth > 0 ? resolveConnections(entryId, descendants, walk, depth) : []
+
+  walk.seen.delete(entryId)
+
+  return {
+    id: entry.id,
+    created_at: entry.created_at,
+    // The title lives in the document, so the current version is the authority on it and renaming
+    // an entry is an ordinary edit. `Entry.title` is the cache written at save time, and it is the
+    // fallback here for content that predates the editor and has no title node to read.
+    title: docTitle(current.content) ?? entry.title,
+    content: current.content,
+    media_refs: current.media_refs,
+    metadata: current.metadata,
+    version: {
+      index: versions.length,
+      // Counted over the whole chain, not just the part that existed at `asOf`. Scrubbing back
+      // through history is the point of this field, and a truncated count could only ever say
+      // "version 3 of 3" — never "version 3 of 7", which is the thing worth showing.
+      total: totalVersions(entryId, walk.index),
+      at: current.at,
+      revision_id: current.revision_id,
+    },
+    children,
+    connections,
+  }
+}
+
+function resolveChildren(
+  descendants: Entry[],
+  current: EntryVersion,
+  walk: Walk,
+  depth: number,
+): ResolvedChild[] {
+  const resolved: ResolvedChild[] = []
+  // Anchors are offsets into the canonical flattening, never into the serialized document. The
+  // detail view renders the same flattening, so what a reader selects and what an anchor records
+  // are measured against one identical string.
+  const text = docToPlainText(current.content)
+
+  for (const child of descendants) {
+    if (child.relation_type !== 'annotation' && child.relation_type !== 'update') continue
+    if (walk.asOfIso && child.created_at > walk.asOfIso) continue
+
+    const entry = aggregate(child.id, walk, depth - 1)
+    if (!entry) continue
+
+    resolved.push({
+      entry,
+      relation_type: child.relation_type,
+      ops: resolveAnchorOps(child.anchors, {
+        text,
+        mediaRefs: current.media_refs,
+      }),
+      has_children: hasVisibleChildren(child.id, walk),
+    })
+  }
+
+  return resolved
+}
+
+/**
+ * A connection is an edge, so it surfaces on both endpoints. The direction is real and kept,
+ * but the destination is not blind to a link pointing at it.
+ */
+function resolveConnections(
+  entryId: string,
+  descendants: Entry[],
+  walk: Walk,
+  depth: number,
+): ResolvedConnection[] {
+  const outgoing = descendants.filter((child) => child.relation_type === 'connection')
+  const incoming = walk.index.connectionsTo.get(entryId) ?? []
+
+  const resolved: ResolvedConnection[] = []
+
+  for (const connection of [...outgoing, ...incoming].sort(compareEntries)) {
+    if (walk.asOfIso && connection.created_at > walk.asOfIso) continue
+
+    const direction = connection.parent_id === entryId ? 'outgoing' : 'incoming'
+    const otherId = direction === 'outgoing' ? connection.target_id : connection.parent_id
+    if (!otherId) continue
+
+    const entry = aggregate(connection.id, walk, depth - 1)
+    if (!entry) continue
+
+    resolved.push({ entry, other_id: otherId, direction, label: connectionLabel(connection) })
+  }
+
+  return resolved
+}
+
+/** Length of the entry's full version chain: the original, plus one per revision. */
+function totalVersions(entryId: string, index: EntryIndex): number {
+  const revisions = (index.childrenOf.get(entryId) ?? []).filter(
+    (child) => child.relation_type === 'revision',
+  )
+
+  return revisions.length + 1
+}
+
+function hasVisibleChildren(entryId: string, walk: Walk): boolean {
+  const children = walk.index.childrenOf.get(entryId) ?? []
+
+  return children.some(
+    (child) =>
+      child.relation_type !== 'revision' && (!walk.asOfIso || child.created_at <= walk.asOfIso),
+  )
+}
+
+/**
+ * Kept in metadata while the vocabulary is still moving. It graduates to a column once it settles,
+ * per the rule that anything filtered or sorted on stops being metadata.
+ */
+function connectionLabel(connection: Entry): string | null {
+  const label = connection.metadata.connection_label
+  return typeof label === 'string' ? label : null
 }

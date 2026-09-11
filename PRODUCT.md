@@ -1,0 +1,289 @@
+# Chronicle — Product Behavior
+
+What Chronicle does, described from the outside. No code, no data model, no file names — if a
+sentence here can't be checked by using the app, it belongs in another document.
+
+**How to use this doc**
+
+- It is the plain-language answer to "what should happen when I do this?" — the thing a test is
+  written against, and the thing to re-read when a feature starts drifting.
+- Every behavior carries a status: **Built** (works today), **Next** (agreed, not built),
+  **Idea** (worth keeping, not decided).
+- Future Considerations is a parking lot, not a plan. Ideas go there the moment they occur so they
+  stop taking up room in anyone's head. Nothing there is a commitment.
+- The technical companions: [CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for the phased plan,
+  [ENTRY_MODEL.md](./ENTRY_MODEL.md) for how records are actually shaped, and
+  [TESTING.md](./TESTING.md) for how tests are written.
+
+---
+
+## 1. What Chronicle is
+
+A private notebook for a life: things that happened, things you thought about them, and the way
+those things connect. It runs entirely on your own device, works with no internet connection, needs
+no account, and never sends your writing anywhere.
+
+Its distinguishing idea is that **nothing you write is ever overwritten**. Correcting an entry adds
+a new version rather than replacing the old one; commenting on a passage leaves the passage intact.
+The record of what you thought last year survives changing your mind about it this year.
+
+## 2. Promises the product makes
+
+These are the claims the app should always be able to keep. A change that breaks one of them is a
+bug even if nothing else complains.
+
+1. **It works offline.** Everything is on the device. Nothing waits on a network.
+2. **Nothing you typed is lost.** Writing is saved continuously while you write, and survives a
+   crash, a closed laptop, or a reload.
+3. **Nothing is destroyed by a later action.** Edits, notes, and corrections add; they never erase.
+4. **You can always see how something got to be the way it is.** Every entry can, in principle,
+   account for its own history.
+5. **Nothing enters your history unless you put it there.** Saving is always a deliberate act.
+6. **It should be readable in the dark.** No part of the design may make a dark theme impossible.
+
+## 3. Vocabulary
+
+The words the interface should use, and what a user should take them to mean.
+
+| Word           | Means                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| **Entry**      | One record. Everything in Chronicle is one — a journal entry, a note on one, a link between two. |
+| **Timeline**   | The list of entries, newest first.                                                               |
+| **Annotation** | A note about an entry, or about one passage in it. Claims nothing changed.                       |
+| **Update**     | A note reporting what changed or happened next. Same shape as an annotation, different intent.   |
+| **Connection** | A link from one entry to another, with your explanation of why they relate. Directional.         |
+| **Revision**   | A new version of an entry's own text. The previous version stays.                                |
+| **Draft**      | Writing in progress. Saved as you type, invisible to the timeline until you save it.             |
+| **Passage**    | Text you selected inside an entry, which a note can be attached to.                              |
+
+Two words are deliberately absent from the interface: "delete", in the sense of erasing history, and
+"edit", in the sense of replacing what was there.
+
+---
+
+## 4. Behavior today
+
+### 4.1 Writing a new entry — Built
+
+- The timeline page has a writing area at the top, always ready. No "new entry" step first.
+- An entry can have a title, and titling is just typing on the first line — not a separate field to
+  fill in and keep in sync.
+- A toolbar offers undo and redo, two levels of heading, bold, italic, underline, strikethrough,
+  bulleted and numbered lists, quotes, links, clearing formatting, and adding an image. Everything
+  it offers also works from the keyboard, including markdown shortcuts such as `## ` and `- `.
+- Strikethrough here is an ordinary formatting mark, no different from bold or italic — applying it
+  to your own text while writing or revising does not create a note or touch any other entry. A
+  strike delivered by a child entry (§4.4) is a different gesture, an attached explanation rather
+  than a mark you typed, and stays legible as that through its own presentation rather than through
+  strikethrough being scarce (see "Making anchor ops unmistakable" in Future Considerations).
+- **Everything typed is saved as a draft continuously**, within a fraction of a second. Closing the
+  tab mid-sentence costs nothing.
+- Nothing appears on the timeline until **Save entry** is pressed. There is no autosave-into-history
+  and no idle timeout that decides for you.
+- After saving, the writing area is empty and ready for a genuinely new entry — not holding remnants
+  of the last one.
+- An empty entry cannot be saved.
+
+### 4.2 The timeline — Built
+
+- Shows top-level entries, newest first, each as a card with its title, its date, and a preview of
+  its text.
+- A card says how many times its entry has been revised, when it has been.
+- Clicking a card opens that entry.
+- Notes, updates, connections, and revisions do **not** appear as separate cards on the main
+  timeline. They belong to the entry they are attached to.
+
+### 4.3 Reading an entry — Built
+
+- Shows the entry's title, when it was created, and its current text — meaning the latest version,
+  with earlier versions still on record.
+- If it has been revised, it says which version you are looking at and how many exist.
+- Attached images appear below the text.
+- Notes, updates, and connections attached to it are listed beneath, each showing what part of the
+  entry it points at.
+- A note pointing at a passage that no longer exists still shows what it _was_ attached to, quoting
+  the original wording. A broken reference reads as history, not as an error.
+- Immediate children are shown; deeper ones are indicated rather than expanded.
+
+### 4.4 Commenting on a passage — Built
+
+- Selecting text inside an entry offers to attach a note to exactly that passage. With nothing
+  selected, a note is about the entry as a whole.
+- A note is either an **annotation** or an **update** — the user's choice, affecting how it reads
+  and how it will filter, not what it does.
+- On a selected passage you can either comment on it or **strike** it. A strike shows the original
+  struck through; it never hides or removes it.
+- A strike can carry replacement wording, which appears beside the struck text — the familiar
+  correction shape. The entry's own text is not touched.
+- Notes can themselves be annotated, so a conversation with yourself can go deeper than one level.
+
+### 4.5 Revising an entry — Built
+
+- **Revise** opens the entry's current text for editing.
+- Editing produces a pending draft. The entry itself is untouched until the revision is saved, and
+  the change can be discarded with no trace left on the entry.
+- Saving appends a new version. The previous version stays on record and the entry's version count
+  goes up.
+- Revising an entry that already has images keeps them.
+- Renaming is an ordinary revision — you retype the title line.
+
+### 4.6 Connections — Built
+
+- From an entry, you can connect it to any other entry on the timeline, in a chosen direction, with
+  a short label and an explanation of why they relate.
+- The connection is visible from both ends, marked as outgoing or incoming.
+- A connection is itself an entry: it can be annotated and revised like anything else. Its notes
+  belong to the connection, not to either entry it links.
+
+### 4.7 Images — Built
+
+- Images can be added into an entry while writing, and appear inline in the text.
+- They are stored on the device with everything else and display offline.
+- A failed attachment says so rather than failing silently.
+
+### 4.8 Drafts — Built
+
+- A **Drafts** page lists every unfinished writing session, so nothing is stranded invisibly.
+- Each draft says what it would become — a new entry, an annotation or update on a named entry, or a
+  revision of a named entry — with when it was last touched and a preview.
+- A draft can be resumed (continuing where it left off, not restarting), saved as an entry, or
+  discarded.
+- Drafts never appear on the timeline.
+
+### 4.9 How writing is remembered — Built, invisible for now
+
+While you write, Chronicle quietly records how the text came to be — not only the finished result —
+and bookmarks the moments worth returning to: where you paused, where you finished a sentence, and
+at regular intervals regardless.
+
+Today this is invisible: it is captured and stored but nothing displays it. It is what makes the
+scrubbable history view (§5.1) possible, and it is why that feature can be built later without
+retroactively wishing we had kept something.
+
+---
+
+## 5. Agreed but not built
+
+### 5.1 Scrubbing an entry's history — Next
+
+A view of a single entry that can be dragged backwards through time, showing the entry as it stood
+at each moment. Not only version to version: within a single writing session, the bookmarked moments
+are stops on the same track. It should feel like the global timeline, not like a separate tool.
+
+### 5.2 Showing what a revision changed — Next
+
+When looking at a revision, show what actually changed since the version before it — additions and
+removals marked in the familiar way, rather than two blocks of text to compare by eye.
+
+### 5.3 Warning when an edit orphans a note — Next
+
+If a revision would remove a passage that a note is attached to, say so before saving, and name the
+note. The note survives either way (§4.3), but the user deserves the chance to reconsider.
+
+### 5.4 Known gaps in what exists
+
+- **Dates.** An entry records when it was added to Chronicle, but there is no way yet to say when
+  the thing actually _happened_, or when it was originally written elsewhere. The record keeps room
+  for both; the interface asks for neither.
+- **No way to find anything.** No search, no filtering, no browsing other than scrolling.
+- **Theme.** Dark mode is unblocked but neither finished nor switchable.
+- **Connections are invisible as a whole.** They exist one entry at a time; there is no view of the
+  web they form.
+
+---
+
+## 6. Future considerations
+
+Not commitments. A parking lot, so ideas stop being remembered by hand.
+
+### Finding things
+
+- Full-text search across entries, notes, and connections.
+- Filtering the timeline: by kind, by date range, by tag, by whether an entry has been revised.
+- Choosing what the timeline is ordered by — when things were entered, or when they happened.
+- Choosing what the timeline _contains_: showing revisions as their own cards is a legitimate view
+  (how often was this reworked?), as is hiding them entirely.
+- Tags, as a real filterable thing rather than a note to yourself inside the text.
+- Pinning or color-coding the entries that matter.
+
+### Seeing the shape of things
+
+- A graph view of connections — entries as nodes, connections as labeled arrows.
+- Navigating by connection rather than by time.
+- One entry's whole subtree as an activity stream: everything that ever happened to it, in order.
+- Expanding past the default two levels of depth on demand.
+- Diff like presentation between 2 revisions or perhaps multiple selected revisions on both sides? Can anchor ops be included in such a view?
+- Comprehensive rendering of authorship sessions with detailed time info surfaced. Perhaps a scrubbable widget that will demonstate the evolution of an authorship session from start to finish. (I have a thought about scrubbing through the saved bookmarks and the affects of those ticks appearing/disappearing in a document view of the revision depending on user input/position in the timeline)
+
+### Making anchor ops unmistakable
+
+Now that ordinary formatting (strikethrough included) can look similar to what an anchor op
+renders, an anchor op earns its distinctness from its own presentation rather than from any mark
+being reserved for it alone.
+
+- User-controlled color coding for anchor op highlights (comment, strike, insert, media).
+- Numbering anchor ops visually so a passage and its explanation are obviously paired.
+- A hover state on an anchor that surfaces which child entry it belongs to.
+- A preview of a child entry's commentary sitting near the passage it anchors to, not only listed
+  below the parent's text.
+- Overall presentation of the 'current' state of a parent entry with multiple child entries shown with their anchors and formatting.
+
+### Getting things in
+
+- Importing a batch of scanned journal pages or photos as an unfiled queue, then turning them into
+  entries one at a time, deliberately, with your own context added. Never bulk-creating entries
+  nobody has read.
+- Reading text out of a scanned page automatically to pre-fill a draft — still ending in human
+  review before it becomes an entry.
+- Importing from other journaling apps or from plain text files.
+- Supplying when something happened at import time, so old material sorts by its own date rather
+  than by the day it was imported.
+
+### Getting things out
+
+- Export and backup — the whole archive, in a form that outlives this app.
+- Printing or exporting a single entry with its notes and history attached.
+- Restoring from a backup on a new device.
+
+### The writing experience
+
+- Voice to text dictating
+- Editing/adding to a child entry's Anchors after they were saved. Editing the text content of a child entry will work the same for every entry with smart edit, but perhaps editing the anchors will need special consideration unless it can be included in the smart edit tick saving process like all the rest?
+- A distraction-free writing mode.
+- Templates or prompts for recurring kinds of entry.
+- Keyboard-first navigation throughout.
+- Tuning how often writing moments get bookmarked, or turning that capture off — including the open
+  question of whether it should be a user-facing switch at all.
+- Richer text: links, quotes, lists, checklists.
+- Smart links: Ones that have a preview for at least common sources (maybe google docs or one drive?) But personally, links to LDS scripture are perhaps the most important. I imagine this would primarily be a hover mode that would shows the full text of the scripture reference. (probably requires internet or we decide to cache things in app. Configurable?)
+
+### The app itself
+
+- Finished light and dark themes with a switch that remembers the choice.
+- A polished install experience, so it lives on a phone home screen or a desktop like a real app.
+- Onboarding for a brand-new, empty archive — what to write first.
+- An honest account, somewhere in the interface, that nothing is ever deleted, so the promise is
+  discoverable rather than merely true.
+
+### Bigger, later, maybe
+
+- Audio and video entries.
+- Ambient context attached to an entry — where you were, what the weather was — captured
+  automatically rather than typed. (perhaps from third parties as I doubt I'll want to save weather data automatically)
+- Encryption of the local archive.
+- Syncing across devices, which changes several of the promises above and needs its own thinking.
+- A desktop application shell.
+
+---
+
+## 7. Deliberately not doing
+
+Recorded here so they do not get re-proposed.
+
+- **No account, no server, no cloud.** Not a default to be changed later — the design.
+- **No social features.** Chronicle is for one person.
+- **No deleting history.** Discarding an unsaved draft is the only thing that disappears, and it was
+  never history.
+- **No automatic entries.** Nothing is written into the timeline that a person did not decide to put
+  there.
+- **No AI writing the entries.** Whatever assistance eventually exists, the writing is the user's.

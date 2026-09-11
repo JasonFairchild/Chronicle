@@ -5,11 +5,27 @@ Local-first Progressive Web App for personal life mapping and journaling. Every 
 ## Architecture
 
 ```
-Views / Components → Pinia store → EntryRepository (interface) → InMemoryEntryRepository
-                                                              ↳ SQLite / Dexie (future)
+Views / Components → Pinia store → EntryRepository (interface)
+                                          ↑
+                            src/repositories/index.ts  ← the only file naming a concrete adapter
+                                          ↓
+                      DexieEntryRepository (active) | InMemoryEntryRepository (tests)
+                                          ↳ SQLite WASM + OPFS (planned)
 ```
 
-Core domain logic lives in `reconstructEntryState`, which rebuilds an entry's aggregated content from its root entry and related child entries ordered by `created_at`.
+Storage sits behind one interface, and a single composition root decides which adapter implements
+it. Nothing in the store, views, or domain layer names a concrete adapter, so changing backends is
+a one-line change. Both adapters run the same behavioral suite from `entryRepository.contract.ts`,
+which is what makes that swap trustworthy rather than merely claimed.
+
+Core domain logic lives in `reconstructEntryState`, which folds an entry's version chain to get its
+state at any moment and returns its children and connections as separate collections rather than
+splicing them into the text. Anchor resolution is a second pure module: it locates a child entry's
+references inside the parent as it stands now, degrading from exact to orphaned rather than
+vanishing when an edit breaks one.
+
+See [ENTRY_MODEL.md](./ENTRY_MODEL.md) for the data model and the reasoning behind it, including why
+ids are UUIDv7, why only revisions write content, and why connections are edges rather than children.
 
 ## Tech stack
 
@@ -58,4 +74,7 @@ Skip with `LEFTHOOK=0 git commit …` when needed.
 
 ## Roadmap
 
-See [CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for the product concept, data model, and phased plan.
+See [PRODUCT.md](./PRODUCT.md) for how the app behaves from a user's perspective,
+[CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for the product concept and phased plan,
+[ENTRY_MODEL.md](./ENTRY_MODEL.md) for the entry model, and [TESTING.md](./TESTING.md) for how
+tests are written.

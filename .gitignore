@@ -44,6 +44,7 @@ cypress/downloads/
 
 # Vitest
 __screenshots__/
+.vitest-attachments/
 
 # PWA dev
 dev-dist/

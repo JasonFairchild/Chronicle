@@ -1,51 +1,21 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
-import { createEntryInput } from '@/types/entry'
+import { runEntryRepositoryContract } from '@/repositories/entryRepository.contract'
+import { newEntryId } from '@/types/entry'
 
-describe('InMemoryEntryRepository', () => {
-  let repository: InMemoryEntryRepository
+runEntryRepositoryContract('in-memory', () => new InMemoryEntryRepository())
 
-  beforeEach(() => {
-    repository = new InMemoryEntryRepository()
+describe('newEntryId', () => {
+  it('produces ids that sort in creation order even within one millisecond', () => {
+    const ids = Array.from({ length: 50 }, () => newEntryId())
+
+    expect([...ids].sort()).toEqual(ids)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('creates and retrieves a root text entry', async () => {
-    const created = await repository.create(
-      createEntryInput({ type: 'text', content: 'Hello Chronicle' }),
+  it('produces a version 7 UUID', () => {
+    expect(newEntryId()).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     )
-
-    expect(created.id).toBeTruthy()
-    expect(created.parent_id).toBeNull()
-    expect(created.content).toBe('Hello Chronicle')
-
-    const fetched = await repository.getById(created.id)
-    expect(fetched?.content).toBe('Hello Chronicle')
-  })
-
-  it('lists root entries newest first', async () => {
-    const first = await repository.create(createEntryInput({ type: 'text', content: 'First' }))
-    const second = await repository.create(createEntryInput({ type: 'text', content: 'Second' }))
-
-    second.created_at = new Date(Date.now() + 1000).toISOString()
-    repository.seed([first, second])
-
-    const roots = await repository.listRootEntries()
-    expect(roots.map((entry) => entry.content)).toEqual(['Second', 'First'])
-  })
-
-  it('lists direct children for a parent entry', async () => {
-    const parent = await repository.create(createEntryInput({ type: 'text', content: 'Root' }))
-    await repository.create(
-      createEntryInput({
-        type: 'text',
-        content: 'Child note',
-        parent_id: parent.id,
-        relation_type: 'annotation',
-      }),
-    )
-
-    const children = await repository.listChildren(parent.id)
-    expect(children).toHaveLength(1)
-    expect(children[0]?.relation_type).toBe('annotation')
   })
 })

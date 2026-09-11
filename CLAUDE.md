@@ -1,61 +1,52 @@
 # Chronicle — Claude Code Instructions
 
-## What this project is
+Local-first PWA life-mapping / journaling app; portfolio demo + personal tool. Every record is one
+immutable `Entry` — updates, annotations, connections, and revisions are Entries too. Offline is
+non-negotiable; immutability and reconstructible history are the core feature, not a nicety.
 
-Local-first PWA life-mapping / journaling app. Portfolio demo + personal tool.
-Every record is a unified immutable `Entry`. Updates, annotations, and connections are also Entries (recursive). Roots have no parent.
+Stack: Vue 3 + TypeScript + Vite, Tailwind (dark-mode ready), Pinia, Vue Router, TipTap,
+vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser Mode) + Cypress CT.
 
-Goals while coding:
+## The other docs — read the relevant one before changing that area
 
-- Primarily a portfolio demo for employers: favor clear, readable, easy-to-explain code
-- Keep the product and code simple
-- Local-first / offline is non-negotiable
-- Immutability + reconstructible history is a core feature
-- When equally good options exist, prefer the one that uses less context / fewer steps
+| Doc               | Authority on                        | Read before                                              |
+| ----------------- | ----------------------------------- | -------------------------------------------------------- |
+| ENTRY_MODEL.md    | the data model and its reasoning    | `src/types/entry.ts`, `src/domain/`, `src/repositories/` |
+| TESTING.md        | how tests are written               | writing or changing any test                             |
+| PRODUCT.md        | behavior, and what is built vs next | changing anything user-visible                           |
+| CHRONICLE_PLAN.md | phases and what is out of scope     | planning or scoping work                                 |
 
-## Tech stack
+## Rules that always apply
 
-Vue 3 + TypeScript + Vite, Tailwind (dark-mode ready), Pinia, Vue Router,  
-SQLite WASM + OPFS (preferred) or Dexie, TipTap (from Phase 1), vite-plugin-pwa.  
-Tests required every phase: Vitest (unit + Browser Mode) + Cypress Component Testing.
+- **Write rule:** prefer INSERT of new related Entries; never mutate rows for "edits". The draft
+  buffer (`src/stores/draftsStore.ts`) really does overwrite rows and is the one sanctioned
+  exception — working space, not history.
+- **No child entry is destructive.** Only a `revision` writes content.
+- **Ordering:** every sort tiebreaks on `id` via `compareEntries`; `created_at` is only
+  millisecond-resolution and so is not a total order on its own.
+- Reconstructing aggregated current state or state-at-time-T stays easy via the repository plus the
+  pure `reconstructEntryState`.
+- Tests alongside every feature. `*.test.ts` = pure logic (node), `*.browser.test.ts` = Vitest
+  browser, `*.cy.ts` = Cypress, `*.contract.ts` = shared suite, never run directly.
+- Composition API + `<script setup>`; all data access behind the repository layer.
+- No hard-coded colors that block dark mode.
+- Small, focused changes, in code an employer can read and I can explain.
+- When two options are equally good, take the one that costs less context.
+- Prefer one shell command over a pipeline. Every binary in a chain must be allowlisted, so a stray
+  `| sed` or `; echo` triggers a permission prompt. Use Read/Grep/Glob, not `cat`/`grep`/`find`.
 
-**Testing note:** Vitest Browser Mode + Cypress CT run side by side on purpose (tool
-comparison). Duplicate component tests are intentional — don't consolidate. Split:
-`*.test.ts` = pure logic (node); `*.browser.test.ts` = Vitest browser; `*.cy.ts` = Cypress.
+## Landmarks
 
-## Data model (entries)
+- `src/domain/entryDocument.ts` — the **only** flattening. Anchors, previews, search, and diff must
+  all measure against `docToPlainText`, or an anchor recorded on one ruler resolves on another.
+- `src/editor/extensions.ts` — the only module that knows TipTap exists. The domain layer reads
+  documents as plain JSON, which is what keeps it pure and node-testable.
+- `src/repositories/index.ts` — the composition root. Three interfaces, each with an in-memory
+  adapter for tests and a persistent one for the app, each proven by a shared `.contract.ts`.
 
-- id (UUID), created_at (immutable, system-set), recorded_at?, occurred_at? (both nullable, user-supplied), parent_id, relation_type (`annotation` | `connection` | `update` | null), target_id, type (`text` | `image` | …), content, media_refs, metadata
-- Relation types: `update` = explicit user-facing milestone about a parent; `annotation` = a note/comment on an entry; `connection` = user-authored link between two entries (`parent_id` + `target_id`). Full rationale in CHRONICLE_PLAN.md.
-- `update` is NOT for typo/minor fixes — that's the future "smarter edit" mode (see plan).
+## Where the work is
 
-**Write rule:** Prefer INSERT of new related Entries. Do not mutate existing rows for “edits.”
-
-Reconstructing aggregated current state or state-at-time-T must stay easy via the repository + pure `reconstructEntryState`.
-
-## Current priority (Phase 1 → Phase 2)
-
-Phase 0 scaffold is done (scaffold, PWA shell, Vitest + Cypress CT, in-memory repo, text entry + timeline, tests). Next:
-
-1. Persistent Entry repository adapter (SQLite WASM + OPFS; Dexie fallback) behind the existing `EntryRepository` interface
-2. Wire the store to the persistent adapter; verify data survives an offline reload
-3. Per-entry aggregated detail view + creating child entries (annotation / update / connection)
-4. Give `update` vs `annotation` distinct behavior in `reconstructEntryState` (currently identical)
-5. Image entries (media_refs + OPFS blob storage)
-6. Tests alongside each of the above
-
-## Hard rules
-
-- Tests alongside every feature
-- Composition API + `<script setup>`
-- All data access behind repository/service layer
-- Prefer append (new Entries) over mutation
-- No hard-coded colors that block dark mode
-- Small, focused changes
-- Prefer one shell command over a pipeline. Every binary in a chain must be
-  allowlisted, so a stray `| sed` or `; echo` triggers a permission prompt.
-  Use Read/Grep/Glob instead of `cat`/`grep`/`find` pipelines.
-
-## Out of scope for now
-
-Smarter multi-edit sessions, automatic snapshots, fine-grained change tracking, graph view, video, Tauri, sync, encryption.
+Phase 2 is feature-complete and covered by tests; PRODUCT.md §4 is the list of what that means.
+Next: the SQLite WASM + OPFS adapter behind `EntryRepository` / `DraftRepository`, deliberately
+deferred until the Dexie path has been used in anger. Then Phase 3 — scrubbable per-entry history,
+revision diffs, and the orphaned-anchor warning (PRODUCT.md §5).

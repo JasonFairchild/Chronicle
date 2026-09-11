@@ -45,29 +45,39 @@ This model supports:
 
 ## Data Model (Unified & Extensible)
 
+**See [ENTRY_MODEL.md](./ENTRY_MODEL.md) for the authoritative model and the reasoning behind it.**
+What follows is an orientation, not a specification.
+
 `entries` table / collection:
 
-- `id` (UUID)
-- `created_at` (high-precision, immutable) — when the entry was added to Chronicle; system-set
+- `id` (UUIDv7) — time-ordered, so it breaks `created_at` ties and gives history a total order
+- `created_at` (immutable) — when the entry was added to Chronicle; system-set
 - `recorded_at` (nullable) — when the record was originally recorded elsewhere; null if authored directly in-app
 - `occurred_at` (nullable) — when the event being recorded actually happened, if known
-- `parent_id` (nullable) — the entry this one relates to
-- `relation_type` (nullable) — `annotation` | `connection` | `update` (roots are null)
-- `target_id` (nullable) — used for `connection` relations
-- `type` — `text` | `image` | …
-- `content`
+- `parent_id` (nullable) — the entry this one is attached to; containment follows this and only this
+- `relation_type` (nullable) — `annotation` | `update` | `connection` | `revision` (roots are null)
+- `target_id` (nullable) — the far endpoint of a `connection`
+- `title` (nullable) — cache of the document's title node
+- `content` — serialized document
+- `anchors` — the places in the parent this entry operates on; empty means "the parent at large"
+- `authoring_trace` (nullable) — how this snapshot was typed
 - `media_refs`
 - `metadata` (JSON)
 
-The three dates are deliberately separate: `created_at` anchors the immutable ledger, while `recorded_at` / `occurred_at` are user-supplied and let the timeline be ordered by when things _happened_ rather than when they were entered.
+The three dates are deliberately separate: `created_at` anchors the immutable ledger, while `recorded_at` / `occurred_at` are user-supplied and let the timeline be ordered by when things _happened_ rather than when they were entered. A bulk import shares one `created_at` by design; `occurred_at` is what such entries get sorted by.
 
 ### Relation types
 
-- **`update`** — an explicit, first-class entry about a parent entry ("here's what changed / what happened next"). Users can expound on an update at length. The point is to make updates visible and to visualize many updates to one entry over time. This is _not_ the mechanism for fixing typos or minor revisions (see "smarter edit" below).
-- **`annotation`** — a comment or note on an existing entry. Lightweight; does not claim anything changed.
-- **`connection`** — a user-created link between two entries (`parent_id` + `target_id`), carrying the user's thoughts about why the two relate.
+Only two of these change how the domain layer behaves. The other two are a label.
 
-**Write rule:** Prefer insert over update. New related Entries are created instead of mutating existing ones.
+- **`revision`** — a new version of the entry itself, and the _only_ relation that writes content. Full-state snapshot, last one wins. This is the mechanism behind "smarter edit" and behind capturing how a first draft was written.
+- **`connection`** — a directional edge between two entries (`parent_id` = source, `target_id` = destination), carrying the user's thoughts about why they relate. Gathered onto both endpoints, but never traversed as containment.
+- **`update`** — a child entry that reports what changed or happened next, usually anchored to a specific passage. Updates accumulate and are visualized over time; they never overwrite the parent.
+- **`annotation`** — a note on an entry or on a passage within it. Does not claim anything changed.
+
+The update/annotation split is a label for UI and filtering. Structurally both are children carrying anchored operations, and what the user actually did — striking a phrase, inserting wording, or just commenting — is what distinguishes them.
+
+**Write rule:** Prefer insert over update. New related Entries are created instead of mutating existing ones. No child entry is ever destructive: a parent's stored text is never altered by its children.
 
 Reconstructing aggregated current state or historical state at time T must stay straightforward via the repository layer (and pure helpers such as `reconstructEntryState`).
 
@@ -78,7 +88,9 @@ Reconstructing aggregated current state or historical state at time T must stay 
 3. [x] Set up both Vitest (including Browser Mode) and Cypress Component Testing.
 4. Implement the Entry repository:
    - 4a) [x] Interface + in-memory adapter (with `parent_id`, `relation_type`, `target_id`)
-   - 4b) [ ] Persistent adapter (SQLite WASM preferred, or Dexie)
+   - 4b) [x] Persistent adapter — Dexie, wired at the composition root and proven against the same
+     contract suite as the in-memory one. SQLite WASM + OPFS remains the preferred long-term
+     backend and is deliberately deferred until the Dexie path has been used in anger.
 5. [x] Minimal layout + create a text entry + list entries in a basic timeline.
 6. [x] First data-layer and component tests (repository, store, `reconstructEntryState`, `EntryForm`).
 
@@ -101,9 +113,20 @@ Connection/graph visualization, search/filtering, export/backup, PWA install exp
 
 ## Future Considerations (explicitly out of MVP)
 
-- Smarter “edit” experience: a mode that “opens up” any entry (roots included) for editing while tracking those edits over time — the detailed _evolution of an entry_ — without cluttering the UI with a separate Entry per minor change. This is distinct from `update` relations, which are deliberate, user-facing milestones. Editing may be deferred until this is clearer.
-- Automatic or semi-automatic snapshots when enough content has changed or enough time has passed; these feed the per-entry history and longer-term “evolution over time.”
-- Finer-grained (but not keystroke-level) change tracking — the persistence layer behind the “smarter edit” mode above.
+The “smarter edit” experience is no longer an open question — it is designed in
+[ENTRY_MODEL.md](./ENTRY_MODEL.md) as the `revision` relation plus authoring capture, and it is
+Phase 2 work rather than a someday item. An entry becomes a living chain: opening it for editing
+reopens that chain and appends to it, the latest state is what most views surface, and nothing
+important is lost. Ticks bookmark meaningful moments in a session without becoming entries.
+
+The capture layer now exists: sessions accumulate ProseMirror steps into a durable draft buffer,
+ticks bookmark the moments worth returning to, and sealing writes one immutable entry carrying the
+completed trace. Diff rendering and the scrubbable history UI are unblocked by it and are Phase 3.
+
+Still genuinely out of scope:
+
+- Diff rendering and the scrubbable per-entry history UI, now unblocked but not yet built.
+- Warning before a revision orphans a child's anchor.
 - Light/dark theme polish and preference persistence.
 - Video/audio support, optional Tauri desktop shell, encryption, multi-device sync.
 

@@ -83,7 +83,7 @@ comment/strike, or place the cursor and propose wording — and cannot touch sur
 This makes "no child entry is destructive" checkable, not just true by convention: an anchor-mode
 session's `sameContent(before, after)` holds, and it holds by construction rather than by
 convention, for two independent reasons. A `filterTransaction` guard (`isAnchorEdit` in
-`editor/extensions.ts`) rejects every transaction in an anchor-mode session except the anchor
+`editor/anchorCommands.ts`) rejects every transaction in an anchor-mode session except the anchor
 commands below and undoing them, so surrounding text is unreachable at the editor level before the
 question of what counts as "content" even comes up. And within what those anchor commands _can_
 produce, `docToPlainText` is blind to both shapes: a mark is metadata riding on existing text, which
@@ -121,7 +121,7 @@ accommodate it.
 
 **Warning on an affected anchor.** Warn when the _text under_ an anchor changes — insertion inside
 its range, partial or full deletion — not when it merely shifts from an edit elsewhere. Detected by
-mapping each anchor's endpoints (`anchorSpans` / `mapAnchorSpans` in `editor/extensions.ts`) through
+mapping each anchor's endpoints (`anchorSpans` / `mapAnchorSpans` in `editor/anchorCommands.ts`) through
 the pending session's `Mapping` and reading ProseMirror's own deletion flags (`deletedAfter` on the
 start, `deletedBefore` on the end), not by comparing text; `anchorsAffectedBy`
 (`domain/anchorWarnings.ts`) is the pure judgment on top. Tracking runs one transaction at a time for

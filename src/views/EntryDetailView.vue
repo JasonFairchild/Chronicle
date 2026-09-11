@@ -7,6 +7,7 @@ import ConnectionForm, {
   type ConnectionSubmission,
 } from '@/components/ConnectionForm.vue'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import { useDraftSession } from '@/composables/useDraftSession'
 import { useMedia } from '@/composables/useMedia'
 import { docToPlainText, hasTitleNode } from '@/domain/entryDocument'
 import type { AggregatedEntry, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
@@ -32,10 +33,8 @@ const mediaEl = ref<HTMLElement | null>(null)
 // into the repository: a proxy is not structured-cloneable.
 const aggregated = shallowRef<AggregatedEntry | null>(null)
 
-/** The open revision session, if the entry's own text is being edited. Null means it is being read. */
-const revisionSession = ref<string | null>(null)
-const revisionContent = ref('')
-const savingRevision = ref(false)
+/** The open revision session, if the entry's own text is being edited. `isOpen` false means it is being read. */
+const revisionSession = useDraftSession()
 /** Anchors this revision session has disturbed so far (PRODUCT.md §5.3). Sticky across the session. */
 const revisionAffectedAnchorIds = ref<string[]>([])
 
@@ -44,12 +43,14 @@ const revisionAffectedAnchorIds = ref<string[]>([])
  * exclusive with `revisionSession`: ENTRY_MODEL.md is explicit that the two creation experiences
  * are never offered in the same sitting, and hiding each control while the other is open is what
  * enforces that in the UI rather than merely documenting it.
+ *
+ * `useDraftSession` covers the child's own prose (`childSession.content`); the parent gaining
+ * provisional anchors is a second document `useDraftSession` doesn't know about, tracked here
+ * alongside it and pushed into the same underlying draft via `recordParentChange`.
  */
-const childSession = ref<string | null>(null)
+const childSession = useDraftSession()
 const childRelationType = ref<NarrativeRelation>('annotation')
 const childParentContent = ref('')
-const childNoteContent = ref('')
-const savingChild = ref(false)
 
 const heading = computed(() => aggregated.value?.title ?? 'Entry detail')
 
@@ -113,24 +114,14 @@ async function loadEntry(entryId: string): Promise<void> {
 
 /** Discards an in-progress revision rather than leaving it open. */
 function resetRevisionState(): void {
-  if (revisionSession.value) {
-    void drafts.discardDraft(revisionSession.value)
-  }
-  revisionSession.value = null
-  revisionContent.value = ''
+  revisionSession.reset()
   revisionAffectedAnchorIds.value = []
-  savingRevision.value = false
 }
 
 /** Discards an in-progress anchor-mode session rather than leaving it open. */
 function resetChildState(): void {
-  if (childSession.value) {
-    void drafts.discardDraft(childSession.value)
-  }
-  childSession.value = null
+  childSession.reset()
   childParentContent.value = ''
-  childNoteContent.value = ''
-  savingChild.value = false
 }
 
 onMounted(() => {
@@ -200,45 +191,27 @@ function startRevising(): void {
   const current = aggregated.value
   if (!current) return
 
-  revisionContent.value = current.content
-  revisionSession.value = drafts.beginDraft(
-    { kind: 'revision', parent_id: props.id },
-    { content: current.content },
-  )
+  revisionSession.begin({ kind: 'revision', parent_id: props.id }, { content: current.content })
 }
 
 function handleRevisionChange(change: EditorChange): void {
-  if (!revisionSession.value) return
-
-  revisionContent.value = change.content
   revisionAffectedAnchorIds.value = change.affectedAnchorIds ?? []
-  drafts.recordChange(revisionSession.value, change)
+  revisionSession.handleChange(change)
 }
 
 async function saveRevision(): Promise<void> {
-  const sessionId = revisionSession.value
-  if (!sessionId || savingRevision.value) return
-
-  savingRevision.value = true
   actionError.value = null
 
   try {
-    await drafts.sealDraft(sessionId)
-    revisionSession.value = null
-    await loadEntry(props.id)
+    const saved = await revisionSession.save()
+    if (saved) await loadEntry(props.id)
   } catch (err) {
     actionError.value = err instanceof Error ? err.message : 'Failed to save revision'
-  } finally {
-    savingRevision.value = false
   }
 }
 
 async function cancelRevision(): Promise<void> {
-  const sessionId = revisionSession.value
-  if (!sessionId) return
-
-  revisionSession.value = null
-  await drafts.discardDraft(sessionId)
+  await revisionSession.discard()
 }
 
 /**
@@ -251,55 +224,37 @@ function startAnchoring(relationType: NarrativeRelation): void {
 
   childRelationType.value = relationType
   childParentContent.value = current.content
-  childNoteContent.value = ''
-  childSession.value = drafts.beginDraft(
+  childSession.begin(
     { kind: 'new_child', parent_id: props.id, relation_type: relationType },
     { parentContent: current.content },
   )
 }
 
+/** The parent's own document, tracked outside `childSession` — see its declaration above. */
 function handleParentAnchorChange(change: EditorChange): void {
-  if (!childSession.value) return
+  if (!childSession.sessionId) return
 
   childParentContent.value = change.content
-  drafts.recordParentChange(childSession.value, {
+  drafts.recordParentChange(childSession.sessionId, {
     content: change.content,
     steps: change.steps,
     anchorIds: change.anchorIds ?? [],
   })
 }
 
-function handleChildNoteChange(change: EditorChange): void {
-  if (!childSession.value) return
-
-  childNoteContent.value = change.content
-  drafts.recordChange(childSession.value, change)
-}
-
 async function saveChildEntry(): Promise<void> {
-  const sessionId = childSession.value
-  if (!sessionId || savingChild.value) return
-
-  savingChild.value = true
   actionError.value = null
 
   try {
-    await drafts.sealDraft(sessionId)
-    childSession.value = null
-    await loadEntry(props.id)
+    const saved = await childSession.save()
+    if (saved) await loadEntry(props.id)
   } catch (err) {
     actionError.value = err instanceof Error ? err.message : 'Failed to add entry'
-  } finally {
-    savingChild.value = false
   }
 }
 
 async function cancelChildEntry(): Promise<void> {
-  const sessionId = childSession.value
-  if (!sessionId) return
-
-  childSession.value = null
-  await drafts.discardDraft(sessionId)
+  await childSession.discard()
 }
 
 function formatDate(iso: string): string {
@@ -373,7 +328,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </div>
 
           <button
-            v-if="!revisionSession && !childSession"
+            v-if="!revisionSession.isOpen && !childSession.isOpen"
             type="button"
             class="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             @click="startRevising"
@@ -382,7 +337,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </button>
         </header>
 
-        <template v-if="revisionSession">
+        <template v-if="revisionSession.isOpen">
           <p class="mb-2 text-sm text-[var(--color-text-muted)]">
             Editing appends a new version. The current text stays in the entry's history either way.
           </p>
@@ -390,8 +345,8 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           <DocumentEditor
             label="Revised entry"
             with-title
-            :content="revisionContent"
-            :disabled="savingRevision"
+            :content="revisionSession.content"
+            :disabled="revisionSession.saving"
             @change="handleRevisionChange"
           />
 
@@ -408,7 +363,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             <button
               type="button"
               class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
-              :disabled="savingRevision"
+              :disabled="revisionSession.saving"
               @click="cancelRevision"
             >
               Discard revision
@@ -416,7 +371,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             <button
               type="button"
               class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="savingRevision"
+              :disabled="revisionSession.saving"
               @click="saveRevision"
             >
               Save revision
@@ -424,7 +379,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </div>
         </template>
 
-        <template v-else-if="childSession">
+        <template v-else-if="childSession.isOpen">
           <p class="mb-2 text-sm text-[var(--color-text-muted)]">
             Select a passage and mark it, or place the cursor and propose wording. Surrounding text
             cannot be changed from here.
@@ -435,23 +390,23 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             anchor-mode
             :with-title="parentHasTitle"
             :content="childParentContent"
-            :disabled="savingChild"
+            :disabled="childSession.saving"
             @change="handleParentAnchorChange"
           />
 
           <label for="child-note" class="mt-4 mb-2 block text-sm font-medium">Your note</label>
           <DocumentEditor
             label="Your note"
-            :content="childNoteContent"
-            :disabled="savingChild"
-            @change="handleChildNoteChange"
+            :content="childSession.content"
+            :disabled="childSession.saving"
+            @change="childSession.handleChange"
           />
 
           <div class="mt-3 flex justify-end gap-2">
             <button
               type="button"
               class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
-              :disabled="savingChild"
+              :disabled="childSession.saving"
               @click="cancelChildEntry"
             >
               Discard
@@ -459,7 +414,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             <button
               type="button"
               class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="savingChild || !childNoteContent.trim()"
+              :disabled="childSession.saving || !childSession.content.trim()"
               @click="saveChildEntry"
             >
               Add entry
@@ -554,7 +509,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         </section>
       </article>
 
-      <section v-if="!revisionSession && !childSession">
+      <section v-if="!revisionSession.isOpen && !childSession.isOpen">
         <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
           Add a related entry
         </h2>
@@ -580,7 +535,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         </div>
       </section>
 
-      <section v-if="!revisionSession && !childSession">
+      <section v-if="!revisionSession.isOpen && !childSession.isOpen">
         <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
           Connect to another entry
         </h2>

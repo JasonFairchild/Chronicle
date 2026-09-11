@@ -41,8 +41,9 @@ vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser 
 
 - `src/domain/entryDocument.ts` — the **only** flattening. Anchors, previews, search, and diff must
   all measure against `docToPlainText`, or an anchor recorded on one ruler resolves on another.
-- `src/editor/extensions.ts` — the only module that knows TipTap exists. The domain layer reads
-  documents as plain JSON, which is what keeps it pure and node-testable.
+- `src/editor/` — the only place that knows TipTap exists: `extensions.ts` (schema) and
+  `anchorCommands.ts` (imperative commands over an editor already built from it). The domain layer
+  reads documents as plain JSON either way, which is what keeps it pure and node-testable.
 - `src/repositories/index.ts` — the composition root. Three interfaces, each with an in-memory
   adapter for tests and a persistent one for the app, each proven by a shared `.contract.ts`.
 

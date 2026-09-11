@@ -139,10 +139,16 @@ anchor (`domain/anchorWarnings.ts`, checked via ProseMirror's own step mapping r
 re-resolving text) are what Phase 3's history UI now has to build on.
 
 Not carried over from the redesign: a per-anchor "remove just this one" UI affordance before
-sealing. `editor/extensions.ts` has the commands to add or read anchors; undoing one before sealing
-today means the browser's own undo (Ctrl+Z), which only ever undoes the most recent placement, not
-an arbitrary earlier one in the same session. A small, well-scoped follow-up once anchor-mode has
-seen real use, not a blocker.
+sealing. `editor/anchorCommands.ts` has the commands to add or read anchors; undoing one before
+sealing today means the browser's own undo (Ctrl+Z), which only ever undoes the most recent
+placement, not an arbitrary earlier one in the same session. A small, well-scoped follow-up once
+anchor-mode has seen real use, not a blocker.
+
+**Follow-up simplification pass (2026-09-11):** `editor/extensions.ts` was doing two jobs — the
+TipTap schema and an imperative command API over it — split so `extensions.ts` stays schema-only
+and `editor/anchorCommands.ts` holds `addAnchorMark`, `addAnchorInsert`, `anchorSpans`,
+`mapAnchorSpans`, and the `isAnchorEdit` guard predicate. No behavior change; `DocumentEditor.vue`
+is the only importer and just points at two modules instead of one.
 
 ### Parked, not decided against
 
@@ -171,11 +177,12 @@ queued next but not yet done when work paused to clear the session:
   `ConnectionForm` is not being rebuilt, so this one should actually be removed: the state can never
   be observed true (`handleSubmit` sets it, emits synchronously, resets it in `finally`, all before
   Vue flushes a render), so it and its `:disabled` bindings are dead weight.
-- **Missing tests for `src/composables/useMedia.ts`.** Still true. `extensions.ts` is no longer bare:
-  the anchor-mode mechanism it added (`Anchor`, `AnchorInsert`, `isAnchorEdit`, `addAnchorMark`,
-  `addAnchorInsert`, `anchorSpans`/`mapAnchorSpans`) now has coverage in
-  `DocumentEditor.browser.test.ts`'s "anchor mode" suite (and its `.cy.ts` mirror), and pure logic
-  moved out to node-tested `domain/anchors.ts` / `domain/anchorWarnings.ts` where it could be.
+- **Missing tests for `src/composables/useMedia.ts`.** Still true. `editor/` is no longer bare:
+  the anchor-mode mechanism it added (`Anchor`, `AnchorInsert` in `extensions.ts`; `isAnchorEdit`,
+  `addAnchorMark`, `addAnchorInsert`, `anchorSpans`/`mapAnchorSpans` in `anchorCommands.ts`) now
+  has coverage in `DocumentEditor.browser.test.ts`'s "anchor mode" suite (and its `.cy.ts`
+  mirror), and pure logic moved out to node-tested `domain/anchors.ts` / `domain/anchorWarnings.ts`
+  where it could be.
 - **Hard-coded `text-red-500`** in `DocumentEditor.vue`, `EntryForm.vue`, `DraftsView.vue`, and
   `EntryDetailView.vue` — every other color in these files routes through the `--color-*` token
   system; this is the one thing that doesn't. Needs a `--color-error` token (with a `.dark` variant)

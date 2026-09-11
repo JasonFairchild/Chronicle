@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import DocumentEditor from '@/components/DocumentEditor.vue'
+import { useDraftSession } from '@/composables/useDraftSession'
 import { docToPlainText, isEmptyDocument } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
@@ -9,9 +10,7 @@ import type { Draft, DraftTarget } from '@/types/draft'
 const drafts = useDraftsStore()
 const store = useEntriesStore()
 
-const openSession = ref<string | null>(null)
-const openContent = ref('')
-const saving = ref(false)
+const session = useDraftSession()
 const error = ref<string | null>(null)
 
 /** What each draft is attached to, so the list can name it rather than just describe its kind. */
@@ -72,44 +71,36 @@ async function resume(draft: Draft): Promise<void> {
   // Reopening rebuilds the authoring session from what was flushed, so the step chain continues
   // rather than restarting at the reload. This has to finish before the editor mounts — otherwise
   // typing right after clicking "Resume" could record into a session that isn't open yet.
-  const resumed = await drafts.resumeDraft(draft.session_id)
-  if (!resumed) return
-
-  openContent.value = resumed.content
-  openSession.value = draft.session_id
-}
-
-function handleChange(change: EditorChange): void {
-  if (!openSession.value) return
-
-  openContent.value = change.content
-  drafts.recordChange(openSession.value, change)
+  await session.resume(draft.session_id)
 }
 
 async function seal(): Promise<void> {
-  const sessionId = openSession.value
-  if (!sessionId || saving.value || isEmptyDocument(openContent.value)) return
+  if (isEmptyDocument(session.content)) return
 
-  saving.value = true
   error.value = null
 
   try {
-    await drafts.sealDraft(sessionId)
-    openSession.value = null
-    await refresh()
+    const saved = await session.save()
+    if (saved) await refresh()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save entry'
-  } finally {
-    saving.value = false
   }
 }
 
+/**
+ * Discards any draft in the list, not only the one open for editing — every row offers this, so
+ * the session composable (which only ever tracks the one currently open) is used when this is
+ * that draft, and the store directly otherwise.
+ */
 async function discard(sessionId: string): Promise<void> {
   error.value = null
 
   try {
-    await drafts.discardDraft(sessionId)
-    if (openSession.value === sessionId) openSession.value = null
+    if (session.sessionId === sessionId) {
+      await session.discard()
+    } else {
+      await drafts.discardDraft(sessionId)
+    }
     await refresh()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to discard draft'
@@ -162,13 +153,13 @@ function formatDate(iso: string): string {
           </time>
         </div>
 
-        <template v-if="openSession === draft.session_id">
+        <template v-if="session.sessionId === draft.session_id">
           <DocumentEditor
             label="Draft"
-            :content="draft.content"
+            :content="session.content"
             :with-title="draft.target.kind !== 'new_child'"
-            :disabled="saving"
-            @change="handleChange"
+            :disabled="session.saving"
+            @change="session.handleChange"
           />
 
           <div class="mt-3 flex justify-end gap-2">
@@ -182,7 +173,7 @@ function formatDate(iso: string): string {
             <button
               type="button"
               class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="saving"
+              :disabled="session.saving"
               @click="seal"
             >
               Save as entry

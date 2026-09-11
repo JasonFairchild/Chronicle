@@ -19,6 +19,7 @@ import {
   type Entry,
   type EntryVersion,
   type NarrativeRelation,
+  type RevisionMode,
 } from '@/types/entry'
 
 export interface CreateChildOptions {
@@ -119,14 +120,14 @@ export const useEntriesStore = defineStore('entries', () => {
     }
 
     const entry = await entryRepository.create(
-      createEntryInput({
+      revisionInput(
+        options.entryId,
         content,
-        parent_id: options.entryId,
-        relation_type: 'revision',
-        revision_mode: 'text',
-        media_refs: options.mediaRefs ?? mediaRefsFor(content, current.media_refs),
-        metadata: options.metadata ?? current.metadata,
-      }),
+        'text',
+        options.mediaRefs ?? mediaRefsFor(content, current.media_refs),
+        options.metadata ?? current.metadata,
+        null,
+      ),
     )
 
     await refreshRoot(options.entryId)
@@ -185,15 +186,14 @@ export const useEntriesStore = defineStore('entries', () => {
       }
 
       const entry = await entryRepository.create(
-        createEntryInput({
+        revisionInput(
+          target.parent_id,
           content,
-          parent_id: target.parent_id,
-          relation_type: 'revision',
-          revision_mode: 'text',
-          media_refs: mediaRefsFor(content, current.media_refs),
-          metadata: current.metadata,
-          authoring_trace: trace,
-        }),
+          'text',
+          mediaRefsFor(content, current.media_refs),
+          current.metadata,
+          trace,
+        ),
       )
 
       await refreshRoot(target.parent_id)
@@ -230,15 +230,14 @@ export const useEntriesStore = defineStore('entries', () => {
     }
 
     const [, child] = await entryRepository.createMany([
-      createEntryInput({
-        content: parentContent,
-        parent_id: parentId,
-        relation_type: 'revision',
-        revision_mode: 'anchor',
-        media_refs: mediaRefsFor(parentContent, current.media_refs),
-        metadata: current.metadata,
-        authoring_trace: parentTrace,
-      }),
+      revisionInput(
+        parentId,
+        parentContent,
+        'anchor',
+        mediaRefsFor(parentContent, current.media_refs),
+        current.metadata,
+        parentTrace,
+      ),
       childInput(content, parentId, relationType, {
         anchors: anchorRefsFor(draft.anchor_ids, parentContent),
         authoring_trace: trace,
@@ -345,6 +344,31 @@ export const useEntriesStore = defineStore('entries', () => {
       relation_type: relationType,
       media_refs: collectMediaRefs(content),
       ...extra,
+    })
+  }
+
+  /**
+   * A revision's `CreateEntryInput`. Shared by `reviseEntry` and the two revision-writing branches
+   * of `createFromDraft` (an ordinary text-mode revision, and the parent half of an anchor-mode
+   * seal) — the only differences between them are the revision mode and which trace and
+   * media/metadata values the caller has already resolved.
+   */
+  function revisionInput(
+    parentId: string,
+    content: string,
+    revisionMode: RevisionMode,
+    mediaRefs: string[],
+    metadata: Record<string, unknown>,
+    trace: AuthoringTrace | null,
+  ): CreateEntryInput {
+    return createEntryInput({
+      content,
+      parent_id: parentId,
+      relation_type: 'revision',
+      revision_mode: revisionMode,
+      media_refs: mediaRefs,
+      metadata,
+      authoring_trace: trace,
     })
   }
 

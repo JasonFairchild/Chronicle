@@ -42,10 +42,10 @@ import {
   addAnchorInsert,
   addAnchorMark,
   anchorSpans,
-  entryExtensions,
   mapAnchorSpans,
   type AnchorSpan,
-} from '@/editor/extensions'
+} from '@/editor/anchorCommands'
+import { entryExtensions } from '@/editor/extensions'
 
 const props = withDefaults(
   defineProps<{

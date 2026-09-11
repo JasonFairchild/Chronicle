@@ -119,6 +119,36 @@ describe('useEntriesStore', () => {
     expect(history.map((version) => version.content)).toEqual(['One', 'Two'])
   })
 
+  it('rejects a revision that changes nothing', async () => {
+    const store = useEntriesStore()
+    const created = await store.createTextEntry('Nothing to see here')
+
+    await expect(
+      store.reviseEntry({ entryId: created.id, content: 'Nothing to see here' }),
+    ).rejects.toThrow('No changes to save')
+  })
+
+  it('updates the revised root in place, without reloading the rest of the timeline', async () => {
+    const store = useEntriesStore()
+    const created = await store.createTextEntry('Draft wording')
+    await store.loadRootEntries()
+
+    await store.reviseEntry({ entryId: created.id, content: 'Final wording' })
+
+    expect(store.rootEntries[0]?.content).toBe('Final wording')
+    expect(store.rootEntries[0]?.version.total).toBe(2)
+  })
+
+  it('prepends a newly created root without reloading the rest of the timeline', async () => {
+    const store = useEntriesStore()
+    await store.createTextEntry('First')
+    await store.loadRootEntries()
+
+    await store.createTextEntry('Second')
+
+    expect(store.rootEntries.map((entry) => entry.content)).toEqual(['Second', 'First'])
+  })
+
   it('keeps a child entry out of the root timeline', async () => {
     const store = useEntriesStore()
     const parent = await store.createTextEntry('Root')

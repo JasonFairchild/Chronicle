@@ -43,6 +43,13 @@ interface ActiveSession {
   dirty: boolean
   /** Whether a row for this session exists on disk, so an emptied draft knows to remove it. */
   persisted: boolean
+  /**
+   * The repository write `flush` is currently awaiting, if any. Cancelling the timer stops a
+   * flush that hasn't started; it does nothing for one already mid-write. Sealing or discarding
+   * must wait on this too, or a write that resolves after `delete()` has already run would
+   * resurrect the row it just removed.
+   */
+  flushing: Promise<void> | null
 }
 
 export const useDraftsStore = defineStore('drafts', () => {
@@ -76,6 +83,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       timer: null,
       dirty: false,
       persisted: false,
+      flushing: null,
     })
 
     return sessionId
@@ -102,6 +110,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       // emptying it later has something to delete.
       dirty: false,
       persisted: true,
+      flushing: null,
     })
 
     return structuredClone(draft)
@@ -160,16 +169,25 @@ export const useDraftsStore = defineStore('drafts', () => {
     if (!entry.dirty) return
     entry.dirty = false
 
-    if (isEmptyDocument(entry.draft.content)) {
-      if (entry.persisted) {
-        await draftRepository.delete(sessionId)
-        entry.persisted = false
+    const write = (async () => {
+      if (isEmptyDocument(entry.draft.content)) {
+        if (entry.persisted) {
+          await draftRepository.delete(sessionId)
+          entry.persisted = false
+        }
+        return
       }
-      return
-    }
 
-    await draftRepository.save(entry.draft)
-    entry.persisted = true
+      await draftRepository.save(entry.draft)
+      entry.persisted = true
+    })()
+
+    entry.flushing = write
+    try {
+      await write
+    } finally {
+      if (entry.flushing === write) entry.flushing = null
+    }
   }
 
   /**
@@ -180,6 +198,10 @@ export const useDraftsStore = defineStore('drafts', () => {
   async function sealDraft(sessionId: string): Promise<Entry> {
     const entry = requireActive(sessionId)
     cancelFlush(entry)
+    // A flush already mid-write must finish before anything below deletes this session's row, or
+    // its resolution could land after the delete and resurrect a draft for content that has
+    // already become a real entry.
+    await entry.flushing?.catch(() => {})
 
     if (isEmptyDocument(entry.draft.content)) {
       throw new Error('Entry content cannot be empty')
@@ -203,10 +225,31 @@ export const useDraftsStore = defineStore('drafts', () => {
     }
   }
 
+  /**
+   * Called when whatever opened a session goes away — a composer unmounted, a page navigated from
+   * — without the user explicitly saving or discarding. Real, already-persisted work is left
+   * exactly as `flush` leaves it: a resumable draft, since closing a tab must not discard it. A
+   * session nothing was ever typed into has nothing worth keeping, so it is dropped from memory
+   * rather than left in `active` forever with no way for the UI to ever reach it again.
+   */
+  async function abandonDraft(sessionId: string): Promise<void> {
+    await flush(sessionId)
+
+    const entry = active.get(sessionId)
+    if (entry && !entry.persisted) {
+      active.delete(sessionId)
+    }
+  }
+
   /** Throws the session away. The one thing that ever removes work, and only on request. */
   async function discardDraft(sessionId: string): Promise<void> {
     const entry = active.get(sessionId)
-    if (entry) cancelFlush(entry)
+    if (entry) {
+      cancelFlush(entry)
+      // Same reasoning as sealDraft: let a flush already mid-write land before the row it holds
+      // is deleted, or it can resurrect what's being discarded.
+      await entry.flushing?.catch(() => {})
+    }
 
     active.delete(sessionId)
     await draftRepository.delete(sessionId)
@@ -268,6 +311,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     recordChange,
     markTick,
     flush,
+    abandonDraft,
     sealDraft,
     discardDraft,
     loadDrafts,

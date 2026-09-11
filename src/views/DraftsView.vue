@@ -33,15 +33,16 @@ async function refresh(): Promise<void> {
 }
 
 async function loadParentLabels(): Promise<void> {
+  const parentIds = [...new Set(drafts.drafts.map((draft) => parentIdOf(draft.target)))].filter(
+    (id): id is string => id !== null,
+  )
+
+  const parents = await Promise.all(parentIds.map((id) => store.getEntry(id)))
+
   const labels: Record<string, string> = {}
-
-  for (const draft of drafts.drafts) {
-    const parentId = parentIdOf(draft.target)
-    if (!parentId || labels[parentId]) continue
-
-    const parent = await store.getEntry(parentId)
-    if (parent) labels[parentId] = parent.title ?? preview(docToPlainText(parent.content))
-  }
+  parents.forEach((parent, index) => {
+    if (parent) labels[parentIds[index]!] = parent.title ?? preview(docToPlainText(parent.content))
+  })
 
   parentLabels.value = labels
 }
@@ -67,11 +68,15 @@ function labelFor(target: Extract<DraftTarget, { kind: 'new_child' }>): string {
 
 async function resume(draft: Draft): Promise<void> {
   error.value = null
-  openContent.value = draft.content
-  openSession.value = draft.session_id
+
   // Reopening rebuilds the authoring session from what was flushed, so the step chain continues
-  // rather than restarting at the reload.
-  await drafts.resumeDraft(draft.session_id)
+  // rather than restarting at the reload. This has to finish before the editor mounts — otherwise
+  // typing right after clicking "Resume" could record into a session that isn't open yet.
+  const resumed = await drafts.resumeDraft(draft.session_id)
+  if (!resumed) return
+
+  openContent.value = resumed.content
+  openSession.value = draft.session_id
 }
 
 function handleChange(change: EditorChange): void {

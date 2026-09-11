@@ -126,11 +126,7 @@ describe('useDraftsStore', () => {
     const entries = useEntriesStore()
     const original = await entries.createTextEntry('I recieved the offer')
 
-    const sessionId = store.beginDraft({
-      kind: 'revision',
-      parent_id: original.id,
-      base_version_id: null,
-    })
+    const sessionId = store.beginDraft({ kind: 'revision', parent_id: original.id })
     store.recordChange(sessionId, {
       content: 'I received the offer',
       steps: [{ stepType: 'replace' }],
@@ -182,6 +178,57 @@ describe('useDraftsStore', () => {
     await store.loadDrafts()
 
     expect(store.drafts.map((draft) => draft.content)).toEqual(['Newer', 'Older'])
+  })
+
+  it('abandons an untouched session outright, rather than leaving it open forever', async () => {
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+
+    await store.abandonDraft(sessionId)
+
+    expect(store.currentDraft(sessionId)).toBeNull()
+  })
+
+  it('flushes and keeps a session that was actually typed into when abandoned', async () => {
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+    store.recordChange(sessionId, { content: 'Half a thought', steps: [{ stepType: 'replace' }] })
+
+    await store.abandonDraft(sessionId)
+
+    expect(store.currentDraft(sessionId)?.content).toBe('Half a thought')
+    expect(await draftRepository.getById(sessionId)).not.toBeNull()
+  })
+
+  it('does not resurrect a draft when sealing races an in-flight flush', async () => {
+    vi.useFakeTimers()
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+    store.recordChange(sessionId, {
+      content: 'A day at the lake',
+      steps: [{ stepType: 'replace' }],
+    })
+
+    // Let the debounced flush actually start its write, but hold it open so sealing can race it
+    // — this is exactly the window the fix has to close.
+    const originalSave = draftRepository.save.bind(draftRepository)
+    let releaseSave: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    vi.spyOn(draftRepository, 'save').mockImplementationOnce(async (draft) => {
+      await held
+      return originalSave(draft)
+    })
+
+    await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+    // The flush's write is now in flight, awaiting `held`.
+
+    const sealPromise = store.sealDraft(sessionId)
+    releaseSave()
+    await sealPromise
+
+    expect(await draftRepository.getById(sessionId)).toBeNull()
   })
 
   it('discards a draft on request, the only thing that ever removes work', async () => {

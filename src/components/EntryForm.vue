@@ -48,9 +48,11 @@ async function handleSubmit(): Promise<void> {
   }
 }
 
-// Whatever is pending has to reach disk before this component goes away.
+// Whatever is pending has to reach disk before this component goes away — and if this composer
+// was opened and never typed into, there is nothing to keep, so the session is dropped rather
+// than left open forever.
 onBeforeUnmount(() => {
-  void drafts.flush(sessionId.value)
+  void drafts.abandonDraft(sessionId.value)
 })
 </script>
 

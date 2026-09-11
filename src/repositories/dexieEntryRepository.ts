@@ -82,25 +82,28 @@ export class DexieEntryRepository implements EntryRepository {
 
     // Indexed breadth-first expansion rather than the repeated full-table scan the in-memory
     // adapter uses: each level here is one indexed query instead of a scan-until-fixpoint loop.
+    //
+    // Two edges grow the frontier, not one: parent_id children, and incoming connections (an
+    // entry outside the subtree whose target_id points into it). Both run every iteration, or a
+    // connection's own children — annotations on it, its own revisions — are found once as a
+    // one-level graft and never explored further themselves.
     while (frontier.length > 0) {
-      const rows = await this.db.entries.where('parent_id').anyOf(frontier).toArray()
+      const [children, incoming] = await Promise.all([
+        this.db.entries.where('parent_id').anyOf(frontier).toArray(),
+        this.db.entries
+          .where('[target_id+relation_type]')
+          .anyOf(frontier.map((id): [string, 'connection'] => [id, 'connection']))
+          .toArray(),
+      ])
+
       frontier = []
-      for (const row of rows) {
+      for (const row of [...children, ...incoming]) {
         if (!subtree.has(row.id)) {
           subtree.set(row.id, row)
           frontier.push(row.id)
         }
       }
     }
-
-    // Incoming connections live outside the subtree but are needed to render it.
-    const subtreeIds = [...subtree.keys()]
-    const incoming = await this.db.entries
-      .where('[target_id+relation_type]')
-      .anyOf(subtreeIds.map((id): [string, 'connection'] => [id, 'connection']))
-      .toArray()
-
-    for (const connection of incoming) subtree.set(connection.id, connection)
 
     return [...subtree.values()].sort(compareEntries).map(stripStorage)
   }

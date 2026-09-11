@@ -9,7 +9,7 @@ export type DraftTarget =
   // Narrowed to the narrative relations on purpose: a connection is two picked entries and a
   // sentence, composed in one gesture, so nothing about it needs a durable session.
   | { kind: 'new_child'; parent_id: string; relation_type: NarrativeRelation }
-  | { kind: 'revision'; parent_id: string; base_version_id: string | null }
+  | { kind: 'revision'; parent_id: string }
 
 /**
  * A writing session in progress. See ENTRY_MODEL.md: this is the one sanctioned mutable store,

@@ -65,26 +65,33 @@ export class InMemoryEntryRepository implements EntryRepository {
     const all = [...this.entries.values()]
     const subtree = new Set<string>([rootId])
 
-    // Containment follows parent_id only. Repeating until nothing new appears keeps this
-    // independent of insertion order without needing the entries pre-sorted.
+    // Two edges grow the subtree, not one: parent_id containment, and an incoming connection (an
+    // entry outside it whose target_id points in). Both run every pass, or a connection's own
+    // children — annotations on it, its own revisions — are never picked up themselves. Repeating
+    // until nothing new appears keeps this independent of insertion order and of which edge fires
+    // first for a given entry.
     for (let added = true; added;) {
       added = false
       for (const entry of all) {
-        if (entry.parent_id && subtree.has(entry.parent_id) && !subtree.has(entry.id)) {
+        if (subtree.has(entry.id)) continue
+
+        const isChild = entry.parent_id !== null && subtree.has(entry.parent_id)
+        const isIncomingConnection =
+          entry.relation_type === 'connection' &&
+          entry.target_id !== null &&
+          subtree.has(entry.target_id)
+
+        if (isChild || isIncomingConnection) {
           subtree.add(entry.id)
           added = true
         }
       }
     }
 
-    // Incoming connections live outside the subtree but are needed to render it.
-    const needed = all.filter(
-      (entry) =>
-        subtree.has(entry.id) ||
-        (entry.relation_type === 'connection' && entry.target_id && subtree.has(entry.target_id)),
-    )
-
-    return needed.sort(compareEntries).map((entry) => structuredClone(entry))
+    return all
+      .filter((entry) => subtree.has(entry.id))
+      .sort(compareEntries)
+      .map((entry) => structuredClone(entry))
   }
 
   clear(): void {

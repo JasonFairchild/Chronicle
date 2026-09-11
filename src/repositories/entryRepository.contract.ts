@@ -140,6 +140,32 @@ export function runEntryRepositoryContract(
       expect(contents).not.toContain('Elsewhere')
     })
 
+    it('follows an incoming connection’s own children too, not just the connection itself', async () => {
+      const root = await repository.create(createEntryInput({ content: 'Root' }))
+      const outsider = await repository.create(createEntryInput({ content: 'Elsewhere' }))
+      const connection = await repository.create(
+        createEntryInput({
+          content: 'Points at the root',
+          parent_id: outsider.id,
+          target_id: root.id,
+          relation_type: 'connection',
+        }),
+      )
+      await repository.create(
+        createEntryInput({
+          content: 'A note on that connection',
+          parent_id: connection.id,
+          relation_type: 'annotation',
+        }),
+      )
+
+      const descendants = await repository.listDescendants(root.id)
+      const contents = descendants.map((entry) => entry.content)
+
+      expect(contents).toContain('Points at the root')
+      expect(contents).toContain('A note on that connection')
+    })
+
     it('refuses a relation with nothing to relate to', async () => {
       await expect(
         repository.create(

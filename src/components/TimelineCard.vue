@@ -24,7 +24,7 @@ function preview(text: string): string {
 }
 
 /** Shown only once an entry has actually been revised, so an untouched entry stays quiet. */
-const revisionCount = props.entry.version.total - 1
+const revisionCount = computed(() => props.entry.version.total - 1)
 </script>
 
 <template>

@@ -229,11 +229,7 @@ function startRevising(): void {
 
   revisionContent.value = current.content
   revisionSession.value = drafts.beginDraft(
-    {
-      kind: 'revision',
-      parent_id: props.id,
-      base_version_id: current.version.revision_id,
-    },
+    { kind: 'revision', parent_id: props.id },
     { content: current.content },
   )
 }

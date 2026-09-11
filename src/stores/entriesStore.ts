@@ -5,6 +5,7 @@ import {
   docTitle,
   isEmptyDocument,
   isSerializedDocument,
+  sameContent,
 } from '@/domain/entryDocument'
 import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
 import { entryRepository } from '@/repositories'
@@ -72,7 +73,7 @@ export const useEntriesStore = defineStore('entries', () => {
   async function createTextEntry(content: string): Promise<Entry> {
     const entry = await entryRepository.create(rootInput(requireContent(content), null))
 
-    rootEntries.value = await aggregateRoots()
+    await addRoot(entry.id)
     return entry
   }
 
@@ -111,6 +112,9 @@ export const useEntriesStore = defineStore('entries', () => {
     if (!current) {
       throw new Error('Cannot revise an entry that does not exist')
     }
+    if (sameContent(current.content, content)) {
+      throw new Error('No changes to save')
+    }
 
     const entry = await entryRepository.create(
       createEntryInput({
@@ -122,7 +126,7 @@ export const useEntriesStore = defineStore('entries', () => {
       }),
     )
 
-    rootEntries.value = await aggregateRoots()
+    await refreshRoot(options.entryId)
     return entry
   }
 
@@ -152,6 +156,9 @@ export const useEntriesStore = defineStore('entries', () => {
       if (!current) {
         throw new Error('Cannot revise an entry that does not exist')
       }
+      if (sameContent(current.content, content)) {
+        throw new Error('No changes to save')
+      }
 
       const entry = await entryRepository.create(
         createEntryInput({
@@ -164,13 +171,13 @@ export const useEntriesStore = defineStore('entries', () => {
         }),
       )
 
-      rootEntries.value = await aggregateRoots()
+      await refreshRoot(target.parent_id)
       return entry
     }
 
     const entry = await entryRepository.create(rootInput(content, trace))
 
-    rootEntries.value = await aggregateRoots()
+    await addRoot(entry.id)
     return entry
   }
 
@@ -193,18 +200,58 @@ export const useEntriesStore = defineStore('entries', () => {
 
   async function aggregateRoots(): Promise<AggregatedEntry[]> {
     const roots = await entryRepository.listRootEntries()
-    const states: AggregatedEntry[] = []
 
     // A card needs each root folded over its own revisions and nothing else, so it asks for
     // exactly that. The persistent adapter should collapse this into one query rather than
-    // reaching for listAll, which would load the whole database to render a list.
-    for (const root of roots) {
-      const revisions = await entryRepository.listRevisions(root.id)
-      const state = reconstructEntryState(root.id, [root, ...revisions], { depth: 0 })
-      if (state) states.push(state)
-    }
+    // reaching for listAll, which would load the whole database to render a list. The revision
+    // fetches are independent of each other, so they run concurrently rather than one root's
+    // round trip waiting on the last.
+    const states = await Promise.all(
+      roots.map(async (root) => {
+        const revisions = await entryRepository.listRevisions(root.id)
+        return reconstructEntryState(root.id, [root, ...revisions], { depth: 0 })
+      }),
+    )
 
-    return states
+    return states.filter((state): state is AggregatedEntry => state !== null)
+  }
+
+  /**
+   * Re-aggregates one root in place. Revising an entry only ever needs its own card refreshed —
+   * reloading every root over again after each write would make every save cost more as the
+   * timeline grows, for entries that did not change.
+   */
+  async function refreshRoot(rootId: string): Promise<void> {
+    const [root, revisions] = await Promise.all([
+      entryRepository.getById(rootId),
+      entryRepository.listRevisions(rootId),
+    ])
+    if (!root) return
+
+    const state = reconstructEntryState(rootId, [root, ...revisions], { depth: 0 })
+    if (!state) return
+
+    const index = rootEntries.value.findIndex((entry) => entry.id === rootId)
+    if (index === -1) return
+
+    const next = [...rootEntries.value]
+    next[index] = state
+    rootEntries.value = next
+  }
+
+  /**
+   * Adds a freshly created root without re-fetching the rest. Ids are UUIDv7 and generated one
+   * client at a time, so a brand-new root is always the most recent thing in the list — it can be
+   * placed at the front directly rather than re-sorting everything already loaded.
+   */
+  async function addRoot(rootId: string): Promise<void> {
+    const root = await entryRepository.getById(rootId)
+    if (!root) return
+
+    const state = reconstructEntryState(rootId, [root], { depth: 0 })
+    if (!state) return
+
+    rootEntries.value = [state, ...rootEntries.value]
   }
 
   /** A root caches its document's title node; media is whatever the document points at. */

@@ -60,6 +60,34 @@ describe('DocumentEditor', () => {
     })
   })
 
+  it('moves from the title to the body on Tab, rather than leaving the editor entirely', () => {
+    const onChange = cy.stub().as('change')
+
+    cy.mount(DocumentEditor, {
+      props: { label: 'New entry', withTitle: true },
+      attrs: { onChange },
+    })
+
+    // Cypress's `.type()` has no `{tab}` sequence (cypress-io/cypress#299), so the keydown ProseMirror
+    // listens for is dispatched directly, on whichever element the browser currently has focused.
+    cy.findByRole('heading').click().type('Lake Tahoe')
+    cy.focused().trigger('keydown', {
+      key: 'Tab',
+      code: 'Tab',
+      keyCode: 9,
+      which: 9,
+      bubbles: true,
+      cancelable: true,
+    })
+    cy.focused().type('We drove up on Friday.')
+
+    cy.get('@change').then((stub) => {
+      const change = lastChange(stub)
+      expect(docTitle(change.content)).to.equal('Lake Tahoe')
+      expect(docToPlainText(change.content)).to.equal('We drove up on Friday.')
+    })
+  })
+
   it('survives Enter over a selection covering the title, which cannot be split', () => {
     const onChange = cy.stub().as('change')
 
@@ -75,6 +103,25 @@ describe('DocumentEditor', () => {
 
     cy.get('@change').then((stub) => {
       expect(docToPlainText(lastChange(stub).content)).to.equal('Starting over.')
+    })
+  })
+
+  it('keeps the title a title rather than letting a text style replace it', () => {
+    const onChange = cy.stub().as('change')
+
+    cy.mount(DocumentEditor, {
+      props: { label: 'New entry', withTitle: true },
+      attrs: { onChange },
+    })
+
+    cy.findByRole('heading').click().type('Lake Tahoe')
+    cy.findByRole('combobox', { name: 'Text style' }).select('Heading')
+
+    // A heading with the same words would satisfy `findByRole('heading', { name: 'Lake Tahoe' })`
+    // just as well, so the level is what actually distinguishes "still the title" from "replaced".
+    cy.findByRole('heading', { name: 'Lake Tahoe', level: 1 }).should('be.visible')
+    cy.get('@change').then((stub) => {
+      expect(docTitle(lastChange(stub).content)).to.equal('Lake Tahoe')
     })
   })
 
@@ -97,7 +144,7 @@ describe('DocumentEditor', () => {
     cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
 
     cy.findByRole('textbox', { name: 'New entry' }).type('Worth remembering{selectall}')
-    cy.findByRole('button', { name: 'Heading' }).click()
+    cy.findByRole('combobox', { name: 'Text style' }).select('Heading')
 
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)

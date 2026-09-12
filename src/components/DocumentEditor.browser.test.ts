@@ -61,6 +61,17 @@ describe('DocumentEditor (browser)', () => {
     expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
   })
 
+  it('moves from the title to the body on Tab, rather than leaving the editor entirely', async () => {
+    const screen = mountEditor({ withTitle: true })
+
+    await screen.getByRole('heading').click()
+    await userEvent.keyboard('Lake Tahoe{Tab}We drove up on Friday.')
+
+    const latest = changes[changes.length - 1]!
+    expect(docTitle(latest.content)).toBe('Lake Tahoe')
+    expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
+  })
+
   it('survives Enter over a selection covering the title, which cannot be split', async () => {
     const screen = mountEditor({ withTitle: true })
 
@@ -70,6 +81,21 @@ describe('DocumentEditor (browser)', () => {
 
     const latest = changes[changes.length - 1]!
     expect(docToPlainText(latest.content)).toBe('Starting over.')
+  })
+
+  it('keeps the title a title rather than letting a text style replace it', async () => {
+    const screen = mountEditor({ withTitle: true })
+
+    await screen.getByRole('heading').click()
+    await userEvent.keyboard('Lake Tahoe')
+    await screen.getByRole('combobox', { name: 'Text style' }).selectOptions('Heading')
+
+    // A heading with the same words would satisfy `getByRole('heading', { name: 'Lake Tahoe' })`
+    // just as well, so the level is what actually distinguishes "still the title" from "replaced".
+    await expect
+      .element(screen.getByRole('heading', { name: 'Lake Tahoe', level: 1 }))
+      .toBeVisible()
+    expect(docTitle(changes[changes.length - 1]!.content)).toBe('Lake Tahoe')
   })
 
   it('reports a formatting change as formatting, since it inserts no words', async () => {
@@ -89,8 +115,7 @@ describe('DocumentEditor (browser)', () => {
 
     await screen.getByRole('textbox', { name: 'New entry' }).fill('Worth remembering')
     await userEvent.keyboard('{Control>}a{/Control}')
-    // Exact, or Playwright's substring matching also finds Subheading.
-    await screen.getByRole('button', { name: 'Heading', exact: true }).click()
+    await screen.getByRole('combobox', { name: 'Text style' }).selectOptions('Heading')
 
     // A heading arrives as a replaceAround step, which no step type tells apart from an edit.
     const latest = changes[changes.length - 1]!

@@ -57,6 +57,28 @@ const Title = Node.create({
   addKeyboardShortcuts() {
     const isTitle = (position: ResolvedPos) => position.parent.type.name === this.name
 
+    /**
+     * Moves the caret from the title into the body, shared by Enter and Tab below. `deleteSelection`
+     * is what tells them apart: Enter is "commit this line and move on," so selected title text is
+     * replaced the way splitting a line would; Tab is only navigation, so it leaves the title's text
+     * untouched and just moves the caret past it.
+     */
+    const leaveTitle = (deleteSelection: boolean) =>
+      this.editor.commands.command(({ tr, state, dispatch }) => {
+        const { $anchor, $head } = state.selection
+        if (!isTitle($anchor) && !isTitle($head)) return false
+
+        if (dispatch) {
+          if (deleteSelection) tr.deleteSelection()
+          const head = tr.selection.$head
+          const target = isTitle(head) ? head.after() + 1 : head.pos
+          tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(target, tr.doc.content.size))))
+          tr.scrollIntoView()
+        }
+
+        return true
+      })
+
     return {
       /**
        * A title is one line, so Enter moves into the body rather than splitting the heading. The
@@ -67,23 +89,14 @@ const Title = Node.create({
        * invalid against this schema and throws rather than failing quietly. Returning true here is
        * what stops that handler from running at all.
        */
-      Enter: () =>
-        this.editor.commands.command(({ tr, state, dispatch }) => {
-          const { $anchor, $head } = state.selection
-          if (!isTitle($anchor) && !isTitle($head)) return false
-
-          if (dispatch) {
-            tr.deleteSelection()
-            const head = tr.selection.$head
-            const target = isTitle(head) ? head.after() + 1 : head.pos
-            tr.setSelection(
-              TextSelection.near(tr.doc.resolve(Math.min(target, tr.doc.content.size))),
-            )
-            tr.scrollIntoView()
-          }
-
-          return true
-        }),
+      Enter: () => leaveTitle(true),
+      /**
+       * Without this, Tab falls through to the browser default: since the title and body share one
+       * contenteditable region, that default is "leave the editor entirely," landing on whatever's
+       * next in the page's tab order (the save button) rather than the body right below. Title and
+       * body are meant to read as two fields, so Tab between them should behave like it.
+       */
+      Tab: () => leaveTitle(false),
     }
   },
 })
@@ -227,7 +240,7 @@ export function entryExtensions({
 }: EntryExtensionOptions = {}): Extensions {
   return [
     withTitle ? TitledDocument : BodyDocument,
-    ...(withTitle ? [Title] : []),
+    ...(withTitle ? [Title, TitleGuard] : []),
     // StarterKit ships its own Document; ours replaces it so the title has somewhere to sit.
     StarterKit.configure({ document: false }),
     MediaImage,
@@ -263,6 +276,34 @@ const AnchorModeGuard = Extension.create({
   name: 'anchorModeGuard',
   addProseMirrorPlugins() {
     return [new Plugin({ filterTransaction: isAnchorEdit })]
+  },
+})
+
+/**
+ * Keeps the title node the title, no matter what tries to replace it.
+ *
+ * `title? block+` makes the title optional precisely so a document can start directly with `block+`
+ * once no title is given — but that same optionality means `[heading, paragraph]` satisfies the
+ * schema just as well as `[title, paragraph]` does. Nothing stops `setHeading`, `setParagraph`, or
+ * their markdown-shortcut equivalents (`## `, `- `) from landing on the title's position and
+ * quietly turning "Lake Tahoe" into an ordinary first paragraph — the placeholder and the divider
+ * both key off the node's *type*, so that paragraph stops reading as a title at all.
+ *
+ * Filtering the transaction, rather than only disabling the toolbar buttons that could cause it, is
+ * what makes "the title stays the title" a property of the document instead of a rule every entry
+ * point (toolbar, keyboard shortcut, markdown shortcut, paste) has to individually remember.
+ */
+const TitleGuard = Extension.create({
+  name: 'titleGuard',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        filterTransaction: (transaction) => {
+          const hadTitle = transaction.before.firstChild?.type.name === TITLE_NODE
+          return !hadTitle || transaction.doc.firstChild?.type.name === TITLE_NODE
+        },
+      }),
+    ]
   },
 })
 

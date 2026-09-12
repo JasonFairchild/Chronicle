@@ -24,9 +24,25 @@ export interface EditorChange {
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import type { Transaction } from '@tiptap/pm/state'
+import {
+  Bold,
+  Eraser,
+  Image,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  MoreHorizontal,
+  Quote,
+  Redo2,
+  Strikethrough,
+  Underline,
+  Undo2,
+  type LucideIcon,
+} from '@lucide/vue'
 import { addedAnchorIds } from '@/domain/anchors'
 import { anchorsAffectedBy } from '@/domain/anchorWarnings'
 import { useMedia } from '@/composables/useMedia'
@@ -219,94 +235,174 @@ function insertWording(): void {
 const linkOpen = ref(false)
 const linkUrl = ref('')
 
-/** One button in the toolbar. `active` is omitted for commands that are not a state to be in. */
+/** One icon button in the toolbar. `active` is omitted for commands that are not a state to be in. */
 interface ToolbarAction {
   label: string
+  icon: LucideIcon
   active?: boolean
   enabled?: boolean
   run: () => void
 }
 
 /**
- * The toolbar, as data.
+ * The toolbar, as data, grouped the way the buttons are laid out.
  *
  * Every one of these is already installed — StarterKit ships them and they have always worked from
- * the keyboard. Buttons are the only part that was missing, so this list exposes what the editor
- * can do rather than adding to it.
- *
- * One deliberate omission. Heading level one is absent because the title node is the document's
- * h1, and a second one in the body would compete with it.
+ * the keyboard. Buttons are the only part that was missing, so this exposes what the editor can do
+ * rather than adding to it. Heading levels live in the text-style select below, not here: a select
+ * is a more natural fit for "pick one of several block types," and it is where a future block type
+ * (a code block, say) would be added rather than growing this button row.
  *
  * Strikethrough is included: it is ordinary formatting here, distinct from an anchor-op strike
  * (a child entry retracting part of its parent) by its own presentation, not by being withheld
  * from the toolbar. See PRODUCT.md, "Making anchor ops unmistakable".
  */
-const toolbarGroups = computed<ToolbarAction[][]>(() => {
+interface ToolbarGroups {
+  history: ToolbarAction[]
+  marks: ToolbarAction[]
+  lists: ToolbarAction[]
+  link: ToolbarAction[]
+}
+
+const toolbarGroups = computed<ToolbarGroups>(() => {
   const instance = editor.value
-  if (!instance) return []
+  if (!instance) return { history: [], marks: [], lists: [], link: [] }
 
   const chain = () => instance.chain().focus()
 
-  return [
-    [
-      { label: 'Undo', enabled: instance.can().undo(), run: () => chain().undo().run() },
-      { label: 'Redo', enabled: instance.can().redo(), run: () => chain().redo().run() },
-    ],
-    [
+  return {
+    history: [
       {
-        label: 'Heading',
-        active: instance.isActive('heading', { level: 2 }),
-        run: () => chain().toggleHeading({ level: 2 }).run(),
+        label: 'Undo',
+        icon: Undo2,
+        enabled: instance.can().undo(),
+        run: () => chain().undo().run(),
       },
       {
-        label: 'Subheading',
-        active: instance.isActive('heading', { level: 3 }),
-        run: () => chain().toggleHeading({ level: 3 }).run(),
+        label: 'Redo',
+        icon: Redo2,
+        enabled: instance.can().redo(),
+        run: () => chain().redo().run(),
       },
     ],
-    [
-      { label: 'Bold', active: instance.isActive('bold'), run: () => chain().toggleBold().run() },
+    marks: [
+      {
+        label: 'Bold',
+        icon: Bold,
+        active: instance.isActive('bold'),
+        run: () => chain().toggleBold().run(),
+      },
       {
         label: 'Italic',
+        icon: Italic,
         active: instance.isActive('italic'),
         run: () => chain().toggleItalic().run(),
       },
       {
         label: 'Underline',
+        icon: Underline,
         active: instance.isActive('underline'),
         run: () => chain().toggleUnderline().run(),
       },
       {
         label: 'Strikethrough',
+        icon: Strikethrough,
         active: instance.isActive('strike'),
         run: () => chain().toggleStrike().run(),
       },
     ],
-    [
+    lists: [
       {
         label: 'List',
+        icon: List,
         active: instance.isActive('bulletList'),
         run: () => chain().toggleBulletList().run(),
       },
       {
         label: 'Numbered',
+        icon: ListOrdered,
         active: instance.isActive('orderedList'),
         run: () => chain().toggleOrderedList().run(),
       },
       {
         label: 'Quote',
+        icon: Quote,
         active: instance.isActive('blockquote'),
         run: () => chain().toggleBlockquote().run(),
       },
     ],
-    [
-      { label: 'Link', active: linkOpen.value, run: openLink },
-      // Marks and block types both, so one button answers "get this back to plain".
-      { label: 'Clear formatting', run: () => chain().unsetAllMarks().clearNodes().run() },
-      { label: 'Add image', run: () => fileInput.value?.click() },
-    ],
-  ]
+    link: [{ label: 'Link', icon: LinkIcon, active: linkOpen.value, run: openLink }],
+  }
 })
+
+/**
+ * The block type the cursor currently sits in, for the text-style select below. Read-only outside
+ * of `setTextStyle`: a `<select>` here is a view onto editor state, not state of its own.
+ */
+const textStyleValue = computed(() => {
+  const instance = editor.value
+  if (!instance) return 'paragraph'
+  if (instance.isActive('heading', { level: 2 })) return 'heading'
+  if (instance.isActive('heading', { level: 3 })) return 'subheading'
+  return 'paragraph'
+})
+
+function setTextStyle(event: Event): void {
+  const instance = editor.value
+  if (!instance) return
+
+  const chain = instance.chain().focus()
+  switch ((event.target as HTMLSelectElement).value) {
+    case 'heading':
+      chain.setHeading({ level: 2 }).run()
+      break
+    case 'subheading':
+      chain.setHeading({ level: 3 }).run()
+      break
+    default:
+      chain.setParagraph().run()
+  }
+}
+
+/**
+ * Rarely-reached actions live behind one "More" toggle rather than in the button row, which is
+ * where a future addition (dates, mentions, whatever comes next) should go too — see PRODUCT.md.
+ * A disclosure, not a `menu`/`menuitem` widget: those roles promise arrow-key navigation this
+ * doesn't implement, so plain buttons in a revealed panel are the honest a11y choice.
+ */
+const moreOpen = ref(false)
+const moreToggle = ref<HTMLButtonElement | null>(null)
+const morePanel = ref<HTMLElement | null>(null)
+
+function toggleMore(): void {
+  moreOpen.value = !moreOpen.value
+  if (moreOpen.value) linkOpen.value = false
+}
+
+function closeMore(returnFocus: boolean): void {
+  moreOpen.value = false
+  if (returnFocus) moreToggle.value?.focus()
+}
+
+function handleDocumentPointerDown(event: PointerEvent): void {
+  if (!moreOpen.value) return
+  const target = event.target as Node
+  if (moreToggle.value?.contains(target) || morePanel.value?.contains(target)) return
+  moreOpen.value = false
+}
+
+onMounted(() => document.addEventListener('pointerdown', handleDocumentPointerDown))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', handleDocumentPointerDown))
+
+function clearFormatting(): void {
+  editor.value?.chain().focus().unsetAllMarks().clearNodes().run()
+  closeMore(false)
+}
+
+function triggerAddImage(): void {
+  fileInput.value?.click()
+  closeMore(false)
+}
 
 /** Seeded from the link under the cursor, so clicking Link on an existing one edits it. */
 function openLink(): void {
@@ -317,6 +413,7 @@ function openLink(): void {
 
   linkUrl.value = (editor.value?.getAttributes('link').href as string | undefined) ?? ''
   linkOpen.value = true
+  moreOpen.value = false
 }
 
 /**
@@ -432,23 +529,124 @@ defineExpose({
         Neither test runner reproduces it — both synthesize the click in a way that leaves focus
         where the handler puts it — so this one is held by the driven-browser check in
         `DocumentEditor` rather than by a spec.
+
+        Every button below is icon-only: the visible label is gone, but `aria-label` keeps the
+        accessible name exactly what it was, so `getByRole('button', { name: 'Bold' })` and friends
+        still find these the same way. `title` is only for the mouse tooltip; it never wins over
+        `aria-label` when a screen reader computes the name.
       -->
-      <template v-for="(group, index) in toolbarGroups" :key="index">
+      <button
+        v-for="action in toolbarGroups.history"
+        :key="action.label"
+        type="button"
+        class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+        :aria-label="action.label"
+        :title="action.label"
+        :disabled="disabled || action.enabled === false"
+        @mousedown.prevent
+        @click="action.run"
+      >
+        <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />
+      </button>
+
+      <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
+
+      <!--
+        A select, not two more toggle buttons: only one block type ever applies at once, and this is
+        where a future one (a code block, say) gets added without the button row growing again.
+      -->
+      <label :for="`${label}-text-style`" class="sr-only">Text style</label>
+      <select
+        :id="`${label}-text-style`"
+        class="rounded border border-transparent bg-transparent px-1.5 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+        :value="textStyleValue"
+        :disabled="disabled"
+        @change="setTextStyle"
+      >
+        <option value="paragraph">Normal text</option>
+        <option value="heading">Heading</option>
+        <option value="subheading">Subheading</option>
+      </select>
+
+      <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
+
+      <template
+        v-for="(group, index) in [toolbarGroups.marks, toolbarGroups.lists, toolbarGroups.link]"
+        :key="index"
+      >
         <span v-if="index > 0" aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
         <button
           v-for="action in group"
           :key="action.label"
           type="button"
-          class="rounded px-2 py-1 text-sm hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+          class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
           :class="{ 'bg-[var(--color-surface)] text-[var(--color-accent)]': action.active }"
           :aria-pressed="action.active"
+          :aria-label="action.label"
+          :title="action.label"
           :disabled="disabled || action.enabled === false"
           @mousedown.prevent
           @click="action.run"
         >
-          {{ action.label }}
+          <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />
         </button>
       </template>
+
+      <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
+
+      <!--
+        The overflow menu: rarely-reached actions today, and the place a future addition to this
+        toolbar belongs instead of a new button crowding the row above. A disclosure, not a
+        `menu`/`menuitem` widget — those roles promise arrow-key navigation this doesn't implement,
+        so plain, independently-tabbable buttons in a revealed panel are the honest a11y choice.
+      -->
+      <div class="relative">
+        <button
+          ref="moreToggle"
+          type="button"
+          class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+          :class="{ 'bg-[var(--color-surface)] text-[var(--color-accent)]': moreOpen }"
+          :aria-expanded="moreOpen"
+          :aria-controls="`${label}-more-menu`"
+          aria-label="More formatting actions"
+          title="More"
+          :disabled="disabled"
+          @mousedown.prevent
+          @click="toggleMore"
+          @keydown.escape="closeMore(true)"
+        >
+          <MoreHorizontal class="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div
+          v-if="moreOpen"
+          :id="`${label}-more-menu`"
+          ref="morePanel"
+          class="absolute left-0 top-full z-10 mt-1 min-w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md"
+          @keydown.escape="closeMore(true)"
+        >
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-bg-muted)] disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="disabled"
+            @mousedown.prevent
+            @click="clearFormatting"
+          >
+            <Eraser class="h-4 w-4" aria-hidden="true" />
+            Clear formatting
+          </button>
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-bg-muted)] disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="disabled"
+            @mousedown.prevent
+            @click="triggerAddImage"
+          >
+            <Image class="h-4 w-4" aria-hidden="true" />
+            Add image
+          </button>
+        </div>
+      </div>
+
       <input
         ref="fileInput"
         type="file"
@@ -500,10 +698,18 @@ defineExpose({
   The editor renders ProseMirror's own DOM, so these have to pierce scoping. Sizes and weights
   only — every colour stays on a CSS variable so dark mode is a token swap.
 */
+/*
+  The negative margin cancels EditorContent's own padding (px-3 py-2) so the title's border spans
+  the full width of the editor, then the padding puts that space back inside the title's own box.
+  Title and body share one contenteditable region — see `extensions.ts`'s Tab handler — so this is
+  what makes them read as two fields rather than one long block.
+*/
 :deep(.chronicle-document h1[data-title]) {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin: -0.5rem -0.75rem 0.75rem;
+  padding: 0.625rem 0.75rem 0.75rem;
+  font-size: 1.375rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--color-border);
 }
 
 /*

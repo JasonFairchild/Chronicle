@@ -26,6 +26,7 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
+    "@lucide/vue": "^1.45.0",
     "@tiptap/core": "^3.31.2",
     "@tiptap/extension-document": "^3.31.2",
     "@tiptap/extensions": "^3.31.2",

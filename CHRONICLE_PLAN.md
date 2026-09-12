@@ -129,26 +129,11 @@ Still genuinely out of scope:
 - Light/dark theme polish and preference persistence.
 - Video/audio support, optional Tauri desktop shell, encryption, multi-device sync.
 
-**The anchor model redesign is built (2026-09-11).** Anchors moved from offsets stored on a child
-entry into marks and nodes inside the parent's own document — see ENTRY_MODEL.md, "Child entries and
-anchors" and "Two creation experiences, kept separate." `resolveAnchor.ts`'s four-status ladder and
-`ChildEntryForm`'s old quote/opKind API are gone; anchor-mode child creation
-(`DocumentEditor.vue`'s `anchor-mode` prop, `EntryRepository.createMany` for the atomic
-parent-revision-plus-child seal) and the warning when a text-mode revision changes the text under an
-anchor (`domain/anchorWarnings.ts`, checked via ProseMirror's own step mapping rather than by
-re-resolving text) are what Phase 3's history UI now has to build on.
-
-Not carried over from the redesign: a per-anchor "remove just this one" UI affordance before
-sealing. `editor/anchorCommands.ts` has the commands to add or read anchors; undoing one before
-sealing today means the browser's own undo (Ctrl+Z), which only ever undoes the most recent
-placement, not an arbitrary earlier one in the same session. A small, well-scoped follow-up once
-anchor-mode has seen real use, not a blocker.
-
-**Follow-up simplification pass (2026-09-11):** `editor/extensions.ts` was doing two jobs — the
-TipTap schema and an imperative command API over it — split so `extensions.ts` stays schema-only
-and `editor/anchorCommands.ts` holds `addAnchorMark`, `addAnchorInsert`, `anchorSpans`,
-`mapAnchorSpans`, and the `isAnchorEdit` guard predicate. No behavior change; `DocumentEditor.vue`
-is the only importer and just points at two modules instead of one.
+Not carried over from the anchor model redesign (see ENTRY_MODEL.md, "Child entries and anchors"):
+a per-anchor "remove just this one" UI affordance before sealing. `editor/anchorCommands.ts` has the
+commands to add or read anchors; undoing one before sealing today means the browser's own undo
+(Ctrl+Z), which only ever undoes the most recent placement, not an arbitrary earlier one in the same
+session. A small, well-scoped follow-up once anchor-mode has seen real use, not a blocker.
 
 ### Parked, not decided against
 
@@ -166,45 +151,6 @@ Genuinely deferred rather than rejected — worth another look later, but not no
   out not to force a shape change here after all — the anchor-carried-wording skip landed in the
   shared `nodeText` helper `docToPlainText` already called, so `sameContent` itself never changed —
   but the walk-per-keystroke cost itself is unaddressed and still worth revisiting sometime.
-
-### The September 2026 review pass — closed
-
-A code-review pass (2026-09-11) found two halves of work. The correctness/race-condition half was
-fixed and committed first; this half — dedup and finishing gaps, none of it touching anchors — is
-now done too. What it came to:
-
-- **`ConnectionForm.vue`'s dead `submitting` guard is gone.** It could never be observed true
-  (`handleSubmit` set it, emitted synchronously, and reset it in `finally`, all before Vue flushed a
-  render), so it and its `:disabled` bindings were dead weight. Whether a save is actually in flight
-  is the parent's to know, and it already says so through the `disabled` prop, which stays.
-- **`src/composables/useMedia.ts` now has tests** — `useMedia.browser.test.ts`, covering URL reuse
-  per id, a missing blob resolving to null rather than a broken URL, `applyTo` filling in only
-  unresolved images and labelling the ones whose blob has gone, and revocation on scope disposal.
-  Vitest Browser Mode only, and no Cypress mirror: a composable is not a component, the same reason
-  `DexieEntryRepository` is proven in one runner (TESTING.md, "Not everything belongs in Cypress").
-- **`--color-error` exists** in `src/assets/main.css` with a `.dark` variant, and every
-  `text-red-500` is gone — the four call sites the review named plus `TimelineView.vue`, which has
-  the same store-error paragraph and would otherwise have been the one hard-coded colour left.
-- **`preview()`, `formatDate()`, and the error-message ternary are each written once.**
-  `previewText(content, limit)` lives in `domain/entryDocument.ts`, taking stored content rather
-  than pre-flattened text so the `docToPlainText` call is inside it too; `formatDate(iso, dateStyle)`
-  and `toErrorMessage(err, fallback)` live in the new `src/utils/format.ts`, which is display
-  formatting and deliberately not domain. The copies disagreed, so consolidating had to make
-  choices: preview limits stayed per-call-site as an argument (160 on a timeline card, 120 on a
-  draft row, 60 for a picker label), `previewText` returns the empty string for an empty document
-  instead of naming it, and `EntryDetailView`'s `entryLabel` supplies "Untitled entry" where a blank
-  row would otherwise appear. `toErrorMessage` also falls back on an `Error` with an empty message,
-  which no copy did. The two stores were swapped over as well, since leaving three hand-rolled
-  copies behind is the drift this item was about.
-- **The duplicated "edit an open draft session" scaffold** was resolved earlier, by the
-  `useDraftSession` composable in the 2026-09-11 simplification commit. The one thread still tracked
-  by hand is `EntryDetailView`'s `childParentContent` — the parent document gaining provisional
-  anchors, which is a second document the composable does not model and which is documented as such
-  at its declaration.
-- **`src/testing/realRepositories.ts` shares one `ChronicleDatabase`** between entries and drafts,
-  matching the composition root. It is opened on first use, so a spec needing only one of the two
-  still opens only one connection. This is what lets a future test of the anchor-mode atomic seal
-  (parent revision + child, one transaction) run against the shape production actually has.
 
 ## Implementation Rules for the AI
 

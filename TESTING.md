@@ -17,9 +17,11 @@ duplicated specs for tool comparison.
 `TimelineCard.cy.ts` cover the same cases on purpose, to compare the two runners. Don't consolidate
 them.
 
-**Not everything belongs in Cypress.** Cypress Component Testing exists to mount components. A
-data-layer class is not a component, so `DexieEntryRepository` is proven in the Vitest browser
-project only. Real-browser coverage is the reason it's there, not a desire to duplicate.
+**Cypress should keep up with Vitest Browser Mode.** Default to mirroring every `.browser.test.ts`
+into a `.cy.ts`, the same as any other duplicated pair. Skip the mirror only when there is a real
+obstacle, not merely because the thing under test isn't a `.vue` file — a composable can still be
+driven through a small host component. `DexieEntryRepository` is the genuine case: a plain data-layer
+class with nothing to mount, so it is proven in the Vitest browser project alone.
 
 **Contract suites are for interfaces with more than one implementation.** Each of the three
 repositories exports one: `entryRepository.contract.ts` (in-memory and Dexie),
@@ -174,18 +176,7 @@ Don't introduce a helper purely to reduce vertical size. Readability beats densi
 
 ## Running Cypress
 
-VS Code sets `ELECTRON_RUN_AS_NODE=1` in its terminals and extension host. `Cypress.exe` is an
-Electron binary, and that variable makes it launch as plain Node, so it reports Node's version and
-rejects Cypress's own flags (`bad option: --smoke-test`, or npm dying with `Illegal instruction`).
-Unset it for the run, wrapping the whole command — `npm run cy:run` under that variable still dies,
-so go straight to the binary:
-
-```sh
-env -u ELECTRON_RUN_AS_NODE npx cypress run --component --browser=chrome
-```
-
-Nothing is wrong with the install when that happens, so don't clear the binary cache over it. The
-suite passes this way; a crash here is the variable, never a reason to skip running Cypress.
+`npm run cy:run` (headless) or `npm run cy` (interactive).
 
 ## Coverage
 

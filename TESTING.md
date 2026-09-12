@@ -92,10 +92,11 @@ element to compute character offsets, and no role identifies it.
 
 **Driving the editor.** `DocumentEditor` renders a contenteditable, which has no implicit role, so
 it sets `role="textbox"` and an `aria-label` from its `label` prop: query it as
-`getByRole('textbox', { name: 'New entry' })`. Its title line is an `h1`, so
-`getByRole('heading').click()` puts the caret there — deterministic in a way clicking the editor
-body is not. Filling a titled editor replaces the whole document; to append, click and use
-`{Control>}{End}{/Control}` (Cypress: `{ctrl}{end}`).
+`getByRole('textbox', { name: 'New entry' })`. The title is a separate, ordinary input beside it —
+`getByRole('textbox', { name: 'Title' })` — so filling one leaves the other alone. Filling the body
+replaces its whole document; to append, click and use `{Control>}{End}{/Control}` (Cypress:
+`{ctrl}{end}`). Cypress has no `{tab}` sequence (cypress-io/cypress#299), so a spec that needs Tab
+dispatches the keydown on `cy.focused()` — see `DocumentEditor.cy.ts`.
 
 ## Structure and naming
 

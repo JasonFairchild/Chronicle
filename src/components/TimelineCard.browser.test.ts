@@ -41,10 +41,13 @@ describe('TimelineCard (browser)', () => {
     await expect.element(screen.getByText('A quiet morning')).toBeVisible()
   })
 
-  it('falls back to a neutral label when the entry has no title', async () => {
+  it('leaves the name slot empty when the entry has no title', async () => {
     const screen = await mountCard(makeAggregated())
 
-    await expect.element(screen.getByText('Entry')).toBeVisible()
+    // No stand-in label: the summary below already opens with the entry's own words, so a fallback
+    // in this slot would print the same text twice.
+    expect(screen.getByText('Entry').elements()).toHaveLength(0)
+    await expect.element(screen.getByText('A quiet morning')).toBeVisible()
   })
 
   it('shows the title when one has been set', async () => {

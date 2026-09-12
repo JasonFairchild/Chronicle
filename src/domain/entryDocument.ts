@@ -25,7 +25,14 @@ export interface EntryDocument extends DocNode {
   content: DocNode[]
 }
 
-/** The optional first node of a root entry's document. Child entries and revisions omit it. */
+/**
+ * The first node of a titled entry's document. Child entries omit it.
+ *
+ * Nothing in the editor's schema knows this node: a title is typed in its own plain field, and this
+ * module is what joins that field's text to the body on its way to storage (`titledDocument`) and
+ * splits it back off on the way out (`docBody`). Storing them as one document is what makes renaming
+ * an entry an ordinary revision rather than a second kind of write.
+ */
 export const TITLE_NODE = 'title'
 
 /** An image whose bytes live in the media store; the node carries only the blob's id. */
@@ -145,6 +152,32 @@ export function docTitle(content: string | EntryDocument): string | null {
 }
 
 /**
+ * Everything but the title: the document the body editor actually opens.
+ *
+ * An empty result becomes a blank paragraph rather than nothing, because the body's schema is
+ * `block+` — a document with no blocks at all is one the editor cannot hold.
+ */
+export function docBody(content: string | EntryDocument): EntryDocument {
+  const body = parseDocument(content).content.filter((node) => node.type !== TITLE_NODE)
+  return { type: 'doc', content: body.length > 0 ? body : [{ type: 'paragraph' }] }
+}
+
+/**
+ * The inverse: a body and a title text, rejoined into the one document that gets stored.
+ *
+ * A blank title still leaves the node behind. Nothing is owed — a title is optional everywhere — but
+ * the node is what `hasTitleNode` reads to decide whether to offer the field again, so dropping it
+ * would mean a draft resumed after being left unnamed came back with nowhere to put a name.
+ */
+export function titledDocument(body: EntryDocument, title: string): EntryDocument {
+  const node: DocNode = title
+    ? { type: TITLE_NODE, content: [{ type: 'text', text: title }] }
+    : { type: TITLE_NODE }
+
+  return { type: 'doc', content: [node, ...docBody(body).content] }
+}
+
+/**
  * Every media id the document depends on, in document order and without repeats. This is what
  * fills `Entry.media_refs`, so the column is derived from the document rather than maintained
  * alongside it and able to drift from it.
@@ -224,28 +257,7 @@ function isEntryDocument(value: unknown): value is EntryDocument {
   return candidate.type === 'doc' && Array.isArray(candidate.content)
 }
 
-/**
- * A blank document to start a session in.
- *
- * The title node is optional in the schema, and an optional node is one the editor will never
- * create on its own — so a root entry's editor has to be handed an empty title to type into, or
- * naming an entry would be impossible. `isEmptyDocument` still reports this as empty.
- */
-export function emptyDocument(withTitle = false): EntryDocument {
-  const heading: DocNode[] = withTitle ? [{ type: TITLE_NODE }] : []
-  return { type: 'doc', content: [...heading, { type: 'paragraph' }] }
-}
-
-/**
- * Guarantees a document has a title node to type into.
- *
- * The schema makes the title optional, and an optional node is one the editor will never create on
- * its own. Without this, an entry written before the editor existed — or any document that simply
- * never had a title — could never be given one, so renaming would be impossible for exactly the
- * entries most likely to need it.
- */
-export function ensureTitle(doc: EntryDocument): EntryDocument {
-  if (doc.content.some((node) => node.type === TITLE_NODE)) return doc
-
-  return { ...doc, content: [{ type: TITLE_NODE }, ...doc.content] }
+/** A blank body to start a session in. `isEmptyDocument` still reports this as empty. */
+export function emptyDocument(): EntryDocument {
+  return { type: 'doc', content: [{ type: 'paragraph' }] }
 }

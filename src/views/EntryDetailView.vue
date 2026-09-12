@@ -53,7 +53,33 @@ const childParentContent = ref('')
 /** Two columns of readable width need more room than the page gives by default. */
 const layoutWidth = useLayoutWidth()
 
-const heading = computed(() => aggregated.value?.title ?? 'Entry detail')
+/**
+ * An entry nobody named is headed by when it was written.
+ *
+ * Not `entryLabel`, which names an entry where only one line fits: here the text is already on the
+ * page, so opening with a truncated copy of the sentence directly below it would only say the same
+ * thing twice. The date is the half every entry has, and it stays put — a title can be revised away
+ * and the opening words rewritten, but when a record was made does not move.
+ */
+const heading = computed(() => {
+  const entry = aggregated.value
+  if (!entry) return 'Entry detail'
+  return entry.title ?? formatDate(entry.created_at, 'full')
+})
+
+/**
+ * The muted line under the heading. Drops "Created …" when the heading is already that date, so an
+ * untitled entry says when it was written once rather than twice.
+ */
+const metaLine = computed(() => {
+  const entry = aggregated.value
+  if (!entry) return ''
+
+  return [
+    ...(entry.title ? [`Created ${formatDate(entry.created_at, 'full')}`] : []),
+    ...(versionLabel.value ? [versionLabel.value] : []),
+  ].join(' · ')
+})
 
 /** The user's own dates, one line each. Empty when they gave none, so nothing is shown. */
 const whenLines = computed(() => (aggregated.value ? entryWhenLines(aggregated.value.dates) : []))
@@ -64,8 +90,12 @@ const versionLabel = computed(() => {
   return `Version ${version.index} of ${version.total}`
 })
 
-/** Whether the document being read has a title node, so an anchor-mode editor opens the same shape. */
-const parentHasTitle = computed(() => hasTitleNode(aggregated.value?.content ?? ''))
+/**
+ * Whether the document being read has a title node. Every editor this view opens on it follows —
+ * reading it, revising it, or anchoring on it — so none of them can add a title where there was
+ * never one or drop one that is there.
+ */
+const entryHasTitle = computed(() => hasTitleNode(aggregated.value?.content ?? ''))
 
 /**
  * The note each disturbed anchor belongs to, named rather than just counted (PRODUCT.md §5.3: "say
@@ -287,9 +317,8 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           <div>
             <h1 class="text-xl font-semibold">{{ heading }}</h1>
             <p v-for="line in whenLines" :key="line" class="mt-1 text-sm">{{ line }}</p>
-            <p class="mt-1 text-sm text-[var(--color-text-muted)]">
-              Created {{ formatDate(aggregated.created_at, 'full') }}
-              <span v-if="versionLabel"> · {{ versionLabel }}</span>
+            <p v-if="metaLine" class="mt-1 text-sm text-[var(--color-text-muted)]">
+              {{ metaLine }}
             </p>
           </div>
 
@@ -326,9 +355,16 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             Editing appends a new version. The current text stays in the entry's history either way.
           </p>
 
+          <!--
+            The title field is offered exactly when this entry has one, the same question the
+            read-only view above asks. A revision cannot add a title where there was never one or
+            drop the field from an entry that has it: whether an entry carries a name at all is
+            settled when it is written. Filling that name in, or clearing it, is an ordinary
+            revision like any other.
+          -->
           <DocumentEditor
             label="Revised entry"
-            with-title
+            :with-title="entryHasTitle"
             :content="revisionSession.content"
             :disabled="revisionSession.saving"
             @change="handleRevisionChange"
@@ -343,7 +379,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             {{ revisionWarnings.length === 1 ? 'is' : 'are' }} about.
           </p>
 
-          <div class="mt-3 flex justify-end gap-2">
+          <div class="mt-3 flex items-center justify-end gap-3">
             <button
               type="button"
               class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
@@ -355,7 +391,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             <button
               type="button"
               class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="revisionSession.saving"
+              :disabled="revisionSession.saving || !revisionSession.canSave"
               @click="saveRevision"
             >
               Save revision
@@ -375,7 +411,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
               <DocumentEditor
                 label="Entry being annotated"
                 anchor-mode
-                :with-title="parentHasTitle"
+                :with-title="entryHasTitle"
                 :content="childParentContent"
                 :disabled="childSession.saving"
                 @change="handleParentAnchorChange"
@@ -427,7 +463,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         <template v-else>
           <DocumentEditor
             label="Entry content"
-            :with-title="parentHasTitle"
+            :with-title="entryHasTitle"
             :content="aggregated.content"
             disabled
           />

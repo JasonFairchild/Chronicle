@@ -12,6 +12,7 @@ import { selectTextRange } from '@/testing/selectTextRange'
 
 interface ObservedChange {
   content: string
+  steps: unknown[]
   isFormatting: boolean
   anchorIds?: string[]
 }
@@ -41,7 +42,7 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('separates a title from the body, so each ends up where it belongs', () => {
+  it('joins the title typed beside the editor to the body typed inside it', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, {
@@ -49,9 +50,10 @@ describe('DocumentEditor', () => {
       attrs: { onChange },
     })
 
-    // Straight onto the empty title line, which the placeholder gives a height to click. Enter
-    // then leaves the title for the body rather than splitting the heading in two.
-    cy.findByRole('heading').click().type('Lake Tahoe{enter}We drove up on Friday.')
+    // Two fields, one stored document: the title is an ordinary input, and this is where the two
+    // halves come back together.
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
 
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
@@ -60,7 +62,7 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('moves from the title to the body on Tab, rather than leaving the editor entirely', () => {
+  it('moves from the title into the body on Enter, rather than submitting the form', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, {
@@ -68,9 +70,27 @@ describe('DocumentEditor', () => {
       attrs: { onChange },
     })
 
-    // Cypress's `.type()` has no `{tab}` sequence (cypress-io/cypress#299), so the keydown ProseMirror
-    // listens for is dispatched directly, on whichever element the browser currently has focused.
-    cy.findByRole('heading').click().type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
+    cy.focused().type('We drove up on Friday.')
+
+    cy.get('@change').then((stub) => {
+      const change = lastChange(stub)
+      expect(docTitle(change.content)).to.equal('Lake Tahoe')
+      expect(docToPlainText(change.content)).to.equal('We drove up on Friday.')
+    })
+  })
+
+  it('moves from the title into the body on Tab, skipping the toolbar between them', () => {
+    const onChange = cy.stub().as('change')
+
+    cy.mount(DocumentEditor, {
+      props: { label: 'New entry', withTitle: true },
+      attrs: { onChange },
+    })
+
+    // Cypress's `.type()` has no `{tab}` sequence (cypress-io/cypress#299), so the keydown the
+    // title field listens for is dispatched directly, on whichever element has focus.
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
     cy.focused().trigger('keydown', {
       key: 'Tab',
       code: 'Tab',
@@ -88,7 +108,7 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('survives Enter over a selection covering the title, which cannot be split', () => {
+  it('leaves the title untouched by the toolbar, which is the body’s alone', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, {
@@ -96,33 +116,33 @@ describe('DocumentEditor', () => {
       attrs: { onChange },
     })
 
-    cy.findByRole('heading')
-      .click()
-      .type('Lake Tahoe{enter}We drove up.')
-      .type('{ctrl+a}{enter}Starting over.')
-
-    cy.get('@change').then((stub) => {
-      expect(docToPlainText(lastChange(stub).content)).to.equal('Starting over.')
-    })
-  })
-
-  it('keeps the title a title rather than letting a text style replace it', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, {
-      props: { label: 'New entry', withTitle: true },
-      attrs: { onChange },
-    })
-
-    cy.findByRole('heading').click().type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.{selectall}')
     cy.findByRole('combobox', { name: 'Text style' }).select('Heading')
 
-    // A heading with the same words would satisfy `findByRole('heading', { name: 'Lake Tahoe' })`
-    // just as well, so the level is what actually distinguishes "still the title" from "replaced".
-    cy.findByRole('heading', { name: 'Lake Tahoe', level: 1 }).should('be.visible')
+    // The title is not in the editor's document at all, so a block-type command cannot reach it —
+    // where a title node sitting first in that document could be replaced by one.
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
     cy.get('@change').then((stub) => {
       expect(docTitle(lastChange(stub).content)).to.equal('Lake Tahoe')
     })
+  })
+
+  it('drops the placeholder once anything is written, including beside a new heading', () => {
+    cy.mount(DocumentEditor, { props: { label: 'New entry' } })
+
+    // No role and no text of its own: the extension marks every empty block with the words to show
+    // and the stylesheet draws them, so the attribute is the only thing there is to assert on. Its
+    // value, not its presence — a block told to prompt for nothing still carries it, empty.
+    const prompt = '[data-placeholder="Record your thoughts…"]'
+    cy.findByRole('textbox', { name: 'New entry' }).find(prompt).should('have.length', 1)
+
+    cy.findByRole('textbox', { name: 'New entry' }).type('Worth remembering{selectall}')
+    cy.findByRole('combobox', { name: 'Text style' }).select('Heading')
+
+    // Making a heading leaves an empty paragraph after it. Prompting for thoughts there, under a
+    // heading someone is still typing, reads as though the entry had not been started.
+    cy.findByRole('textbox', { name: 'New entry' }).find(prompt).should('not.exist')
   })
 
   it('reports a formatting change as formatting, since it inserts no words', () => {
@@ -172,7 +192,7 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('reports typing a title as an edit, since a title is content', () => {
+  it('reports a title as content, but produces no steps for it', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, {
@@ -180,10 +200,14 @@ describe('DocumentEditor', () => {
       attrs: { onChange },
     })
 
-    cy.findByRole('heading').click().type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
 
     cy.get('@change').then((stub) => {
-      expect(lastChange(stub).isFormatting).to.equal(false)
+      const change = lastChange(stub)
+      expect(docTitle(change.content)).to.equal('Lake Tahoe')
+      // The title is a plain field beside the editor, so there is no step chain it belongs to. Its
+      // history is the value at each save point, read back from the entry's version chain.
+      expect(change.steps).to.deep.equal([])
     })
   })
 
@@ -228,7 +252,7 @@ describe('DocumentEditor', () => {
       },
     })
 
-    cy.findByRole('heading', { name: 'Lake Tahoe' }).should('be.visible')
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
     cy.findByText('We drove up on Friday.').should('be.visible')
   })
 

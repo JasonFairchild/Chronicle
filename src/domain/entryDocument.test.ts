@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectMediaRefs,
+  docBody,
   docTitle,
   docToPlainText,
   isEmptyDocument,
@@ -9,6 +10,7 @@ import {
   previewText,
   sameContent,
   serializeDocument,
+  titledDocument,
   type EntryDocument,
 } from '@/domain/entryDocument'
 
@@ -106,6 +108,39 @@ describe('docTitle', () => {
     expect(docTitle(document)).toBe('Lake Tahoe')
     expect(docTitle(plainTextDocument('No heading here'))).toBeNull()
     expect(docTitle({ type: 'doc', content: [{ type: 'title' }] })).toBeNull()
+  })
+})
+
+describe('docBody and titledDocument', () => {
+  it('splits the stored document into the two fields that produced it', () => {
+    expect(docBody(document).content).toEqual(document.content.slice(1))
+    expect(docTitle(docBody(document))).toBeNull()
+  })
+
+  it('gives an editor something to hold when the body is empty', () => {
+    // `block+`: a document with no blocks at all is one the editor cannot open.
+    expect(docBody({ type: 'doc', content: [{ type: 'title' }] })).toEqual({
+      type: 'doc',
+      content: [{ type: 'paragraph' }],
+    })
+  })
+
+  it('rejoins them into the document that was stored', () => {
+    expect(titledDocument(docBody(document), 'Lake Tahoe')).toEqual(document)
+  })
+
+  it('keeps an empty title node, which is what says a title is owed', () => {
+    const untitled = titledDocument(plainTextDocument('We drove up on Friday.'), '')
+
+    expect(untitled.content[0]).toEqual({ type: 'title' })
+    expect(docTitle(untitled)).toBeNull()
+  })
+
+  it('replaces the title it is given a new one for rather than stacking a second', () => {
+    const renamed = titledDocument(document, 'Donner Lake')
+
+    expect(docTitle(renamed)).toBe('Donner Lake')
+    expect(renamed.content.filter((node) => node.type === 'title')).toHaveLength(1)
   })
 })
 

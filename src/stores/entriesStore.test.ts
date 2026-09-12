@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useEntriesStore } from '@/stores/entriesStore'
-import { docToPlainText, serializeDocument, textContent } from '@/domain/entryDocument'
+import {
+  docToPlainText,
+  plainTextDocument,
+  serializeDocument,
+  textContent,
+  titledDocument,
+} from '@/domain/entryDocument'
 import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { withAnchorMark } from '@/testing/anchorFixtures'
@@ -31,6 +37,31 @@ describe('useEntriesStore', () => {
   it('rejects empty content', async () => {
     const store = useEntriesStore()
     await expect(store.createTextEntry('   ')).rejects.toThrow('Entry content cannot be empty')
+  })
+
+  it('seals a draft whose title field was left empty, storing no title for it', async () => {
+    const store = useEntriesStore()
+    const draft: Draft = {
+      session_id: 'session-untitled',
+      target: { kind: 'new_root' },
+      started_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      // A title node with no text: the field was offered and not filled in. Nothing is owed — a
+      // journal entry that would only ever be named "Tuesday" is better left unnamed.
+      content: serializeDocument(titledDocument(plainTextDocument('We drove up on Friday.'), '')),
+      dates: emptyEntryDates(),
+      anchor_ids: [],
+      parent_content: null,
+      steps: [],
+      parent_steps: [],
+      ticks: [],
+    }
+
+    const sealed = await store.createFromDraft(draft, null)
+
+    expect(sealed.title).toBeNull()
+    expect(docToPlainText(sealed.content)).toBe('We drove up on Friday.')
+    expect(await entryRepository.listRootEntries()).toHaveLength(1)
   })
 
   it('returns aggregated entry state from the repository data', async () => {

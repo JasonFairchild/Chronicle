@@ -153,11 +153,17 @@ export const useDraftsStore = defineStore('drafts', () => {
   function recordChange(sessionId: string, change: DraftChange): void {
     const entry = requireActive(sessionId)
 
-    entry.session.record({
-      steps: change.steps ?? [],
-      insertedText: change.insertedText,
-      isFormatting: change.isFormatting,
-    })
+    // A change with no steps did not touch the traced document — a retitling is the one that does
+    // this, since the title is a plain field beside the editor rather than part of it. There is
+    // nothing for the trace to append and no typing for the tick policy to judge, so only the
+    // snapshot moves; counting it would bookmark the body's chain for something that never entered it.
+    if ((change.steps ?? []).length > 0) {
+      entry.session.record({
+        steps: change.steps ?? [],
+        insertedText: change.insertedText,
+        isFormatting: change.isFormatting,
+      })
+    }
 
     entry.draft = {
       ...entry.draft,

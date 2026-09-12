@@ -64,6 +64,29 @@ describe('useDraftsStore', () => {
     expect(flushed?.steps).toHaveLength(3)
   })
 
+  it('moves the snapshot but not the trace for a change that produced no steps', async () => {
+    vi.useFakeTimers()
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+
+    store.recordChange(sessionId, {
+      content: textContent('We drove up on Friday'),
+      steps: [{ stepType: 'replace' }],
+    })
+    // What retitling looks like from here: the title is a plain field beside the editor, so it
+    // produces no steps and the body's own chain has nothing to record.
+    store.recordChange(sessionId, {
+      content: textContent('We drove up on Friday', 'Lake Tahoe'),
+      steps: [],
+    })
+
+    await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+
+    const flushed = await draftRepository.getById(sessionId)
+    expect(flushed?.content).toBe(textContent('We drove up on Friday', 'Lake Tahoe'))
+    expect(flushed?.steps).toHaveLength(1)
+  })
+
   it('keeps the dates alongside the words, so a reload loses neither', async () => {
     vi.useFakeTimers()
     const store = useDraftsStore()

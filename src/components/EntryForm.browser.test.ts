@@ -22,8 +22,8 @@ describe('EntryForm (browser)', () => {
   it('holds a session as a draft and commits one entry only when it is saved', async () => {
     const screen = mountForm()
 
-    await screen.getByRole('heading').click()
-    await userEvent.keyboard('Lake Tahoe{Enter}We drove up on Friday.')
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await userEvent.keyboard('{Enter}We drove up on Friday.')
 
     // Still a draft: nothing a person has not finished belongs in the timeline.
     expect(await entries.listRootEntries()).toEqual([])
@@ -49,6 +49,7 @@ describe('EntryForm (browser)', () => {
     await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
     await screen.getByLabelText('Time it happened').fill('late morning')
     await screen.getByLabelText('Originally written', { exact: true }).fill('1994-06-12')
+    await screen.getByRole('textbox', { name: 'Title' }).fill('The green notebook')
     await screen.getByRole('textbox', { name: 'New entry' }).fill('From the green notebook')
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
@@ -67,6 +68,7 @@ describe('EntryForm (browser)', () => {
   it('starts a fresh empty session after a save rather than reopening the last one', async () => {
     const screen = mountForm()
 
+    await screen.getByRole('textbox', { name: 'Title' }).fill('The first one')
     await screen.getByRole('textbox', { name: 'New entry' }).fill('First entry')
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
@@ -102,5 +104,22 @@ describe('EntryForm (browser)', () => {
     await screen.getByRole('textbox', { name: 'New entry' }).fill('   ')
 
     await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeDisabled()
+  })
+
+  it('saves an entry that was never given a title', async () => {
+    const screen = mountForm()
+
+    // The title field is offered and skipped. A daily journal is mostly entries nobody would name,
+    // and a required title there produces filler rather than better names.
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
+
+    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeEnabled()
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+
+    await vi.waitFor(async () => {
+      const [saved] = await entries.listRootEntries()
+      expect(saved?.title).toBeNull()
+      expect(docToPlainText(saved!.content)).toBe('We drove up on Friday.')
+    })
   })
 })

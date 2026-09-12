@@ -1,10 +1,8 @@
 import { Extension, mergeAttributes, Mark, Node, type Extensions } from '@tiptap/core'
-import Document from '@tiptap/extension-document'
 import { Placeholder } from '@tiptap/extensions'
-import type { ResolvedPos } from '@tiptap/pm/model'
-import { Plugin, TextSelection } from '@tiptap/pm/state'
+import { Plugin } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
-import { ANCHOR_INSERT_NODE, ANCHOR_MARK, MEDIA_NODE, TITLE_NODE } from '@/domain/entryDocument'
+import { ANCHOR_INSERT_NODE, ANCHOR_MARK, MEDIA_NODE } from '@/domain/entryDocument'
 import { isAnchorEdit } from './anchorCommands'
 
 /**
@@ -16,90 +14,11 @@ import { isAnchorEdit } from './anchorCommands'
  */
 
 /**
- * A root entry's document: an optional title, then a body.
- *
- * The title lives inside the document rather than beside it, so renaming an entry is an ordinary
- * document step that lands in the authoring trace for free. `Entry.title` is only a cache of this
- * node, written at save time so timelines and search never have to parse a document.
+ * This schema is the **body** only. A titled entry's title is a plain input beside this editor, and
+ * `entryDocument.ts` joins the two into the one document that gets stored — so there is no title
+ * node here, and nothing in the toolbar, the keyboard shortcuts, the markdown shortcuts, or a paste
+ * can reach a title by construction rather than by a guard that has to catch each of them.
  */
-const TitledDocument = Document.extend({
-  name: 'doc',
-  content: `${TITLE_NODE}? block+`,
-})
-
-/** Child entries and revisions carry no title: the title belongs to the entry being read. */
-const BodyDocument = Document.extend({
-  name: 'doc',
-  content: 'block+',
-})
-
-/**
- * Deliberately not in the `block` group. If it were, `title? block+` would happily accept a second
- * title further down the document, and the "one title, first" rule would live in the UI instead of
- * in the schema where it can actually be enforced.
- */
-const Title = Node.create({
-  name: TITLE_NODE,
-  content: 'text*',
-  marks: '',
-  defining: true,
-  // Above StarterKit's, so the Enter below is reached before the default block-splitting one.
-  priority: 1000,
-
-  parseHTML() {
-    return [{ tag: 'h1[data-title]' }]
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['h1', mergeAttributes(HTMLAttributes, { 'data-title': '' }), 0]
-  },
-
-  addKeyboardShortcuts() {
-    const isTitle = (position: ResolvedPos) => position.parent.type.name === this.name
-
-    /**
-     * Moves the caret from the title into the body, shared by Enter and Tab below. `deleteSelection`
-     * is what tells them apart: Enter is "commit this line and move on," so selected title text is
-     * replaced the way splitting a line would; Tab is only navigation, so it leaves the title's text
-     * untouched and just moves the caret past it.
-     */
-    const leaveTitle = (deleteSelection: boolean) =>
-      this.editor.commands.command(({ tr, state, dispatch }) => {
-        const { $anchor, $head } = state.selection
-        if (!isTitle($anchor) && !isTitle($head)) return false
-
-        if (dispatch) {
-          if (deleteSelection) tr.deleteSelection()
-          const head = tr.selection.$head
-          const target = isTitle(head) ? head.after() + 1 : head.pos
-          tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(target, tr.doc.content.size))))
-          tr.scrollIntoView()
-        }
-
-        return true
-      })
-
-    return {
-      /**
-       * A title is one line, so Enter moves into the body rather than splitting the heading. The
-       * body always exists, because the schema requires at least one block after the title.
-       *
-       * Both ends of the selection are checked, not just the caret: select the whole document and
-       * press Enter and the default handler would try to split across the title boundary, which is
-       * invalid against this schema and throws rather than failing quietly. Returning true here is
-       * what stops that handler from running at all.
-       */
-      Enter: () => leaveTitle(true),
-      /**
-       * Without this, Tab falls through to the browser default: since the title and body share one
-       * contenteditable region, that default is "leave the editor entirely," landing on whatever's
-       * next in the page's tab order (the save button) rather than the body right below. Title and
-       * body are meant to read as two fields, so Tab between them should behave like it.
-       */
-      Tab: () => leaveTitle(false),
-    }
-  },
-})
 
 /**
  * An image whose bytes live in the media store. The node carries the blob's id and nothing else:
@@ -228,36 +147,32 @@ const AnchorInsert = Node.create({
 })
 
 export interface EntryExtensionOptions {
-  /** True for a root entry's editor, false for a child entry or a revision. */
-  withTitle?: boolean
   /** True for an anchor-mode session: installs the guard that blocks every other kind of edit. */
   anchorMode?: boolean
 }
 
-export function entryExtensions({
-  withTitle = false,
-  anchorMode = false,
-}: EntryExtensionOptions = {}): Extensions {
+export function entryExtensions({ anchorMode = false }: EntryExtensionOptions = {}): Extensions {
   return [
-    withTitle ? TitledDocument : BodyDocument,
-    ...(withTitle ? [Title, TitleGuard] : []),
-    // StarterKit ships its own Document; ours replaces it so the title has somewhere to sit.
-    StarterKit.configure({ document: false }),
+    StarterKit,
     MediaImage,
     // Installed in every editor, not only anchor-mode ones: a text-mode revision has to be able to
     // read, render, and carry forward the anchors already in the document it is editing.
     Anchor,
     AnchorInsert,
     ...(anchorMode ? [AnchorModeGuard] : []),
-    // Shown on every empty text block, not only the focused one: a blank title stays visibly a
-    // title whether or not the caret is in it, since a person may leave it untitled on purpose.
+    /*
+      An invitation to start, so it belongs only where nothing has been started: on the empty body,
+      and never on an empty block inside writing that is already under way. Making a heading appends
+      an empty paragraph after it, and prompting someone to record their thoughts directly beneath
+      the heading they are still typing reads as though the entry were blank.
+
+      `showOnlyCurrent: false` so it is there before the caret is — an empty composer sitting on the
+      timeline should say what it is for without being clicked into first.
+    */
     Placeholder.configure({
       showOnlyCurrent: false,
-      placeholder: ({ node }) => {
-        if (node.type.name === TITLE_NODE) return 'Title'
-        if (node.type.name === 'paragraph') return 'Record your thoughts…'
-        return ''
-      },
+      placeholder: ({ editor, node }) =>
+        editor.isEmpty && node.type.name === 'paragraph' ? 'Record your thoughts…' : '',
     }),
   ]
 }
@@ -279,32 +194,4 @@ const AnchorModeGuard = Extension.create({
   },
 })
 
-/**
- * Keeps the title node the title, no matter what tries to replace it.
- *
- * `title? block+` makes the title optional precisely so a document can start directly with `block+`
- * once no title is given — but that same optionality means `[heading, paragraph]` satisfies the
- * schema just as well as `[title, paragraph]` does. Nothing stops `setHeading`, `setParagraph`, or
- * their markdown-shortcut equivalents (`## `, `- `) from landing on the title's position and
- * quietly turning "Lake Tahoe" into an ordinary first paragraph — the placeholder and the divider
- * both key off the node's *type*, so that paragraph stops reading as a title at all.
- *
- * Filtering the transaction, rather than only disabling the toolbar buttons that could cause it, is
- * what makes "the title stays the title" a property of the document instead of a rule every entry
- * point (toolbar, keyboard shortcut, markdown shortcut, paste) has to individually remember.
- */
-const TitleGuard = Extension.create({
-  name: 'titleGuard',
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        filterTransaction: (transaction) => {
-          const hadTitle = transaction.before.firstChild?.type.name === TITLE_NODE
-          return !hadTitle || transaction.doc.firstChild?.type.name === TITLE_NODE
-        },
-      }),
-    ]
-  },
-})
-
-export { Anchor, AnchorInsert, MediaImage, Title }
+export { Anchor, AnchorInsert, MediaImage }

@@ -155,7 +155,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="session.saving || !session.content.trim()"
+                :disabled="session.saving || !session.canSave"
                 @click="save"
               >
                 Add connection

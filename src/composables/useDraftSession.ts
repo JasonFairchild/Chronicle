@@ -1,5 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import type { EditorChange } from '@/components/DocumentEditor.vue'
+import { isEmptyDocument } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import type { Draft, DraftTarget } from '@/types/draft'
 import { emptyEntryDates, type Entry, type EntryDates } from '@/types/entry'
@@ -24,6 +25,9 @@ export function useDraftSession() {
   const saving = ref(false)
 
   const isOpen = computed(() => sessionId.value !== null)
+
+  /** The same condition `entriesStore.requireContent` enforces, asked before the button is offered. */
+  const canSave = computed(() => !isEmptyDocument(content.value))
 
   /** Opens a brand-new session — nothing is written until the first real change. */
   function begin(target: DraftTarget, seed: { content?: string; parentContent?: string } = {}) {
@@ -105,6 +109,7 @@ export function useDraftSession() {
     dates,
     saving,
     isOpen,
+    canSave,
     begin,
     resume,
     handleChange,

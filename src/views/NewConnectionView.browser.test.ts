@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { userEvent } from 'vitest/browser'
 import NewConnectionView from '@/views/NewConnectionView.vue'
 import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
@@ -43,9 +42,7 @@ describe('NewConnectionView (browser)', () => {
 
     await screen.getByLabelText('Connect to').selectOptions(destination.id)
     await screen.getByLabelText('Happened', { exact: true }).fill('2020-01-01')
-    const editor = screen.getByRole('textbox', { name: 'New connection' })
-    await editor.getByRole('heading').click()
-    await userEvent.keyboard('Led to it')
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Led to it')
     await screen.getByRole('button', { name: 'Add connection' }).click()
 
     await vi.waitFor(() => {
@@ -56,6 +53,33 @@ describe('NewConnectionView (browser)', () => {
     expect(connection?.title).toBe('Led to it')
     expect(connection?.occurred_at).toBe('2020-01-01')
     expect(connection?.parent_id).toBe(source.id)
+    expect(connection?.target_id).toBe(destination.id)
+  })
+
+  it('adds an untitled connection', async () => {
+    const source = await repository.create(
+      createEntryInput({ content: textContent('Left my job') }),
+    )
+    const destination = await repository.create(
+      createEntryInput({ content: textContent('Started the degree') }),
+    )
+
+    const { screen, router } = await mountNewConnection(source.id)
+    await screen.getByLabelText('Connect to').selectOptions(destination.id)
+
+    // A connection can be as light as noticing two things share something. Making it name that
+    // recognition before it can be recorded would stop most of them from being made at all.
+    await screen.getByRole('textbox', { name: 'New connection' }).fill('These rhyme.')
+    await screen.getByRole('button', { name: 'Add connection' }).click()
+
+    // Waiting on the post-save navigation, not just the row: sealing writes and then routes away,
+    // and reading the repository before that settles races this test's database being torn down.
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.name).toBe('entry-detail')
+    })
+
+    const [connection] = await repository.listConnectionsFor(source.id)
+    expect(connection?.title).toBeNull()
     expect(connection?.target_id).toBe(destination.id)
   })
 

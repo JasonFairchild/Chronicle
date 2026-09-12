@@ -3,11 +3,11 @@ import { onMounted, ref } from 'vue'
 import DocumentEditor from '@/components/DocumentEditor.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
-import { isEmptyDocument, previewText } from '@/domain/entryDocument'
+import { hasTitleNode, isEmptyDocument, previewText } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { Draft, DraftTarget } from '@/types/draft'
-import { formatDate, toErrorMessage } from '@/utils/format'
+import { entryLabel, formatDate, toErrorMessage } from '@/utils/format'
 
 /** A draft's own text is shown at full width here, so it gets more room than a picker label would. */
 const PREVIEW_LIMIT = 120
@@ -46,7 +46,7 @@ async function loadParentLabels(): Promise<void> {
   const labels: Record<string, string> = {}
   parents.forEach((parent, index) => {
     if (!parent) return
-    labels[parentIds[index]!] = parent.title ?? previewText(parent.content, PREVIEW_LIMIT)
+    labels[parentIds[index]!] = entryLabel(parent)
   })
 
   parentLabels.value = labels
@@ -154,15 +154,21 @@ async function discard(sessionId: string): Promise<void> {
             @update:model-value="session.handleDatesChange"
           />
 
+          <!--
+            Read off the draft's own document rather than inferred from what it will become: the
+            document already carries a title node or it doesn't, settled when the session started.
+            Guessing from the target kind would offer a title on a revision of a child entry, which
+            has none.
+          -->
           <DocumentEditor
             label="Draft"
             :content="session.content"
-            :with-title="draft.target.kind !== 'new_child'"
+            :with-title="hasTitleNode(session.content)"
             :disabled="session.saving"
             @change="session.handleChange"
           />
 
-          <div class="mt-3 flex justify-end gap-2">
+          <div class="mt-3 flex items-center justify-end gap-3">
             <button
               type="button"
               class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
@@ -173,7 +179,7 @@ async function discard(sessionId: string): Promise<void> {
             <button
               type="button"
               class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="session.saving"
+              :disabled="session.saving || !session.canSave"
               @click="seal"
             >
               Save as entry

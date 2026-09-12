@@ -19,7 +19,8 @@ describe('EntryForm', () => {
   it('holds a session as a draft and commits one entry only when it is saved', () => {
     mountForm()
 
-    cy.findByRole('heading').click().type('Lake Tahoe{enter}We drove up on Friday.')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
+    cy.focused().type('We drove up on Friday.')
 
     // Still a draft: nothing a person has not finished belongs in the timeline.
     cy.then(async () => {
@@ -44,6 +45,7 @@ describe('EntryForm', () => {
     cy.findByLabelText('Happened').type('1994-06-11')
     cy.findByLabelText('Time it happened').type('late morning')
     cy.findByLabelText('Originally written').type('1994-06-12')
+    cy.findByRole('textbox', { name: 'Title' }).type('The green notebook')
     cy.findByRole('textbox', { name: 'New entry' }).type('From the green notebook')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
@@ -60,10 +62,12 @@ describe('EntryForm', () => {
   it('starts a fresh empty session after a save rather than reopening the last one', () => {
     mountForm()
 
+    cy.findByRole('textbox', { name: 'Title' }).type('The first one')
     cy.findByRole('textbox', { name: 'New entry' }).type('First entry')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
     cy.findByRole('button', { name: 'Save entry' }).should('be.disabled')
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
     cy.findByText('First entry').should('not.exist')
   })
 
@@ -88,5 +92,21 @@ describe('EntryForm', () => {
     cy.findByRole('textbox', { name: 'New entry' }).type('   ')
 
     cy.findByRole('button', { name: 'Save entry' }).should('be.disabled')
+  })
+
+  it('saves an entry that was never given a title', () => {
+    mountForm()
+
+    // The title field is offered and skipped. A daily journal is mostly entries nobody would name,
+    // and a required title there produces filler rather than better names.
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
+
+    cy.findByRole('button', { name: 'Save entry' }).should('be.enabled').click()
+
+    cy.then(async () => {
+      const [saved] = await entries.listRootEntries()
+      expect(saved?.title).to.equal(null)
+      expect(docToPlainText(saved!.content)).to.equal('We drove up on Friday.')
+    })
   })
 })

@@ -354,20 +354,59 @@ support, and the shorter string is worth nothing here. `crypto.randomUUID()` emi
 generation is a small helper. A sequence column looks simpler but needs an owner, so each storage
 adapter would maintain one and they would have to agree.
 
-**The title lives inside the document; the column is only a cache.** The editor schema puts an
-optional title node first, so changing a title is an ordinary document step and lands in the
-authoring trace for free, with no extra op kind and no second field to keep in sync. The column is
-written at save time so timeline lists, search, and naming an entry from the far end of a connection
-do not parse every document. It is never edited on its own. Child entries hide the title field and
-leave it null; a revision leaves the _column_ null too, but its document keeps the title node, which
-is what makes renaming an entry an ordinary edit rather than a special case.
+**The title lives inside the document; the column is only a cache.** A stored document is a title
+node followed by the body, so changing a title is an ordinary revision — no extra op kind, no second
+field to keep in sync, and an entry's old names stay on record with the versions they belonged to.
+The column is written at save time so timeline lists, search, and naming an entry from the far end
+of a connection do not parse every document. It is never edited on its own, and it is never read as
+a fallback: the aggregate reads the title from the current version's document, full stop, or a
+rename would show the old name forever.
 
-Because of that, the aggregate reads the title from the current version's document and falls back to
-the column. The fallback is what carries content written before the editor existed, which is plain
-text with no title node to read. The schema makes the title optional, and an optional node is one
-the editor never creates on its own, so an editor opened on a titled entry is handed an empty title
-node when the document lacks one (`ensureTitle`) or the entries most in need of a name could never
-be given one.
+**But the title is not part of the editor.** It is a plain `<input>` beside the editing surface, and
+`entryDocument.ts` joins the two halves on the way to storage (`titledDocument`) and splits them
+again on the way out (`docBody`). The editor's schema has no title node in it at all.
+
+This started as a single document with a `title? block+` schema and a dedicated title node, which
+put the title inside the one contenteditable region the toolbar acts on — and nothing there is meant
+for a title. Guarding that took a `filterTransaction` plugin to stop `setHeading` from swapping the
+title node out, custom Enter and Tab handlers to get the caret across the boundary, and a node
+deliberately kept out of the `block` group so a second title could not appear further down. Each
+guard was correct; all of them together were a list of ways to reach a title that the design should
+never have offered. An `<input>` cannot be turned into a heading by a toolbar button, a `## `
+shortcut, or a paste, so the guards are gone rather than relocated.
+
+The exchange is that a title produces no ProseMirror steps, so it is absent from the authoring trace
+and invisible to the tick policy (`draftsStore.recordChange` skips a change with no steps). Its
+history is the coarser one: the value at each save point, read straight back out of the version
+chain by `titleHistory`. That is enough for what a title is for, and the finer record is not — a
+keystroke-level trace of a name nobody scrubs through.
+
+A consequence worth naming: **the steps in an authoring trace are relative to the body document, not
+to the stored one.** Every position in them is short by the title node's length. Nothing replays
+them yet — the snapshot is authoritative and always has been (`authoringSession.ts`) — but whatever
+does replay them in Phase 3 must reconstruct the body, not the stored document.
+
+**A title is never required.** Not on a root entry, not on a connection. `Entry.title` is nullable
+and genuinely so — the untitled case is the ordinary one, not an edge.
+
+This was briefly the other way, and the argument for requiring one was that lists need a handle.
+It does not survive contact with a daily journal: most of what gets written would only ever be
+named "Tuesday", and a mandatory field does not produce better names, it produces filler that makes
+the list it was meant to protect harder to read. Nor does requiring a title let any code go — child
+entries keep `title` null regardless, so every untitled-rendering path has to exist and work either
+way. What the rule bought was a save button that refused, and nothing else.
+
+So a title is an affordance, offered wherever it makes sense and skipped without comment. Naming an
+entry falls to `entryLabel` (`utils/format.ts`): the title if it has one, otherwise the opening of
+what it says. Surfaces with room for both — a timeline card, the detail header — show the title only
+when there is one rather than falling back, since the text is already on screen and a fallback there
+would print it twice. The detail header uses the creation date instead, which is the half every
+entry has and the half that does not move.
+
+A title node with no text is still meaningful: it records that the field was offered, which is what
+`hasTitleNode` reads when a draft is resumed or an entry revised. Whether an entry carries a name at
+all is settled when it is written; filling that name in later, or clearing it, is an ordinary
+revision.
 
 **The two user-supplied dates are days, not instants, and each has a free-text companion.**
 `created_at` is a full timestamp because the ledger sets it. `recorded_at` and `occurred_at` are

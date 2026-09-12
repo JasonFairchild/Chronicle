@@ -47,10 +47,11 @@ import { addedAnchorIds } from '@/domain/anchors'
 import { anchorsAffectedBy } from '@/domain/anchorWarnings'
 import { useMedia } from '@/composables/useMedia'
 import {
-  emptyDocument,
-  ensureTitle,
+  docBody,
+  docTitle,
   parseDocument,
   sameContent,
+  titledDocument,
   MEDIA_NODE,
   type EntryDocument,
 } from '@/domain/entryDocument'
@@ -70,7 +71,7 @@ const props = withDefaults(
     label: string
     /** Seed content, serialized. Read once, on mount: the editor owns the document after that. */
     content?: string
-    /** Root entries get a title node; children and revisions do not. */
+    /** Titled entries get the title field above the toolbar; child entries do not. */
     withTitle?: boolean
     disabled?: boolean
     /**
@@ -91,18 +92,23 @@ const media = useMedia()
 const fileInput = ref<HTMLInputElement | null>(null)
 const attachError = ref<string | null>(null)
 
-/**
- * Seeded once, on mount. A titled editor is guaranteed a title node even when the document it
- * opens has none, or an entry written before the editor existed could never be given a name.
- */
-function seedDocument() {
-  const doc = props.content ? parseDocument(props.content) : emptyDocument(props.withTitle)
-  return props.withTitle ? ensureTitle(doc) : doc
-}
+// Seeded once, on mount. The stored document holds both, and this is where they come apart: the
+// title into its own plain field below, the body into the editor.
+const seeded = parseDocument(props.content)
+const titleText = ref(props.withTitle ? (docTitle(seeded) ?? '') : '')
 
 // Captured once, so anchor mode can tell "placed this session" apart from "was already there" for
 // as long as this editor instance lives — the same document this editor opened, never reassigned.
-const initialDocument = seedDocument()
+const initialDocument = docBody(seeded)
+
+/**
+ * The two halves rejoined, which is the only shape that ever leaves this component. Keeping the
+ * stored document whole is what lets a rename ride along in the same revision as an edit, and what
+ * keeps every reader — search, previews, the version chain — looking in one place for a title.
+ */
+function storedContent(body: EntryDocument): string {
+  return JSON.stringify(props.withTitle ? titledDocument(body, titleText.value) : body)
+}
 
 /**
  * The anchors already in the document, moved forward one transaction at a time — text mode only.
@@ -117,7 +123,7 @@ const editor = useEditor({
   // In anchor mode, `entryExtensions` installs the guard that lets through only the anchor
   // commands below and undo/redo of them — see `isAnchorEdit`. That is what makes "no child entry
   // is destructive" a property of the editor rather than a rule the UI is trusted to follow.
-  extensions: entryExtensions({ withTitle: props.withTitle, anchorMode: props.anchorMode }),
+  extensions: entryExtensions({ anchorMode: props.anchorMode }),
   content: initialDocument,
   editable: !props.disabled,
   editorProps: {
@@ -151,7 +157,7 @@ const editor = useEditor({
     }
 
     emit('change', {
-      content: JSON.stringify(document),
+      content: storedContent(document),
       steps,
       insertedText: insertedTextOf(transaction),
       // Judged by what the document says before and after, not by which steps did it. A heading,
@@ -178,6 +184,46 @@ watch(
 )
 
 onBeforeUnmount(() => editor.value?.destroy())
+
+/**
+ * A title change is content, but it is not an edit to the traced document: it produces no
+ * ProseMirror steps, so the authoring trace and the tick policy see nothing of it (see
+ * `draftsStore.recordChange`). That is the deal the title is held to — a coarser record than the
+ * body's, its history being the value at each save point rather than a keystroke-level chain.
+ *
+ * `affectedAnchorIds` is carried through unchanged rather than omitted: it is the session's running
+ * total, and a reader that treats a missing list as an empty one would have this change clear
+ * warnings the body's edits had earned.
+ */
+function handleTitleInput(event: Event): void {
+  titleText.value = (event.target as HTMLInputElement).value
+
+  const instance = editor.value
+  if (!instance) return
+
+  emit('change', {
+    content: storedContent(instance.getJSON() as EntryDocument),
+    steps: [],
+    insertedText: '',
+    isFormatting: false,
+    affectedAnchorIds: [...affectedAnchorIds],
+  })
+}
+
+/**
+ * Enter and Tab both leave the title for the body.
+ *
+ * Enter because a title is one line — and because every composer around this is a `<form>`, where
+ * the browser's own answer to Enter in a text field is to submit it, saving the entry from the
+ * title field. Tab because the toolbar sits between the two and belongs to the body: moving on from
+ * a title means the body, not eleven formatting buttons. Neither is trapped — Shift+Tab from the
+ * body reaches the toolbar, and Shift+Tab again the title.
+ */
+function focusBody(): void {
+  // The view's own focus rather than `commands.focus()`, which defers to the next animation frame:
+  // a character typed within ~16ms of Tab would land back in the title field.
+  editor.value?.view.focus()
+}
 
 /**
  * The text a change added, for the tick policy alone: it only ever asks whether a sentence just
@@ -465,6 +511,30 @@ defineExpose({
 
 <template>
   <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)]">
+    <!--
+      Its own field, above the toolbar rather than inside the editing surface, because none of the
+      toolbar applies to it: a title is one line of plain text, and an ordinary `<input>` is the one
+      thing no formatting command, markdown shortcut, or paste can turn into something else.
+
+      Read-only rather than disabled while the document is: a disabled input cannot be focused or
+      read out, and this is still the entry's name when it is only being displayed. Anchor mode gets
+      the same treatment for a stronger reason — nothing in the parent's document may change there.
+    -->
+    <div v-if="withTitle" class="border-b border-[var(--color-border)] px-3 py-2">
+      <label :for="`${label}-title`" class="sr-only">Title</label>
+      <input
+        :id="`${label}-title`"
+        type="text"
+        class="w-full bg-transparent text-xl font-bold outline-none placeholder:font-normal placeholder:text-[var(--color-text-muted)]"
+        placeholder="Title"
+        :value="titleText"
+        :readonly="disabled || anchorMode"
+        @input="handleTitleInput"
+        @keydown.enter.prevent="focusBody"
+        @keydown.tab.exact.prevent="focusBody"
+      />
+    </div>
+
     <div
       v-if="editor && anchorMode"
       class="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-2 py-1.5"
@@ -699,20 +769,6 @@ defineExpose({
   only — every colour stays on a CSS variable so dark mode is a token swap.
 */
 /*
-  The negative margin cancels EditorContent's own padding (px-3 py-2) so the title's border spans
-  the full width of the editor, then the padding puts that space back inside the title's own box.
-  Title and body share one contenteditable region — see `extensions.ts`'s Tab handler — so this is
-  what makes them read as two fields rather than one long block.
-*/
-:deep(.chronicle-document h1[data-title]) {
-  margin: -0.5rem -0.75rem 0.75rem;
-  padding: 0.625rem 0.75rem 0.75rem;
-  font-size: 1.375rem;
-  font-weight: 700;
-  border-bottom: 1px solid var(--color-border);
-}
-
-/*
   The Placeholder extension marks an empty text block `is-empty` and carries the words to show in
   `data-placeholder`; this is only the styling for that. `float: left` plus `height: 0` is the
   extension's own recommended pairing, so the ghost text doesn't add a line the real content never
@@ -724,11 +780,6 @@ defineExpose({
   height: 0;
   color: var(--color-text-muted);
   pointer-events: none;
-}
-
-/* Title's placeholder reads as a hint, not as the heading itself. */
-:deep(.chronicle-document h1[data-title].is-empty::before) {
-  font-weight: 400;
 }
 
 :deep(.chronicle-document p) {

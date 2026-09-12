@@ -26,11 +26,20 @@ const whenLines = computed(() => entryWhenLines(props.entry.dates))
   <article
     class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-accent)]/40"
   >
+    <!--
+      A card has room for both a name and the text, so it shows the title only when there is one
+      rather than falling back: the summary below is already the entry's opening words, and putting
+      those in the slot above would say the same thing twice. The date is the half that is always
+      there, so it holds the row on its own for an entry nobody named.
+    -->
     <div class="mb-2 flex items-center justify-between gap-3">
-      <span class="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
-        {{ entry.title ?? 'Entry' }}
+      <span
+        v-if="entry.title"
+        class="text-xs uppercase tracking-wide text-[var(--color-text-muted)]"
+      >
+        {{ entry.title }}
       </span>
-      <time class="text-xs text-[var(--color-text-muted)]" :datetime="entry.created_at">
+      <time class="ml-auto text-xs text-[var(--color-text-muted)]" :datetime="entry.created_at">
         {{ formatDate(entry.created_at) }}
       </time>
     </div>

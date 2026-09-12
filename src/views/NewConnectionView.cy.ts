@@ -29,10 +29,7 @@ describe('NewConnectionView', () => {
 
         cy.findByLabelText('Connect to').select(destination.id)
         cy.findByLabelText('Happened').type('2020-01-01')
-        // Scoped to the editor rather than matched by name: the page's own "New connection
-        // from..." heading is also an <h1>, so an unscoped role query would be ambiguous.
-        cy.findByRole('textbox', { name: 'New connection' }).findByRole('heading').click()
-        cy.focused().type('Led to it')
+        cy.findByRole('textbox', { name: 'Title' }).type('Led to it')
         cy.findByRole('button', { name: 'Add connection' }).click()
 
         // Not checking the resulting route here: `cy.mount`'s router runs on in-memory history,
@@ -43,6 +40,30 @@ describe('NewConnectionView', () => {
           expect(connections[0]?.title).to.equal('Led to it')
           expect(connections[0]?.occurred_at).to.equal('2020-01-01')
           expect(connections[0]?.parent_id).to.equal(source.id)
+          expect(connections[0]?.target_id).to.equal(destination.id)
+        })
+      })
+    })
+  })
+
+  it('adds an untitled connection', () => {
+    cy.then(() =>
+      repository.create(createEntryInput({ content: textContent('Left my job') })),
+    ).then((source) => {
+      cy.then(() =>
+        repository.create(createEntryInput({ content: textContent('Started the degree') })),
+      ).then((destination) => {
+        mountNewConnection(source.id)
+
+        cy.findByLabelText('Connect to').select(destination.id)
+
+        // A connection can be as light as noticing two things share something. Making it name that
+        // recognition before it can be recorded would stop most of them from being made at all.
+        cy.findByRole('textbox', { name: 'New connection' }).type('These rhyme.')
+        cy.findByRole('button', { name: 'Add connection' }).click()
+
+        cy.then(() => repository.listConnectionsFor(source.id)).then((connections) => {
+          expect(connections[0]?.title).to.equal(null)
           expect(connections[0]?.target_id).to.equal(destination.id)
         })
       })

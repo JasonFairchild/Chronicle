@@ -48,54 +48,74 @@ describe('DocumentEditor (browser)', () => {
     expect(latest.isFormatting).toBe(false)
   })
 
-  it('separates a title from the body, so each ends up where it belongs', async () => {
+  it('joins the title typed beside the editor to the body typed inside it', async () => {
     const screen = mountEditor({ withTitle: true })
 
-    // Straight onto the empty title line, which the placeholder gives a height to click.
-    await screen.getByRole('heading').click()
-    // Enter leaves the title for the body rather than splitting the heading in two.
-    await userEvent.keyboard('Lake Tahoe{Enter}We drove up on Friday.')
+    // Two fields, one stored document: the title is an ordinary input, and this is where the two
+    // halves come back together.
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
 
     const latest = changes[changes.length - 1]!
     expect(docTitle(latest.content)).toBe('Lake Tahoe')
     expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
   })
 
-  it('moves from the title to the body on Tab, rather than leaving the editor entirely', async () => {
+  it('moves from the title into the body on Enter, rather than submitting the form', async () => {
     const screen = mountEditor({ withTitle: true })
 
-    await screen.getByRole('heading').click()
-    await userEvent.keyboard('Lake Tahoe{Tab}We drove up on Friday.')
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await userEvent.keyboard('{Enter}We drove up on Friday.')
 
     const latest = changes[changes.length - 1]!
     expect(docTitle(latest.content)).toBe('Lake Tahoe')
     expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
   })
 
-  it('survives Enter over a selection covering the title, which cannot be split', async () => {
+  it('moves from the title into the body on Tab, skipping the toolbar between them', async () => {
     const screen = mountEditor({ withTitle: true })
 
-    await screen.getByRole('heading').click()
-    await userEvent.keyboard('Lake Tahoe{Enter}We drove up.')
-    await userEvent.keyboard('{Control>}a{/Control}{Enter}Starting over.')
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await userEvent.keyboard('{Tab}We drove up on Friday.')
 
     const latest = changes[changes.length - 1]!
-    expect(docToPlainText(latest.content)).toBe('Starting over.')
+    expect(docTitle(latest.content)).toBe('Lake Tahoe')
+    expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
   })
 
-  it('keeps the title a title rather than letting a text style replace it', async () => {
+  it('leaves the title untouched by the toolbar, which is the body’s alone', async () => {
     const screen = mountEditor({ withTitle: true })
 
-    await screen.getByRole('heading').click()
-    await userEvent.keyboard('Lake Tahoe')
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
+    await userEvent.keyboard('{Control>}a{/Control}')
     await screen.getByRole('combobox', { name: 'Text style' }).selectOptions('Heading')
 
-    // A heading with the same words would satisfy `getByRole('heading', { name: 'Lake Tahoe' })`
-    // just as well, so the level is what actually distinguishes "still the title" from "replaced".
-    await expect
-      .element(screen.getByRole('heading', { name: 'Lake Tahoe', level: 1 }))
-      .toBeVisible()
+    // The title is not in the editor's document at all, so a block-type command cannot reach it —
+    // where a title node sitting first in that document could be replaced by one.
+    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
     expect(docTitle(changes[changes.length - 1]!.content)).toBe('Lake Tahoe')
+  })
+
+  it('drops the placeholder once anything is written, including beside a new heading', async () => {
+    const screen = mountEditor()
+    const body = screen.getByRole('textbox', { name: 'New entry' })
+    await expect.element(body).toBeVisible()
+    // No role and no text of its own: the extension marks every empty block with the words to show
+    // and the stylesheet draws them, so the attribute is the only thing there is to assert on. Its
+    // value, not its presence — a block told to prompt for nothing still carries it, empty.
+    const prompts = () =>
+      body.element().querySelectorAll('[data-placeholder="Record your thoughts…"]')
+
+    expect(prompts()).toHaveLength(1)
+
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('Worth remembering')
+    await userEvent.keyboard('{Control>}a{/Control}')
+    await screen.getByRole('combobox', { name: 'Text style' }).selectOptions('Heading')
+
+    // Making a heading leaves an empty paragraph after it. Prompting for thoughts there, under a
+    // heading someone is still typing, reads as though the entry had not been started.
+    expect(prompts()).toHaveLength(0)
   })
 
   it('reports a formatting change as formatting, since it inserts no words', async () => {
@@ -136,13 +156,16 @@ describe('DocumentEditor (browser)', () => {
     expect(docToPlainText(latest.content).trim()).toBe('Worth remembering, and worth keeping')
   })
 
-  it('reports typing a title as an edit, since a title is content', async () => {
+  it('reports a title as content, but produces no steps for it', async () => {
     const screen = mountEditor({ withTitle: true })
 
-    await screen.getByRole('heading').click()
-    await userEvent.keyboard('Lake Tahoe')
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
 
-    expect(changes[changes.length - 1]!.isFormatting).toBe(false)
+    const latest = changes[changes.length - 1]!
+    expect(docTitle(latest.content)).toBe('Lake Tahoe')
+    // The title is a plain field beside the editor, so there is no step chain it belongs to. Its
+    // history is the value at each save point, read back from the entry's version chain.
+    expect(latest.steps).toEqual([])
   })
 
   it('turns a selection into a link at the address it is given', async () => {
@@ -184,7 +207,7 @@ describe('DocumentEditor (browser)', () => {
       content: serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe')),
     })
 
-    await expect.element(screen.getByRole('heading', { name: 'Lake Tahoe' })).toBeVisible()
+    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
     await expect.element(screen.getByText('We drove up on Friday.')).toBeVisible()
   })
 

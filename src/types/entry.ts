@@ -165,6 +165,13 @@ export interface EntryVersion {
   metadata: Record<string, unknown>
 }
 
+/** The same chain read through one field: what the entry was called, and when. */
+export interface TitleVersion {
+  revision_id: string | null
+  at: string
+  title: string | null
+}
+
 export interface ResolvedChild {
   entry: AggregatedEntry
   relation_type: RelationType

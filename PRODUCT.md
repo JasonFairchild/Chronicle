@@ -67,8 +67,14 @@ either — they are names for what a note turned out to be, not a choice to make
 ### 4.1 Writing a new entry — Built
 
 - The timeline page has a writing area at the top, always ready. No "new entry" step first.
-- An entry can have a title, and titling is just typing on the first line — not a separate field to
-  fill in and keep in sync.
+- An entry is titled in a field of its own, above the toolbar: one line, plain text, no formatting.
+  Enter or Tab moves from it into the body.
+- **A title is optional.** Naming an entry is worth doing when there is a name worth giving, and a
+  great deal of journal writing has none — a required field there produces "Tuesday" and "thoughts"
+  rather than better names. Where only one line of an entry can be shown, it is named by its title
+  if it has one and by its opening words otherwise.
+- Related entries (§4.4) are offered no title field at all. They are read as part of the entry they
+  are about, which is what names them.
 - Above the writing area are two optional dates: when the thing **happened**, and when it was
   **originally written** somewhere else. Each takes a day, and beside it a free line of text for the
   time — "morning", "3:30 pm", "after dinner" — because that is how a paper journal says it and
@@ -92,9 +98,11 @@ either — they are names for what a note turned out to be, not a choice to make
 
 ### 4.2 The timeline — Built
 
-- Shows top-level entries, newest first, each as a card with its title, its date, and a preview of
-  its text. A card also says when the thing happened, or when it was originally written, if the
-  entry says so — the card's own date stays what it always was: when the entry entered Chronicle.
+- Shows top-level entries, newest first, each as a card with its date, a preview of its text, and
+  its title when it has one — an untitled entry shows no stand-in label, since the preview beneath
+  already opens with its own words. A card also says when the thing happened, or when it was
+  originally written, if the entry says so — the card's own date stays what it always was: when the
+  entry entered Chronicle.
 - A card says how many times its entry has been revised, when it has been.
 - Clicking a card opens that entry.
 - Notes, updates, connections, and revisions do **not** appear as separate cards on the main
@@ -104,7 +112,8 @@ either — they are names for what a note turned out to be, not a choice to make
 
 - Shows the entry's title, when it happened and when it was originally written if it says so, when
   it was created, and its current text — meaning the latest version, with earlier versions still on
-  record.
+  record. An entry with no title is headed by the date it was created: the text is already on the
+  page, so repeating its opening line above it would say the same thing twice.
 - If it has been revised, it says which version you are looking at and how many exist.
 - Attached images appear below the text.
 - Notes, updates, and connections attached to it are listed beneath, each showing what part of the
@@ -151,7 +160,11 @@ either — they are names for what a note turned out to be, not a choice to make
 - Saving appends a new version. The previous version stays on record and the entry's version count
   goes up.
 - Revising an entry that already has images keeps them.
-- Renaming is an ordinary revision — you retype the title line.
+- Renaming is an ordinary revision — you retype the title and save. The entry's old names stay on
+  record with the versions they belonged to, since the title is saved as part of the document.
+- A revision cannot add a title field to a related entry that never had one, or take the field away
+  from an entry that has it: whether an entry carries a name at all is settled when it is written.
+  Filling that name in later, or clearing it, is an ordinary revision.
 - Existing anchors show natively while you edit, since they live in the entry's own document. If the
   edit would change the text underneath one — inserting into it, or deleting part or all of it — a
   warning names the note before you save. Moving an anchor by editing elsewhere is not a change and
@@ -164,8 +177,10 @@ either — they are names for what a note turned out to be, not a choice to make
   other entry it points to. A connection is not a lightweight second-class thing with its own
   cut-down form; it is an entry that happens to also name a destination.
 - There is no separate short label for how two entries relate. What the connection is called, on
-  both ends it joins, is its own title if it has one, otherwise the opening of what it says — the
-  same rule that names every other entry.
+  both ends it joins, is its own title — the same rule that names every other entry.
+- A connection needs no title either. It can be as light as recognising that two entries share
+  something, and asking that recognition to be named before it can be recorded would stop most of
+  them from being made. An untitled one is named by its opening words wherever it is listed.
 - The connection is visible from both ends, marked as outgoing or incoming.
 - A connection is itself an entry: it can be annotated and revised like anything else. Its notes
   belong to the connection, not to either entry it links.
@@ -244,7 +259,18 @@ Not commitments. A parking lot, so ideas stop being remembered by hand.
 
 ### Seeing the shape of things
 
-- A graph view of connections — entries as nodes, connections as labeled arrows.
+- A connection that points at several entries, not just one. A connection is already an entry that
+  happens to name a destination; letting it name more than one would make "these three all circle
+  the same thing" a single record rather than three pairwise connections saying it separately. It
+  would still have its one parent, still appear in timeline views like any other entry, and also
+  show up in the web-like views below. Needs a shape for the extra targets — `target_id` holds one
+  today — and a decision about whether the graph draws it as a node with several edges or as a
+  hyperedge.
+- A graph view of connections — entries as nodes, connections as labeled arrows. With the above,
+  some connections are nodes in their own right rather than only the arrows between them.
+- An optional nudge toward titling something when leaving it unnamed would cost the writer
+  legibility later — a connection joining several entries, say, or anything a web view has to label.
+  A nudge, not a requirement (§4.1).
 - A way to open a connection's own entry page. Today the Connections list on each endpoint links to
   the _other_ entry, not to the connection itself, so a connection's own revisions and annotations
   have no route in from the UI — even though the data model already treats a connection as an entry

@@ -417,6 +417,11 @@ export const useEntriesStore = defineStore('entries', () => {
     })
   }
 
+  /**
+   * The one thing that must be true of any document about to become an entry: it has to say
+   * something. A title is not among the conditions — an entry may be saved unnamed, and
+   * `entryLabel` names it by its opening words wherever one line is all there is room for.
+   */
   function requireContent(content: string): string {
     error.value = null
     const trimmed = content.trim()

@@ -31,10 +31,13 @@ describe('TimelineCard', () => {
     cy.findByText('A quiet morning').should('be.visible')
   })
 
-  it('falls back to a neutral label when the entry has no title', () => {
+  it('leaves the name slot empty when the entry has no title', () => {
     mountCard(makeAggregated())
 
-    cy.findByText('Entry').should('be.visible')
+    // No stand-in label: the summary below already opens with the entry's own words, so a fallback
+    // in this slot would print the same text twice.
+    cy.findByText('Entry').should('not.exist')
+    cy.findByText('A quiet morning').should('be.visible')
   })
 
   it('shows the title when one has been set', () => {

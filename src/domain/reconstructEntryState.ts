@@ -146,6 +146,12 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
   return {
     id: entry.id,
     created_at: entry.created_at,
+    dates: {
+      recorded_at: entry.recorded_at,
+      recorded_time_note: entry.recorded_time_note,
+      occurred_at: entry.occurred_at,
+      occurred_time_note: entry.occurred_time_note,
+    },
     // The title lives in the document, so the current version is the authority on it and renaming
     // an entry is an ordinary edit. `Entry.title` is the cache written at save time, and it is the
     // fallback here for content that predates the editor and has no title node to read.

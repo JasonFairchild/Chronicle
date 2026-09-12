@@ -42,6 +42,28 @@ describe('EntryForm (browser)', () => {
     expect(await draftRepository.list()).toEqual([])
   })
 
+  it('saves when something happened and when it was first written down, with the entry', async () => {
+    const screen = mountForm()
+
+    // Exact, or "Happened" would also match the "Time it happened" beside it.
+    await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
+    await screen.getByLabelText('Time it happened').fill('late morning')
+    await screen.getByLabelText('Originally written', { exact: true }).fill('1994-06-12')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('From the green notebook')
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+
+    await vi.waitFor(async () => {
+      expect(await entries.listRootEntries()).toHaveLength(1)
+    })
+
+    const [saved] = await entries.listRootEntries()
+    expect(saved?.occurred_at).toBe('1994-06-11')
+    expect(saved?.occurred_time_note).toBe('late morning')
+    expect(saved?.recorded_at).toBe('1994-06-12')
+    // Not asked for, so not invented.
+    expect(saved?.recorded_time_note).toBeNull()
+  })
+
   it('starts a fresh empty session after a save rather than reopening the last one', async () => {
     const screen = mountForm()
 

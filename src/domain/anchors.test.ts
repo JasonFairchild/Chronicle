@@ -4,6 +4,7 @@ import {
   anchorRefsFor,
   collectAnchors,
   readAnchorRefs,
+  relationTypeForAnchors,
   resolveAnchors,
 } from '@/domain/anchors'
 import { serializeDocument, type EntryDocument } from '@/domain/entryDocument'
@@ -170,6 +171,76 @@ describe('resolveAnchors', () => {
     expect(resolveAnchors(refs, doc('Rewritten entirely'))).toEqual([
       { anchor_id: 'a1', status: 'orphaned', quote: 'meeting', kind: null, insertion: null },
     ])
+  })
+})
+
+describe('relationTypeForAnchors', () => {
+  it('reads commenting on a passage as an annotation, since nothing was corrected', () => {
+    const content = doc('The meeting went badly', {
+      anchorId: 'a1',
+      kind: 'comment',
+      from: 4,
+      to: 11,
+    })
+
+    expect(relationTypeForAnchors(['a1'], content)).toBe('annotation')
+  })
+
+  it('reads a strike as an update, since striking reports a correction', () => {
+    const content = doc('The meeting went badly', {
+      anchorId: 'a1',
+      kind: 'strike',
+      from: 4,
+      to: 11,
+    })
+
+    expect(relationTypeForAnchors(['a1'], content)).toBe('update')
+  })
+
+  it('reads proposed wording with nothing struck as an update too', () => {
+    const content = docWithInsert('The meeting went badly', 'a1', 22, ' in the end')
+
+    expect(relationTypeForAnchors(['a1'], content)).toBe('update')
+  })
+
+  it('takes one correction among comments as enough to make the whole note an update', () => {
+    const content = serializeDocument({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'The ',
+              marks: [{ type: 'anchor', attrs: { anchorId: 'a1', kind: 'comment' } }],
+            },
+            {
+              type: 'text',
+              text: 'meeting',
+              marks: [{ type: 'anchor', attrs: { anchorId: 'a2', kind: 'strike' } }],
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(relationTypeForAnchors(['a1', 'a2'], content)).toBe('update')
+  })
+
+  it('calls a note with nothing anchored an annotation, the quieter claim', () => {
+    expect(relationTypeForAnchors([], doc('Untouched'))).toBe('annotation')
+  })
+
+  it('ignores an id the document no longer carries, such as one undone before sealing', () => {
+    const content = doc('The meeting went badly', {
+      anchorId: 'a1',
+      kind: 'strike',
+      from: 4,
+      to: 11,
+    })
+
+    expect(relationTypeForAnchors(['gone'], content)).toBe('annotation')
   })
 })
 

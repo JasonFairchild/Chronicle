@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { previewText } from '@/domain/entryDocument'
 import type { AggregatedEntry } from '@/types/entry'
-import { formatDate } from '@/utils/format'
+import { entryWhenLines, formatDate } from '@/utils/format'
 
 const props = defineProps<{
   entry: AggregatedEntry
@@ -14,6 +14,12 @@ const summary = computed(() => previewText(props.entry.content))
 
 /** Shown only once an entry has actually been revised, so an untouched entry stays quiet. */
 const revisionCount = computed(() => props.entry.version.total - 1)
+
+/**
+ * The dates the writer gave. The card's own timestamp stays what it has always been — when the
+ * entry entered Chronicle — so these are additions to it rather than a replacement for it.
+ */
+const whenLines = computed(() => entryWhenLines(props.entry.dates))
 </script>
 
 <template>
@@ -35,6 +41,10 @@ const revisionCount = computed(() => props.entry.version.total - 1)
     >
       {{ summary }}
     </RouterLink>
+
+    <p v-for="line in whenLines" :key="line" class="mt-2 text-xs text-[var(--color-text-muted)]">
+      {{ line }}
+    </p>
 
     <p v-if="revisionCount > 0" class="mt-2 text-xs text-[var(--color-text-muted)]">
       Revised {{ revisionCount }} {{ revisionCount === 1 ? 'time' : 'times' }}

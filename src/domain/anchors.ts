@@ -12,7 +12,7 @@
  * walks the same plain JSON `entryDocument.ts` does.
  */
 
-import type { AnchorKind, AnchorRef, ResolvedAnchor } from '@/types/entry'
+import type { AnchorKind, AnchorRef, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
 import {
   parseDocument,
   ANCHOR_INSERT_NODE,
@@ -108,15 +108,43 @@ export function addedAnchorIds(
 
 /**
  * What a child entry stores for the anchors it just placed: the ids, plus the wording each one
- * covers at this moment. Ids the document does not carry are skipped — a child never records a
- * reference to an anchor that was undone before sealing.
+ * covers at this moment.
  */
 export function anchorRefsFor(anchorIds: string[], content: string | EntryDocument): AnchorRef[] {
+  return placedAnchors(anchorIds, content).map((anchor) => ({
+    anchor_id: anchor.anchor_id,
+    quote: anchor.quote,
+  }))
+}
+
+/**
+ * Whether a child reads as an annotation or an update, judged by what it did to its parent rather
+ * than asked of the writer. Leaving the parent's wording alone and saying something about it claims
+ * nothing changed — an annotation. Striking wording or proposing different wording reports a
+ * correction, which is what an update is. A note with no anchors at all has nothing to go on and is
+ * an annotation, the quieter of the two claims.
+ */
+export function relationTypeForAnchors(
+  anchorIds: string[],
+  content: string | EntryDocument,
+): NarrativeRelation {
+  const corrects = placedAnchors(anchorIds, content).some(
+    (anchor) => anchor.kind === 'strike' || anchor.insertion !== null,
+  )
+
+  return corrects ? 'update' : 'annotation'
+}
+
+/**
+ * The anchors a session placed, as the document holds them. Ids the document does not carry are
+ * skipped — nothing should record a reference to an anchor that was undone before sealing.
+ */
+function placedAnchors(anchorIds: string[], content: string | EntryDocument): DocumentAnchor[] {
   const present = new Map(collectAnchors(content).map((anchor) => [anchor.anchor_id, anchor]))
 
   return anchorIds.flatMap((anchorId) => {
     const anchor = present.get(anchorId)
-    return anchor ? [{ anchor_id: anchorId, quote: anchor.quote }] : []
+    return anchor ? [anchor] : []
   })
 }
 

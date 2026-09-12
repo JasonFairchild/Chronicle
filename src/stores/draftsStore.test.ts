@@ -12,7 +12,7 @@ import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { createEntryInput } from '@/types/entry'
+import { createEntryInput, emptyEntryDates } from '@/types/entry'
 
 describe('useDraftsStore', () => {
   beforeEach(() => {
@@ -58,6 +58,30 @@ describe('useDraftsStore', () => {
     expect(flushed?.steps).toHaveLength(3)
   })
 
+  it('keeps the dates alongside the words, so a reload loses neither', async () => {
+    vi.useFakeTimers()
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+
+    store.recordChange(sessionId, { content: 'From the green notebook' })
+    store.recordDates(sessionId, {
+      recorded_at: '1994-06-12',
+      recorded_time_note: 'evening',
+      occurred_at: '1994-06-11',
+      occurred_time_note: null,
+    })
+
+    await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+
+    const flushed = await draftRepository.getById(sessionId)
+    expect(flushed?.dates).toEqual({
+      recorded_at: '1994-06-12',
+      recorded_time_note: 'evening',
+      occurred_at: '1994-06-11',
+      occurred_time_note: null,
+    })
+  })
+
   it('seals a draft into one immutable entry carrying the trace, and clears the buffer', async () => {
     const store = useDraftsStore()
     const entries = useEntriesStore()
@@ -85,7 +109,7 @@ describe('useDraftsStore', () => {
     const parent = await entryRepository.create(createEntryInput({ content: parentContent }))
 
     const sessionId = store.beginDraft(
-      { kind: 'new_child', parent_id: parent.id, relation_type: 'annotation' },
+      { kind: 'new_child', parent_id: parent.id },
       { parentContent },
     )
     const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
@@ -139,6 +163,7 @@ describe('useDraftsStore', () => {
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
       content: 'Half a thought',
+      dates: emptyEntryDates(),
       anchor_ids: [],
       parent_content: null,
       steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],

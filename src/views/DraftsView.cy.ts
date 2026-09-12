@@ -4,7 +4,7 @@ import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import type { Draft } from '@/types/draft'
-import { createEntryInput } from '@/types/entry'
+import { createEntryInput, emptyEntryDates } from '@/types/entry'
 
 function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft {
   return {
@@ -12,6 +12,7 @@ function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft
     started_at: '2026-09-05T10:00:00.000Z',
     updated_at: '2026-09-05T10:00:02.000Z',
     content: '',
+    dates: emptyEntryDates(),
     anchor_ids: [],
     parent_content: null,
     steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
@@ -67,14 +68,14 @@ describe('DraftsView', () => {
       await drafts.save(
         makeDraft({
           session_id: 'session-1',
-          target: { kind: 'new_child', parent_id: parent.id, relation_type: 'update' },
+          target: { kind: 'new_child', parent_id: parent.id },
           content: 'It was salvaged later',
         }),
       )
     })
     mountDrafts()
 
-    cy.findByText('Update on “The meeting went badly”').should('be.visible')
+    cy.findByText('Related entry on “The meeting went badly”').should('be.visible')
   })
 
   it('discards a draft on request, the one thing that removes work', () => {

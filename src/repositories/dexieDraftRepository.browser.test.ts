@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import { runDraftRepositoryContract } from '@/repositories/draftRepository.contract'
+import { emptyEntryDates } from '@/types/entry'
 
 // Real IndexedDB, via Playwright Chromium, for the same reason the entry adapter is proven here:
 // Dexie has nothing to fall back to in node. Each test gets its own database name, and every one
@@ -30,6 +31,7 @@ describe('DexieDraftRepository persistence', () => {
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
       content: 'Never got round to finishing this',
+      dates: emptyEntryDates(),
       anchor_ids: [],
       parent_content: null,
       steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],

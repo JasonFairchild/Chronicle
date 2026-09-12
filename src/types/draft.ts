@@ -1,4 +1,4 @@
-import type { AuthoringStep, AuthoringTick, NarrativeRelation } from './entry'
+import type { AuthoringStep, AuthoringTick, EntryDates } from './entry'
 
 /**
  * What an unsealed draft is going to become. Without it a drafts list could show the words but not
@@ -8,10 +8,13 @@ import type { AuthoringStep, AuthoringTick, NarrativeRelation } from './entry'
  * separate"): the parent's own text cannot be touched, only marked, and the sharply limited action
  * set is what a plain content edit here would violate. `revision` is the other mode, ordinary
  * text editing, and the two are never offered in the same session.
+ *
+ * It carries no relation type: whether the child reads as an annotation or an update is derived at
+ * seal time from what was actually anchored, so there is nothing for a session to decide up front.
  */
 export type DraftTarget =
   | { kind: 'new_root' }
-  | { kind: 'new_child'; parent_id: string; relation_type: NarrativeRelation }
+  | { kind: 'new_child'; parent_id: string }
   | { kind: 'revision'; parent_id: string }
 
 /**
@@ -37,6 +40,8 @@ export interface Draft {
   updated_at: string
   /** The current document snapshot, serialized the same way an entry's content is. */
   content: string
+  /** Dates typed so far, so they survive a reload like the words do. */
+  dates: EntryDates
   /** Ids of the anchors this session has placed in `parent_content`, in the order placed. */
   anchor_ids: string[]
   /** The parent document as this session has provisionally marked it. `new_child` only. */

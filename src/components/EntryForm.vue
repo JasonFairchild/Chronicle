@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import { isEmptyDocument } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
+import { emptyEntryDates, type EntryDates } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 
 const props = defineProps<{
@@ -18,6 +20,7 @@ const drafts = useDraftsStore()
  */
 const sessionId = ref(drafts.beginDraft({ kind: 'new_root' }))
 const content = ref('')
+const dates = ref<EntryDates>(emptyEntryDates())
 const saving = ref(false)
 const error = ref<string | null>(null)
 
@@ -26,6 +29,11 @@ const canSave = computed(() => !isEmptyDocument(content.value) && !props.disable
 function handleChange(change: EditorChange): void {
   content.value = change.content
   drafts.recordChange(sessionId.value, change)
+}
+
+function handleDatesChange(next: EntryDates): void {
+  dates.value = next
+  drafts.recordDates(sessionId.value, next)
 }
 
 async function handleSubmit(): Promise<void> {
@@ -42,6 +50,7 @@ async function handleSubmit(): Promise<void> {
     // gives it a genuinely empty document rather than a cleared-out old one.
     sessionId.value = drafts.beginDraft({ kind: 'new_root' })
     content.value = ''
+    dates.value = emptyEntryDates()
   } catch (err) {
     error.value = toErrorMessage(err, 'Failed to save entry')
   } finally {
@@ -63,6 +72,12 @@ onBeforeUnmount(() => {
     @submit.prevent="handleSubmit"
   >
     <p class="mb-2 text-sm font-medium">New entry</p>
+
+    <EntryDatesFields
+      :model-value="dates"
+      :disabled="disabled || saving"
+      @update:model-value="handleDatesChange"
+    />
 
     <DocumentEditor
       :key="sessionId"

@@ -62,6 +62,33 @@ export interface AuthoringStep {
   step: unknown
 }
 
+/**
+ * The dates a person supplies, as one unit: a day, plus freeform wording for the time within it.
+ *
+ * A day is date-only (`YYYY-MM-DD`), not an instant. Storing midnight as a timestamp would claim a
+ * precision nobody entered and would shift the day itself across timezones; the time note is where
+ * any precision actually lives, and it is text because "morning" and "3:30 pm" are equally valid
+ * answers and neither is worth parsing until something needs to sort by it.
+ *
+ * Required and nullable here, though optional on a stored `Entry` — this is the shape a form and a
+ * draft work in, where "not filled in" is a real state rather than a missing property.
+ */
+export interface EntryDates {
+  recorded_at: string | null
+  recorded_time_note: string | null
+  occurred_at: string | null
+  occurred_time_note: string | null
+}
+
+export function emptyEntryDates(): EntryDates {
+  return {
+    recorded_at: null,
+    recorded_time_note: null,
+    occurred_at: null,
+    occurred_time_note: null,
+  }
+}
+
 /** A bookmark into the step chain, marking a state worth stopping at when reviewing. */
 export interface AuthoringTick {
   at: string
@@ -83,10 +110,14 @@ export interface Entry {
   id: string
   /** When the entry entered Chronicle. System-set and immutable. */
   created_at: string
-  /** When the record was originally recorded elsewhere. Null if authored in-app. */
-  recorded_at?: string | null
-  /** When the event being recorded actually happened, if known. */
-  occurred_at?: string | null
+  /** When the record was originally recorded elsewhere, as `YYYY-MM-DD`. Null if authored in-app. */
+  recorded_at: string | null
+  /** Freeform time within `recorded_at` — see `EntryDates`. */
+  recorded_time_note: string | null
+  /** When the event being recorded actually happened, as `YYYY-MM-DD`, if known. */
+  occurred_at: string | null
+  /** Freeform time within `occurred_at` — see `EntryDates`. */
+  occurred_time_note: string | null
   parent_id: string | null
   relation_type: RelationType | null
   /** The far endpoint. Connections only. */
@@ -159,6 +190,11 @@ export interface ResolvedConnection {
 export interface AggregatedEntry {
   id: string
   created_at: string
+  /**
+   * Read from the entry's own row rather than the current version: a revision carries no dates, so
+   * folding them through the version chain would blank them on the first edit.
+   */
+  dates: EntryDates
   title: string | null
   /** This entry's OWN text at the requested time. */
   content: string
@@ -173,6 +209,7 @@ export function createEntryInput(
   partial: Partial<CreateEntryInput> & Pick<CreateEntryInput, 'content'>,
 ): CreateEntryInput {
   return {
+    ...emptyEntryDates(),
     parent_id: null,
     relation_type: null,
     target_id: null,

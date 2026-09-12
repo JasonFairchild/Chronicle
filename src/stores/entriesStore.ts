@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
-import { anchorRefsFor } from '@/domain/anchors'
+import { anchorRefsFor, relationTypeForAnchors } from '@/domain/anchors'
 import {
   collectMediaRefs,
   docTitle,
@@ -13,10 +13,12 @@ import { entryRepository } from '@/repositories'
 import type { Draft } from '@/types/draft'
 import {
   createEntryInput,
+  emptyEntryDates,
   type AggregatedEntry,
   type AuthoringTrace,
   type CreateEntryInput,
   type Entry,
+  type EntryDates,
   type EntryVersion,
   type NarrativeRelation,
   type RevisionMode,
@@ -71,7 +73,9 @@ export const useEntriesStore = defineStore('entries', () => {
   }
 
   async function createTextEntry(content: string): Promise<Entry> {
-    const entry = await entryRepository.create(rootInput(requireContent(content), null))
+    const entry = await entryRepository.create(
+      rootInput(requireContent(content), null, emptyEntryDates()),
+    )
 
     await addRoot(entry.id)
     return entry
@@ -84,9 +88,13 @@ export const useEntriesStore = defineStore('entries', () => {
    */
   async function createChildEntry(options: CreateChildOptions): Promise<Entry> {
     return entryRepository.create(
-      childInput(requireContent(options.content), options.parentId, options.relationType, {
-        anchors: [],
-      }),
+      childInput(
+        requireContent(options.content),
+        options.parentId,
+        options.relationType,
+        emptyEntryDates(),
+        { anchors: [] },
+      ),
     )
   }
 
@@ -158,23 +166,17 @@ export const useEntriesStore = defineStore('entries', () => {
     if (target.kind === 'new_child') {
       if (draft.anchor_ids.length === 0) {
         // Nothing was placed on the parent, so this is a note about the entry at large: one entry,
-        // no revision, exactly like `createChildEntry`.
+        // no revision, exactly like `createChildEntry`. With nothing anchored there is nothing for
+        // `relationTypeForAnchors` to read, and its answer for that case is annotation.
         return entryRepository.create(
-          childInput(content, target.parent_id, target.relation_type, {
+          childInput(content, target.parent_id, 'annotation', draft.dates, {
             anchors: [],
             authoring_trace: trace,
           }),
         )
       }
 
-      return sealAnchorChild(
-        draft,
-        target.parent_id,
-        target.relation_type,
-        content,
-        trace,
-        parentTrace,
-      )
+      return sealAnchorChild(draft, target.parent_id, content, trace, parentTrace)
     }
 
     if (target.kind === 'revision') {
@@ -201,7 +203,7 @@ export const useEntriesStore = defineStore('entries', () => {
       return entry
     }
 
-    const entry = await entryRepository.create(rootInput(content, trace))
+    const entry = await entryRepository.create(rootInput(content, trace, draft.dates))
 
     await addRoot(entry.id)
     return entry
@@ -211,11 +213,13 @@ export const useEntriesStore = defineStore('entries', () => {
    * The atomic half of sealing an anchor-mode draft: a parent revision carrying the new anchors,
    * plus the child referencing them, written together via `createMany` so the pair can never land
    * half-written (ENTRY_MODEL.md, "Drafts").
+   *
+   * Whether the child reads as an annotation or an update is derived from what was anchored rather
+   * than asked for up front — see `relationTypeForAnchors`.
    */
   async function sealAnchorChild(
     draft: Draft,
     parentId: string,
-    relationType: NarrativeRelation,
     content: string,
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null,
@@ -239,10 +243,16 @@ export const useEntriesStore = defineStore('entries', () => {
         current.metadata,
         parentTrace,
       ),
-      childInput(content, parentId, relationType, {
-        anchors: anchorRefsFor(draft.anchor_ids, parentContent),
-        authoring_trace: trace,
-      }),
+      childInput(
+        content,
+        parentId,
+        relationTypeForAnchors(draft.anchor_ids, parentContent),
+        draft.dates,
+        {
+          anchors: anchorRefsFor(draft.anchor_ids, parentContent),
+          authoring_trace: trace,
+        },
+      ),
     ])
 
     await refreshRoot(parentId)
@@ -323,12 +333,17 @@ export const useEntriesStore = defineStore('entries', () => {
   }
 
   /** A root caches its document's title node; media is whatever the document points at. */
-  function rootInput(content: string, trace: AuthoringTrace | null): CreateEntryInput {
+  function rootInput(
+    content: string,
+    trace: AuthoringTrace | null,
+    dates: EntryDates,
+  ): CreateEntryInput {
     return createEntryInput({
       content,
       title: docTitle(content),
       media_refs: collectMediaRefs(content),
       authoring_trace: trace,
+      ...dates,
     })
   }
 
@@ -337,6 +352,7 @@ export const useEntriesStore = defineStore('entries', () => {
     content: string,
     parentId: string,
     relationType: NarrativeRelation,
+    dates: EntryDates,
     extra: Partial<CreateEntryInput>,
   ): CreateEntryInput {
     return createEntryInput({
@@ -344,6 +360,7 @@ export const useEntriesStore = defineStore('entries', () => {
       parent_id: parentId,
       relation_type: relationType,
       media_refs: collectMediaRefs(content),
+      ...dates,
       ...extra,
     })
   }

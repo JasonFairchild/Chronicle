@@ -6,6 +6,8 @@
  * domain layer: nothing here is about what an entry *is*, only about how one is shown.
  */
 
+import type { EntryDates } from '@/types/entry'
+
 /**
  * A stored ISO timestamp as local text.
  *
@@ -15,6 +17,54 @@
  */
 export function formatDate(iso: string, dateStyle: 'full' | 'medium' = 'medium'): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle, timeStyle: 'short' }).format(new Date(iso))
+}
+
+/**
+ * An entry's user-supplied dates as labelled lines — "Happened Jun 11, 1994 · late morning". One
+ * line per date given, so a caller renders what it gets and nothing when nothing was said, and the
+ * two never have to be joined into one sentence where the separator would mean two different things.
+ */
+export function entryWhenLines(dates: EntryDates): string[] {
+  const happened = formatWhen(dates.occurred_at, dates.occurred_time_note)
+  const written = formatWhen(dates.recorded_at, dates.recorded_time_note)
+
+  return [
+    ...(happened ? [`Happened ${happened}`] : []),
+    ...(written ? [`Originally written ${written}`] : []),
+  ]
+}
+
+/**
+ * A user-supplied day and its freeform time as one phrase — "Jun 12, 1994 · morning". Null when
+ * neither was given; either half alone is a legitimate answer, since a remembered "one winter
+ * evening" with no date is still worth keeping.
+ */
+function formatWhen(
+  day: string | null | undefined,
+  timeNote: string | null | undefined,
+): string | null {
+  const date = day ? formatDay(day) : ''
+  const time = timeNote?.trim() ?? ''
+
+  if (date && time) return `${date} · ${time}`
+  return date || time || null
+}
+
+/**
+ * A date-only `YYYY-MM-DD` as local text.
+ *
+ * Split into parts rather than handed to `new Date(string)`, which reads a date-only string as UTC
+ * midnight and so renders the day *before* in every negative-offset timezone — the entered date
+ * changing on its way to the screen. Anything not shaped like a day is shown as stored rather than
+ * as "Invalid Date".
+ */
+function formatDay(day: string): string {
+  const [year, month, date] = day.split('-').map(Number)
+  if (!year || !month || !date) return day
+
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
+    new Date(year, month - 1, date),
+  )
 }
 
 /**

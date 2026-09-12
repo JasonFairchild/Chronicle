@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import TimelineCard from '@/components/TimelineCard.vue'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
-import type { AggregatedEntry } from '@/types/entry'
+import { emptyEntryDates, type AggregatedEntry } from '@/types/entry'
 
 const CREATED_AT = '2026-01-01T00:00:00.000Z'
 
@@ -10,6 +10,7 @@ function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEnt
   return {
     id: 'entry-1',
     created_at: CREATED_AT,
+    dates: emptyEntryDates(),
     title: null,
     content: 'A quiet morning',
     media_refs: [],

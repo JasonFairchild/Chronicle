@@ -149,26 +149,45 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByText('Entry not found.')).toBeVisible()
   })
 
-  it('adds an unanchored note about the entry as a whole', async () => {
+  it('shows the dates the writer gave, alongside when the entry was created', async () => {
+    const parent = await repository.create(
+      createEntryInput({
+        content: PARENT_TEXT,
+        occurred_at: '1994-06-11',
+        occurred_time_note: 'late morning',
+        recorded_at: '1994-06-12',
+      }),
+    )
+
+    const screen = await mountDetail(parent.id)
+
+    await expect.element(screen.getByText(/Happened .*1994 · late morning/)).toBeVisible()
+    await expect.element(screen.getByText(/Originally written .*1994/)).toBeVisible()
+  })
+
+  it('adds a note about the entry as a whole when the session marks nothing', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_TEXT }))
 
     const screen = await mountDetail(parent.id)
-    await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
+    await screen.getByRole('button', { name: 'Create related entry' }).click()
 
-    await screen.getByLabelText('Your note').fill('Still think about this trip')
+    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await userEvent.keyboard('Still think about this trip')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
     await expect.element(screen.getByText('Still think about this trip')).toBeVisible()
 
     const children = await repository.listChildren(parent.id)
     expect(children[0]?.anchors).toEqual([])
+    // Nothing was marked, so the note claims nothing changed about the entry.
+    expect(children[0]?.relation_type).toBe('annotation')
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_TEXT }))
 
     const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Anchor an update to a passage' }).click()
+    await screen.getByRole('button', { name: 'Create related entry' }).click()
 
     const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
     await expect.element(parentEditor).toBeVisible()
@@ -195,6 +214,8 @@ describe('EntryDetailView (browser)', () => {
     const children = await repository.listChildren(parent.id)
     expect(children[0]?.anchors).toHaveLength(1)
     expect(children[0]?.anchors[0]?.quote).toBe('Lake Tahoe')
+    // Striking reports a correction, so the note reads as an update without anyone being asked.
+    expect(children[0]?.relation_type).toBe('update')
   })
 
   it('warns before saving a revision that changes the text under an anchor', async () => {
@@ -210,7 +231,7 @@ describe('EntryDetailView (browser)', () => {
     )
 
     const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Revise' }).click()
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
 
     const editorLocator = screen.getByRole('textbox', { name: 'Revised entry' })
     await expect.element(editorLocator).toBeVisible()
@@ -248,7 +269,7 @@ describe('EntryDetailView (browser)', () => {
     )
 
     const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Revise' }).click()
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
 
     await screen.getByRole('textbox', { name: 'Revised entry' }).click()
     await userEvent.keyboard('{Control>}{End}{/Control}!')
@@ -265,7 +286,7 @@ describe('EntryDetailView (browser)', () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_TEXT }))
 
     const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Revise' }).click()
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
 
     await screen.getByRole('textbox', { name: 'Revised entry' }).click()
     await userEvent.keyboard('{Control>}{End}{/Control}, or so I remembered it.')
@@ -285,7 +306,7 @@ describe('EntryDetailView (browser)', () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_TEXT }))
 
     const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Revise' }).click()
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
 
     await screen.getByRole('textbox', { name: 'Revised entry' }).click()
     await userEvent.keyboard('{Control>}{End}{/Control} — actually never mind')

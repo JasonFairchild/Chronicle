@@ -93,10 +93,19 @@ the flattening never reads at all, and an `anchorInsert` node is a real node wit
 (not `metadata`, since it's filtered on: a card's revision count reads only `revision_mode ===
 'text'` revisions, so an anchor-mode session's parent revision doesn't inflate it).
 
+**`annotation` vs `update` is derived at seal time, never asked.** `relationTypeForAnchors`
+(`domain/anchors.ts`) reads the anchors a session placed out of the parent's document: a `strike`, or
+an `anchorInsert` proposing wording, reports a correction and makes the child an `update`; anchors
+that only `comment` claim nothing changed and make it an `annotation`; no anchors at all is an
+`annotation`, the quieter claim. This is why `DraftTarget`'s `new_child` carries no `relation_type` —
+an unsealed draft has not settled the question, which is also why the drafts list calls one a
+"related entry" rather than naming a kind it would sometimes get wrong.
+
 **Drafts.** An anchor-mode session edits two documents — the parent (gaining provisional anchors,
 tracked in `Draft.parent_content` / `parent_steps`) and the child's own prose (`Draft.content` /
 `steps`) — sealing atomically into two entries via `EntryRepository.createMany`: a parent revision
-(`revision_mode: 'anchor'`) and the child (`anchors` pointing at what just landed). `createMany`
+(`revision_mode: 'anchor'`) and the child (`anchors` pointing at what just landed). A draft also
+holds the dates typed beside the words (`Draft.dates`), so a reload loses neither. `createMany`
 writes all-or-nothing, so a half-sealed pair — a revision whose anchors no entry explains, or a child
 pointing at ids nothing in the parent carries — is never representable. If nothing was actually
 anchored (`Draft.anchor_ids` empty), sealing writes only the child, exactly as it would for an
@@ -305,8 +314,10 @@ interface AnchorRef {
 interface Entry {
   id: string // UUIDv7: time-ordered and sortable as text
   created_at: string
-  recorded_at?: string | null
-  occurred_at?: string | null
+  recorded_at: string | null // YYYY-MM-DD, user-supplied
+  recorded_time_note: string | null // freeform: "evening", "after dinner"
+  occurred_at: string | null // YYYY-MM-DD, user-supplied
+  occurred_time_note: string | null // freeform: "morning", "3:30 pm"
   parent_id: string | null
   relation_type: RelationType | null
   target_id: string | null // connections only
@@ -354,6 +365,25 @@ text with no title node to read. The schema makes the title optional, and an opt
 the editor never creates on its own, so an editor opened on a titled entry is handed an empty title
 node when the document lacks one (`ensureTitle`) or the entries most in need of a name could never
 be given one.
+
+**The two user-supplied dates are days, not instants, and each has a free-text companion.**
+`created_at` is a full timestamp because the ledger sets it. `recorded_at` and `occurred_at` are
+`YYYY-MM-DD`: a person entering a journal entry from 1994 knows the day, and storing midnight as an
+instant would both invent a precision nobody gave and move the day itself across timezones. Whatever
+precision does exist goes in `*_time_note` as text, because "morning", "after dinner" and "3:30 pm"
+are equally valid answers and none of them is worth parsing until something sorts by it.
+
+Those notes are columns rather than `metadata` despite nothing querying them today, which is the one
+place that rule is knowingly bent. A note is meaningless apart from the date it qualifies, so
+splitting the pair across a column and an open bag would make every reader look in two places; and
+the likely next step for both — ordering the timeline by when things happened — is exactly the
+graduation the rule describes, with real journal data already entered by then. All four fields are
+required and nullable, like everything else on `Entry`, never optional: this is pre-users, so there
+is no row predating them to tolerate, and there will not be a code path for one until real data
+needs to survive a shape change (CLAUDE.md, "No backward compatibility until we deliberately decide
+it's needed"). **A revision carries no dates**, so the aggregate reads them from the entry's own row
+rather than folding them through the version chain — which is also why a date cannot yet be
+corrected (PRODUCT.md §5.3).
 
 **`authoring_trace` is null when typing was not captured, never because an entry lacks content.**
 Imports, seeds, test fixtures, and programmatic creation all produce a null trace. Whether a

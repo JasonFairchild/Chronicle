@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import ChildEntryForm, { type ChildEntrySubmission } from '@/components/ChildEntryForm.vue'
 import ConnectionForm, {
   type ConnectionCandidate,
   type ConnectionSubmission,
 } from '@/components/ConnectionForm.vue'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
+import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useMedia } from '@/composables/useMedia'
 import { docToPlainText, hasTitleNode, previewText } from '@/domain/entryDocument'
-import type { AggregatedEntry, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
+import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import { formatDate, toErrorMessage } from '@/utils/format'
+import { entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
 
 const props = defineProps<{
   id: string
@@ -50,10 +51,15 @@ const revisionAffectedAnchorIds = ref<string[]>([])
  * alongside it and pushed into the same underlying draft via `recordParentChange`.
  */
 const childSession = useDraftSession()
-const childRelationType = ref<NarrativeRelation>('annotation')
 const childParentContent = ref('')
 
+/** Two columns of readable width need more room than the page gives by default. */
+const layoutWidth = useLayoutWidth()
+
 const heading = computed(() => aggregated.value?.title ?? 'Entry detail')
+
+/** The user's own dates, one line each. Empty when they gave none, so nothing is shown. */
+const whenLines = computed(() => (aggregated.value ? entryWhenLines(aggregated.value.dates) : []))
 
 const versionLabel = computed(() => {
   const version = aggregated.value?.version
@@ -158,20 +164,18 @@ watch(
   { flush: 'post' },
 )
 
-async function handleAddChild(submission: ChildEntrySubmission): Promise<void> {
-  actionError.value = null
+// Raised only while the side-by-side session is open, and lowered again however it ends — saved,
+// discarded, or navigated away from.
+watch(
+  () => childSession.isOpen,
+  (open) => {
+    layoutWidth.value = open ? 'wide' : 'normal'
+  },
+)
 
-  try {
-    await store.createChildEntry({
-      parentId: props.id,
-      relationType: submission.relationType,
-      content: submission.content,
-    })
-    await loadEntry(props.id)
-  } catch (err) {
-    actionError.value = toErrorMessage(err, 'Failed to add entry')
-  }
-}
+onBeforeUnmount(() => {
+  layoutWidth.value = 'normal'
+})
 
 async function handleAddConnection(submission: ConnectionSubmission): Promise<void> {
   actionError.value = null
@@ -224,17 +228,16 @@ async function cancelRevision(): Promise<void> {
 /**
  * Opens an anchor-mode session: two documents, the parent gaining provisional anchors and the
  * child's own prose, sealing atomically together (ENTRY_MODEL.md, "Drafts").
+ *
+ * Anchoring is optional within it. Marking nothing and simply writing produces a note about the
+ * entry at large, which is why there is one way in here rather than a separate form for that case.
  */
-function startAnchoring(relationType: NarrativeRelation): void {
+function startRelatedEntry(): void {
   const current = aggregated.value
   if (!current) return
 
-  childRelationType.value = relationType
   childParentContent.value = current.content
-  childSession.begin(
-    { kind: 'new_child', parent_id: props.id, relation_type: relationType },
-    { parentContent: current.content },
-  )
+  childSession.begin({ kind: 'new_child', parent_id: props.id }, { parentContent: current.content })
 }
 
 /** The parent's own document, tracked outside `childSession` — see its declaration above. */
@@ -318,20 +321,32 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         >
           <div>
             <h1 class="text-xl font-semibold">{{ heading }}</h1>
+            <p v-for="line in whenLines" :key="line" class="mt-1 text-sm">{{ line }}</p>
             <p class="mt-1 text-sm text-[var(--color-text-muted)]">
               Created {{ formatDate(aggregated.created_at, 'full') }}
               <span v-if="versionLabel"> · {{ versionLabel }}</span>
             </p>
           </div>
 
-          <button
+          <div
             v-if="!revisionSession.isOpen && !childSession.isOpen"
-            type="button"
-            class="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            @click="startRevising"
+            class="flex shrink-0 flex-wrap justify-end gap-2"
           >
-            Revise
-          </button>
+            <button
+              type="button"
+              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              @click="startRelatedEntry"
+            >
+              Create related entry
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              @click="startRevising"
+            >
+              Revise entry
+            </button>
+          </div>
         </header>
 
         <template v-if="revisionSession.isOpen">
@@ -377,45 +392,63 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         </template>
 
         <template v-else-if="childSession.isOpen">
-          <p class="mb-2 text-sm text-[var(--color-text-muted)]">
-            Select a passage and mark it, or place the cursor and propose wording. Surrounding text
-            cannot be changed from here.
-          </p>
+          <div class="grid gap-6 lg:grid-cols-2">
+            <section>
+              <h2 class="mb-2 text-sm font-medium">This entry</h2>
+              <p class="mb-2 text-sm text-[var(--color-text-muted)]">
+                Select a passage and mark it, or place the cursor and propose wording. Surrounding
+                text cannot be changed from here.
+              </p>
 
-          <DocumentEditor
-            label="Entry being annotated"
-            anchor-mode
-            :with-title="parentHasTitle"
-            :content="childParentContent"
-            :disabled="childSession.saving"
-            @change="handleParentAnchorChange"
-          />
+              <DocumentEditor
+                label="Entry being annotated"
+                anchor-mode
+                :with-title="parentHasTitle"
+                :content="childParentContent"
+                :disabled="childSession.saving"
+                @change="handleParentAnchorChange"
+              />
+            </section>
 
-          <label for="child-note" class="mt-4 mb-2 block text-sm font-medium">Your note</label>
-          <DocumentEditor
-            label="Your note"
-            :content="childSession.content"
-            :disabled="childSession.saving"
-            @change="childSession.handleChange"
-          />
+            <section>
+              <h2 class="mb-2 text-sm font-medium">The related entry</h2>
+              <p class="mb-2 text-sm text-[var(--color-text-muted)]">
+                Marking a passage is optional — with nothing marked this becomes a note about the
+                entry as a whole.
+              </p>
 
-          <div class="mt-3 flex justify-end gap-2">
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
-              :disabled="childSession.saving"
-              @click="cancelChildEntry"
-            >
-              Discard
-            </button>
-            <button
-              type="button"
-              class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="childSession.saving || !childSession.content.trim()"
-              @click="saveChildEntry"
-            >
-              Add entry
-            </button>
+              <EntryDatesFields
+                :model-value="childSession.dates"
+                :disabled="childSession.saving"
+                @update:model-value="childSession.handleDatesChange"
+              />
+
+              <DocumentEditor
+                label="Your note"
+                :content="childSession.content"
+                :disabled="childSession.saving"
+                @change="childSession.handleChange"
+              />
+
+              <div class="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
+                  :disabled="childSession.saving"
+                  @click="cancelChildEntry"
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="childSession.saving || !childSession.content.trim()"
+                  @click="saveChildEntry"
+                >
+                  Add entry
+                </button>
+              </div>
+            </section>
           </div>
         </template>
 
@@ -469,6 +502,14 @@ function describeAnchor(resolved: ResolvedAnchor): string {
               {{ docToPlainText(child.entry.content) }}
             </p>
 
+            <p
+              v-for="line in entryWhenLines(child.entry.dates)"
+              :key="line"
+              class="mt-1 text-xs text-[var(--color-text-muted)]"
+            >
+              {{ line }}
+            </p>
+
             <ul v-if="child.anchors.length > 0" class="mt-2 space-y-1">
               <li
                 v-for="resolved in child.anchors"
@@ -505,32 +546,6 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </p>
         </section>
       </article>
-
-      <section v-if="!revisionSession.isOpen && !childSession.isOpen">
-        <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-          Add a related entry
-        </h2>
-        <div class="space-y-3">
-          <ChildEntryForm @submit="handleAddChild" />
-
-          <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              @click="startAnchoring('annotation')"
-            >
-              Anchor an annotation to a passage
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              @click="startAnchoring('update')"
-            >
-              Anchor an update to a passage
-            </button>
-          </div>
-        </div>
-      </section>
 
       <section v-if="!revisionSession.isOpen && !childSession.isOpen">
         <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-text-muted)]">

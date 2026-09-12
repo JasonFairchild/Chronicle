@@ -4,7 +4,14 @@ import { AuthoringSession } from '@/domain/authoringSession'
 import { isEmptyDocument } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import type { Draft, DraftTarget } from '@/types/draft'
-import { newEntryId, newEntryTimestamp, type Entry, type TickReason } from '@/types/entry'
+import {
+  emptyEntryDates,
+  newEntryId,
+  newEntryTimestamp,
+  type Entry,
+  type EntryDates,
+  type TickReason,
+} from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 import { useEntriesStore } from './entriesStore'
 
@@ -85,6 +92,7 @@ export const useDraftsStore = defineStore('drafts', () => {
         started_at: startedAt,
         updated_at: startedAt,
         content: seed.content ?? '',
+        dates: emptyEntryDates(),
         anchor_ids: [],
         parent_content: seed.parentContent ?? null,
         steps: [],
@@ -181,6 +189,20 @@ export const useDraftsStore = defineStore('drafts', () => {
       updated_at: newEntryTimestamp(),
       parent_steps: entry.parentSession.steps,
     }
+    entry.dirty = true
+
+    scheduleFlush(sessionId)
+  }
+
+  /**
+   * Records the dates typed alongside the words. Spread into a plain object rather than stored by
+   * reference: these arrive from a form's reactive state, and a Vue proxy does not survive the
+   * `structuredClone` on the way into the repository.
+   */
+  function recordDates(sessionId: string, dates: EntryDates): void {
+    const entry = requireActive(sessionId)
+
+    entry.draft = { ...entry.draft, dates: { ...dates }, updated_at: newEntryTimestamp() }
     entry.dirty = true
 
     scheduleFlush(sessionId)
@@ -359,6 +381,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     resumeDraft,
     recordChange,
     recordParentChange,
+    recordDates,
     markTick,
     flush,
     abandonDraft,

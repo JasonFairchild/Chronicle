@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import { provideLayoutWidth } from '@/composables/useLayoutWidth'
+
+const layoutWidth = provideLayoutWidth()
 </script>
 
 <template>
@@ -14,7 +17,7 @@ import { RouterLink } from 'vue-router'
       </div>
     </header>
 
-    <main class="mx-auto max-w-3xl px-4 py-8">
+    <main class="mx-auto px-4 py-8" :class="layoutWidth === 'wide' ? 'max-w-[96rem]' : 'max-w-3xl'">
       <slot />
     </main>
   </div>

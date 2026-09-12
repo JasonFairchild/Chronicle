@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Draft } from '@/types/draft'
+import { emptyEntryDates } from '@/types/entry'
 import type { DraftRepository } from './draftRepository'
 
 function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft {
@@ -8,6 +9,7 @@ function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft
     started_at: '2026-09-05T10:00:00.000Z',
     updated_at: '2026-09-05T10:00:00.000Z',
     content: '',
+    dates: emptyEntryDates(),
     anchor_ids: [],
     parent_content: null,
     steps: [],
@@ -37,8 +39,14 @@ export function runDraftRepositoryContract(
       await repository.save(
         makeDraft({
           session_id: 'session-1',
-          target: { kind: 'new_child', parent_id: 'entry-9', relation_type: 'annotation' },
+          target: { kind: 'new_child', parent_id: 'entry-9' },
           content: 'Half a thought',
+          dates: {
+            recorded_at: '1994-06-12',
+            recorded_time_note: 'evening',
+            occurred_at: '1994-06-11',
+            occurred_time_note: 'morning',
+          },
           anchor_ids: ['anchor-1'],
           parent_content: 'The full parent document, with a provisional anchor mark',
           steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
@@ -50,10 +58,12 @@ export function runDraftRepositoryContract(
       const fetched = await repository.getById('session-1')
 
       expect(fetched?.content).toBe('Half a thought')
-      expect(fetched?.target).toEqual({
-        kind: 'new_child',
-        parent_id: 'entry-9',
-        relation_type: 'annotation',
+      expect(fetched?.target).toEqual({ kind: 'new_child', parent_id: 'entry-9' })
+      expect(fetched?.dates).toEqual({
+        recorded_at: '1994-06-12',
+        recorded_time_note: 'evening',
+        occurred_at: '1994-06-11',
+        occurred_time_note: 'morning',
       })
       expect(fetched?.anchor_ids).toEqual(['anchor-1'])
       expect(fetched?.parent_content).toBe(

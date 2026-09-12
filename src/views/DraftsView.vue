@@ -61,13 +61,9 @@ function describe(draft: Draft): string {
   if (target.kind === 'new_root') return 'New entry'
 
   const parent = parentLabels.value[target.parent_id] ?? 'another entry'
-  return target.kind === 'revision'
-    ? `Revision of “${parent}”`
-    : `${labelFor(target)} on “${parent}”`
-}
-
-function labelFor(target: Extract<DraftTarget, { kind: 'new_child' }>): string {
-  return target.relation_type === 'update' ? 'Update' : 'Annotation'
+  // Not "annotation" or "update": which one it reads as follows from what gets anchored, and an
+  // unsealed draft has not settled that yet.
+  return target.kind === 'revision' ? `Revision of “${parent}”` : `Related entry on “${parent}”`
 }
 
 async function resume(draft: Draft): Promise<void> {

@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import type { EditorChange } from '@/components/DocumentEditor.vue'
 import { useDraftsStore } from '@/stores/draftsStore'
 import type { Draft, DraftTarget } from '@/types/draft'
-import type { Entry } from '@/types/entry'
+import { emptyEntryDates, type Entry, type EntryDates } from '@/types/entry'
 
 /**
  * One single-document draft session — begin or resume it, mirror an editor's changes into it, seal
@@ -20,6 +20,7 @@ export function useDraftSession() {
 
   const sessionId = ref<string | null>(null)
   const content = ref('')
+  const dates = ref<EntryDates>(emptyEntryDates())
   const saving = ref(false)
 
   const isOpen = computed(() => sessionId.value !== null)
@@ -27,6 +28,7 @@ export function useDraftSession() {
   /** Opens a brand-new session — nothing is written until the first real change. */
   function begin(target: DraftTarget, seed: { content?: string; parentContent?: string } = {}) {
     content.value = seed.content ?? ''
+    dates.value = emptyEntryDates()
     sessionId.value = drafts.beginDraft(target, seed)
   }
 
@@ -36,6 +38,7 @@ export function useDraftSession() {
     if (!resumed) return null
 
     content.value = resumed.content
+    dates.value = resumed.dates ?? emptyEntryDates()
     sessionId.value = existingSessionId
     return resumed
   }
@@ -46,6 +49,12 @@ export function useDraftSession() {
 
     content.value = change.content
     drafts.recordChange(sessionId.value, change)
+  }
+
+  /** Mirrors the dates a form holds into the session, so a reload keeps them too. */
+  function handleDatesChange(next: EntryDates): void {
+    dates.value = next
+    if (sessionId.value) drafts.recordDates(sessionId.value, next)
   }
 
   /**
@@ -86,17 +95,20 @@ export function useDraftSession() {
     if (sessionId.value) void drafts.discardDraft(sessionId.value)
     sessionId.value = null
     content.value = ''
+    dates.value = emptyEntryDates()
     saving.value = false
   }
 
   return reactive({
     sessionId,
     content,
+    dates,
     saving,
     isOpen,
     begin,
     resume,
     handleChange,
+    handleDatesChange,
     save,
     discard,
     reset,

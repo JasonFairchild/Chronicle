@@ -74,6 +74,10 @@ describe('DexieEntryRepository persistence', () => {
     await db.entries.add({
       id: 'legacy-child',
       created_at: new Date().toISOString(),
+      recorded_at: null,
+      recorded_time_note: null,
+      occurred_at: null,
+      occurred_time_note: null,
       parent_id: parent.id,
       relation_type: 'annotation',
       target_id: null,

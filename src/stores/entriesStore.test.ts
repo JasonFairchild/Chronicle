@@ -5,6 +5,7 @@ import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import type { Draft } from '@/types/draft'
+import { createEntryInput, emptyEntryDates } from '@/types/entry'
 
 describe('useEntriesStore', () => {
   beforeEach(() => {
@@ -59,10 +60,11 @@ describe('useEntriesStore', () => {
 
     const draft: Draft = {
       session_id: 'session-1',
-      target: { kind: 'new_child', parent_id: parent.id, relation_type: 'update' },
+      target: { kind: 'new_child', parent_id: parent.id },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
       content: 'It was actually Donner Lake',
+      dates: emptyEntryDates(),
       anchor_ids: ['anchor-1'],
       parent_content: marked,
       steps: [],
@@ -77,6 +79,8 @@ describe('useEntriesStore', () => {
     const aggregated = await store.getAggregatedEntry(parent.id)
     expect(aggregated?.version.total).toBe(2)
     expect(aggregated?.children).toHaveLength(1)
+    // Commenting claims nothing changed, so the kind follows from the anchor rather than a picker.
+    expect(aggregated?.children[0]?.relation_type).toBe('annotation')
     expect(aggregated?.children[0]?.anchors).toEqual([
       {
         anchor_id: 'anchor-1',
@@ -86,6 +90,67 @@ describe('useEntriesStore', () => {
         insertion: null,
       },
     ])
+  })
+
+  it('reads a struck passage as an update, since striking reports a correction', async () => {
+    const store = useEntriesStore()
+    const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
+    const struck = withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike')
+
+    const draft: Draft = {
+      session_id: 'session-2',
+      target: { kind: 'new_child', parent_id: parent.id },
+      started_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      content: 'It was actually Donner Lake',
+      dates: emptyEntryDates(),
+      anchor_ids: ['anchor-1'],
+      parent_content: struck,
+      steps: [],
+      parent_steps: [],
+      ticks: [],
+    }
+
+    await store.createFromDraft(draft, null)
+
+    const aggregated = await store.getAggregatedEntry(parent.id)
+    expect(aggregated?.children[0]?.relation_type).toBe('update')
+  })
+
+  it('carries the dates a writer supplied through to the entry and its aggregate', async () => {
+    const store = useEntriesStore()
+
+    const draft: Draft = {
+      session_id: 'session-3',
+      target: { kind: 'new_root' },
+      started_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      content: 'Transcribed out of the green notebook',
+      dates: {
+        recorded_at: '1994-06-12',
+        recorded_time_note: 'evening',
+        occurred_at: '1994-06-11',
+        occurred_time_note: 'late morning',
+      },
+      anchor_ids: [],
+      parent_content: null,
+      steps: [],
+      parent_steps: [],
+      ticks: [],
+    }
+
+    const created = await store.createFromDraft(draft, null)
+
+    expect(created.occurred_at).toBe('1994-06-11')
+    expect(created.recorded_time_note).toBe('evening')
+
+    const aggregated = await store.getAggregatedEntry(created.id)
+    expect(aggregated?.dates).toEqual({
+      recorded_at: '1994-06-12',
+      recorded_time_note: 'evening',
+      occurred_at: '1994-06-11',
+      occurred_time_note: 'late morning',
+    })
   })
 
   it('surfaces a connection on both entries it joins', async () => {
@@ -110,18 +175,9 @@ describe('useEntriesStore', () => {
 
   it('carries media forward through a revision instead of dropping it', async () => {
     const store = useEntriesStore()
-    const created = await entryRepository.create({
-      parent_id: null,
-      relation_type: null,
-      target_id: null,
-      title: null,
-      content: 'A day at the lake',
-      anchors: [],
-      revision_mode: null,
-      authoring_trace: null,
-      media_refs: ['blob-1'],
-      metadata: {},
-    })
+    const created = await entryRepository.create(
+      createEntryInput({ content: 'A day at the lake', media_refs: ['blob-1'] }),
+    )
 
     await store.reviseEntry({ entryId: created.id, content: 'A day at Donner Lake' })
 

@@ -50,14 +50,15 @@ The words the interface should use, and what a user should take them to mean.
 | **Entry**      | One record. Everything in Chronicle is one — a journal entry, a note on one, a link between two. |
 | **Timeline**   | The list of entries, newest first.                                                               |
 | **Annotation** | A note about an entry, or about one passage in it. Claims nothing changed.                       |
-| **Update**     | A note reporting what changed or happened next. Same shape as an annotation, different intent.   |
+| **Update**     | A note that strikes wording or proposes different wording. Same shape as an annotation.          |
 | **Connection** | A link from one entry to another, with your explanation of why they relate. Directional.         |
 | **Revision**   | A new version of an entry's own text. The previous version stays.                                |
 | **Draft**      | Writing in progress. Saved as you type, invisible to the timeline until you save it.             |
 | **Passage**    | Text you selected inside an entry, which a note can be attached to.                              |
 
 Two words are deliberately absent from the interface: "delete", in the sense of erasing history, and
-"edit", in the sense of replacing what was there.
+"edit", in the sense of replacing what was there. Annotation and update are never asked about
+either — they are names for what a note turned out to be, not a choice to make before writing one.
 
 ---
 
@@ -68,6 +69,11 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 - The timeline page has a writing area at the top, always ready. No "new entry" step first.
 - An entry can have a title, and titling is just typing on the first line — not a separate field to
   fill in and keep in sync.
+- Above the writing area are two optional dates: when the thing **happened**, and when it was
+  **originally written** somewhere else. Each takes a day, and beside it a free line of text for the
+  time — "morning", "3:30 pm", "after dinner" — because that is how a paper journal says it and
+  neither half is worth forcing into the other's shape. Both are offered on a related entry too.
+  Leaving them empty is normal; an entry written today about today needs neither.
 - A toolbar offers undo and redo, two levels of heading, bold, italic, underline, strikethrough,
   bulleted and numbered lists, quotes, links, clearing formatting, and adding an image. Everything
   it offers also works from the keyboard, including markdown shortcuts such as `## ` and `- `.
@@ -87,7 +93,8 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 ### 4.2 The timeline — Built
 
 - Shows top-level entries, newest first, each as a card with its title, its date, and a preview of
-  its text.
+  its text. A card also says when the thing happened, or when it was originally written, if the
+  entry says so — the card's own date stays what it always was: when the entry entered Chronicle.
 - A card says how many times its entry has been revised, when it has been.
 - Clicking a card opens that entry.
 - Notes, updates, connections, and revisions do **not** appear as separate cards on the main
@@ -95,8 +102,9 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 
 ### 4.3 Reading an entry — Built
 
-- Shows the entry's title, when it was created, and its current text — meaning the latest version,
-  with earlier versions still on record.
+- Shows the entry's title, when it happened and when it was originally written if it says so, when
+  it was created, and its current text — meaning the latest version, with earlier versions still on
+  record.
 - If it has been revised, it says which version you are looking at and how many exist.
 - Attached images appear below the text.
 - Notes, updates, and connections attached to it are listed beneath, each showing what part of the
@@ -105,21 +113,29 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
   the original wording. A broken reference reads as history, not as an error.
 - Immediate children are shown; deeper ones are indicated rather than expanded.
 
-### 4.4 Commenting on a passage — Built
+### 4.4 Writing a related entry — Built
 
-- A quick note about the entry as a whole needs no special mode: write it and choose annotation or
-  update. Pointing at a specific passage instead opens a dedicated session — anchoring is its own
-  mode, never mixed with revising the entry's own text in the same sitting (ENTRY_MODEL.md, "Two
-  creation experiences, kept separate").
-- In that session, the entry's text is shown live: select a passage to comment on it or **strike**
-  it, or place the cursor and propose wording, then write the note explaining it. Nothing outside
-  those actions can change the entry's own text from here.
+- An entry offers two things to do to it: **Create related entry** and **Revise entry**. There is
+  one way to say something about an entry, not a form for the quick case and buttons for the
+  anchored one.
+- Creating a related entry opens a session with two columns side by side: the entry being written
+  about on the left, and the new entry on the right. Anchoring is its own mode, never mixed with
+  revising the entry's own text in the same sitting (ENTRY_MODEL.md, "Two creation experiences,
+  kept separate").
+- On the left, the entry's text is shown live: select a passage to comment on it or **strike** it,
+  or place the cursor and propose wording. Nothing outside those actions can change the entry's own
+  text from here.
+- On the right, the note itself, with the same optional dates a new entry gets (§4.1).
+- Marking a passage is optional. Writing on the right and marking nothing produces a note about the
+  entry as a whole, and the entry is not revised at all.
 - A strike can carry replacement wording, which renders beside the struck text — the familiar
   correction shape, declared as belonging to that strike rather than guessed from where it landed.
 - Saving anchors a passage and the note together in one action; the entry's own text is not touched
   except to gain the anchor, and its previous version stays exactly as it stood.
-- A note is either an **annotation** or an **update** — the user's choice, affecting how it reads
-  and how it will filter, not what it does.
+- Whether the note reads as an **annotation** or an **update** follows from what was marked, and is
+  never asked. Commenting on a passage claims nothing changed, so it is an annotation; striking
+  wording or proposing different wording reports a correction, so it is an update. A note that
+  marked nothing is an annotation, the quieter of the two claims.
 - Notes can themselves be annotated, so a conversation with yourself can go deeper than one level.
 - An anchor is fixed once its note is saved. Pointing differently at the same passage later means
   writing another note, not editing the first one's anchor (see §6, "Editing a child entry's
@@ -129,7 +145,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 
 ### 4.5 Revising an entry — Built
 
-- **Revise** opens the entry's current text for editing.
+- **Revise entry** opens the entry's current text for editing.
 - Editing produces a pending draft. The entry itself is untouched until the revision is saved, and
   the change can be discarded with no trace left on the entry.
 - Saving appends a new version. The previous version stays on record and the entry's version count
@@ -158,8 +174,9 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 ### 4.8 Drafts — Built
 
 - A **Drafts** page lists every unfinished writing session, so nothing is stranded invisibly.
-- Each draft says what it would become — a new entry, an annotation or update on a named entry, or a
-  revision of a named entry — with when it was last touched and a preview.
+- Each draft says what it would become — a new entry, a related entry on a named entry, or a
+  revision of a named entry — with when it was last touched and a preview. It does not say
+  annotation or update, because an unsealed draft has not settled that yet (§4.4).
 - A draft can be resumed (continuing where it left off, not restarting), saved as an entry, or
   discarded.
 - Drafts never appear on the timeline.
@@ -191,9 +208,14 @@ removals marked in the familiar way, rather than two blocks of text to compare b
 
 ### 5.3 Known gaps in what exists
 
-- **Dates.** An entry records when it was added to Chronicle, but there is no way yet to say when
-  the thing actually _happened_, or when it was originally written elsewhere. The record keeps room
-  for both; the interface asks for neither.
+- **A date, once given, cannot be corrected.** Dates are supplied when an entry is written (§4.1)
+  and there is no way to change one afterwards — a typed-in wrong year stays wrong. When this is
+  built, correcting a date must leave a history the way everything else does: the old date stays on
+  record with the new one beside it, not overwritten. `created_at` is the exception and stays
+  untouchable, being the ledger's own stamp rather than anything a person said.
+- **Nothing sorts by when things happened.** The timeline is ordered by when entries were added.
+  The dates a person supplies are shown but do not yet change any ordering, and the free-text time
+  beside each one is deliberately not interpreted.
 - **No way to find anything.** No search, no filtering, no browsing other than scrolling.
 - **Theme.** Dark mode is unblocked but neither finished nor switchable.
 - **Connections are invisible as a whole.** They exist one entry at a time; there is no view of the

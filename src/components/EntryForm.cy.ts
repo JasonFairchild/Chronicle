@@ -38,6 +38,25 @@ describe('EntryForm', () => {
     })
   })
 
+  it('saves when something happened and when it was first written down, with the entry', () => {
+    mountForm()
+
+    cy.findByLabelText('Happened').type('1994-06-11')
+    cy.findByLabelText('Time it happened').type('late morning')
+    cy.findByLabelText('Originally written').type('1994-06-12')
+    cy.findByRole('textbox', { name: 'New entry' }).type('From the green notebook')
+    cy.findByRole('button', { name: 'Save entry' }).click()
+
+    cy.then(async () => {
+      const [saved] = await entries.listRootEntries()
+      expect(saved?.occurred_at).to.equal('1994-06-11')
+      expect(saved?.occurred_time_note).to.equal('late morning')
+      expect(saved?.recorded_at).to.equal('1994-06-12')
+      // Not asked for, so not invented.
+      expect(saved?.recorded_time_note).to.equal(null)
+    })
+  })
+
   it('starts a fresh empty session after a save rather than reopening the last one', () => {
     mountForm()
 

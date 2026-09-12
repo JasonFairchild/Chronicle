@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { assertValidRelation } from '@/domain/entryValidation'
-import { createEntryInput, type Entry } from '@/types/entry'
+import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
 
 function entry(partial: Partial<Entry>): Entry {
   return {
     id: 'entry-1',
     created_at: '2026-01-01T00:00:00.000Z',
+    ...emptyEntryDates(),
     parent_id: null,
     relation_type: null,
     target_id: null,

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
-import type { Entry } from '@/types/entry'
+import { emptyEntryDates, type Entry } from '@/types/entry'
 
 function makeEntry(overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>): Entry {
   return {
     created_at: '2026-01-01T00:00:00.000Z',
+    ...emptyEntryDates(),
     parent_id: null,
     relation_type: null,
     target_id: null,

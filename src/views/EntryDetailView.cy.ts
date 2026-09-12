@@ -138,18 +138,34 @@ describe('EntryDetailView', () => {
     cy.findByText('Entry not found.').should('be.visible')
   })
 
-  it('adds an unanchored note about the entry as a whole', () => {
+  it('shows the dates the writer gave, alongside when the entry was created', () => {
+    seed({
+      content: PARENT_TEXT,
+      occurred_at: '1994-06-11',
+      occurred_time_note: 'late morning',
+      recorded_at: '1994-06-12',
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByText(/Happened .*1994 · late morning/).should('be.visible')
+      cy.findByText(/Originally written .*1994/).should('be.visible')
+    })
+  })
+
+  it('adds a note about the entry as a whole when the session marks nothing', () => {
     seed({ content: PARENT_TEXT }).then((parent) => {
       mountDetail(parent.id)
 
-      cy.findByText(PARENT_TEXT).should('be.visible')
+      cy.findByRole('button', { name: 'Create related entry' }).click()
 
-      cy.findByLabelText('Your note').type('Still think about this trip')
+      cy.findByRole('textbox', { name: 'Your note' }).type('Still think about this trip')
       cy.findByRole('button', { name: 'Add entry' }).click()
 
       cy.findByText('Still think about this trip').should('be.visible')
       cy.then(() => repository.listChildren(parent.id)).then((children) => {
         expect(children[0]?.anchors).to.deep.equal([])
+        // Nothing was marked, so the note claims nothing changed about the entry.
+        expect(children[0]?.relation_type).to.equal('annotation')
       })
     })
   })
@@ -158,7 +174,7 @@ describe('EntryDetailView', () => {
     seed({ content: PARENT_TEXT }).then((parent) => {
       mountDetail(parent.id)
 
-      cy.findByRole('button', { name: 'Anchor an update to a passage' }).click()
+      cy.findByRole('button', { name: 'Create related entry' }).click()
 
       cy.findByRole('textbox', { name: 'Entry being annotated' })
         .should('be.visible')
@@ -180,6 +196,8 @@ describe('EntryDetailView', () => {
       cy.then(() => repository.listChildren(parent.id)).then((children) => {
         expect(children[0]?.anchors).to.have.length(1)
         expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')
+        // Striking reports a correction, so the note reads as an update without anyone being asked.
+        expect(children[0]?.relation_type).to.equal('update')
       })
     })
   })
@@ -196,7 +214,7 @@ describe('EntryDetailView', () => {
       }).then(() => {
         mountDetail(parent.id)
 
-        cy.findByRole('button', { name: 'Revise' }).click()
+        cy.findByRole('button', { name: 'Revise entry' }).click()
         cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
           const el = $editor[0]!
           el.focus()
@@ -223,7 +241,7 @@ describe('EntryDetailView', () => {
       }).then(() => {
         mountDetail(parent.id)
 
-        cy.findByRole('button', { name: 'Revise' }).click()
+        cy.findByRole('button', { name: 'Revise entry' }).click()
         cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}!')
 
         cy.findByText(/This changes the passage/).should('not.exist')
@@ -236,7 +254,7 @@ describe('EntryDetailView', () => {
     seed({ content: PARENT_TEXT }).then((parent) => {
       mountDetail(parent.id)
 
-      cy.findByRole('button', { name: 'Revise' }).click()
+      cy.findByRole('button', { name: 'Revise entry' }).click()
       cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}, or so I remembered it.')
       cy.findByRole('button', { name: 'Save revision' }).click()
 
@@ -260,7 +278,7 @@ describe('EntryDetailView', () => {
     seed({ content: PARENT_TEXT }).then((parent) => {
       mountDetail(parent.id)
 
-      cy.findByRole('button', { name: 'Revise' }).click()
+      cy.findByRole('button', { name: 'Revise entry' }).click()
       cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end} — actually never mind')
       cy.findByRole('button', { name: 'Discard revision' }).click()
 

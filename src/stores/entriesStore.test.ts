@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useEntriesStore } from '@/stores/entriesStore'
+import { docToPlainText, serializeDocument, textContent } from '@/domain/entryDocument'
 import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { withAnchorMark } from '@/testing/anchorFixtures'
@@ -24,7 +25,7 @@ describe('useEntriesStore', () => {
     await store.loadRootEntries()
 
     expect(store.rootCount).toBe(1)
-    expect(store.rootEntries[0]?.content).toBe('First timeline entry')
+    expect(docToPlainText(store.rootEntries[0]!.content)).toBe('First timeline entry')
   })
 
   it('rejects empty content', async () => {
@@ -37,7 +38,7 @@ describe('useEntriesStore', () => {
     const created = await store.createTextEntry('Root content')
 
     const aggregated = await store.getAggregatedEntry(created.id)
-    expect(aggregated?.content).toBe('Root content')
+    expect(docToPlainText(aggregated!.content)).toBe('Root content')
   })
 
   it('never alters the parent’s stored row when a child is created', async () => {
@@ -50,7 +51,9 @@ describe('useEntriesStore', () => {
       content: 'Miss those trips',
     })
 
-    expect((await store.getEntry(parent.id))?.content).toBe('I went to Lake Tahoe with Dad')
+    expect(docToPlainText((await store.getEntry(parent.id))!.content)).toBe(
+      'I went to Lake Tahoe with Dad',
+    )
   })
 
   it('anchors a child to a passage by sealing a parent revision and the child together', async () => {
@@ -63,7 +66,7 @@ describe('useEntriesStore', () => {
       target: { kind: 'new_child', parent_id: parent.id },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
-      content: 'It was actually Donner Lake',
+      content: textContent('It was actually Donner Lake'),
       dates: emptyEntryDates(),
       anchor_ids: ['anchor-1'],
       parent_content: marked,
@@ -102,7 +105,7 @@ describe('useEntriesStore', () => {
       target: { kind: 'new_child', parent_id: parent.id },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
-      content: 'It was actually Donner Lake',
+      content: textContent('It was actually Donner Lake'),
       dates: emptyEntryDates(),
       anchor_ids: ['anchor-1'],
       parent_content: struck,
@@ -125,7 +128,7 @@ describe('useEntriesStore', () => {
       target: { kind: 'new_root' },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
-      content: 'Transcribed out of the green notebook',
+      content: textContent('Transcribed out of the green notebook'),
       dates: {
         recorded_at: '1994-06-12',
         recorded_time_note: 'evening',
@@ -162,7 +165,6 @@ describe('useEntriesStore', () => {
       fromId: from.id,
       toId: to.id,
       content: 'One made the other possible',
-      label: 'led_to',
     })
 
     const source = await store.getAggregatedEntry(from.id)
@@ -170,20 +172,51 @@ describe('useEntriesStore', () => {
 
     expect(source?.connections[0]?.direction).toBe('outgoing')
     expect(destination?.connections[0]?.direction).toBe('incoming')
-    expect(destination?.connections[0]?.label).toBe('led_to')
   })
 
-  it('carries media forward through a revision instead of dropping it', async () => {
+  it('keeps an entry’s media through a revision whose new document still contains it', async () => {
+    // `reviseEntry`'s plain-text shortcut always writes a fresh, image-free document — media_refs
+    // is derived from the document, with no exception any more (ENTRY_MODEL.md), so it can only
+    // stay populated when the revision's own content still carries the image node. That's exactly
+    // what the real editor does: it seeds a revision from the current, full document, images
+    // included, which is what this test mirrors via `createFromDraft` instead of the shortcut.
     const store = useEntriesStore()
+    const withPhoto = serializeDocument({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'A day at the lake' }] },
+        { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } },
+      ],
+    })
     const created = await entryRepository.create(
-      createEntryInput({ content: 'A day at the lake', media_refs: ['blob-1'] }),
+      createEntryInput({ content: withPhoto, media_refs: ['blob-1'] }),
     )
 
-    await store.reviseEntry({ entryId: created.id, content: 'A day at Donner Lake' })
+    const draft: Draft = {
+      session_id: 'session-4',
+      target: { kind: 'revision', parent_id: created.id },
+      started_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      content: serializeDocument({
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'A day at Donner Lake' }] },
+          { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } },
+        ],
+      }),
+      dates: emptyEntryDates(),
+      anchor_ids: [],
+      parent_content: null,
+      steps: [],
+      parent_steps: [],
+      ticks: [],
+    }
+
+    await store.createFromDraft(draft, null)
 
     const aggregated = await store.getAggregatedEntry(created.id)
-
-    expect(aggregated?.content).toBe('A day at Donner Lake')
+    // The image is a block node of its own, so it contributes an empty trailing line.
+    expect(docToPlainText(aggregated!.content).trim()).toBe('A day at Donner Lake')
     expect(aggregated?.media_refs).toEqual(['blob-1'])
   })
 
@@ -194,7 +227,7 @@ describe('useEntriesStore', () => {
     await store.reviseEntry({ entryId: created.id, content: 'I received the offer' })
     await store.loadRootEntries()
 
-    expect(store.rootEntries[0]?.content).toBe('I received the offer')
+    expect(docToPlainText(store.rootEntries[0]!.content)).toBe('I received the offer')
     expect(store.rootEntries[0]?.version.total).toBe(2)
   })
 
@@ -205,7 +238,7 @@ describe('useEntriesStore', () => {
     await store.reviseEntry({ entryId: created.id, content: 'Two' })
 
     const history = await store.getEntryHistory(created.id)
-    expect(history.map((version) => version.content)).toEqual(['One', 'Two'])
+    expect(history.map((version) => docToPlainText(version.content))).toEqual(['One', 'Two'])
   })
 
   it('rejects a revision that changes nothing', async () => {
@@ -224,7 +257,7 @@ describe('useEntriesStore', () => {
 
     await store.reviseEntry({ entryId: created.id, content: 'Final wording' })
 
-    expect(store.rootEntries[0]?.content).toBe('Final wording')
+    expect(docToPlainText(store.rootEntries[0]!.content)).toBe('Final wording')
     expect(store.rootEntries[0]?.version.total).toBe(2)
   })
 
@@ -235,7 +268,10 @@ describe('useEntriesStore', () => {
 
     await store.createTextEntry('Second')
 
-    expect(store.rootEntries.map((entry) => entry.content)).toEqual(['Second', 'First'])
+    expect(store.rootEntries.map((entry) => docToPlainText(entry.content))).toEqual([
+      'Second',
+      'First',
+    ])
   })
 
   it('keeps a child entry out of the root timeline', async () => {

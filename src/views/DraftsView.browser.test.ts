@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import DraftsView from '@/views/DraftsView.vue'
-import { docToPlainText, plainTextDocument, serializeDocument } from '@/domain/entryDocument'
+import { docToPlainText, textContent } from '@/domain/entryDocument'
 import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { renderComponent } from '@/testing/renderComponent'
@@ -42,7 +42,7 @@ describe('DraftsView (browser)', () => {
     await drafts.save(
       makeDraft({
         session_id: 'session-1',
-        content: serializeDocument(plainTextDocument('Half a thought', 'Lake Tahoe')),
+        content: textContent('Half a thought', 'Lake Tahoe'),
       }),
     )
 
@@ -70,12 +70,14 @@ describe('DraftsView (browser)', () => {
   })
 
   it('names what each draft is attached to rather than only what kind it is', async () => {
-    const parent = await entries.create(createEntryInput({ content: 'The meeting went badly' }))
+    const parent = await entries.create(
+      createEntryInput({ content: textContent('The meeting went badly') }),
+    )
     await drafts.save(
       makeDraft({
         session_id: 'session-1',
         target: { kind: 'new_child', parent_id: parent.id },
-        content: 'It was salvaged later',
+        content: textContent('It was salvaged later'),
       }),
     )
 
@@ -87,7 +89,7 @@ describe('DraftsView (browser)', () => {
   })
 
   it('discards a draft on request, the one thing that removes work', async () => {
-    await drafts.save(makeDraft({ session_id: 'session-1', content: 'Never mind' }))
+    await drafts.save(makeDraft({ session_id: 'session-1', content: textContent('Never mind') }))
 
     const screen = mountDrafts()
     await expect.element(screen.getByText('Never mind')).toBeVisible()

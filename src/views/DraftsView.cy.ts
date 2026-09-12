@@ -1,5 +1,5 @@
 import DraftsView from '@/views/DraftsView.vue'
-import { docToPlainText, plainTextDocument, serializeDocument } from '@/domain/entryDocument'
+import { docToPlainText, textContent } from '@/domain/entryDocument'
 import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
@@ -40,7 +40,7 @@ describe('DraftsView', () => {
       drafts.save(
         makeDraft({
           session_id: 'session-1',
-          content: serializeDocument(plainTextDocument('Half a thought', 'Lake Tahoe')),
+          content: textContent('Half a thought', 'Lake Tahoe'),
         }),
       ),
     )
@@ -64,12 +64,14 @@ describe('DraftsView', () => {
 
   it('names what each draft is attached to rather than only what kind it is', () => {
     cy.then(async () => {
-      const parent = await entries.create(createEntryInput({ content: 'The meeting went badly' }))
+      const parent = await entries.create(
+        createEntryInput({ content: textContent('The meeting went badly') }),
+      )
       await drafts.save(
         makeDraft({
           session_id: 'session-1',
           target: { kind: 'new_child', parent_id: parent.id },
-          content: 'It was salvaged later',
+          content: textContent('It was salvaged later'),
         }),
       )
     })
@@ -79,7 +81,9 @@ describe('DraftsView', () => {
   })
 
   it('discards a draft on request, the one thing that removes work', () => {
-    cy.then(() => drafts.save(makeDraft({ session_id: 'session-1', content: 'Never mind' })))
+    cy.then(() =>
+      drafts.save(makeDraft({ session_id: 'session-1', content: textContent('Never mind') })),
+    )
     mountDrafts()
 
     cy.findByText('Never mind').should('be.visible')

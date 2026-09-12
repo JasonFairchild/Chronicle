@@ -5,8 +5,8 @@ import {
   collectMediaRefs,
   docTitle,
   isEmptyDocument,
-  isSerializedDocument,
   sameContent,
+  textContent,
 } from '@/domain/entryDocument'
 import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
 import { entryRepository } from '@/repositories'
@@ -35,7 +35,6 @@ export interface CreateConnectionOptions {
   fromId: string
   toId: string
   content?: string
-  label?: string
 }
 
 export interface ReviseEntryOptions {
@@ -72,9 +71,14 @@ export const useEntriesStore = defineStore('entries', () => {
     }
   }
 
+  /**
+   * A simple, non-session way to create a root entry from plain text — no draft, no title, no
+   * dates. The real UI always writes through a draft session (`createFromDraft`); this exists for
+   * callers, chiefly tests, that just want an entry to exist.
+   */
   async function createTextEntry(content: string): Promise<Entry> {
     const entry = await entryRepository.create(
-      rootInput(requireContent(content), null, emptyEntryDates()),
+      rootInput(requireContent(textContent(content)), null, emptyEntryDates()),
     )
 
     await addRoot(entry.id)
@@ -82,14 +86,15 @@ export const useEntriesStore = defineStore('entries', () => {
   }
 
   /**
-   * An annotation or an update about the parent at large, with no anchors. A child that points at a
-   * specific passage goes through an anchor-mode draft instead (`createFromDraft`), since placing
-   * an anchor means revising the parent's own document.
+   * An annotation or an update about the parent at large, with no anchors, from plain text — the
+   * simple counterpart to `createTextEntry` for children. A child that points at a specific passage
+   * goes through an anchor-mode draft instead (`createFromDraft`), since placing an anchor means
+   * revising the parent's own document.
    */
   async function createChildEntry(options: CreateChildOptions): Promise<Entry> {
     return entryRepository.create(
       childInput(
-        requireContent(options.content),
+        requireContent(textContent(options.content)),
         options.parentId,
         options.relationType,
         emptyEntryDates(),
@@ -98,28 +103,33 @@ export const useEntriesStore = defineStore('entries', () => {
     )
   }
 
-  /** A directional edge. `fromId` is where it was authored; both endpoints will surface it. */
+  /**
+   * A directional edge from plain text — the simple counterpart to `createTextEntry` for
+   * connections. The real UI always writes through `createFromDraft`'s `new_connection` branch,
+   * which gets the full entry model (title, dates, rich content); this is for tests that just want
+   * a connection to exist.
+   */
   async function createConnection(options: CreateConnectionOptions): Promise<Entry> {
     error.value = null
 
     return entryRepository.create(
       createEntryInput({
-        content: options.content?.trim() ?? '',
+        content: textContent(options.content?.trim() ?? ''),
         parent_id: options.fromId,
         target_id: options.toId,
         relation_type: 'connection',
-        metadata: options.label ? { connection_label: options.label } : {},
       }),
     )
   }
 
   /**
-   * Appends a new version. A revision is a full-state snapshot, so anything the caller is not
-   * changing is carried forward from the current aggregate rather than from the original row,
-   * which is what stops an edit from silently dropping the entry's media.
+   * Appends a new version from plain text — the simple counterpart to `createTextEntry` for
+   * revisions. A revision is a full-state snapshot, so anything the caller is not changing is
+   * carried forward from the current aggregate rather than from the original row, which is what
+   * stops an edit from silently dropping the entry's media.
    */
   async function reviseEntry(options: ReviseEntryOptions): Promise<Entry> {
-    const content = requireContent(options.content)
+    const content = requireContent(textContent(options.content))
     const current = await getAggregatedEntry(options.entryId)
     if (!current) {
       throw new Error('Cannot revise an entry that does not exist')
@@ -133,7 +143,7 @@ export const useEntriesStore = defineStore('entries', () => {
         options.entryId,
         content,
         'text',
-        options.mediaRefs ?? mediaRefsFor(content, current.media_refs),
+        options.mediaRefs ?? collectMediaRefs(content),
         options.metadata ?? current.metadata,
         null,
       ),
@@ -193,7 +203,7 @@ export const useEntriesStore = defineStore('entries', () => {
           target.parent_id,
           content,
           'text',
-          mediaRefsFor(content, current.media_refs),
+          collectMediaRefs(content),
           current.metadata,
           trace,
         ),
@@ -201,6 +211,23 @@ export const useEntriesStore = defineStore('entries', () => {
 
       await refreshRoot(target.parent_id)
       return entry
+    }
+
+    if (target.kind === 'new_connection') {
+      // Never a timeline root — a connection is reached through the entries it links, not the
+      // timeline, so there is no `addRoot` here the way there is for `new_root`.
+      return entryRepository.create(
+        createEntryInput({
+          content,
+          title: docTitle(content),
+          parent_id: target.parent_id,
+          target_id: target.target_id,
+          relation_type: 'connection',
+          media_refs: collectMediaRefs(content),
+          authoring_trace: trace,
+          ...draft.dates,
+        }),
+      )
     }
 
     const entry = await entryRepository.create(rootInput(content, trace, draft.dates))
@@ -239,7 +266,7 @@ export const useEntriesStore = defineStore('entries', () => {
         parentId,
         parentContent,
         'anchor',
-        mediaRefsFor(parentContent, current.media_refs),
+        collectMediaRefs(parentContent),
         current.metadata,
         parentTrace,
       ),
@@ -388,15 +415,6 @@ export const useEntriesStore = defineStore('entries', () => {
       metadata,
       authoring_trace: trace,
     })
-  }
-
-  /**
-   * A document knows which blobs it depends on, so it is the authority on its own media. Legacy
-   * plain text knows nothing, so the previous version's list is carried forward rather than being
-   * derived away to nothing, which is the rule that a revision must never silently drop images.
-   */
-  function mediaRefsFor(content: string, carriedForward: string[]): string[] {
-    return isSerializedDocument(content) ? collectMediaRefs(content) : carriedForward
   }
 
   function requireContent(content: string): string {

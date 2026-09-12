@@ -36,6 +36,11 @@ vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser 
   `| sed` or `; echo` triggers a permission prompt. Use Read/Grep/Glob, not `cat`/`grep`/`find`.
 - Commit messages: a subject line, then only what the diff can't say — why a choice was made, and
   anything a reviewer couldn't discover from the code. No tour of the changes.
+- **No backward compatibility until we deliberately decide it's needed.** This includes entries
+  already sitting in a browser's local IndexedDB — at this stage that's all test data. Change a
+  shape and update every call site; don't add a fallback to read an old one. If old local data
+  stops working, clear the IndexedDB (or seed fresh data) rather than writing code to migrate or
+  tolerate it. Revisit only when we deliberately decide real data needs to survive a shape change.
 
 ## Landmarks
 

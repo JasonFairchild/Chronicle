@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { plainTextDocument, serializeDocument } from '@/domain/entryDocument'
+import { docToPlainText, textContent } from '@/domain/entryDocument'
 import {
   draftRepository,
   entryRepository,
@@ -42,10 +42,16 @@ describe('useDraftsStore', () => {
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
 
-    store.recordChange(sessionId, { content: 'It rai', steps: [{ stepType: 'replace' }] })
-    store.recordChange(sessionId, { content: 'It rained', steps: [{ stepType: 'replace' }] })
     store.recordChange(sessionId, {
-      content: 'It rained all day.',
+      content: textContent('It rai'),
+      steps: [{ stepType: 'replace' }],
+    })
+    store.recordChange(sessionId, {
+      content: textContent('It rained'),
+      steps: [{ stepType: 'replace' }],
+    })
+    store.recordChange(sessionId, {
+      content: textContent('It rained all day.'),
       steps: [{ stepType: 'replace' }],
     })
 
@@ -54,7 +60,7 @@ describe('useDraftsStore', () => {
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(flushed?.content).toBe('It rained all day.')
+    expect(docToPlainText(flushed!.content)).toBe('It rained all day.')
     expect(flushed?.steps).toHaveLength(3)
   })
 
@@ -63,7 +69,7 @@ describe('useDraftsStore', () => {
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
 
-    store.recordChange(sessionId, { content: 'From the green notebook' })
+    store.recordChange(sessionId, { content: textContent('From the green notebook') })
     store.recordDates(sessionId, {
       recorded_at: '1994-06-12',
       recorded_time_note: 'evening',
@@ -86,7 +92,7 @@ describe('useDraftsStore', () => {
     const store = useDraftsStore()
     const entries = useEntriesStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
-    const content = serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe'))
+    const content = textContent('We drove up on Friday.', 'Lake Tahoe')
 
     store.recordChange(sessionId, {
       content,
@@ -106,7 +112,9 @@ describe('useDraftsStore', () => {
   it('seals an anchor-mode draft as a parent revision plus a child referencing its anchor', async () => {
     const store = useDraftsStore()
     const parentContent = 'The meeting went badly'
-    const parent = await entryRepository.create(createEntryInput({ content: parentContent }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent(parentContent) }),
+    )
 
     const sessionId = store.beginDraft(
       { kind: 'new_child', parent_id: parent.id },
@@ -119,7 +127,7 @@ describe('useDraftsStore', () => {
       anchorIds: ['anchor-1'],
     })
     store.recordChange(sessionId, {
-      content: 'It was salvaged later.',
+      content: textContent('It was salvaged later.'),
       steps: [{ stepType: 'replace' }],
     })
     const sealed = await store.sealDraft(sessionId)
@@ -144,15 +152,17 @@ describe('useDraftsStore', () => {
 
     const sessionId = store.beginDraft({ kind: 'revision', parent_id: original.id })
     store.recordChange(sessionId, {
-      content: 'I received the offer',
+      content: textContent('I received the offer'),
       steps: [{ stepType: 'replace' }],
     })
     await store.sealDraft(sessionId)
 
     const aggregated = await entries.getAggregatedEntry(original.id)
-    expect(aggregated?.content).toBe('I received the offer')
+    expect(docToPlainText(aggregated!.content)).toBe('I received the offer')
     expect(aggregated?.version.total).toBe(2)
-    expect((await entries.getEntry(original.id))?.content).toBe('I recieved the offer')
+    expect(docToPlainText((await entries.getEntry(original.id))!.content)).toBe(
+      'I recieved the offer',
+    )
   })
 
   it('resumes a draft left behind by a reload with its history intact', async () => {
@@ -162,7 +172,7 @@ describe('useDraftsStore', () => {
       target: { kind: 'new_root' },
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
-      content: 'Half a thought',
+      content: textContent('Half a thought'),
       dates: emptyEntryDates(),
       anchor_ids: [],
       parent_content: null,
@@ -173,12 +183,12 @@ describe('useDraftsStore', () => {
 
     const resumed = await store.resumeDraft('interrupted')
     store.recordChange('interrupted', {
-      content: 'Half a thought, finished.',
+      content: textContent('Half a thought, finished.'),
       steps: [{ stepType: 'replace' }],
     })
     const sealed = await store.sealDraft('interrupted')
 
-    expect(resumed?.content).toBe('Half a thought')
+    expect(docToPlainText(resumed!.content)).toBe('Half a thought')
     const trace = (await useEntriesStore().getEntry(sealed.id))?.authoring_trace
     expect(trace?.started_at).toBe('2026-09-05T10:00:00.000Z')
     expect(trace?.steps).toHaveLength(2)
@@ -187,16 +197,16 @@ describe('useDraftsStore', () => {
   it('lists unsealed drafts most recently touched first', async () => {
     const store = useDraftsStore()
     const older = store.beginDraft({ kind: 'new_root' })
-    store.recordChange(older, { content: 'Older', steps: [{ stepType: 'replace' }] })
+    store.recordChange(older, { content: textContent('Older'), steps: [{ stepType: 'replace' }] })
     await store.flush(older)
 
     const newer = store.beginDraft({ kind: 'new_root' })
-    store.recordChange(newer, { content: 'Newer', steps: [{ stepType: 'replace' }] })
+    store.recordChange(newer, { content: textContent('Newer'), steps: [{ stepType: 'replace' }] })
     await store.flush(newer)
 
     await store.loadDrafts()
 
-    expect(store.drafts.map((draft) => draft.content)).toEqual(['Newer', 'Older'])
+    expect(store.drafts.map((draft) => docToPlainText(draft.content))).toEqual(['Newer', 'Older'])
   })
 
   it('abandons an untouched session outright, rather than leaving it open forever', async () => {
@@ -211,11 +221,14 @@ describe('useDraftsStore', () => {
   it('flushes and keeps a session that was actually typed into when abandoned', async () => {
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
-    store.recordChange(sessionId, { content: 'Half a thought', steps: [{ stepType: 'replace' }] })
+    store.recordChange(sessionId, {
+      content: textContent('Half a thought'),
+      steps: [{ stepType: 'replace' }],
+    })
 
     await store.abandonDraft(sessionId)
 
-    expect(store.currentDraft(sessionId)?.content).toBe('Half a thought')
+    expect(docToPlainText(store.currentDraft(sessionId)!.content)).toBe('Half a thought')
     expect(await draftRepository.getById(sessionId)).not.toBeNull()
   })
 
@@ -224,7 +237,7 @@ describe('useDraftsStore', () => {
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
     store.recordChange(sessionId, {
-      content: 'A day at the lake',
+      content: textContent('A day at the lake'),
       steps: [{ stepType: 'replace' }],
     })
 
@@ -253,7 +266,10 @@ describe('useDraftsStore', () => {
   it('discards a draft on request, the only thing that ever removes work', async () => {
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
-    store.recordChange(sessionId, { content: 'Never mind', steps: [{ stepType: 'replace' }] })
+    store.recordChange(sessionId, {
+      content: textContent('Never mind'),
+      steps: [{ stepType: 'replace' }],
+    })
     await store.flush(sessionId)
 
     await store.discardDraft(sessionId)
@@ -268,7 +284,7 @@ describe('useDraftsStore', () => {
 
     // An editor can report a change that leaves the document empty — housekeeping, a stray
     // transaction, or a writer clearing the line. None of those is a draft.
-    store.recordChange(sessionId, { content: '   ', steps: [] })
+    store.recordChange(sessionId, { content: textContent('   '), steps: [] })
     await store.flush(sessionId)
 
     expect(await draftRepository.list()).toEqual([])
@@ -278,7 +294,10 @@ describe('useDraftsStore', () => {
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
 
-    store.recordChange(sessionId, { content: 'It rained', steps: [{ stepType: 'replace' }] })
+    store.recordChange(sessionId, {
+      content: textContent('It rained'),
+      steps: [{ stepType: 'replace' }],
+    })
     await store.flush(sessionId)
     expect(await draftRepository.list()).toHaveLength(1)
 
@@ -293,9 +312,12 @@ describe('useDraftsStore', () => {
   it('refuses to seal an empty draft and leaves the session open', async () => {
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
-    store.recordChange(sessionId, { content: '   ', steps: [{ stepType: 'replace' }] })
+    store.recordChange(sessionId, {
+      content: textContent('   '),
+      steps: [{ stepType: 'replace' }],
+    })
 
     await expect(store.sealDraft(sessionId)).rejects.toThrow('Entry content cannot be empty')
-    expect(store.currentDraft(sessionId)?.content).toBe('   ')
+    expect(docToPlainText(store.currentDraft(sessionId)!.content)).toBe('   ')
   })
 })

@@ -12,7 +12,7 @@ export default defineConfig({
           ...(typeof viteConfig === 'object' && viteConfig && 'server' in viteConfig
             ? (viteConfig as { server?: object }).server
             : {}),
-          port: 5174, // CT-only port
+          port: 5174,
         },
       },
     },

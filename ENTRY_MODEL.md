@@ -277,10 +277,13 @@ tiebreak, which is arbitrary but stable, and nobody cares about intra-import ins
 
 ## Connections
 
-Connections are directional edges, not children. Direction is meaningful and gets leaned into, with
-an optional label rendering as an arrow. The destination is not blind to the edge: both endpoints
-surface it, gathered by union on `parent_id === id || target_id === id` with an `outgoing`/`incoming`
-marker.
+Connections are directional edges, not children. Direction is meaningful and gets leaned into: the
+arrow names the entry at the other end the same way any entry is named elsewhere (its title, else a
+preview of what it says — `entryLabel` in `utils/format.ts`) — there is no connection-specific label
+field, no vocabulary of its own for "how they relate." A connection is created through the same
+full-entry composer as anything else (`NewConnectionView.vue`), just with a destination attached.
+The destination is not blind to the edge: both endpoints surface it, gathered by union on
+`parent_id === id || target_id === id` with an `outgoing`/`incoming` marker.
 
 **`parent_id` alone defines containment; `target_id` is gathered but never traversed.** Reconstructing
 an entry needs to know which entries belong to its subtree, and it answers that by following
@@ -390,10 +393,10 @@ Imports, seeds, test fixtures, and programmatic creation all produce a null trac
 user-facing switch for disabling capture should exist is a later product question.
 
 **`metadata` holds only what neither drives domain logic nor gets queried:** provenance for imports,
-originating device or app version, a pinned or color flag, and the connection label while its
-vocabulary churns. The rule is that anything filtered, sorted, or joined on graduates to a real
-column. Without it, an open bag becomes where columns hide, unindexed and unvalidated. Tags are the
-likeliest first graduate. Ambient data such as weather belongs in a third-party overlay, not here.
+originating device or app version, a pinned or color flag. The rule is that anything filtered,
+sorted, or joined on graduates to a real column. Without it, an open bag becomes where columns hide,
+unindexed and unvalidated. Tags are the likeliest first graduate. Ambient data such as weather
+belongs in a third-party overlay, not here.
 
 **There is no `type` field and no `content_format` field.** An entry with an image is a document
 containing an image node, not a different kind of entry, and with no data to migrate every entry is a

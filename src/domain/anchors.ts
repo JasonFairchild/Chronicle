@@ -185,24 +185,6 @@ export function resolveAnchors(
   })
 }
 
-/**
- * Drops anything in a stored `anchors` column that is not an anchor reference.
- *
- * Rows written before anchors moved into the parent's document hold the old op shape, which has no
- * id to look up and no mark to find. They are read as no anchors at all rather than being migrated:
- * the notes themselves are untouched, and nothing can be reconstructed from offsets measured
- * against a ruler this model no longer keeps.
- */
-export function readAnchorRefs(value: unknown): AnchorRef[] {
-  if (!Array.isArray(value)) return []
-
-  return value.filter((item): item is AnchorRef => {
-    if (typeof item !== 'object' || item === null) return false
-    const candidate = item as Partial<AnchorRef>
-    return typeof candidate.anchor_id === 'string' && typeof candidate.quote === 'string'
-  })
-}
-
 function anchorKind(attrs: Record<string, unknown> | undefined): AnchorKind | null {
   const kind = attrString(attrs, 'kind')
   return kind === 'comment' || kind === 'strike' ? kind : null

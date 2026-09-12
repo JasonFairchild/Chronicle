@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { docToPlainText, textContent } from '@/domain/entryDocument'
 import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
 import { emptyEntryDates, type Entry } from '@/types/entry'
 
+/**
+ * Every test here writes plain text and reads it back through `docToPlainText`, not `.content`
+ * directly — `content` is a real serialized document, and plain text is just the shorthand this
+ * file writes it as. This is the fold's own correctness, not the document format's, so wrapping it
+ * here keeps every test below unchanged.
+ */
 function makeEntry(overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>): Entry {
   return {
     created_at: '2026-01-01T00:00:00.000Z',
@@ -16,6 +23,7 @@ function makeEntry(overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>): E
     media_refs: [],
     metadata: {},
     ...overrides,
+    content: textContent(overrides.content),
   }
 }
 
@@ -25,7 +33,7 @@ describe('reconstructEntryState', () => {
 
     const result = reconstructEntryState('root-1', [root])
 
-    expect(result?.content).toBe('Original text')
+    expect(docToPlainText(result!.content)).toBe('Original text')
     expect(result?.children).toEqual([])
     expect(result?.connections).toEqual([])
     expect(result?.version).toEqual({
@@ -55,8 +63,8 @@ describe('reconstructEntryState', () => {
 
     const result = reconstructEntryState('root-1', [root, first, second])
 
-    expect(result?.content).toBe('Started learning guitar.')
-    expect(result?.children.map((child) => child.entry.content)).toEqual([
+    expect(docToPlainText(result!.content)).toBe('Started learning guitar.')
+    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
       'Learned first chord.',
       'Played a whole song.',
     ])
@@ -74,8 +82,8 @@ describe('reconstructEntryState', () => {
 
     const result = reconstructEntryState('root-1', [root, annotation])
 
-    expect(result?.content).toBe('Original text')
-    expect(result?.content).not.toContain('Remember this context')
+    expect(docToPlainText(result!.content)).toBe('Original text')
+    expect(docToPlainText(result!.content)).not.toContain('Remember this context')
     expect(result?.children[0]?.relation_type).toBe('annotation')
   })
 
@@ -98,7 +106,7 @@ describe('reconstructEntryState', () => {
 
     const result = reconstructEntryState('root-1', [root, fix, reword])
 
-    expect(result?.content).toBe('I received the offer and accepted it')
+    expect(docToPlainText(result!.content)).toBe('I received the offer and accepted it')
     expect(result?.version.index).toBe(3)
     expect(result?.version.revision_id).toBe('revision-2')
   })
@@ -122,8 +130,10 @@ describe('reconstructEntryState', () => {
 
     const result = reconstructEntryState('root-1', [root, update, revision])
 
-    expect(result?.content).toBe('I received the offer')
-    expect(result?.children.map((child) => child.entry.content)).toEqual(['Start date is March 3.'])
+    expect(docToPlainText(result!.content)).toBe('I received the offer')
+    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
+      'Start date is March 3.',
+    ])
   })
 
   it('carries media through a revision instead of dropping it', () => {
@@ -156,7 +166,7 @@ describe('reconstructEntryState', () => {
       asOf: new Date('2026-01-01T12:00:00.000Z'),
     })
 
-    expect(result?.content).toBe('Original text')
+    expect(docToPlainText(result!.content)).toBe('Original text')
     // Positioned within the whole chain, not just the part that had happened yet: scrubbing back
     // to this moment should read "version 1 of 2", which is what makes it navigable.
     expect(result?.version.index).toBe(1)
@@ -184,8 +194,14 @@ describe('reconstructEntryState', () => {
     const forwards = reconstructEntryState('root-1', [root, first, second])
     const backwards = reconstructEntryState('root-1', [root, second, first])
 
-    expect(forwards?.children.map((child) => child.entry.content)).toEqual(['First', 'Second'])
-    expect(backwards?.children.map((child) => child.entry.content)).toEqual(['First', 'Second'])
+    expect(forwards?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
+      'First',
+      'Second',
+    ])
+    expect(backwards?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
+      'First',
+      'Second',
+    ])
   })
 
   it('surfaces a connection from both endpoints with its direction', () => {
@@ -197,7 +213,6 @@ describe('reconstructEntryState', () => {
       target_id: 'entry-b',
       relation_type: 'connection',
       content: 'These rhyme',
-      metadata: { connection_label: 'led_to' },
       created_at: '2026-01-02T00:00:00.000Z',
     })
 
@@ -212,7 +227,6 @@ describe('reconstructEntryState', () => {
       direction: 'incoming',
       other_id: 'entry-a',
     })
-    expect(destination?.connections[0]?.label).toBe('led_to')
   })
 
   it('keeps a connection’s own children out of both endpoints', () => {
@@ -282,7 +296,7 @@ describe('buildEntryHistory', () => {
 
     const history = buildEntryHistory('root-1', [root, revision])
 
-    expect(history?.map((version) => version.content)).toEqual(['One', 'Two'])
+    expect(history?.map((version) => docToPlainText(version.content))).toEqual(['One', 'Two'])
     expect(history?.[0]?.revision_id).toBeNull()
     expect(history?.[1]?.revision_id).toBe('revision-1')
   })

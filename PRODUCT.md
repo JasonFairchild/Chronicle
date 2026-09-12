@@ -159,8 +159,13 @@ either — they are names for what a note turned out to be, not a choice to make
 
 ### 4.6 Connections — Built
 
-- From an entry, you can connect it to any other entry on the timeline, in a chosen direction, with
-  a short label and an explanation of why they relate.
+- **Add connection** opens a full screen for creating one — the same tools as writing any entry
+  (a title, the optional dates, rich text with the whole formatting toolbar), plus a choice of which
+  other entry it points to. A connection is not a lightweight second-class thing with its own
+  cut-down form; it is an entry that happens to also name a destination.
+- There is no separate short label for how two entries relate. What the connection is called, on
+  both ends it joins, is its own title if it has one, otherwise the opening of what it says — the
+  same rule that names every other entry.
 - The connection is visible from both ends, marked as outgoing or incoming.
 - A connection is itself an entry: it can be annotated and revised like anything else. Its notes
   belong to the connection, not to either entry it links.
@@ -240,6 +245,10 @@ Not commitments. A parking lot, so ideas stop being remembered by hand.
 ### Seeing the shape of things
 
 - A graph view of connections — entries as nodes, connections as labeled arrows.
+- A way to open a connection's own entry page. Today the Connections list on each endpoint links to
+  the _other_ entry, not to the connection itself, so a connection's own revisions and annotations
+  have no route in from the UI — even though the data model already treats a connection as an entry
+  like any other and supports it.
 - Navigating by connection rather than by time.
 - One entry's whole subtree as an activity stream: everything that ever happened to it, in order.
 - Expanding past the default two levels of depth on demand.

@@ -39,16 +39,12 @@ describe('docToPlainText', () => {
     expect(docToPlainText(document)).toBe('We drove up on Friday.\n\nSnow\nPines')
   })
 
-  it('reads a serialized document and a bare string identically', () => {
+  it('reads a serialized document the same whether it came from an object or a string', () => {
     const serialized = serializeDocument(plainTextDocument('First line\nSecond line'))
 
     expect(docToPlainText(serialized)).toBe('First line\nSecond line')
-    expect(docToPlainText('First line\nSecond line')).toBe('First line\nSecond line')
-  })
-
-  it('treats prose that merely starts with a brace as prose', () => {
-    expect(docToPlainText('{ this is not JSON, it is a thought }')).toBe(
-      '{ this is not JSON, it is a thought }',
+    expect(docToPlainText(plainTextDocument('First line\nSecond line'))).toBe(
+      'First line\nSecond line',
     )
   })
 
@@ -146,6 +142,18 @@ describe('isEmptyDocument', () => {
 describe('parseDocument', () => {
   it('round-trips a document through serialization', () => {
     expect(parseDocument(serializeDocument(document))).toEqual(document)
+  })
+
+  it('reads an empty string as a blank document rather than throwing', () => {
+    // The transient state of a ref before an editor has mounted or a draft has been typed into —
+    // never something stored, since an empty document is refused at save time.
+    expect(parseDocument('')).toEqual({ type: 'doc', content: [{ type: 'paragraph' }] })
+  })
+
+  it('rejects content that is not a real serialized document', () => {
+    expect(() => parseDocument('plain prose, never serialized')).toThrow()
+    expect(() => parseDocument('{ not valid JSON')).toThrow()
+    expect(() => parseDocument(JSON.stringify({ not: 'a document' }))).toThrow()
   })
 })
 

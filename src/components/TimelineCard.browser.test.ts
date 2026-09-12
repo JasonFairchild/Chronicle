@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import TimelineCard from '@/components/TimelineCard.vue'
+import { textContent } from '@/domain/entryDocument'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { emptyEntryDates, type AggregatedEntry } from '@/types/entry'
@@ -12,7 +13,7 @@ function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEnt
     created_at: CREATED_AT,
     dates: emptyEntryDates(),
     title: null,
-    content: 'A quiet morning',
+    content: textContent('A quiet morning'),
     media_refs: [],
     metadata: {},
     version: { index: 1, total: 1, at: CREATED_AT, revision_id: null },
@@ -61,7 +62,7 @@ describe('TimelineCard (browser)', () => {
   it('reports how many times a revised entry has changed', async () => {
     const screen = await mountCard(
       makeAggregated({
-        content: 'A quiet morning, reworded',
+        content: textContent('A quiet morning, reworded'),
         version: { index: 3, total: 3, at: CREATED_AT, revision_id: 'revision-2' },
       }),
     )

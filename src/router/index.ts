@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import TimelineView from '@/views/TimelineView.vue'
 import EntryDetailView from '@/views/EntryDetailView.vue'
+import NewConnectionView from '@/views/NewConnectionView.vue'
 import DraftsView from '@/views/DraftsView.vue'
 
 /**
@@ -23,6 +24,12 @@ export const routes: RouteRecordRaw[] = [
     path: '/entries/:id',
     name: 'entry-detail',
     component: EntryDetailView,
+    props: true,
+  },
+  {
+    path: '/entries/:id/connect',
+    name: 'new-connection',
+    component: NewConnectionView,
     props: true,
   },
 ]

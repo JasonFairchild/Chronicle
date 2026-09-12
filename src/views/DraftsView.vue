@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import DocumentEditor from '@/components/DocumentEditor.vue'
+import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { isEmptyDocument, previewText } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
@@ -61,9 +62,12 @@ function describe(draft: Draft): string {
   if (target.kind === 'new_root') return 'New entry'
 
   const parent = parentLabels.value[target.parent_id] ?? 'another entry'
+
+  if (target.kind === 'revision') return `Revision of “${parent}”`
+  if (target.kind === 'new_connection') return `Connection from “${parent}”`
   // Not "annotation" or "update": which one it reads as follows from what gets anchored, and an
   // unsealed draft has not settled that yet.
-  return target.kind === 'revision' ? `Revision of “${parent}”` : `Related entry on “${parent}”`
+  return `Related entry on “${parent}”`
 }
 
 async function resume(draft: Draft): Promise<void> {
@@ -144,6 +148,12 @@ async function discard(sessionId: string): Promise<void> {
         </div>
 
         <template v-if="session.sessionId === draft.session_id">
+          <EntryDatesFields
+            :model-value="session.dates"
+            :disabled="session.saving"
+            @update:model-value="session.handleDatesChange"
+          />
+
           <DocumentEditor
             label="Draft"
             :content="session.content"

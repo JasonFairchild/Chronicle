@@ -135,8 +135,9 @@ merely shortens an assertion does not.
   freshMediaRepository()
   ```
 
-  Call only the ones a given spec actually needs — `ChildEntryForm`/`ConnectionForm` call none of
-  them, since neither touches storage. Entries and drafts share one uniquely-named database per
+  Call only the ones a given spec actually needs — `ConnectionForm` (superseded by
+  `NewConnectionView`) called none of them, since it never touched storage directly. Entries and
+  drafts share one uniquely-named database per
   test, exactly as `src/repositories/index.ts` shares one in production — a transaction cannot span
   two connections, so a spec covering the anchor-mode atomic seal has to be given the shape it will
   actually run against. Media gets its own OPFS directory. Everything created registers itself for

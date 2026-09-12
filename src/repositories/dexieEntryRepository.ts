@@ -5,7 +5,6 @@ import {
   type CreateEntryInput,
   type Entry,
 } from '@/types/entry'
-import { readAnchorRefs } from '@/domain/anchors'
 import { assertValidRelation } from '@/domain/entryValidation'
 import { resolveDatabase, type ChronicleDatabase, type StoredEntry } from './chronicleDatabase'
 import type { EntryRepository } from './entryRepository'
@@ -136,16 +135,10 @@ export class DexieEntryRepository implements EntryRepository {
   }
 }
 
-/**
- * Drops the storage-only indexing flag, and sanitizes `anchors` for a row written before anchors
- * moved into the parent's document. `readAnchorRefs` is the only place that shape is ever named
- * again: a row like that duck-types into `AnchorRef[]` at the type level (both are just objects)
- * but has no `anchor_id` to look up, so left alone it would resolve as a blank-looking orphan
- * instead of the "no anchors at all" this entry actually has once its old op shape means nothing.
- */
+/** Drops the storage-only indexing flag. */
 function stripStorage(entry: StoredEntry): Entry {
   const { is_root: _is_root, ...rest } = entry
-  return { ...rest, anchors: readAnchorRefs(rest.anchors) }
+  return rest
 }
 
 function dedupeById(entries: StoredEntry[]): StoredEntry[] {

@@ -1,25 +1,22 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { RouterLink } from 'vue-router'
-import ConnectionForm, {
-  type ConnectionCandidate,
-  type ConnectionSubmission,
-} from '@/components/ConnectionForm.vue'
+import { RouterLink, useRouter } from 'vue-router'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useMedia } from '@/composables/useMedia'
-import { docToPlainText, hasTitleNode, previewText } from '@/domain/entryDocument'
+import { docToPlainText, hasTitleNode } from '@/domain/entryDocument'
 import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import { entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
+import { entryLabel, entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
 
 const props = defineProps<{
   id: string
 }>()
 
+const router = useRouter()
 const store = useEntriesStore()
 const drafts = useDraftsStore()
 const media = useMedia()
@@ -89,25 +86,6 @@ const revisionWarnings = computed<string[]>(() => {
   return [...new Set(names)]
 })
 
-/** Everything on the timeline except this entry. Direction is chosen by which end you start from. */
-const connectionCandidates = computed<ConnectionCandidate[]>(() =>
-  store.rootEntries
-    .filter((entry) => entry.id !== props.id)
-    .map((entry) => ({ id: entry.id, label: entryLabel(entry) })),
-)
-
-/**
- * How to name another entry where only one line fits — a picker option, or the note a revision
- * warning is about. Its title if it has one, otherwise the opening of what it says; an entry with
- * neither still needs naming rather than appearing as a blank row.
- *
- * Structurally typed on the two fields it reads, because it names both stored entries and the
- * aggregated form the timeline hands back, and neither is a subtype of the other.
- */
-function entryLabel(entry: { title: string | null; content: string }): string {
-  return entry.title || previewText(entry.content, 60) || 'Untitled entry'
-}
-
 async function loadEntry(entryId: string): Promise<void> {
   loading.value = true
   error.value = null
@@ -139,8 +117,6 @@ function resetChildState(): void {
 
 onMounted(() => {
   void loadEntry(props.id)
-  // The connection picker needs something to pick from, and the timeline roots are that list.
-  void store.loadRootEntries()
 })
 
 watch(
@@ -177,20 +153,9 @@ onBeforeUnmount(() => {
   layoutWidth.value = 'normal'
 })
 
-async function handleAddConnection(submission: ConnectionSubmission): Promise<void> {
-  actionError.value = null
-
-  try {
-    await store.createConnection({
-      fromId: props.id,
-      toId: submission.toId,
-      content: submission.content,
-      label: submission.label,
-    })
-    await loadEntry(props.id)
-  } catch (err) {
-    actionError.value = toErrorMessage(err, 'Failed to add connection')
-  }
+/** Connections get the full entry model (title, dates, rich content), so they're a whole screen. */
+function goToNewConnection(): void {
+  void router.push({ name: 'new-connection', params: { id: props.id } })
 }
 
 /**
@@ -345,6 +310,13 @@ function describeAnchor(resolved: ResolvedAnchor): string {
               @click="startRevising"
             >
               Revise entry
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              @click="goToNewConnection"
+            >
+              Add connection
             </button>
           </div>
         </header>
@@ -538,21 +510,18 @@ function describeAnchor(resolved: ResolvedAnchor): string {
               :to="{ name: 'entry-detail', params: { id: connection.other_id } }"
               class="text-[var(--color-accent)] hover:underline"
             >
-              {{ connection.label ?? 'related to' }}
+              {{ entryLabel(connection.entry) }}
             </RouterLink>
-            <span v-if="connection.entry.content">
+            <!--
+              Only when there's a real title: otherwise `entryLabel` above already used the content
+              preview as the link text, and repeating it here would just say the same thing twice.
+            -->
+            <span v-if="connection.entry.title && docToPlainText(connection.entry.content)">
               · {{ docToPlainText(connection.entry.content) }}
             </span>
           </p>
         </section>
       </article>
-
-      <section v-if="!revisionSession.isOpen && !childSession.isOpen">
-        <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-          Connect to another entry
-        </h2>
-        <ConnectionForm :candidates="connectionCandidates" @submit="handleAddConnection" />
-      </section>
     </template>
   </div>
 </template>

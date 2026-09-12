@@ -226,7 +226,7 @@ function resolveConnections(
     const entry = aggregate(connection.id, walk, depth - 1)
     if (!entry) continue
 
-    resolved.push({ entry, other_id: otherId, direction, label: connectionLabel(connection) })
+    resolved.push({ entry, other_id: otherId, direction })
   }
 
   return resolved
@@ -248,13 +248,4 @@ function hasVisibleChildren(entryId: string, walk: Walk): boolean {
     (child) =>
       child.relation_type !== 'revision' && (!walk.asOfIso || child.created_at <= walk.asOfIso),
   )
-}
-
-/**
- * Kept in metadata while the vocabulary is still moving. It graduates to a column once it settles,
- * per the rule that anything filtered or sorted on stops being metadata.
- */
-function connectionLabel(connection: Entry): string | null {
-  const label = connection.metadata.connection_label
-  return typeof label === 'string' ? label : null
 }

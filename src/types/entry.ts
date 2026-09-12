@@ -179,7 +179,6 @@ export interface ResolvedConnection {
   /** The endpoint that is not the entry being viewed. */
   other_id: string
   direction: 'outgoing' | 'incoming'
-  label: string | null
 }
 
 /**

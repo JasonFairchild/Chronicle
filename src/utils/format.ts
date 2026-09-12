@@ -6,7 +6,20 @@
  * domain layer: nothing here is about what an entry *is*, only about how one is shown.
  */
 
+import { previewText } from '@/domain/entryDocument'
 import type { EntryDates } from '@/types/entry'
+
+/**
+ * How to name an entry where only one line fits — a picker option, a connection's arrow, the note a
+ * revision warning is about. Its title if it has one, otherwise the opening of what it says; an
+ * entry with neither still needs naming rather than appearing as a blank row.
+ *
+ * Structurally typed on the two fields it reads, because it names both stored entries and the
+ * aggregated form the timeline hands back, and neither is a subtype of the other.
+ */
+export function entryLabel(entry: { title: string | null; content: string }): string {
+  return entry.title || previewText(entry.content, 60) || 'Untitled entry'
+}
 
 /**
  * A stored ISO timestamp as local text.

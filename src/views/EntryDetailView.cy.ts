@@ -8,10 +8,11 @@ import {
 } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
-import { docToPlainText } from '@/domain/entryDocument'
+import { docToPlainText, textContent } from '@/domain/entryDocument'
 import { createEntryInput, type Entry } from '@/types/entry'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
+const PARENT_CONTENT = textContent(PARENT_TEXT)
 
 function mountDetail(id: string): void {
   cy.mount(EntryDetailView, { props: { id }, routePath: '/' })
@@ -35,7 +36,7 @@ describe('EntryDetailView', () => {
   })
 
   it('renders the entry’s own text', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByText(PARENT_TEXT).should('be.visible')
@@ -43,9 +44,9 @@ describe('EntryDetailView', () => {
   })
 
   it('shows a child entry separately rather than spliced into the parent', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
       seed({
-        content: 'It was actually Donner Lake',
+        content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
         relation_type: 'update',
       }).then(() => {
@@ -62,7 +63,7 @@ describe('EntryDetailView', () => {
 
     seed({ content: marked }).then((parent) => {
       seed({
-        content: 'Wrong lake',
+        content: textContent('Wrong lake'),
         parent_id: parent.id,
         relation_type: 'update',
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
@@ -79,13 +80,13 @@ describe('EntryDetailView', () => {
 
     seed({ content: marked }).then((parent) => {
       seed({
-        content: 'Wrong lake',
+        content: textContent('Wrong lake'),
         parent_id: parent.id,
         relation_type: 'update',
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
       }).then(() => {
         seed({
-          content: 'I stayed home that summer',
+          content: textContent('I stayed home that summer'),
           parent_id: parent.id,
           relation_type: 'revision',
           revision_mode: 'text',
@@ -99,9 +100,9 @@ describe('EntryDetailView', () => {
   })
 
   it('reports the version position once an entry has been revised', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
       seed({
-        content: 'I went to Donner Lake with Dad',
+        content: textContent('I went to Donner Lake with Dad'),
         parent_id: parent.id,
         relation_type: 'revision',
         revision_mode: 'text',
@@ -115,14 +116,13 @@ describe('EntryDetailView', () => {
   })
 
   it('shows an incoming connection on the entry it points at', () => {
-    seed({ content: 'Started the degree' }).then((target) => {
-      seed({ content: 'Left my job' }).then((source) => {
+    seed({ content: textContent('Started the degree') }).then((target) => {
+      seed({ content: textContent('Left my job') }).then((source) => {
         seed({
-          content: 'One made the other possible',
+          content: textContent('One made the other possible', 'led_to'),
           parent_id: source.id,
           target_id: target.id,
           relation_type: 'connection',
-          metadata: { connection_label: 'led_to' },
         }).then(() => {
           mountDetail(target.id)
 
@@ -140,7 +140,7 @@ describe('EntryDetailView', () => {
 
   it('shows the dates the writer gave, alongside when the entry was created', () => {
     seed({
-      content: PARENT_TEXT,
+      content: PARENT_CONTENT,
       occurred_at: '1994-06-11',
       occurred_time_note: 'late morning',
       recorded_at: '1994-06-12',
@@ -153,7 +153,7 @@ describe('EntryDetailView', () => {
   })
 
   it('adds a note about the entry as a whole when the session marks nothing', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -171,7 +171,7 @@ describe('EntryDetailView', () => {
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -207,7 +207,7 @@ describe('EntryDetailView', () => {
 
     seed({ content: marked }).then((parent) => {
       seed({
-        content: 'Wonderful trip',
+        content: textContent('Wonderful trip'),
         parent_id: parent.id,
         relation_type: 'annotation',
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
@@ -234,7 +234,7 @@ describe('EntryDetailView', () => {
 
     seed({ content: marked }).then((parent) => {
       seed({
-        content: 'Wonderful trip',
+        content: textContent('Wonderful trip'),
         parent_id: parent.id,
         relation_type: 'annotation',
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
@@ -251,7 +251,7 @@ describe('EntryDetailView', () => {
   })
 
   it('revises an entry by appending a version, leaving the original row untouched', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -269,13 +269,13 @@ describe('EntryDetailView', () => {
       })
       // The entry itself is never rewritten; the version chain is what carries the change.
       cy.then(() => repository.getById(parent.id)).then((stored) => {
-        expect(stored?.content).to.equal(PARENT_TEXT)
+        expect(docToPlainText(stored!.content)).to.equal(PARENT_TEXT)
       })
     })
   })
 
   it('abandons a revision without touching the entry', () => {
-    seed({ content: PARENT_TEXT }).then((parent) => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -289,32 +289,16 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('creates an outgoing connection to another entry', () => {
-    seed({ content: 'Left my job' }).then((source) => {
-      seed({ content: 'Started the degree' }).then((destination) => {
-        mountDetail(source.id)
-
-        cy.findByText('Left my job').should('be.visible')
-
-        cy.findByLabelText('Connect to').select(destination.id)
-        cy.findByLabelText('How they relate').type('led_to')
-        cy.findByLabelText('Why they relate').type('One made the other possible')
-        cy.findByRole('button', { name: 'Add connection' }).click()
-
-        cy.findByRole('link', { name: 'led_to' }).should('be.visible')
-
-        cy.then(() => repository.listConnectionsFor(source.id)).then((connections) => {
-          expect(connections[0]?.target_id).to.equal(destination.id)
-        })
-      })
-    })
-  })
+  // "Navigates to a dedicated screen to add a connection" is proven in the Vitest browser spec
+  // only: `cy.mount`'s router is created inside the command and never handed back, so there's
+  // nothing here to inspect the post-navigation route on, unlike `createTestRouter()` called
+  // directly in a Vitest spec. Creating a connection itself is covered by NewConnectionView.cy.ts.
 
   it('renders an entry’s attachments from the media store', () => {
     cy.then(() =>
       media.put(new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' })),
     ).then((mediaRef) => {
-      seed({ content: PARENT_TEXT, media_refs: [mediaRef] }).then((parent) => {
+      seed({ content: PARENT_CONTENT, media_refs: [mediaRef] }).then((parent) => {
         mountDetail(parent.id)
 
         // A blob URL, minted from the media store for this page load. Regex because the id in it

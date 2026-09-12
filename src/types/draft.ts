@@ -11,10 +11,16 @@ import type { AuthoringStep, AuthoringTick, EntryDates } from './entry'
  *
  * It carries no relation type: whether the child reads as an annotation or an update is derived at
  * seal time from what was actually anchored, so there is nothing for a session to decide up front.
+ *
+ * `new_connection` reuses `parent_id`/`target_id` rather than inventing `from_id`/`to_id`: those are
+ * exactly the `Entry` fields a connection writes (ENTRY_MODEL.md, "Connections" — `parent_id` is the
+ * source, `target_id` the destination), so naming them the same way here means nothing downstream
+ * that reads `target.parent_id` generically (`DraftsView.vue`'s `parentIdOf`) needs a special case.
  */
 export type DraftTarget =
   | { kind: 'new_root' }
   | { kind: 'new_child'; parent_id: string }
+  | { kind: 'new_connection'; parent_id: string; target_id: string }
   | { kind: 'revision'; parent_id: string }
 
 /**

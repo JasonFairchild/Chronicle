@@ -1,4 +1,5 @@
 import TimelineCard from '@/components/TimelineCard.vue'
+import { textContent } from '@/domain/entryDocument'
 import { emptyEntryDates, type AggregatedEntry } from '@/types/entry'
 
 const CREATED_AT = '2026-01-01T00:00:00.000Z'
@@ -9,7 +10,7 @@ function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEnt
     created_at: CREATED_AT,
     dates: emptyEntryDates(),
     title: null,
-    content: 'A quiet morning',
+    content: textContent('A quiet morning'),
     media_refs: [],
     metadata: {},
     version: { index: 1, total: 1, at: CREATED_AT, revision_id: null },
@@ -51,7 +52,7 @@ describe('TimelineCard', () => {
   it('reports how many times a revised entry has changed', () => {
     mountCard(
       makeAggregated({
-        content: 'A quiet morning, reworded',
+        content: textContent('A quiet morning, reworded'),
         version: { index: 3, total: 3, at: CREATED_AT, revision_id: 'revision-2' },
       }),
     )

@@ -3,7 +3,6 @@ import {
   addedAnchorIds,
   anchorRefsFor,
   collectAnchors,
-  readAnchorRefs,
   relationTypeForAnchors,
   resolveAnchors,
 } from '@/domain/anchors'
@@ -241,26 +240,5 @@ describe('relationTypeForAnchors', () => {
     })
 
     expect(relationTypeForAnchors(['gone'], content)).toBe('annotation')
-  })
-})
-
-describe('readAnchorRefs', () => {
-  it('accepts a well-formed list of anchor references', () => {
-    const value = [{ anchor_id: 'a1', quote: 'meeting' }]
-
-    expect(readAnchorRefs(value)).toEqual(value)
-  })
-
-  it('drops the legacy op shape rather than throwing, since it has no id to resolve', () => {
-    const legacy = [
-      { kind: 'strike', at: { from: 0, to: 4, base_version_id: null, quote: 'The ' } },
-    ]
-
-    expect(readAnchorRefs(legacy)).toEqual([])
-  })
-
-  it('treats anything that is not an array as no anchors at all', () => {
-    expect(readAnchorRefs(undefined)).toEqual([])
-    expect(readAnchorRefs(null)).toEqual([])
   })
 })

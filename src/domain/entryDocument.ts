@@ -51,26 +51,24 @@ export const ANCHOR_INSERT_NODE = 'anchorInsert'
 const INLINE_NODES = new Set(['text', 'hardBreak', ANCHOR_INSERT_NODE])
 
 /**
- * Reads stored content as a document.
+ * Reads stored content as a document. `Entry.content` is always a real serialized document — see
+ * CLAUDE.md, "No backward compatibility" — so invalid content is a real bug and throws rather than
+ * being silently reinterpreted.
  *
- * A string that is not a serialized document is treated as one paragraph per line. That is what
- * every entry written before the editor existed looks like, and it means old rows keep working
- * without a migration pass over the database.
+ * The empty string is the one exception, not a format to sniff: every session ref that will hold a
+ * document starts life as `ref('')`, before an editor has mounted or a draft has been typed into,
+ * and that transient not-yet-anything state never reaches storage (`requireContent` refuses to save
+ * an empty document). It reads as a blank document rather than throwing.
  */
 export function parseDocument(content: string | EntryDocument): EntryDocument {
   if (typeof content !== 'string') return content
+  if (content === '') return emptyDocument()
 
-  const trimmed = content.trim()
-  if (trimmed.startsWith('{')) {
-    try {
-      const parsed: unknown = JSON.parse(trimmed)
-      if (isEntryDocument(parsed)) return parsed
-    } catch {
-      // Not JSON after all, so it is prose that happens to start with a brace.
-    }
+  const parsed: unknown = JSON.parse(content)
+  if (!isEntryDocument(parsed)) {
+    throw new Error('Stored content is not a serialized document')
   }
-
-  return plainTextDocument(content)
+  return parsed
 }
 
 export function serializeDocument(doc: EntryDocument): string {
@@ -90,6 +88,15 @@ export function plainTextDocument(text: string, title?: string | null): EntryDoc
     : []
 
   return { type: 'doc', content: [...heading, ...paragraphs] }
+}
+
+/**
+ * Plain text as stored content — the real document `Entry.content` always holds, built from a body
+ * and an optional title. The one deliberate, named way to turn plain text into a document, used by
+ * the store's simple non-session creation methods and by tests that don't care about rich formatting.
+ */
+export function textContent(body: string, title?: string | null): string {
+  return serializeDocument(plainTextDocument(body, title))
 }
 
 /**
@@ -215,24 +222,6 @@ function isEntryDocument(value: unknown): value is EntryDocument {
   if (typeof value !== 'object' || value === null) return false
   const candidate = value as Partial<EntryDocument>
   return candidate.type === 'doc' && Array.isArray(candidate.content)
-}
-
-/**
- * Whether stored content is a real serialized document rather than legacy plain text.
- *
- * The distinction matters exactly once, when a revision decides where its `media_refs` come from.
- * A document knows which blobs it depends on, so it is the authority; plain text knows nothing, so
- * the previous version's list has to be carried forward instead of being derived away to nothing.
- */
-export function isSerializedDocument(content: string): boolean {
-  const trimmed = content.trim()
-  if (!trimmed.startsWith('{')) return false
-
-  try {
-    return isEntryDocument(JSON.parse(trimmed))
-  } catch {
-    return false
-  }
 }
 
 /**

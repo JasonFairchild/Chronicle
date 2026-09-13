@@ -187,6 +187,49 @@ describe('EntryDetailView (browser)', () => {
     expect(children[0]?.relation_type).toBe('annotation')
   })
 
+  it('will not save a related entry that says nothing', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Create related entry' }).click()
+
+    // Typed into and then emptied: the document is no longer the blank one the session opened
+    // with, but it still holds nothing worth keeping.
+    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await userEvent.keyboard('x{Backspace}')
+
+    await expect.element(screen.getByRole('button', { name: 'Add entry' })).toBeDisabled()
+    expect(await repository.listChildren(parent.id)).toEqual([])
+
+    await screen.getByRole('button', { name: 'Discard' }).click()
+    await vi.waitFor(async () => {
+      expect(await drafts.list()).toEqual([])
+    })
+  })
+
+  it('keeps a related entry in progress when the reader moves to another entry', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const other = await repository.create(
+      createEntryInput({ content: textContent('A different day entirely') }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Create related entry' }).click()
+
+    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await userEvent.keyboard('Half a thought about this')
+
+    // The session has to close — saving after this would seal against the wrong entry — but
+    // closing it is not the same as throwing it away.
+    await screen.rerender({ id: other.id })
+
+    await vi.waitFor(async () => {
+      const [draft] = await drafts.list()
+      expect(draft?.target).toEqual({ kind: 'new_child', parent_id: parent.id })
+      expect(docToPlainText(draft!.content)).toBe('Half a thought about this')
+    })
+  })
+
   it('anchors a strike to the passage the user selects, in one atomic seal', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 

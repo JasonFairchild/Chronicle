@@ -1,4 +1,5 @@
 import EntryDetailView from '@/views/EntryDetailView.vue'
+import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import type { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
 import {
@@ -14,14 +15,15 @@ import { createEntryInput, type Entry } from '@/types/entry'
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
 
-function mountDetail(id: string): void {
-  cy.mount(EntryDetailView, { props: { id }, routePath: '/' })
+function mountDetail(id: string): Cypress.Chainable {
+  return cy.mount(EntryDetailView, { props: { id }, routePath: '/' })
 }
 
 // A fresh, isolated real repository per test, pointed at by the composition root, so the mounted
 // component's own useEntriesStore() call reaches the same instance this file seeds into.
 let repository: DexieEntryRepository
 let media: OpfsMediaRepository
+let drafts: DexieDraftRepository
 
 /** Seeds the active repository and yields the created entry to the chain. */
 function seed(input: Parameters<typeof createEntryInput>[0]): Cypress.Chainable<Entry> {
@@ -32,7 +34,7 @@ describe('EntryDetailView', () => {
   beforeEach(() => {
     repository = freshEntryRepository()
     media = freshMediaRepository()
-    freshDraftRepository()
+    drafts = freshDraftRepository()
   })
 
   it('renders the entry’s own text', () => {
@@ -166,6 +168,44 @@ describe('EntryDetailView', () => {
         expect(children[0]?.anchors).to.deep.equal([])
         // Nothing was marked, so the note claims nothing changed about the entry.
         expect(children[0]?.relation_type).to.equal('annotation')
+      })
+    })
+  })
+
+  it('will not save a related entry that says nothing', () => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Create related entry' }).click()
+
+      // Typed into and then emptied: the document is no longer the blank one the session opened
+      // with, but it still holds nothing worth keeping.
+      cy.findByRole('textbox', { name: 'Your note' }).type('x{backspace}')
+
+      cy.findByRole('button', { name: 'Add entry' }).should('be.disabled')
+      cy.then(() => repository.listChildren(parent.id)).then((children) => {
+        expect(children).to.have.length(0)
+      })
+      cy.findByRole('button', { name: 'Discard' }).click()
+    })
+  })
+
+  it('keeps a related entry in progress when the reader moves to another entry', () => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
+      seed({ content: textContent('A different day entirely') }).then((other) => {
+        mountDetail(parent.id).then(({ wrapper }) => {
+          cy.findByRole('button', { name: 'Create related entry' }).click()
+          cy.findByRole('textbox', { name: 'Your note' }).type('Half a thought about this')
+
+          // The session has to close — saving after this would seal against the wrong entry — but
+          // closing it is not the same as throwing it away.
+          cy.then(() => wrapper.setProps({ id: other.id }))
+        })
+
+        cy.then(() => drafts.list()).then((saved) => {
+          expect(saved[0]?.target).to.deep.equal({ kind: 'new_child', parent_id: parent.id })
+          expect(docToPlainText(saved[0]!.content)).to.equal('Half a thought about this')
+        })
       })
     })
   })

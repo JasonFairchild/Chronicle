@@ -15,7 +15,7 @@
     "test:browser:open": "vitest --project browser --browser.headless=false",
     "test:watch": "vitest --project unit",
     "test:coverage": "vitest run --project unit --project browser --coverage",
-    "cy": "set ELECTRON_RUN_AS_NODE=&& cypress open --component",
+    "cy": "set ELECTRON_RUN_AS_NODE=&& cypress open --component --browser=chrome",
     "cy:run": "set ELECTRON_RUN_AS_NODE=&& cypress run --component --browser=chrome",
     "typecheck": "vue-tsc -b",
     "lint": "eslint .",

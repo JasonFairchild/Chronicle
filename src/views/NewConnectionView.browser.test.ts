@@ -104,6 +104,31 @@ describe('NewConnectionView (browser)', () => {
     })
   })
 
+  it('keeps a half-written connection when the screen is left without discarding it', async () => {
+    const source = await repository.create(
+      createEntryInput({ content: textContent('Left my job') }),
+    )
+    const destination = await repository.create(
+      createEntryInput({ content: textContent('Started the degree') }),
+    )
+
+    const { screen } = await mountNewConnection(source.id)
+    await screen.getByLabelText('Connect to').selectOptions(destination.id)
+    await screen.getByRole('textbox', { name: 'New connection' }).fill('These rhyme, somehow')
+
+    // Navigating away is not discarding. Only the Discard button throws work away.
+    screen.unmount()
+
+    await vi.waitFor(async () => {
+      const [draft] = await drafts.list()
+      expect(draft?.target).toEqual({
+        kind: 'new_connection',
+        parent_id: source.id,
+        target_id: destination.id,
+      })
+    })
+  })
+
   it('says there is nothing to connect to rather than showing an empty picker', async () => {
     const source = await repository.create(
       createEntryInput({ content: textContent('Left my job') }),

@@ -87,6 +87,34 @@ describe('useDraftsStore', () => {
     expect(flushed?.steps).toHaveLength(1)
   })
 
+  it('leaves a snapshot pending when its write fails, rather than retiring it unwritten', async () => {
+    vi.useFakeTimers()
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+
+    // A full disk, a blocked database, a private window evicting storage — rare, but the snapshot
+    // is only in memory until this call lands.
+    const save = vi.spyOn(draftRepository, 'save').mockRejectedValueOnce(new Error('Quota'))
+
+    store.recordChange(sessionId, {
+      content: textContent('It rained all day.'),
+      steps: [{ stepType: 'replace' }],
+    })
+    await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(await draftRepository.getById(sessionId)).toBeNull()
+    expect(store.error).toBe('Quota')
+
+    // Still pending, so the next chance to write takes it — here, the composer closing. Counting
+    // the failed attempt as written would have retired these words unsaved.
+    await store.abandonDraft(sessionId)
+
+    expect(docToPlainText((await draftRepository.getById(sessionId))!.content)).toBe(
+      'It rained all day.',
+    )
+  })
+
   it('keeps the dates alongside the words, so a reload loses neither', async () => {
     vi.useFakeTimers()
     const store = useDraftsStore()

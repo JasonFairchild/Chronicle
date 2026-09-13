@@ -7,6 +7,19 @@ non-negotiable; immutability and reconstructible history are the core feature, n
 Stack: Vue 3 + TypeScript + Vite, Tailwind (dark-mode ready), Pinia, Vue Router, TipTap,
 vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser Mode) + Cypress CT.
 
+## One command per call. No pipelines.
+
+This is the rule most often broken, so it goes first.
+
+A permission rule matches a **whole** command string. `Bash(npm run:*)` does not cover
+`npm run test:browser 2>&1 | tail -20`, and covers `... && npm test` even less — the allowlist sees
+one unlisted compound, and prompts. Every `| tail`, `| grep`, `| head`, `&&`, and `;` is another
+prompt, whatever the pieces are.
+
+So: **run one command and read its output.** Not `| tail -20` — read the whole thing. Two things to
+run means two calls. Reach for Read, Grep and Glob before the shell at all; they never prompt, and
+they are better tools than `cat`, `grep` and `find` for the same job.
+
 ## The other docs — read the relevant one before changing that area
 
 | Doc               | Authority on                        | Read before                                              |
@@ -32,8 +45,6 @@ vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser 
 - No hard-coded colors that block dark mode.
 - Small, focused changes, in code an employer can read and I can explain.
 - When two options are equally good, take the one that costs less context.
-- Prefer one shell command over a pipeline. Every binary in a chain must be allowlisted, so a stray
-  `| sed` or `; echo` triggers a permission prompt. Use Read/Grep/Glob, not `cat`/`grep`/`find`.
 - Commit messages: a subject line, then only what the diff can't say — why a choice was made, and
   anything a reviewer couldn't discover from the code. No tour of the changes.
 - **No backward compatibility until we deliberately decide it's needed.** This includes entries

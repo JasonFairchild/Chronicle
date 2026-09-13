@@ -2,13 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
-import EntryDatesFields from '@/components/EntryDatesFields.vue'
+import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useMedia } from '@/composables/useMedia'
 import { docToPlainText, hasTitleNode } from '@/domain/entryDocument'
 import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
-import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { entryLabel, entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
 
@@ -18,7 +17,6 @@ const props = defineProps<{
 
 const router = useRouter()
 const store = useEntriesStore()
-const drafts = useDraftsStore()
 const media = useMedia()
 const loading = ref(true)
 /** Set when the entry itself couldn't be fetched; exclusive with showing the article at all. */
@@ -42,13 +40,8 @@ const revisionAffectedAnchorIds = ref<string[]>([])
  * exclusive with `revisionSession`: ENTRY_MODEL.md is explicit that the two creation experiences
  * are never offered in the same sitting, and hiding each control while the other is open is what
  * enforces that in the UI rather than merely documenting it.
- *
- * `useDraftSession` covers the child's own prose (`childSession.content`); the parent gaining
- * provisional anchors is a second document `useDraftSession` doesn't know about, tracked here
- * alongside it and pushed into the same underlying draft via `recordParentChange`.
  */
 const childSession = useDraftSession()
-const childParentContent = ref('')
 
 /** Two columns of readable width need more room than the page gives by default. */
 const layoutWidth = useLayoutWidth()
@@ -142,7 +135,6 @@ function resetRevisionState(): void {
 /** Discards an in-progress anchor-mode session rather than leaving it open. */
 function resetChildState(): void {
   childSession.reset()
-  childParentContent.value = ''
 }
 
 onMounted(() => {
@@ -231,20 +223,7 @@ function startRelatedEntry(): void {
   const current = aggregated.value
   if (!current) return
 
-  childParentContent.value = current.content
   childSession.begin({ kind: 'new_child', parent_id: props.id }, { parentContent: current.content })
-}
-
-/** The parent's own document, tracked outside `childSession` — see its declaration above. */
-function handleParentAnchorChange(change: EditorChange): void {
-  if (!childSession.sessionId) return
-
-  childParentContent.value = change.content
-  drafts.recordParentChange(childSession.sessionId, {
-    content: change.content,
-    steps: change.steps,
-    anchorIds: change.anchorIds ?? [],
-  })
 }
 
 async function saveChildEntry(): Promise<void> {
@@ -400,64 +379,11 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         </template>
 
         <template v-else-if="childSession.isOpen">
-          <div class="grid gap-6 lg:grid-cols-2">
-            <section>
-              <h2 class="mb-2 text-sm font-medium">This entry</h2>
-              <p class="mb-2 text-sm text-[var(--color-text-muted)]">
-                Select a passage and mark it, or place the cursor and propose wording. Surrounding
-                text cannot be changed from here.
-              </p>
-
-              <DocumentEditor
-                label="Entry being annotated"
-                anchor-mode
-                :with-title="entryHasTitle"
-                :content="childParentContent"
-                :disabled="childSession.saving"
-                @change="handleParentAnchorChange"
-              />
-            </section>
-
-            <section>
-              <h2 class="mb-2 text-sm font-medium">The related entry</h2>
-              <p class="mb-2 text-sm text-[var(--color-text-muted)]">
-                Marking a passage is optional — with nothing marked this becomes a note about the
-                entry as a whole.
-              </p>
-
-              <EntryDatesFields
-                :model-value="childSession.dates"
-                :disabled="childSession.saving"
-                @update:model-value="childSession.handleDatesChange"
-              />
-
-              <DocumentEditor
-                label="Your note"
-                :content="childSession.content"
-                :disabled="childSession.saving"
-                @change="childSession.handleChange"
-              />
-
-              <div class="mt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
-                  :disabled="childSession.saving"
-                  @click="cancelChildEntry"
-                >
-                  Discard
-                </button>
-                <button
-                  type="button"
-                  class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                  :disabled="childSession.saving || !childSession.content.trim()"
-                  @click="saveChildEntry"
-                >
-                  Add entry
-                </button>
-              </div>
-            </section>
-          </div>
+          <RelatedEntryComposer
+            :session="childSession"
+            @save="saveChildEntry"
+            @discard="cancelChildEntry"
+          />
         </template>
 
         <template v-else>

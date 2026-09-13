@@ -8,7 +8,14 @@ export default defineConfig({
       bundler: 'vite',
       viteConfig: {
         ...viteConfig,
-        server: { port: 5174 },
+        /*
+          Well clear of 5173 and the ports Vite walks up to from it when they're taken. A dev
+          server sitting on this one does not collide loudly: every spec fails identically with
+          "Failed to fetch dynamically imported module" before any test runs, which reads exactly
+          like the dep-cache race below and is nothing of the kind. `strictPort` does not help —
+          it never fires, since Cypress is serving the specs rather than this port's listener.
+        */
+        server: { port: 5199 },
         /*
           Cypress's own dep pre-bundle, kept out of the `node_modules/.vite` the dev server uses.
 

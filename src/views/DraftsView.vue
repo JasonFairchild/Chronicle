@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DocumentEditor from '@/components/DocumentEditor.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
+import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
+import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { hasTitleNode, isEmptyDocument, previewText } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
@@ -20,6 +22,28 @@ const error = ref<string | null>(null)
 
 /** What each draft is attached to, so the list can name it rather than just describe its kind. */
 const parentLabels = ref<Record<string, string>>({})
+
+/**
+ * Whether the open session is an anchor-mode one. Resuming a draft has to reopen the experience it
+ * was left in, and a `new_child` session is two documents side by side — reopening only the note
+ * would strand the anchors already placed on the parent with no way back to them.
+ */
+const anchorModeOpen = computed(
+  () =>
+    drafts.drafts.find((draft) => draft.session_id === session.sessionId)?.target.kind ===
+    'new_child',
+)
+
+/** Two columns of readable width need more room than the page gives by default. */
+const layoutWidth = useLayoutWidth()
+
+watch(anchorModeOpen, (open) => {
+  layoutWidth.value = open ? 'wide' : 'normal'
+})
+
+onBeforeUnmount(() => {
+  layoutWidth.value = 'normal'
+})
 
 onMounted(() => {
   void refresh()
@@ -147,7 +171,14 @@ async function discard(sessionId: string): Promise<void> {
           </time>
         </div>
 
-        <template v-if="session.sessionId === draft.session_id">
+        <RelatedEntryComposer
+          v-if="session.sessionId === draft.session_id && anchorModeOpen"
+          :session="session"
+          @save="seal"
+          @discard="discard(draft.session_id)"
+        />
+
+        <template v-else-if="session.sessionId === draft.session_id">
           <EntryDatesFields
             :model-value="session.dates"
             :disabled="session.saving"

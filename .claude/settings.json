@@ -12,6 +12,7 @@
       "Bash(npm install)",
       "Bash(npm ls:*)",
       "Bash(npm outdated:*)",
+      "Bash(npm view:*)",
       "Bash(npx vue-tsc:*)",
       "Bash(npx tsc:*)",
       "Bash(npx vitest:*)",

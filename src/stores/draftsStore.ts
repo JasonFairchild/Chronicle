@@ -258,6 +258,19 @@ export const useDraftsStore = defineStore('drafts', () => {
     entry.flushing = write
     try {
       await write
+    } catch (err) {
+      // The snapshot never reached disk, so it is still pending. `dirty` was cleared optimistically
+      // above to keep a burst of typing from queueing a second write of the same state; leaving it
+      // cleared after a failure would retire these words unwritten, and a session that has stopped
+      // typing would never try again. Restoring it means the next flush — the next keystroke, or
+      // the composer closing — carries them.
+      //
+      // Deliberately not rescheduling here: a permanently full disk would turn that into a write
+      // attempt every 300ms for as long as the tab is open. And deliberately not rethrown, since
+      // every caller reaches this through `void flush(...)` or a fire-and-forget abandon, where a
+      // rejection becomes an unhandled one rather than anything anybody sees.
+      entry.dirty = true
+      error.value = toErrorMessage(err, 'Failed to save draft')
     } finally {
       if (entry.flushing === write) entry.flushing = null
     }

@@ -1,60 +1,45 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import DocumentEditor from '@/components/DocumentEditor.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
-import { isEmptyDocument } from '@/domain/entryDocument'
-import { useDraftsStore } from '@/stores/draftsStore'
-import { emptyEntryDates, type EntryDates } from '@/types/entry'
+import { useDraftSession } from '@/composables/useDraftSession'
 import { toErrorMessage } from '@/utils/format'
 
 const props = defineProps<{
   disabled?: boolean
 }>()
 
-const drafts = useDraftsStore()
-
 /**
  * Typing here is a draft session, not an entry. Nothing reaches the entries table until someone
  * presses Save, and nothing is lost in the meantime: the buffer flushes on a short debounce, so a
  * closed laptop costs a fraction of a sentence rather than the whole thought.
+ *
+ * Opened immediately rather than on the first keystroke: the session has to exist before the editor
+ * can report into it, and an untouched one costs nothing — nothing is written until something is
+ * typed, and `abandon` below drops a session nobody used.
  */
-const sessionId = ref(drafts.beginDraft({ kind: 'new_root' }))
-const content = ref('')
-const dates = ref<EntryDates>(emptyEntryDates())
-const saving = ref(false)
+const session = useDraftSession()
+session.begin({ kind: 'new_root' })
+
 const error = ref<string | null>(null)
 
-const canSave = computed(() => !isEmptyDocument(content.value) && !props.disabled && !saving.value)
-
-function handleChange(change: EditorChange): void {
-  content.value = change.content
-  drafts.recordChange(sessionId.value, change)
-}
-
-function handleDatesChange(next: EntryDates): void {
-  dates.value = next
-  drafts.recordDates(sessionId.value, next)
-}
+/** The session's own condition, plus the two this composer adds: not busy, not switched off. */
+const canSave = computed(() => session.canSave && !props.disabled && !session.saving)
 
 async function handleSubmit(): Promise<void> {
   if (!canSave.value) return
 
-  saving.value = true
   error.value = null
 
   try {
     // Sealing refreshes the timeline through the entries store, so there is nothing to tell a
     // parent about: the outcome is already visible wherever entries are read.
-    await drafts.sealDraft(sessionId.value)
+    if (!(await session.save())) return
     // A sealed session is finished. The next entry is a new one, and re-keying the editor is what
     // gives it a genuinely empty document rather than a cleared-out old one.
-    sessionId.value = drafts.beginDraft({ kind: 'new_root' })
-    content.value = ''
-    dates.value = emptyEntryDates()
+    session.begin({ kind: 'new_root' })
   } catch (err) {
     error.value = toErrorMessage(err, 'Failed to save entry')
-  } finally {
-    saving.value = false
   }
 }
 
@@ -62,7 +47,7 @@ async function handleSubmit(): Promise<void> {
 // was opened and never typed into, there is nothing to keep, so the session is dropped rather
 // than left open forever.
 onBeforeUnmount(() => {
-  void drafts.abandonDraft(sessionId.value)
+  void session.abandon()
 })
 </script>
 
@@ -74,17 +59,17 @@ onBeforeUnmount(() => {
     <p class="mb-2 text-sm font-medium">New entry</p>
 
     <EntryDatesFields
-      :model-value="dates"
-      :disabled="disabled || saving"
-      @update:model-value="handleDatesChange"
+      :model-value="session.dates"
+      :disabled="disabled || session.saving"
+      @update:model-value="session.handleDatesChange"
     />
 
     <DocumentEditor
-      :key="sessionId"
+      :key="session.sessionId ?? ''"
       label="New entry"
       with-title
-      :disabled="disabled || saving"
-      @change="handleChange"
+      :disabled="disabled || session.saving"
+      @change="session.handleChange"
     />
 
     <p v-if="error" class="mt-2 text-sm text-[var(--color-error)]" role="alert">{{ error }}</p>

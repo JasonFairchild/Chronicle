@@ -6,6 +6,7 @@ import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { renderComponent } from '@/testing/renderComponent'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
+import { withAnchorMark } from '@/testing/anchorFixtures'
 import type { Draft } from '@/types/draft'
 import { createEntryInput, emptyEntryDates } from '@/types/entry'
 
@@ -86,6 +87,49 @@ describe('DraftsView (browser)', () => {
     await expect
       .element(screen.getByText('Related entry on “The meeting went badly”'))
       .toBeVisible()
+  })
+
+  it('reopens a related-entry draft on both halves, not the note alone', async () => {
+    const parent = await entries.create(
+      createEntryInput({ content: textContent('I went to Lake Tahoe with Dad') }),
+    )
+    await drafts.save(
+      makeDraft({
+        session_id: 'session-1',
+        target: { kind: 'new_child', parent_id: parent.id },
+        content: textContent('Wrong lake'),
+        parent_content: withAnchorMark(
+          'I went to Lake Tahoe with Dad',
+          'anchor-1',
+          10,
+          20,
+          'strike',
+        ),
+        anchor_ids: ['anchor-1'],
+      }),
+    )
+
+    const screen = mountDrafts()
+    await screen.getByRole('button', { name: 'Resume' }).click()
+
+    // An anchor-mode session edits two documents at once, and leaving it is not the same as
+    // finishing it: the parent it was marking has to come back with it.
+    await expect.element(screen.getByRole('heading', { name: 'This entry' })).toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Entry being annotated' }))
+      .toBeVisible()
+    await expect.element(screen.getByRole('textbox', { name: 'Your note' })).toBeVisible()
+
+    await screen.getByRole('button', { name: 'Add entry' }).click()
+
+    await vi.waitFor(async () => {
+      expect(await entries.listChildren(parent.id)).toHaveLength(1)
+    })
+
+    // The anchor placed before the reload is still the one the sealed child refers to.
+    const [child] = await entries.listChildren(parent.id)
+    expect(child?.anchors[0]?.quote).toBe('Lake Tahoe')
+    expect(child?.relation_type).toBe('update')
   })
 
   it('discards a draft on request, the one thing that removes work', async () => {

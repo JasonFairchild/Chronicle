@@ -1,19 +1,21 @@
 import NewConnectionView from '@/views/NewConnectionView.vue'
 import { textContent } from '@/domain/entryDocument'
+import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { createEntryInput } from '@/types/entry'
 
-function mountNewConnection(id: string): void {
-  cy.mount(NewConnectionView, { props: { id }, routePath: `/entries/${id}/connect` })
+function mountNewConnection(id: string): Cypress.Chainable {
+  return cy.mount(NewConnectionView, { props: { id }, routePath: `/entries/${id}/connect` })
 }
 
 let repository: DexieEntryRepository
+let drafts: DexieDraftRepository
 
 describe('NewConnectionView', () => {
   beforeEach(() => {
     repository = freshEntryRepository()
-    freshDraftRepository()
+    drafts = freshDraftRepository()
   })
 
   it('creates a connection with a title, dates, and rich content, then returns to the source entry', () => {
@@ -86,6 +88,32 @@ describe('NewConnectionView', () => {
         // it for unmount to clean up fire-and-forget, keeps that write from racing this test's
         // own isolated database being torn down right after.
         cy.findByRole('button', { name: 'Discard' }).click()
+      })
+    })
+  })
+
+  it('keeps a half-written connection when the screen is left without discarding it', () => {
+    cy.then(() =>
+      repository.create(createEntryInput({ content: textContent('Left my job') })),
+    ).then((source) => {
+      cy.then(() =>
+        repository.create(createEntryInput({ content: textContent('Started the degree') })),
+      ).then((destination) => {
+        mountNewConnection(source.id).then(({ wrapper }) => {
+          cy.findByLabelText('Connect to').select(destination.id)
+          cy.findByRole('textbox', { name: 'New connection' }).type('These rhyme, somehow')
+
+          // Navigating away is not discarding. Only the Discard button throws work away.
+          cy.then(() => wrapper.unmount())
+        })
+
+        cy.then(() => drafts.list()).then((saved) => {
+          expect(saved[0]?.target).to.deep.equal({
+            kind: 'new_connection',
+            parent_id: source.id,
+            target_id: destination.id,
+          })
+        })
       })
     })
   })

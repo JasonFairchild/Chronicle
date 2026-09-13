@@ -23,6 +23,15 @@ export function useDraftSession() {
   const content = ref('')
   const dates = ref<EntryDates>(emptyEntryDates())
   const saving = ref(false)
+  /**
+   * The parent document as an anchor-mode session has provisionally marked it — the second document
+   * such a session edits (`Draft.parent_content`), empty for every other target.
+   *
+   * It lives here rather than beside the session in whichever view opened it because resuming is
+   * what makes the difference: a view that tracked it separately would restore the child's prose
+   * from the draft and silently leave the parent half behind.
+   */
+  const parentContent = ref('')
 
   const isOpen = computed(() => sessionId.value !== null)
 
@@ -32,6 +41,7 @@ export function useDraftSession() {
   /** Opens a brand-new session — nothing is written until the first real change. */
   function begin(target: DraftTarget, seed: { content?: string; parentContent?: string } = {}) {
     content.value = seed.content ?? ''
+    parentContent.value = seed.parentContent ?? ''
     dates.value = emptyEntryDates()
     sessionId.value = drafts.beginDraft(target, seed)
   }
@@ -42,6 +52,7 @@ export function useDraftSession() {
     if (!resumed) return null
 
     content.value = resumed.content
+    parentContent.value = resumed.parent_content ?? ''
     dates.value = resumed.dates ?? emptyEntryDates()
     sessionId.value = existingSessionId
     return resumed
@@ -53,6 +64,21 @@ export function useDraftSession() {
 
     content.value = change.content
     drafts.recordChange(sessionId.value, change)
+  }
+
+  /**
+   * Forwards one change to the **parent's** provisional document, anchor-mode only. `anchorIds` is
+   * the full set placed so far rather than a delta — see `draftsStore.recordParentChange`.
+   */
+  function handleParentChange(change: EditorChange): void {
+    if (!sessionId.value) return
+
+    parentContent.value = change.content
+    drafts.recordParentChange(sessionId.value, {
+      content: change.content,
+      steps: change.steps,
+      anchorIds: change.anchorIds ?? [],
+    })
   }
 
   /** Mirrors the dates a form holds into the session, so a reload keeps them too. */
@@ -82,6 +108,19 @@ export function useDraftSession() {
     }
   }
 
+  /**
+   * Closes the session because whatever opened it is going away, keeping whatever already reached
+   * disk — `draftsStore.abandonDraft` flushes what is pending and only drops a session nothing was
+   * ever typed into. The counterpart to `discard`, which is someone asking for the work to go.
+   */
+  async function abandon(): Promise<void> {
+    const id = sessionId.value
+    if (!id) return
+
+    sessionId.value = null
+    await drafts.abandonDraft(id)
+  }
+
   /** Throws the session away on request — an explicit "Discard" click. */
   async function discard(): Promise<void> {
     const id = sessionId.value
@@ -92,13 +131,20 @@ export function useDraftSession() {
   }
 
   /**
-   * Ends the session without a user action to await — navigating away, closing the view. Fire and
-   * forget, matching a session's own rule that a draft already on disk survives being abandoned.
+   * Ends the session without a user action to await — navigating away, switching to another entry,
+   * closing the view — and clears the local state behind it, for a view that stays mounted around
+   * a new one. Fire and forget, matching a session's own rule that a draft already on disk survives
+   * being abandoned.
+   *
+   * `abandon`, never `discard`: leaving a screen is not asking for the work to go. The reason the
+   * session has to close at all is that a save afterwards would seal against whichever entry the
+   * draft still points at, and that is a reason to stop holding it, not a reason to delete it. The
+   * drafts list is where it is picked up again.
    */
   function reset(): void {
-    if (sessionId.value) void drafts.discardDraft(sessionId.value)
-    sessionId.value = null
+    void abandon()
     content.value = ''
+    parentContent.value = ''
     dates.value = emptyEntryDates()
     saving.value = false
   }
@@ -106,6 +152,7 @@ export function useDraftSession() {
   return reactive({
     sessionId,
     content,
+    parentContent,
     dates,
     saving,
     isOpen,
@@ -113,8 +160,10 @@ export function useDraftSession() {
     begin,
     resume,
     handleChange,
+    handleParentChange,
     handleDatesChange,
     save,
+    abandon,
     discard,
     reset,
   })

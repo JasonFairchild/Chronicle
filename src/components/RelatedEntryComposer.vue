@@ -67,6 +67,7 @@ const parentHasTitle = computed(() => hasTitleNode(props.session.parentContent))
 
       <DocumentEditor
         label="Your note"
+        with-title
         :content="session.content"
         :disabled="session.saving"
         @change="session.handleChange"

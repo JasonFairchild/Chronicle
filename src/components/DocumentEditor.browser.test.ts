@@ -211,6 +211,24 @@ describe('DocumentEditor (browser)', () => {
     await expect.element(screen.getByText('We drove up on Friday.')).toBeVisible()
   })
 
+  it('shows a disabled entry’s title as text, not a textbox someone could try to type into', async () => {
+    const screen = mountEditor({
+      withTitle: true,
+      disabled: true,
+      content: serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe')),
+    })
+
+    expect(screen.getByRole('textbox', { name: 'Title' }).query()).toBeNull()
+    await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
+  })
+
+  it('omits the title entirely once it is not editable and was never given one', async () => {
+    const screen = mountEditor({ withTitle: true, disabled: true })
+
+    expect(screen.getByRole('textbox', { name: 'Title' }).query()).toBeNull()
+    expect(screen.getByText('Lake Tahoe').query()).toBeNull()
+  })
+
   it('stores an attached image in the media store and refers to it by id alone', async () => {
     const screen = mountEditor()
 

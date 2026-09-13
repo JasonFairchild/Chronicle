@@ -71,7 +71,7 @@ const props = withDefaults(
     label: string
     /** Seed content, serialized. Read once, on mount: the editor owns the document after that. */
     content?: string
-    /** Titled entries get the title field above the toolbar; child entries do not. */
+    /** Titled entries get the title field above the toolbar; untitled ones do not. */
     withTitle?: boolean
     disabled?: boolean
     /**
@@ -516,11 +516,15 @@ defineExpose({
       toolbar applies to it: a title is one line of plain text, and an ordinary `<input>` is the one
       thing no formatting command, markdown shortcut, or paste can turn into something else.
 
-      Read-only rather than disabled while the document is: a disabled input cannot be focused or
-      read out, and this is still the entry's name when it is only being displayed. Anchor mode gets
-      the same treatment for a stronger reason — nothing in the parent's document may change there.
+      Editable only when the title can actually change here. A `readonly` input still announces as a
+      textbox and still looks like somewhere to type, which is the confusion the static branch below
+      exists to avoid — for a document being merely displayed, or anchor mode, where nothing in the
+      parent's document may change.
     -->
-    <div v-if="withTitle" class="border-b border-[var(--color-border)] px-3 py-2">
+    <div
+      v-if="withTitle && !disabled && !anchorMode"
+      class="border-b border-[var(--color-border)] px-3 py-2"
+    >
       <label :for="`${label}-title`" class="sr-only">Title</label>
       <input
         :id="`${label}-title`"
@@ -528,11 +532,16 @@ defineExpose({
         class="w-full bg-transparent text-xl font-bold outline-none placeholder:font-normal placeholder:text-[var(--color-text-muted)]"
         placeholder="Title"
         :value="titleText"
-        :readonly="disabled || anchorMode"
         @input="handleTitleInput"
         @keydown.enter.prevent="focusBody"
         @keydown.tab.exact.prevent="focusBody"
       />
+    </div>
+    <div
+      v-else-if="withTitle && titleText"
+      class="border-b border-[var(--color-border)] px-3 py-2 text-xl font-bold"
+    >
+      {{ titleText }}
     </div>
 
     <div

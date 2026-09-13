@@ -64,6 +64,31 @@ describe('useEntriesStore', () => {
     expect(await entryRepository.listRootEntries()).toHaveLength(1)
   })
 
+  it('gives a related entry the title its own document carries', async () => {
+    const store = useEntriesStore()
+    const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
+
+    const draft: Draft = {
+      session_id: 'session-titled-child',
+      target: { kind: 'new_child', parent_id: parent.id },
+      started_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      content: serializeDocument(
+        titledDocument(plainTextDocument('Still think about this trip'), 'A later thought'),
+      ),
+      dates: emptyEntryDates(),
+      anchor_ids: [],
+      parent_content: null,
+      steps: [],
+      parent_steps: [],
+      ticks: [],
+    }
+
+    const sealed = await store.createFromDraft(draft, null)
+
+    expect(sealed.title).toBe('A later thought')
+  })
+
   it('returns aggregated entry state from the repository data', async () => {
     const store = useEntriesStore()
     const created = await store.createTextEntry('Root content')

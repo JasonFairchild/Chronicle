@@ -392,9 +392,9 @@ and genuinely so — the untitled case is the ordinary one, not an edge.
 This was briefly the other way, and the argument for requiring one was that lists need a handle.
 It does not survive contact with a daily journal: most of what gets written would only ever be
 named "Tuesday", and a mandatory field does not produce better names, it produces filler that makes
-the list it was meant to protect harder to read. Nor does requiring a title let any code go — child
-entries keep `title` null regardless, so every untitled-rendering path has to exist and work either
-way. What the rule bought was a save button that refused, and nothing else.
+the list it was meant to protect harder to read. Nor does requiring a title let any code go — an
+untitled entry is still routine even where a title is offered, so every untitled-rendering path has
+to exist and work either way. What the rule bought was a save button that refused, and nothing else.
 
 So a title is an affordance, offered wherever it makes sense and skipped without comment. Naming an
 entry falls to `entryLabel` (`utils/format.ts`): the title if it has one, otherwise the opening of

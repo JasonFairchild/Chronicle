@@ -73,8 +73,10 @@ either — they are names for what a note turned out to be, not a choice to make
   great deal of journal writing has none — a required field there produces "Tuesday" and "thoughts"
   rather than better names. Where only one line of an entry can be shown, it is named by its title
   if it has one and by its opening words otherwise.
-- Related entries (§4.4) are offered no title field at all. They are read as part of the entry they
-  are about, which is what names them.
+- Related entries (§4.4) get the same optional title field. A related entry can be substantial
+  enough to name in its own right — a later chapter of what the parent started, a major update, or
+  something closer to a connection entry that happens to pertain to one parent — and they are
+  anticipated as first-class in some timeline views (§6).
 - Above the writing area are two optional dates: when the thing **happened**, and when it was
   **originally written** somewhere else. Each takes a day, and beside it a free line of text for the
   time — "morning", "3:30 pm", "after dinner" — because that is how a paper journal says it and

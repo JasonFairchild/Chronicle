@@ -374,7 +374,6 @@ export const useEntriesStore = defineStore('entries', () => {
     })
   }
 
-  /** Children hide the title field and leave it null; the title belongs to the entry being read. */
   function childInput(
     content: string,
     parentId: string,
@@ -384,6 +383,7 @@ export const useEntriesStore = defineStore('entries', () => {
   ): CreateEntryInput {
     return createEntryInput({
       content,
+      title: docTitle(content),
       parent_id: parentId,
       relation_type: relationType,
       media_refs: collectMediaRefs(content),

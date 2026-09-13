@@ -26,7 +26,7 @@ export interface EntryDocument extends DocNode {
 }
 
 /**
- * The first node of a titled entry's document. Child entries omit it.
+ * The first node of a titled entry's document. Untitled entries omit it.
  *
  * Nothing in the editor's schema knows this node: a title is typed in its own plain field, and this
  * module is what joins that field's text to the body on its way to storage (`titledDocument`) and

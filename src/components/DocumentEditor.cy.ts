@@ -211,6 +211,27 @@ describe('DocumentEditor', () => {
     })
   })
 
+  it('shows a disabled entry’s title as text, not a textbox someone could try to type into', () => {
+    cy.mount(DocumentEditor, {
+      props: {
+        label: 'New entry',
+        withTitle: true,
+        disabled: true,
+        content: serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe')),
+      },
+    })
+
+    cy.findByRole('textbox', { name: 'Title' }).should('not.exist')
+    cy.findByText('Lake Tahoe').should('be.visible')
+  })
+
+  it('omits the title entirely once it is not editable and was never given one', () => {
+    cy.mount(DocumentEditor, { props: { label: 'New entry', withTitle: true, disabled: true } })
+
+    cy.findByRole('textbox', { name: 'Title' }).should('not.exist')
+    cy.findByText('Lake Tahoe').should('not.exist')
+  })
+
   it('turns a selection into a link at the address it is given', () => {
     const onChange = cy.stub().as('change')
 

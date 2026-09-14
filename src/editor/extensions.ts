@@ -1,9 +1,11 @@
 import { Extension, mergeAttributes, Mark, Node, type Extensions } from '@tiptap/core'
 import { Placeholder } from '@tiptap/extensions'
 import { Plugin } from '@tiptap/pm/state'
+import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { ANCHOR_INSERT_NODE, ANCHOR_MARK, MEDIA_NODE } from '@/domain/entryDocument'
-import { isAnchorEdit } from './anchorCommands'
+import AnchorInsertView from './AnchorInsertView.vue'
+import { addAnchorMark, createAnchorInsertStorage, isAnchorEdit } from './anchorCommands'
 
 /**
  * The editor schema: node and mark types, and the extensions list assembled from them.
@@ -105,10 +107,13 @@ const Anchor = Mark.create({
  * A collapsed anchor: wording a child entry proposes, at a position in the parent's document.
  *
  * A node rather than a mark because a mark cannot exist at a zero-width position, let alone carry
- * content of its own. An atom so the wording is placed and removed whole and can never be typed
- * into — it belongs to the child that proposed it, and the parent's editor is not where it gets
- * revised. `docToPlainText` skips it, which is what keeps an anchor non-destructive even though
- * this node really does hold text.
+ * content of its own. An atom so the wording is placed and removed whole rather than typed into
+ * character by character the way ordinary text is — `AnchorInsertView.vue`'s own `<input>` is where
+ * the actual typing happens, in the session that placed it. What this really defends is a *sealed*
+ * insert read in a different editor later — a text-mode revision rendering it, or another session
+ * opening the same parent — where it belongs to the child that proposed it and is not something that
+ * editor's own contenteditable can reach into. `docToPlainText` skips it either way, which is what
+ * keeps an anchor non-destructive even though this node really does hold text.
  */
 const AnchorInsert = Node.create({
   name: ANCHOR_INSERT_NODE,
@@ -137,12 +142,31 @@ const AnchorInsert = Node.create({
     return [{ tag: 'ins[data-anchor-id]' }]
   },
 
+  // The wording sits in its own inner span, separate from the `<ins>` wrapper — CSS positions the
+  // span inline today, with the dormant interlinear presentation (`DocumentEditor.vue`) able to
+  // raise it above the line, with a caret glyph on the baseline marking the insertion point,
+  // without a markup change. That caret is a CSS `::before` on the `<ins>` rather than a DOM node
+  // (and only rendered in interlinear mode — an inline caret would point at nothing), so it never
+  // reaches `textContent`, a copy, or `parseHTML` above — which keeps reading `element.textContent`
+  // and finds the nested span's text the same way it always found the flat text.
   renderHTML({ node, HTMLAttributes }) {
     return [
       'ins',
       mergeAttributes(HTMLAttributes, { class: 'chronicle-anchor-insert' }),
-      String(node.attrs.text ?? ''),
+      ['span', { class: 'chronicle-anchor-wording' }, String(node.attrs.text ?? '')],
     ]
+  },
+
+  // Which anchor's wording is open for editing right now — UI state, never a node attribute, so it
+  // can never reach the stored document. See `AnchorInsertStorage` (`anchorCommands.ts`) for why
+  // this has to be a `Ref` rather than a plain field.
+  addStorage: createAnchorInsertStorage,
+
+  // The Vue node view (`AnchorInsertView.vue`) is what gives committed and open wording one
+  // mechanism: the same node renders as plain text or as a live input depending on this storage,
+  // rather than the toolbar-and-field split the anchor menu replaces (Piece 1).
+  addNodeView() {
+    return VueNodeViewRenderer(AnchorInsertView)
   },
 })
 
@@ -159,7 +183,7 @@ export function entryExtensions({ anchorMode = false }: EntryExtensionOptions = 
     // read, render, and carry forward the anchors already in the document it is editing.
     Anchor,
     AnchorInsert,
-    ...(anchorMode ? [AnchorModeGuard] : []),
+    ...(anchorMode ? [AnchorMode] : []),
     /*
       An invitation to start, so it belongs only where nothing has been started: on the empty body,
       and never on an empty block inside writing that is already under way. Making a heading appends
@@ -178,19 +202,29 @@ export function entryExtensions({ anchorMode = false }: EntryExtensionOptions = 
 }
 
 /**
- * Installs `isAnchorEdit` (`anchorCommands.ts`) as a ProseMirror plugin's `filterTransaction`.
+ * Anchor mode's own extension: the guard that keeps the two creation experiences from mixing, plus
+ * the keyboard shortcuts that are now this mode's first-class entry point now that the fixed toolbar
+ * is gone (Piece 1, "Accessibility — the real cost of this change"). Named for both jobs since it no
+ * longer only guards.
  *
- * `filterTransaction` lives on a plugin spec, not on `EditorProps` — the DOM-facing options
- * (`handleKeyDown` and friends) TipTap types there — so the guard needs its own one-plugin
- * extension rather than a prop `useEditor` would accept directly. This is what makes "the two
- * creation experiences cannot be mixed" a property of the editor rather than a rule the UI is
- * trusted to follow: in anchor mode the only transactions that may change the document are the
- * anchor commands and undoing them, everything else rejected before it produces a step.
+ * The guard installs `isAnchorEdit` (`anchorCommands.ts`) as a ProseMirror plugin's
+ * `filterTransaction`, which lives on a plugin spec rather than on `EditorProps` — the DOM-facing
+ * options (`handleKeyDown` and friends) TipTap types there — so it needs its own one-plugin extension
+ * rather than a prop `useEditor` would accept directly. This is what makes "the two creation
+ * experiences cannot be mixed" a property of the editor rather than a rule the UI is trusted to
+ * follow: in anchor mode the only transactions that may change the document are the anchor commands
+ * and undoing them, everything else rejected before it produces a step.
  */
-const AnchorModeGuard = Extension.create({
-  name: 'anchorModeGuard',
+const AnchorMode = Extension.create({
+  name: 'anchorMode',
   addProseMirrorPlugins() {
     return [new Plugin({ filterTransaction: isAnchorEdit })]
+  },
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Alt-h': () => addAnchorMark(this.editor, 'comment') !== null,
+      'Mod-Alt-s': () => addAnchorMark(this.editor, 'strike') !== null,
+    }
   },
 })
 

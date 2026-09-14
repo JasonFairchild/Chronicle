@@ -262,7 +262,8 @@ function describeAnchor(resolved: ResolvedAnchor): string {
   }
 
   if (resolved.kind === 'comment') {
-    return resolved.quote ? `On “${resolved.quote}”` : 'On a point in the text'
+    const where = resolved.quote ? `“${resolved.quote}”` : 'a point in the text'
+    return resolved.insertion ? `On ${where}, adds “${resolved.insertion}”` : `On ${where}`
   }
 
   // No mark at all: a bare insertion with nothing struck.

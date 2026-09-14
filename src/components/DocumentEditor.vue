@@ -27,6 +27,7 @@ export interface EditorChange {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import type { Transaction } from '@tiptap/pm/state'
+import type { EditorView } from '@tiptap/pm/view'
 import {
   Bold,
   Eraser,
@@ -43,7 +44,7 @@ import {
   Undo2,
   type LucideIcon,
 } from '@lucide/vue'
-import { addedAnchorIds } from '@/domain/anchors'
+import { addedAnchorIds, collectAnchors, pairableAnchorAt } from '@/domain/anchors'
 import { anchorsAffectedBy } from '@/domain/anchorWarnings'
 import { useMedia } from '@/composables/useMedia'
 import {
@@ -53,17 +54,21 @@ import {
   sameContent,
   titledDocument,
   MEDIA_NODE,
+  type DocMark,
   type EntryDocument,
 } from '@/domain/entryDocument'
 import {
-  addAnchorInsert,
   addAnchorMark,
   anchorSpans,
   mapAnchorSpans,
+  openAnchorInsert,
+  readAnchorAnnouncement,
   type AnchorSpan,
 } from '@/editor/anchorCommands'
 import { entryExtensions } from '@/editor/extensions'
+import AnchorMenu from '@/components/AnchorMenu.vue'
 import { toErrorMessage } from '@/utils/format'
+import type { AnchorKind } from '@/types/entry'
 
 const props = withDefaults(
   defineProps<{
@@ -76,12 +81,15 @@ const props = withDefaults(
     disabled?: boolean
     /**
      * The other creation experience (ENTRY_MODEL.md, "Two creation experiences, kept separate").
-     * Surrounding text becomes unreachable — only the anchor toolbar below can change the
-     * document — and the ordinary formatting toolbar is replaced by it.
+     * Surrounding text becomes unreachable — only the anchor menu (`AnchorMenu.vue`) and the
+     * keyboard shortcuts it mirrors can change the document — and the ordinary formatting toolbar
+     * gives way to it.
      */
     anchorMode?: boolean
+    /** Id of an element describing how to use this editor, wired to `aria-describedby`. */
+    describedBy?: string
   }>(),
-  { content: '', withTitle: false, disabled: false, anchorMode: false },
+  { content: '', withTitle: false, disabled: false, anchorMode: false, describedBy: undefined },
 )
 
 const emit = defineEmits<{
@@ -119,6 +127,34 @@ let liveAnchorSpans: AnchorSpan[] = []
 /** Anchors this session has disturbed so far. Sticky: once flagged, an anchor stays flagged. */
 const affectedAnchorIds = new Set<string>()
 
+/**
+ * Two presentations for anchor wording exist in the CSS below: inline (trailing the marked text, in
+ * flow — what ships) and interlinear (raised above the caret, proofreader's-markup style, out of
+ * flow). Interlinear turned out to be tricky to get right — it wants to float "mainly placed with
+ * the caret" without pushing or overlapping trailing text, which a first attempt didn't land — so
+ * it's parked here rather than removed, for whenever there's a real display-setting to choose
+ * between them (PRODUCT.md, "Making anchor ops unmistakable": "Inline vs. interlinear wording
+ * placement is a second thing that same setting would choose").
+ */
+const ANCHOR_MARKUP_MODE: 'inline' | 'interlinear' = 'inline'
+
+/**
+ * `data-anchor-markup` only belongs on a document that actually carries an anchor — plain writing
+ * surfaces keep the ordinary line height regardless of which mode above is active. Read from
+ * whatever the document currently holds rather than only `initialDocument`, so an anchor placed
+ * mid-session (Piece 1) switches this on live, the same as one sealed earlier.
+ */
+function anchorMarkupAttr(document: EntryDocument): Record<string, string> {
+  return collectAnchors(document).length > 0 ? { 'data-anchor-markup': ANCHOR_MARKUP_MODE } : {}
+}
+
+/**
+ * What the polite live region below announces — see Piece 1, "Accessibility". The only feedback an
+ * anchor placement used to give was a colour change inside a contenteditable, invisible to
+ * assistive tech; this is read out for every placement instead.
+ */
+const liveRegionMessage = ref('')
+
 const editor = useEditor({
   // In anchor mode, `entryExtensions` installs the guard that lets through only the anchor
   // commands below and undo/redo of them — see `isAnchorEdit`. That is what makes "no child entry
@@ -133,7 +169,31 @@ const editor = useEditor({
       role: 'textbox',
       'aria-multiline': 'true',
       'aria-label': props.label,
-      class: 'chronicle-document min-h-32 outline-none',
+      // The anchor-mode modifier keeps the selection visibly painted even once focus leaves the
+      // editor for a menu control — see the `::selection` rule below, and `AnchorMenu`'s own
+      // `shouldShow` override for the analogous problem on the menu's own side.
+      class: props.anchorMode
+        ? 'chronicle-document chronicle-document--anchor min-h-32'
+        : 'chronicle-document min-h-32',
+      ...(props.describedBy ? { 'aria-describedby': props.describedBy } : {}),
+      ...anchorMarkupAttr(initialDocument),
+    },
+    handleTextInput: (view: EditorView, from: number, to: number, text: string): boolean => {
+      // Opening a wording session at the caret — see Piece 1, "Opening it: handleTextInput". Only
+      // an empty selection in anchor mode qualifies; anything else falls through to the guard,
+      // which rejects it like any other ordinary edit in this mode.
+      if (!props.anchorMode || from !== to) return false
+
+      const instance = editor.value
+      if (!instance) return false
+
+      const marksBefore = (view.state.doc.resolve(from).nodeBefore?.marks ?? []).map((mark) =>
+        mark.toJSON(),
+      ) as DocMark[]
+      const document = view.state.doc.toJSON() as EntryDocument
+      const pairWith = pairableAnchorAt(marksBefore, document, initialDocument) ?? undefined
+
+      return openAnchorInsert(instance, from, text, pairWith) !== null
     },
   },
   onUpdate: ({ editor: instance, transaction }) => {
@@ -154,6 +214,17 @@ const editor = useEditor({
         from,
         to,
       }))
+    }
+
+    if (collectAnchors(document).length > 0) {
+      instance.view.dom.setAttribute('data-anchor-markup', ANCHOR_MARKUP_MODE)
+    } else {
+      instance.view.dom.removeAttribute('data-anchor-markup')
+    }
+
+    if (props.anchorMode) {
+      const announcement = readAnchorAnnouncement(transaction)
+      if (announcement) liveRegionMessage.value = announcement.message
     }
 
     emit('change', {
@@ -250,32 +321,17 @@ function insertedTextOf(transaction: Transaction): string {
 }
 
 /**
- * Anchor mode's whole action set: select then comment or strike, or place the cursor and propose
- * wording. Nothing else is reachable here — see `filterTransaction` above.
+ * `AnchorMenu`'s one entry point back into the editor. The range is read explicitly rather than
+ * left to `addAnchorMark`'s own default, because the button that calls this lives in a menu whose
+ * own controls can hold focus — see `anchorCommands.ts`'s note on why the range is an explicit,
+ * optional parameter there.
  */
-const hasSelection = computed(() => Boolean(editor.value && !editor.value.state.selection.empty))
-const anchorText = ref('')
-/** The strike just placed, if any, so wording typed next pairs with it rather than standing alone. */
-const pendingStrikeId = ref<string | null>(null)
+function handleAnchorMark(kind: AnchorKind): void {
+  const instance = editor.value
+  if (!instance) return
 
-function commentSelection(): void {
-  if (!editor.value) return
-  addAnchorMark(editor.value, 'comment')
-  pendingStrikeId.value = null
-}
-
-function strikeSelection(): void {
-  if (!editor.value) return
-  pendingStrikeId.value = addAnchorMark(editor.value, 'strike')
-}
-
-function insertWording(): void {
-  const text = anchorText.value.trim()
-  if (!editor.value || !text) return
-
-  addAnchorInsert(editor.value, text, pendingStrikeId.value ?? undefined)
-  anchorText.value = ''
-  pendingStrikeId.value = null
+  const { from, to } = instance.state.selection
+  addAnchorMark(instance, kind, { from, to })
 }
 
 const linkOpen = ref(false)
@@ -529,7 +585,7 @@ defineExpose({
       <input
         :id="`${label}-title`"
         type="text"
-        class="w-full bg-transparent text-xl font-bold outline-none placeholder:font-normal placeholder:text-[var(--color-text-muted)]"
+        class="w-full rounded bg-transparent text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
         placeholder="Title"
         :value="titleText"
         @input="handleTitleInput"
@@ -544,57 +600,20 @@ defineExpose({
       {{ titleText }}
     </div>
 
-    <div
-      v-if="editor && anchorMode"
-      class="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-2 py-1.5"
-      role="toolbar"
-      :aria-label="`${label} anchor actions`"
-    >
-      <button
-        type="button"
-        class="rounded px-2 py-1 text-sm hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="disabled || !hasSelection"
-        @mousedown.prevent
-        @click="commentSelection"
-      >
-        Comment on selection
-      </button>
-      <button
-        type="button"
-        class="rounded px-2 py-1 text-sm hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="disabled || !hasSelection"
-        @mousedown.prevent
-        @click="strikeSelection"
-      >
-        Strike selection
-      </button>
+    <AnchorMenu v-if="editor && anchorMode" :editor="editor" @mark="handleAnchorMark" />
 
-      <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
-
-      <label :for="`${label}-anchor-insert`" class="text-sm text-[var(--color-text-muted)]">
-        {{ pendingStrikeId ? 'Replacement wording' : 'Insert wording here' }}
-      </label>
-      <input
-        :id="`${label}-anchor-insert`"
-        v-model="anchorText"
-        type="text"
-        :disabled="disabled || (hasSelection && !pendingStrikeId)"
-        class="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
-        @keyup.enter="insertWording"
-      />
-      <button
-        type="button"
-        class="rounded px-2 py-1 text-sm hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="disabled || (hasSelection && !pendingStrikeId) || !anchorText.trim()"
-        @mousedown.prevent
-        @click="insertWording"
-      >
-        Insert
-      </button>
-    </div>
+    <!--
+      A polite live region: the only feedback an anchor placement used to give was a colour change
+      inside a contenteditable, which assistive tech cannot see at all (Piece 1, "Accessibility").
+      Always in the DOM, even outside anchor mode, since a live region has to exist before its first
+      update to be announced reliably — an empty one the rest of the time costs nothing.
+    -->
+    <p v-if="anchorMode" class="sr-only" role="status" aria-live="polite">
+      {{ liveRegionMessage }}
+    </p>
 
     <div
-      v-else-if="editor"
+      v-if="editor && !anchorMode"
       class="flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-2 py-1"
       role="toolbar"
       :aria-label="`${label} formatting`"
@@ -853,8 +872,113 @@ defineExpose({
 }
 
 :deep(.chronicle-document .chronicle-anchor-insert) {
-  color: var(--color-anchor-insert);
   text-decoration: none;
+}
+
+/*
+  Inline presentation — active (`ANCHOR_MARKUP_MODE` above is 'inline'). Wording trails straight
+  after the marked passage in normal flow, like ordinary text, with no separate glyph marking where
+  it starts — the type styling below is what reads as "this is proposed wording, not the original".
+  A caret glyph was tried here too and taken back out: pointing up reads fine when the wording is
+  actually above (see the dormant presentation below), but pointing at nothing when it's sitting
+  right next to the wording on the same line just looks like a stray mark.
+*/
+:deep(.chronicle-document .chronicle-anchor-wording) {
+  font-size: 0.82em;
+  color: var(--color-anchor-insert);
   font-style: italic;
+}
+
+/*
+  Interlinear presentation — dormant. `ANCHOR_MARKUP_MODE` above is hardcoded to 'inline', so
+  `data-anchor-markup` never actually reaches 'interlinear' and none of the rules below ever match.
+  Kept rather than deleted for whenever there's a real display-setting to choose between the two
+  presentations (PRODUCT.md, "Making anchor ops unmistakable": "Inline vs. interlinear wording
+  placement is a second thing that same setting would choose").
+
+  The idea: float the wording above a caret glyph left on the baseline, rather than trailing it. The
+  caret is a `::before` on the `<ins>` rather than a DOM node, so it never becomes part of the
+  wording's own text — and it earns its keep here in a way it doesn't for the inline presentation
+  above: pointing up at wording that's actually above it reads as a real pointer, not a stray mark.
+  `position: absolute` on the wording deliberately takes it out of flow so it reserves no horizontal
+  room; `left: 0` lines its own left edge up with the caret's, which is what "mainly placed with the
+  caret" means. The doubled line-height gives the float clearance above the line. What stalled this
+  attempt: long wording can overlap whatever text follows on a tightly packed line, which read as a
+  bug rather than an accepted proofreading-markup limit when it was tried live — worth another pass,
+  not worth losing. If this comes back, a color scheme covering arbitrary text in the parent (see
+  "Making anchor ops unmistakable") is worth rechecking against too — italic-plus-color as "this is
+  wording, not original text" gets weaker the more the original text is itself colored.
+
+:deep(.chronicle-document .chronicle-anchor-insert) {
+  position: relative;
+}
+
+:deep(.chronicle-document .chronicle-anchor-insert::before) {
+  content: '⌃';
+  color: var(--color-anchor-caret);
+}
+
+:deep(.chronicle-document .chronicle-anchor-wording),
+:deep(.chronicle-document .chronicle-anchor-insert-box) {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  white-space: nowrap;
+}
+
+:deep(.chronicle-document[data-anchor-markup='interlinear']) {
+  line-height: 2.75;
+}
+*/
+
+/*
+  A visible ring wherever the browser's own outline was suppressed for layout reasons — see Piece 1,
+  "Accessibility". Kept off `outline-none` at rest so a mouse click never shows one, matching the
+  formatting toolbar's own buttons above.
+*/
+:deep(.chronicle-document:focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/*
+  Keeps the marked passage visibly selected even once focus moves to `AnchorMenu`'s own controls —
+  browsers otherwise dim or drop the painted selection the moment a contenteditable loses focus,
+  which would leave a keyboard user unable to see what a Highlight or Strike click is about to act
+  on. Unconditional on focus state, so it applies the same whether the mouse or the keyboard placed
+  the menu.
+*/
+:deep(.chronicle-document--anchor ::selection) {
+  background-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+/*
+  The open state of an `anchorInsert` node view (`AnchorInsertView.vue`): a bordered, auto-sizing
+  input plus a checkmark, sitting inline right after the caret glyph. Styled to visibly read as a
+  text box the moment it appears — including its empty placeholder state — rather than something
+  that only looks like one after it already has content.
+*/
+:deep(.chronicle-anchor-insert-box) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  z-index: 1;
+}
+
+:deep(.chronicle-anchor-insert-input) {
+  border: 1px solid var(--color-anchor-insert);
+  border-radius: 0.25rem;
+  background-color: var(--color-surface);
+  color: var(--color-anchor-insert);
+  padding: 0 0.25rem;
+  font-size: 0.82em;
+  font-style: italic;
+  outline: none;
+}
+
+:deep(.chronicle-anchor-insert-accept) {
+  color: var(--color-anchor-insert);
+  flex-shrink: 0;
 }
 </style>

@@ -8,6 +8,7 @@ import {
   serializeDocument,
 } from '@/domain/entryDocument'
 import { freshMediaRepository } from '@/testing/realRepositories'
+import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 
 interface ObservedChange {
@@ -307,48 +308,48 @@ describe('DocumentEditor', () => {
   })
 
   describe('anchor mode', () => {
-    function mountAnchorEditor(onChange: (change: ObservedChange) => void) {
+    function mountAnchorEditor(onChange: (change: ObservedChange) => void, content?: string) {
       cy.mount(DocumentEditor, {
         props: {
           label: 'New entry',
           anchorMode: true,
-          content: serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad')),
+          content: content ?? serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad')),
         },
         attrs: { onChange },
       })
     }
 
-    it('offers the anchor toolbar instead of ordinary formatting', () => {
+    it('offers the anchor menu over a selection instead of ordinary formatting', () => {
       mountAnchorEditor(() => {})
 
-      cy.findByRole('button', { name: 'Comment on selection' }).should('be.visible')
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 10, 20),
+      )
+      cy.findByRole('button', { name: 'Highlight' }).should('be.visible')
       cy.findByRole('button', { name: 'Bold' }).should('not.exist')
     })
 
-    it('blocks ordinary typing, since surrounding text cannot change in this mode', () => {
-      const onChange = cy.stub().as('change')
-      mountAnchorEditor(onChange)
-
-      cy.findByRole('textbox', { name: 'New entry' }).type('extra words')
-
-      cy.get('@change').should('not.have.been.called')
-      cy.findByText('I went to Lake Tahoe with Dad').should('be.visible')
-    })
-
-    it('marks a selection as a comment anchor', () => {
+    it('marks a selection as a highlight, types wording, and accepts it as one gesture', () => {
       const onChange = cy.stub().as('change')
       mountAnchorEditor(onChange)
 
       cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
         selectTextRange($editor[0]!, 10, 20),
       )
-      cy.findByRole('button', { name: 'Comment on selection' }).click()
+      cy.findByRole('button', { name: 'Highlight' }).click()
+      // The box opens already focused, empty, and ready — typing continues there, not back in the
+      // document (re-selecting "New entry" would refocus it and strand this keystroke elsewhere).
+      cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
         expect(change.anchorIds).to.have.length(1)
         const [anchor] = collectAnchors(change.content)
-        expect(anchor).to.include({ kind: 'comment', quote: 'Lake Tahoe' })
+        expect(anchor).to.include({
+          kind: 'comment',
+          quote: 'Lake Tahoe',
+          insertion: 'Donner Lake',
+        })
         expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad')
       })
     })
@@ -360,9 +361,8 @@ describe('DocumentEditor', () => {
       cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
         selectTextRange($editor[0]!, 10, 20),
       )
-      cy.findByRole('button', { name: 'Strike selection' }).click()
-      cy.findByLabelText('Replacement wording').type('Donner Lake')
-      cy.findByRole('button', { name: 'Insert' }).click()
+      cy.findByRole('button', { name: 'Strike' }).click()
+      cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
@@ -377,14 +377,75 @@ describe('DocumentEditor', () => {
       const onChange = cy.stub().as('change')
       mountAnchorEditor(onChange)
 
-      cy.findByLabelText('Insert wording here').type('perhaps')
-      cy.findByRole('button', { name: 'Insert' }).click()
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 0, 0),
+      )
+      cy.findByRole('textbox', { name: 'New entry' }).type('perhaps{enter}')
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
         expect(change.anchorIds).to.have.length(1)
         const [anchor] = collectAnchors(change.content)
         expect(anchor).to.include({ kind: null, insertion: 'perhaps' })
+      })
+    })
+
+    it('places a highlight and its wording through the keyboard alone', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 10, 20),
+      )
+      cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+alt+h}Donner Lake{enter}')
+
+      cy.get('@change').then((stub) => {
+        const change = lastChange(stub)
+        const [anchor] = collectAnchors(change.content)
+        expect(anchor).to.include({ kind: 'comment', insertion: 'Donner Lake' })
+      })
+    })
+
+    it('discards an open wording input on Escape', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 10, 20),
+      )
+      cy.findByRole('button', { name: 'Highlight' }).click()
+      cy.findByRole('textbox', { name: 'New entry' }).type('Donner{esc}')
+
+      cy.get('@change').then((stub) => {
+        const [anchor] = collectAnchors(lastChange(stub).content)
+        expect(anchor).to.include({ kind: 'comment', insertion: null })
+      })
+    })
+
+    it('does not let wording typed after a sealed anchor absorb it', () => {
+      const onChange = cy.stub().as('change')
+      // "sealed-1" stands for an anchor an earlier child already placed and sealed — present in
+      // the document this editor opened with, not something this session placed.
+      mountAnchorEditor(
+        onChange,
+        withAnchorMark('I went to Lake Tahoe with Dad', 'sealed-1', 10, 20),
+      )
+
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 20, 20),
+      )
+      cy.findByRole('textbox', { name: 'New entry' }).type('!')
+
+      cy.get('@change').then((stub) => {
+        const change = lastChange(stub)
+        const anchors = collectAnchors(change.content)
+        expect(anchors).to.have.length(2)
+        expect(anchors.find((anchor) => anchor.anchor_id === 'sealed-1')).to.include({
+          insertion: null,
+        })
+        const bare = anchors.find((anchor) => anchor.anchor_id !== 'sealed-1')
+        expect(bare).to.include({ kind: null, insertion: '!' })
+        expect(change.anchorIds).to.deep.equal([bare?.anchor_id])
       })
     })
 
@@ -395,7 +456,7 @@ describe('DocumentEditor', () => {
       cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
         selectTextRange($editor[0]!, 10, 20),
       )
-      cy.findByRole('button', { name: 'Comment on selection' }).click()
+      cy.findByRole('button', { name: 'Highlight' }).click()
       cy.get('@change').then((stub) => expect(lastChange(stub).anchorIds).to.have.length(1))
 
       cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+z}')

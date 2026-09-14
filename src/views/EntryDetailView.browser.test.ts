@@ -238,13 +238,16 @@ describe('EntryDetailView (browser)', () => {
 
     const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
     await expect.element(parentEditor).toBeVisible()
+    parentEditor.element().focus()
     selectTextRange(parentEditor.element(), 10, 20)
 
-    await screen.getByRole('button', { name: 'Strike selection' }).click()
-    await expect.element(screen.getByLabelText('Replacement wording')).toBeVisible()
-
-    await screen.getByLabelText('Replacement wording').fill('Donner Lake')
-    await screen.getByRole('button', { name: 'Insert' }).click()
+    // `exact: true` matters here: this composer's other half (`Your note`) has its own ordinary
+    // "Strikethrough" toggle, and a substring match would find that button instead — on the wrong
+    // editor entirely.
+    await screen.getByRole('button', { name: 'Strike', exact: true }).click()
+    await userEvent.keyboard('D')
+    await screen.getByRole('textbox', { name: 'Wording' }).fill('Donner Lake')
+    await screen.getByRole('button', { name: 'Accept wording' }).click()
 
     await screen.getByRole('textbox', { name: 'Your note' }).click()
     await userEvent.keyboard('Wrong lake')
@@ -262,6 +265,35 @@ describe('EntryDetailView (browser)', () => {
     expect(children[0]?.anchors).toHaveLength(1)
     expect(children[0]?.anchors[0]?.quote).toBe('Lake Tahoe')
     // Striking reports a correction, so the note reads as an update without anyone being asked.
+    expect(children[0]?.relation_type).toBe('update')
+  })
+
+  it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Create related entry' }).click()
+
+    const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
+    await expect.element(parentEditor).toBeVisible()
+    parentEditor.element().focus()
+    selectTextRange(parentEditor.element(), 10, 20)
+
+    await screen.getByRole('button', { name: 'Highlight' }).click()
+    await userEvent.keyboard('D')
+    await screen.getByRole('textbox', { name: 'Wording' }).fill('Donner Lake')
+    await screen.getByRole('button', { name: 'Accept wording' }).click()
+
+    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await userEvent.keyboard('Actually')
+    await screen.getByRole('button', { name: 'Add entry' }).click()
+
+    // A highlight is a mark on existing text, same as a strike — wording rides along with it the
+    // same way, which is what `relationTypeForAnchors` already reads as an `update` and what
+    // `describeAnchor` needs its own branch for (its `comment` case used to ignore an insertion).
+    await expect.element(screen.getByText('On “Lake Tahoe”, adds “Donner Lake”')).toBeVisible()
+
+    const children = await repository.listChildren(parent.id)
     expect(children[0]?.relation_type).toBe('update')
   })
 

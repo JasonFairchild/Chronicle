@@ -38,7 +38,7 @@ export interface DraftChange {
 /**
  * What one anchor-mode edit to the **parent** tells the buffer. `anchorIds` is the full set this
  * session has placed so far, not a delta — the caller already knows it exactly, since every id
- * comes from `addAnchorMark`/`addAnchorInsert` it just called, and undoing one is removing it from
+ * comes from `addAnchorMark`/`openAnchorInsert` it just called, and undoing one is removing it from
  * this same list rather than the store guessing at a diff.
  */
 export interface ParentAnchorChange {

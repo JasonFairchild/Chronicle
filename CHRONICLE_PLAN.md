@@ -130,10 +130,16 @@ Still genuinely out of scope:
 - Video/audio support, optional Tauri desktop shell, encryption, multi-device sync.
 
 Not carried over from the anchor model redesign (see ENTRY_MODEL.md, "Child entries and anchors"):
-a per-anchor "remove just this one" UI affordance before sealing. `editor/anchorCommands.ts` has the
-commands to add or read anchors; undoing one before sealing today means the browser's own undo
-(Ctrl+Z), which only ever undoes the most recent placement, not an arbitrary earlier one in the same
-session. A small, well-scoped follow-up once anchor-mode has seen real use, not a blocker.
+making each anchor placed so far in the current draft session individually interactable before
+sealing — click one to reopen its wording for editing, toggle it between highlight and strike, or
+remove it entirely; possibly widen or shrink its span too, though that might just be remove-and-
+recreate rather than a real resize gesture. `editor/anchorCommands.ts` has the commands to add or
+read anchors, but nothing to reopen or retarget one already placed; undoing one before sealing today
+means the browser's own undo (Ctrl+Z), which only ever undoes the most recent placement, not an
+arbitrary earlier one in the same session. A small, well-scoped follow-up once anchor-mode (the
+bubble menu plus inline wording, PRODUCT.md §4.4) has seen real use, not a blocker — worth scoping
+down to whichever of these actions turn out to actually get reached for once anchor-mode is used in
+anger, rather than building all of them speculatively.
 
 ### Parked, not decided against
 

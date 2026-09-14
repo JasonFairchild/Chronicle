@@ -1,7 +1,8 @@
 import type { Editor } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import type { Transaction } from '@tiptap/pm/state'
+import { TextSelection, type Transaction } from '@tiptap/pm/state'
 import type { Mapping } from '@tiptap/pm/transform'
+import { ref, type Ref } from 'vue'
 import { newAnchorId } from '@/domain/anchors'
 import type { AnchorMapping } from '@/domain/anchorWarnings'
 import { ANCHOR_INSERT_NODE, ANCHOR_MARK } from '@/domain/entryDocument'
@@ -25,7 +26,7 @@ const ANCHOR_EDIT_META = 'chronicleAnchorEdit'
 const HISTORY_META = 'history$'
 
 /**
- * The anchor-mode guard, installed by `extensions.ts`'s `AnchorModeGuard` plugin.
+ * The anchor-mode guard, installed by `extensions.ts`'s `AnchorMode` plugin.
  *
  * This is what makes "the two creation experiences cannot be mixed" a property of the editor rather
  * than a rule the UI is trusted to follow: in anchor mode the only transactions that may change the
@@ -42,38 +43,146 @@ export function isAnchorEdit(transaction: Transaction): boolean {
 }
 
 /**
- * Marks the current selection as an anchor and returns its new id, or null when there is nothing
- * selected to mark.
+ * What the polite live region in `DocumentEditor` announces after an anchor command runs. Carried
+ * on the transaction's own meta rather than returned from the command, so it reaches `onUpdate` —
+ * the one place both a button click and a keyboard shortcut (`extensions.ts`) end up — however the
+ * command was invoked.
  */
-export function addAnchorMark(editor: Editor, kind: AnchorKind): string | null {
+export interface AnchorAnnouncement {
+  message: string
+}
+
+const ANCHOR_ANNOUNCE_META = 'chronicleAnchorAnnounce'
+
+/** Reads the announcement an anchor command attached to its transaction, if any. */
+export function readAnchorAnnouncement(transaction: Transaction): AnchorAnnouncement | null {
+  return (transaction.getMeta(ANCHOR_ANNOUNCE_META) as AnchorAnnouncement | undefined) ?? null
+}
+
+/**
+ * UI state for one `anchorInsert` node view: which anchor's wording input is open, if any. Kept off
+ * the node's own attributes — see `extensions.ts`, "Wording: one mechanism, a node view" — so this
+ * never becomes part of the stored document. A `Ref` rather than a plain field because a node view
+ * mounted by `VueNodeViewRenderer` needs Vue's own reactivity to notice a change here: ProseMirror's
+ * view only re-renders a node whose document representation changed, and opening or closing a
+ * wording session deliberately produces no such change.
+ */
+export interface AnchorInsertStorage {
+  openAnchorId: Ref<string | null>
+}
+
+/** The value `AnchorInsert.addStorage` (`extensions.ts`) installs for every anchor-mode editor. */
+export function createAnchorInsertStorage(): AnchorInsertStorage {
+  return { openAnchorId: ref<string | null>(null) }
+}
+
+function anchorInsertStorage(editor: Editor): AnchorInsertStorage {
+  return (editor.storage as unknown as Record<string, AnchorInsertStorage>)[ANCHOR_INSERT_NODE]
+}
+
+/**
+ * Marks a range as an anchor and returns its new id, or null when there is nothing to mark.
+ *
+ * `range` defaults to the current selection, which is what lets one command serve both entry
+ * points: `AnchorMenu`'s buttons read the live selection, while the `Mod-Alt-h` / `Mod-Alt-s`
+ * keyboard shortcuts (`extensions.ts`) call this with no range at all.
+ *
+ * A wording box opens immediately after the mark, empty and focused, in the **same** transaction —
+ * one undo removes both, and there is no hidden "type to discover it" step between marking a
+ * passage and seeing somewhere to write about it (Piece 1, "After placing a mark"). `inclusive:
+ * false` on the mark (`extensions.ts`) is what keeps that box's position outside the anchor's own
+ * range, so accepting it empty and later widening the highlight can never absorb it.
+ */
+export function addAnchorMark(
+  editor: Editor,
+  kind: AnchorKind,
+  range?: { from: number; to: number },
+): string | null {
   const { state } = editor
-  const { from, to, empty } = state.selection
+  const { from, to } = range ?? state.selection
   const markType = state.schema.marks[ANCHOR_MARK]
-  if (empty || !markType) return null
+  const insertType = state.schema.nodes[ANCHOR_INSERT_NODE]
+  if (from === to || !markType || !insertType) return null
 
   const anchorId = newAnchorId()
-  const transaction = state.tr.addMark(from, to, markType.create({ anchorId, kind }))
+  const quote = state.doc.textBetween(from, to, ' ')
+  const insertNode = insertType.create({ anchorId, text: '' })
 
+  const transaction = state.tr.addMark(from, to, markType.create({ anchorId, kind }))
+  transaction.insert(to, insertNode)
+  transaction.setSelection(TextSelection.create(transaction.doc, to + insertNode.nodeSize))
+  transaction.setMeta(ANCHOR_ANNOUNCE_META, {
+    message: `${kind === 'strike' ? 'Struck' : 'Highlighted'} "${quote}"`,
+  } satisfies AnchorAnnouncement)
+
+  anchorInsertStorage(editor).openAnchorId.value = anchorId
   dispatchAnchorEdit(editor, transaction)
   return anchorId
 }
 
 /**
- * Places proposed wording at the caret, or at the end of the current selection.
+ * Opens a fresh wording session at `pos`: places an `anchorInsert` node carrying `text` as its
+ * first character and marks it the open one, so its node view (`AnchorInsertView.vue`) mounts an
+ * input and focuses it. Called from `DocumentEditor`'s `handleTextInput` hook, on the first
+ * character typed at an empty selection with nothing marked to pair it with — a bare insertion
+ * standing alone (Piece 1, "Opening it"). A mark's own wording box opens eagerly instead, from
+ * `addAnchorMark` above, rather than waiting on this.
  *
- * Passing the `anchorId` of a strike is what declares the two to be one replacement gesture — the
- * shape that used to be guessed from how close a strike and an insert happened to land.
+ * `pairWith` is the anchor id this wording pairs with — a mark placed earlier this session whose
+ * own box was left empty and closed, per `pairableAnchorAt` — or undefined for a bare insertion
+ * with no span of its own.
  */
-export function addAnchorInsert(editor: Editor, text: string, anchorId?: string): string | null {
-  const { state } = editor
-  const nodeType = state.schema.nodes[ANCHOR_INSERT_NODE]
-  if (!nodeType || !text) return null
+export function openAnchorInsert(
+  editor: Editor,
+  pos: number,
+  text: string,
+  pairWith?: string,
+): string | null {
+  const nodeType = editor.state.schema.nodes[ANCHOR_INSERT_NODE]
+  if (!nodeType) return null
 
-  const id = anchorId ?? newAnchorId()
-  const transaction = state.tr.insert(state.selection.to, nodeType.create({ anchorId: id, text }))
+  const anchorId = pairWith ?? newAnchorId()
+  const transaction = editor.state.tr.insert(pos, nodeType.create({ anchorId, text }))
+
+  anchorInsertStorage(editor).openAnchorId.value = anchorId
+  dispatchAnchorEdit(editor, transaction)
+  return anchorId
+}
+
+/**
+ * Updates the text an open `anchorInsert` node carries, called on every keystroke in its input.
+ * Still meta-stamped so the anchor-mode guard lets it through, but otherwise an ordinary attribute
+ * change — the node stays an atom the surrounding document can never be typed into directly.
+ */
+export function updateAnchorInsertText(editor: Editor, pos: number, text: string): void {
+  dispatchAnchorEdit(editor, editor.state.tr.setNodeAttribute(pos, 'text', text))
+}
+
+/**
+ * Commits an open wording session: keeps the node with its trimmed text, or drops it outright if
+ * nothing was typed — an insert with no wording says nothing (Piece 1, "Enter or ✓ commits").
+ */
+export function commitAnchorInsert(editor: Editor, pos: number, text: string): void {
+  anchorInsertStorage(editor).openAnchorId.value = null
+  const trimmed = text.trim()
+
+  const transaction = trimmed
+    ? editor.state.tr.setNodeAttribute(pos, 'text', trimmed)
+    : editor.state.tr.delete(pos, pos + 1)
+
+  if (trimmed) {
+    transaction.setMeta(ANCHOR_ANNOUNCE_META, {
+      message: `Added wording "${trimmed}"`,
+    } satisfies AnchorAnnouncement)
+  }
 
   dispatchAnchorEdit(editor, transaction)
-  return id
+}
+
+/** Discards an open wording session outright, whatever was typed — Escape. */
+export function cancelAnchorInsert(editor: Editor, pos: number): void {
+  anchorInsertStorage(editor).openAnchorId.value = null
+  dispatchAnchorEdit(editor, editor.state.tr.delete(pos, pos + 1))
 }
 
 /** Where one anchor sits in a document, in ProseMirror positions. */

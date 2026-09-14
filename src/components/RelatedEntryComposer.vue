@@ -37,9 +37,9 @@ const parentHasTitle = computed(() => hasTitleNode(props.session.parentContent))
   <div class="grid gap-6 lg:grid-cols-2">
     <section>
       <h2 class="mb-2 text-sm font-medium">This entry</h2>
-      <p class="mb-2 text-sm text-[var(--color-text-muted)]">
-        Select a passage and mark it, or place the cursor and propose wording. Surrounding text
-        cannot be changed from here.
+      <p id="anchor-mode-instructions" class="mb-2 text-sm text-[var(--color-text-muted)]">
+        Select a passage, then Highlight or Strike it (Ctrl+Alt+H / Ctrl+Alt+S) — or place the
+        cursor and type to propose wording. Surrounding text cannot be changed from here.
       </p>
 
       <DocumentEditor
@@ -48,6 +48,7 @@ const parentHasTitle = computed(() => hasTitleNode(props.session.parentContent))
         :with-title="parentHasTitle"
         :content="session.parentContent"
         :disabled="session.saving"
+        described-by="anchor-mode-instructions"
         @change="session.handleParentChange"
       />
     </section>

@@ -24,10 +24,13 @@ kind }`; a collapsed op (an inserted word or phrase, including a strike's replac
 **atom inline node**, `anchorInsert`, carrying `{ anchor_id, text }` — a mark can't represent a
 zero-width position with content of its own, so a collapsed op needs the node form ProseMirror
 already gives `MediaImage`. `anchor_id` ties a mark and a node together as one op, and is what pairs
-a strike with its replacement wording: a strike mark plus an `anchorInsert` sharing one `anchor_id`
-_is_ the strike-and-insert-in-tandem replacement gesture, declared rather than inferred from
-render-time proximity. The mark is `inclusive: false`, so typing at an anchor's edge is not silently
-absorbed into it, and `excludes: ''`, so two children anchoring the same passage can overlap freely.
+wording with the mark it belongs to — a strike plus its replacement, or a highlight plus an inline
+comment — sharing one `anchor_id` _is_ the pairing, declared rather than inferred from render-time
+proximity or from which kind of mark it happens to be: `pairableAnchorAt` (`domain/anchors.ts`)
+derives it from whichever anchor mark this session placed immediately before the caret, comment or
+strike alike, never asking which. The mark is `inclusive: false`, so typing at an anchor's edge is
+not silently absorbed into it, and `excludes: ''`, so two children anchoring the same passage can
+overlap freely.
 
 There is deliberately no `replace` op. Since nothing a child does hides the parent's text, "I would
 have written this differently" is a strike over the original plus an `anchorInsert` of the new

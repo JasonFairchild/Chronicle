@@ -220,9 +220,8 @@ describe('EntryDetailView', () => {
         .should('be.visible')
         .then(($editor) => selectTextRange($editor[0]!, 10, 20))
 
-      cy.findByRole('button', { name: 'Strike selection' }).click()
-      cy.findByLabelText('Replacement wording').should('be.visible').type('Donner Lake')
-      cy.findByRole('button', { name: 'Insert' }).click()
+      cy.findByRole('button', { name: 'Strike' }).click()
+      cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
 
       cy.findByRole('textbox', { name: 'Your note' }).type('Wrong lake')
       cy.findByRole('button', { name: 'Add entry' }).click()
@@ -237,6 +236,32 @@ describe('EntryDetailView', () => {
         expect(children[0]?.anchors).to.have.length(1)
         expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')
         // Striking reports a correction, so the note reads as an update without anyone being asked.
+        expect(children[0]?.relation_type).to.equal('update')
+      })
+    })
+  })
+
+  it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', () => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Create related entry' }).click()
+
+      cy.findByRole('textbox', { name: 'Entry being annotated' })
+        .should('be.visible')
+        .then(($editor) => selectTextRange($editor[0]!, 10, 20))
+
+      cy.findByRole('button', { name: 'Highlight' }).click()
+      cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
+
+      cy.findByRole('textbox', { name: 'Your note' }).type('Actually')
+      cy.findByRole('button', { name: 'Add entry' }).click()
+
+      // A highlight is a mark on existing text, same as a strike — wording rides along with it the
+      // same way, which is what `describeAnchor`'s `comment` case needed its own branch for.
+      cy.findByText('On “Lake Tahoe”, adds “Donner Lake”').should('be.visible')
+
+      cy.then(() => repository.listChildren(parent.id)).then((children) => {
         expect(children[0]?.relation_type).to.equal('update')
       })
     })

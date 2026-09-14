@@ -26,8 +26,10 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
+    "@floating-ui/dom": "^1.8.0",
     "@lucide/vue": "^1.45.0",
     "@tiptap/core": "^3.31.2",
+    "@tiptap/extension-bubble-menu": "^3.31.2",
     "@tiptap/extension-document": "^3.31.2",
     "@tiptap/extensions": "^3.31.2",
     "@tiptap/pm": "^3.31.2",

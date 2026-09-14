@@ -12,6 +12,9 @@
   /* Failure text: a dead repository write, a rejected save. Its own token rather than a Tailwind
      red, so the dark theme can lighten it the way every other colour here is lightened. */
   --color-error: #dc2626;
+  /* The visible :focus-visible ring on controls that suppress the browser's own outline, such as
+     the editor surface and AnchorMenu's buttons (Piece 1, "Accessibility"). */
+  --color-focus-ring: #2563eb;
   /*
     Anchor colours are the *system scheme* — the default of several (see ENTRY_MODEL.md, "Colour"),
     picked at render time from the op kind and never stored on the mark. Swapping schemes later is
@@ -20,6 +23,7 @@
   --color-anchor-comment: #fde68a;
   --color-anchor-strike: #fecaca;
   --color-anchor-insert: #15803d;
+  --color-anchor-caret: #94a3b8;
 }
 
 .dark {
@@ -32,9 +36,11 @@
   --color-accent: #3b82f6;
   --color-accent-hover: #60a5fa;
   --color-error: #f87171;
+  --color-focus-ring: #60a5fa;
   --color-anchor-comment: #78350f;
   --color-anchor-strike: #7f1d1d;
   --color-anchor-insert: #4ade80;
+  --color-anchor-caret: #64748b;
 }
 
 body {

@@ -133,14 +133,21 @@ either — they are names for what a note turned out to be, not a choice to make
   about on the left, and the new entry on the right. Anchoring is its own mode, never mixed with
   revising the entry's own text in the same sitting (ENTRY_MODEL.md, "Two creation experiences,
   kept separate").
-- On the left, the entry's text is shown live: select a passage to comment on it or **strike** it,
-  or place the cursor and propose wording. Nothing outside those actions can change the entry's own
-  text from here.
+- On the left, the entry's text is shown live: select a passage and a small menu appears above it
+  offering **Highlight** or **Strike** (also reachable as Ctrl+Alt+H / Ctrl+Alt+S); or place the
+  cursor and type to propose wording inline, right where it would go. Nothing outside those two
+  gestures can change the entry's own text from here.
 - On the right, the note itself, with the same optional dates a new entry gets (§4.1).
 - Marking a passage is optional. Writing on the right and marking nothing produces a note about the
   entry as a whole, and the entry is not revised at all.
-- A strike can carry replacement wording, which renders beside the struck text — the familiar
-  correction shape, declared as belonging to that strike rather than guessed from where it landed.
+- Wording may attach to a highlighted passage as readily as a struck one — one mechanism for typing
+  it either way, rather than a strike-only field. It renders inline, right after the highlight or
+  strike it belongs to — declared as belonging to that passage rather than guessed from where it
+  landed, and read as proposed wording from its own italic styling rather than from any glyph. A
+  proofreader's-markup presentation, with the wording raised above the line and a caret glyph on the
+  baseline marking the insertion point, exists in code but is dormant (`DocumentEditor.vue`,
+  `ANCHOR_MARKUP_MODE`) — a first attempt at it let long wording overlap trailing text on a packed
+  line; see "Making anchor ops unmistakable" below.
 - Saving anchors a passage and the note together in one action; the entry's own text is not touched
   except to gain the anchor, and its previous version stays exactly as it stood.
 - Whether the note reads as an **annotation** or an **update** follows from what was marked, and is
@@ -277,6 +284,10 @@ Not commitments. A parking lot, so ideas stop being remembered by hand.
   the _other_ entry, not to the connection itself, so a connection's own revisions and annotations
   have no route in from the UI — even though the data model already treats a connection as an entry
   like any other and supports it.
+- Related entries as first-class citizens in some timeline views. Now that a related entry can carry
+  its own title (§4.1), one substantial enough to be a later chapter or a major update reads less
+  like a footnote and more like something a timeline could surface on its own, not only nested under
+  the entry it pertains to.
 - Navigating by connection rather than by time.
 - One entry's whole subtree as an activity stream: everything that ever happened to it, in order.
 - Expanding past the default two levels of depth on demand.
@@ -287,11 +298,24 @@ Not commitments. A parking lot, so ideas stop being remembered by hand.
 
 Now that ordinary formatting (strikethrough included) can look similar to what an anchor op
 renders, an anchor op earns its distinctness from its own presentation rather than from any mark
-being reserved for it alone.
+being reserved for it alone. Today that distinctness rests on italic-plus-color styling for the
+wording itself (§4.4) — the dormant raised-wording presentation would be a stronger step in that
+direction, proofreader's markup reading as nothing else in the editor does, once it's back — but
+neither resolves the whole problem on its own:
 
+- Ordinary highlight formatting as a mark (a note-less highlight, the way strikethrough became
+  ordinary formatting) would collide with the comment anchor's system yellow the moment both exist,
+  since nothing today distinguishes "highlighted" from "commented on" by color alone. Anchor ops
+  need to earn distinctness through their own presentation one step further than they do today.
+- Arbitrary text coloring for the parent entry, if it's ever added (no such feature is planned or
+  requested today), would weaken the inline wording's italic-plus-color signal further: "this is
+  proposed wording, not the original" reads less clearly the more the original text is itself
+  colored. Worth rechecking whichever presentation is active against that at the time.
 - Color schemes for anchor highlights — system (by op kind), per-child auto-assigned, or
   user-defined palettes — chosen as a display setting rather than stored with the entry, so
-  switching schemes never touches history.
+  switching schemes never touches history. Inline vs. interlinear wording placement is a second
+  thing that same setting would choose: both presentations exist in code today (§4.4), just not a
+  setting to pick between them yet — interlinear is dormant until one exists.
 - A tag-linked scheme as a fourth option: color the tag, not the child, once tags are a real thing
   (see "Finding things" above) — a user colors a tag, applies it to entries at will, and an anchor
   on a tagged entry can adopt that color on command instead of the system or per-child default.
@@ -300,6 +324,17 @@ being reserved for it alone.
 - A preview of a child entry's commentary sitting near the passage it anchors to, not only listed
   below the parent's text.
 - Overall presentation of the 'current' state of a parent entry with multiple child entries shown with their anchors and formatting.
+
+### Extending what can be anchored
+
+The anchor menu (§4.4) is built contextual so both of these have somewhere to land, but neither is
+built:
+
+- Anchoring a connection to a passage rather than to a whole entry — today a connection always
+  points at its target entry as a whole.
+- Anchoring to an image, a media node, or a caption. `MediaImage` is a block atom, so the `anchor`
+  mark cannot apply to it at all as things stand; this needs node-level anchor attributes instead of
+  a mark.
 
 ### Getting things in
 
@@ -325,6 +360,10 @@ being reserved for it alone.
   anchors are fixed once sealed, and pointing differently at the same passage means adding another
   child entry. Re-opening a sealed child's anchors is architecturally possible — they'd be ordinary
   document steps on the parent — just not offered as a feature.
+- Interacting with an anchor already placed earlier in the _same_ still-open draft session — before
+  sealing, unlike the point above: click one to reopen its wording, toggle highlight/strike, or
+  remove it, and maybe widen or shrink its span (or just remove-and-recreate for that). Not decided
+  against, just not built (CHRONICLE_PLAN.md, "Not carried over from the anchor model redesign").
 - A distraction-free writing mode.
 - Templates or prompts for recurring kinds of entry.
 - Keyboard-first navigation throughout.

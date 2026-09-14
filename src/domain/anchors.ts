@@ -17,6 +17,7 @@ import {
   parseDocument,
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
+  type DocMark,
   type DocNode,
   type EntryDocument,
 } from './entryDocument'
@@ -64,7 +65,9 @@ export function collectAnchors(content: string | EntryDocument): DocumentAnchor[
       if (!anchorId) return
 
       const anchor = upsert(anchorId)
-      anchor.insertion = attrString(node.attrs, 'text') ?? ''
+      // Empty text reads as no insertion at all — the node an eagerly-opened, still-empty wording
+      // session leaves behind (`addAnchorMark`) must not read as a correction nobody wrote.
+      anchor.insertion = attrString(node.attrs, 'text')
       return
     }
 
@@ -90,6 +93,33 @@ export function collectAnchors(content: string | EntryDocument): DocumentAnchor[
 /** The ids a document currently carries, for telling what a session added. */
 export function anchorIdsIn(content: string | EntryDocument): string[] {
   return collectAnchors(content).map((anchor) => anchor.anchor_id)
+}
+
+/**
+ * The anchor id that wording typed at a caret should pair with, given the marks carried by the text
+ * immediately before it — `$from.nodeBefore`'s marks, in `anchorCommands.ts`'s terms — or null when
+ * there is nothing to pair with.
+ *
+ * Only an anchor placed **this session** may absorb it: a sealed anchor from an earlier child sits in
+ * the same document, and pairing with one would attach this entry's wording to another entry's
+ * anchor. `addedAnchorIds(initialDocument, document)` is exactly that set — deriving the answer from
+ * position rather than from session state kept in a ref is what makes this pure and node-testable,
+ * and what makes highlight-plus-inline-wording work for free (Piece 1, "The pairing rule").
+ */
+export function pairableAnchorAt(
+  marksBefore: DocMark[],
+  document: string | EntryDocument,
+  initialDocument: string | EntryDocument,
+): string | null {
+  const addedIds = new Set(addedAnchorIds(initialDocument, document))
+
+  for (const mark of marksBefore) {
+    if (mark.type !== ANCHOR_MARK) continue
+    const anchorId = attrString(mark.attrs, 'anchorId')
+    if (anchorId && addedIds.has(anchorId)) return anchorId
+  }
+
+  return null
 }
 
 /**

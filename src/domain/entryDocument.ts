@@ -11,13 +11,19 @@
  * runnable in node, and independent of whichever editor sits on top.
  */
 
+/** A ProseMirror mark as it serializes to JSON. */
+export interface DocMark {
+  type: string
+  attrs?: Record<string, unknown>
+}
+
 /** A ProseMirror node as it serializes to JSON. Structural only; the editor owns the schema. */
 export interface DocNode {
   type: string
   attrs?: Record<string, unknown>
   content?: DocNode[]
   text?: string
-  marks?: { type: string; attrs?: Record<string, unknown> }[]
+  marks?: DocMark[]
 }
 
 export interface EntryDocument extends DocNode {

@@ -3,10 +3,11 @@ import {
   addedAnchorIds,
   anchorRefsFor,
   collectAnchors,
+  pairableAnchorAt,
   relationTypeForAnchors,
   resolveAnchors,
 } from '@/domain/anchors'
-import { serializeDocument, type EntryDocument } from '@/domain/entryDocument'
+import { serializeDocument, type DocMark, type EntryDocument } from '@/domain/entryDocument'
 
 /** A one-paragraph document, with a subrange optionally carrying an anchor mark. */
 function doc(text: string, mark?: { anchorId: string; kind: string; from: number; to: number }) {
@@ -170,6 +171,44 @@ describe('resolveAnchors', () => {
     expect(resolveAnchors(refs, doc('Rewritten entirely'))).toEqual([
       { anchor_id: 'a1', status: 'orphaned', quote: 'meeting', kind: null, insertion: null },
     ])
+  })
+})
+
+describe('pairableAnchorAt', () => {
+  const mark = (anchorId: string, kind = 'comment'): DocMark[] => [
+    { type: 'anchor', attrs: { anchorId, kind } },
+  ]
+
+  it('pairs with an anchor mark placed this session', () => {
+    const before = doc('The meeting went badly')
+    const after = doc('The meeting went badly', {
+      anchorId: 'a1',
+      kind: 'comment',
+      from: 4,
+      to: 11,
+    })
+
+    expect(pairableAnchorAt(mark('a1'), after, before)).toBe('a1')
+  })
+
+  it('refuses to pair with a sealed anchor from an earlier child', () => {
+    const sealed = doc('The meeting went badly', {
+      anchorId: 'a1',
+      kind: 'comment',
+      from: 4,
+      to: 11,
+    })
+
+    // The anchor is present in *both* documents — this session never placed it.
+    expect(pairableAnchorAt(mark('a1'), sealed, sealed)).toBeNull()
+  })
+
+  it('returns null when the text before the caret carries no anchor mark at all', () => {
+    const before = doc('Plain text')
+    const after = doc('Plain text')
+
+    expect(pairableAnchorAt([], after, before)).toBeNull()
+    expect(pairableAnchorAt([{ type: 'bold' }], after, before)).toBeNull()
   })
 })
 

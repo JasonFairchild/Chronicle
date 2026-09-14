@@ -11,6 +11,7 @@ import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import { createEntryInput, type Entry } from '@/types/entry'
+import { formatDate } from '@/utils/format'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
@@ -129,6 +130,87 @@ describe('EntryDetailView', () => {
           mountDetail(target.id)
 
           cy.findByRole('link', { name: 'led_to' }).should('be.visible')
+        })
+      })
+    })
+  })
+
+  it('shows a child card’s created date', () => {
+    seed({ content: PARENT_CONTENT }).then((parent) => {
+      seed({
+        content: textContent('It was actually Donner Lake'),
+        parent_id: parent.id,
+        relation_type: 'update',
+      }).then((child) => {
+        mountDetail(parent.id)
+
+        cy.findByText(formatDate(child.created_at)).should('be.visible')
+      })
+    })
+  })
+
+  it('opens the connection’s own page, not the far endpoint, when its card is clicked', () => {
+    seed({ content: textContent('Started the degree') }).then((target) => {
+      seed({ content: textContent('Left my job') }).then((source) => {
+        seed({
+          content: textContent('One made the other possible', 'led_to'),
+          parent_id: source.id,
+          target_id: target.id,
+          relation_type: 'connection',
+        }).then((connection) => {
+          mountDetail(target.id)
+
+          cy.findByRole('link', { name: 'led_to' }).should(
+            'have.attr',
+            'href',
+            `/entries/${connection.id}`,
+          )
+        })
+      })
+    })
+  })
+
+  it('shows a breadcrumb back to the parent on a child’s own detail page', () => {
+    seed({ content: textContent('Left my job', 'Career change') }).then((parent) => {
+      seed({
+        content: textContent('Started the degree'),
+        parent_id: parent.id,
+        relation_type: 'update',
+      }).then((child) => {
+        mountDetail(child.id)
+
+        cy.findByText('About').should('be.visible')
+        cy.findByRole('link', { name: 'Career change' }).should(
+          'have.attr',
+          'href',
+          `/entries/${parent.id}`,
+        )
+      })
+    })
+  })
+
+  it('shows a breadcrumb linking both sides on a connection’s own detail page', () => {
+    seed({ content: textContent('Started the degree') }).then((target) => {
+      seed({ content: textContent('Left my job') }).then((source) => {
+        seed({
+          content: textContent('One made the other possible', 'led_to'),
+          parent_id: source.id,
+          target_id: target.id,
+          relation_type: 'connection',
+        }).then((connection) => {
+          mountDetail(connection.id)
+
+          cy.findByText('Connects').should('be.visible')
+          cy.findByRole('link', { name: 'Left my job' }).should(
+            'have.attr',
+            'href',
+            `/entries/${source.id}`,
+          )
+          cy.findByRole('link', { name: 'Started the degree' }).should(
+            'have.attr',
+            'href',
+            `/entries/${target.id}`,
+          )
         })
       })
     })

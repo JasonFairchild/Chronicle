@@ -76,9 +76,10 @@ describe('reconstructEntryState', () => {
     const result = reconstructEntryState('root-1', [root, first, second])
 
     expect(docToPlainText(result!.content)).toBe('Started learning guitar.')
+    // Newest first: a reader wants the latest word on what's happened at the top of the list.
     expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'Learned first chord.',
       'Played a whole song.',
+      'Learned first chord.',
     ])
   })
 
@@ -206,13 +207,15 @@ describe('reconstructEntryState', () => {
     const forwards = reconstructEntryState('root-1', [root, first, second])
     const backwards = reconstructEntryState('root-1', [root, second, first])
 
+    // The tiebreak still resolves 'aaa' before 'bbb' regardless of insertion order; displayed
+    // newest-first, that puts 'Second' on top.
     expect(forwards?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'First',
       'Second',
+      'First',
     ])
     expect(backwards?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'First',
       'Second',
+      'First',
     ])
   })
 
@@ -239,6 +242,58 @@ describe('reconstructEntryState', () => {
       direction: 'incoming',
       other_id: 'entry-a',
     })
+  })
+
+  it('lists an entry’s children and connections newest first', () => {
+    const root = makeEntry({ id: 'root-1', content: 'Root' })
+    const other = makeEntry({ id: 'other-1', content: 'Other' })
+    const olderChild = makeEntry({
+      id: 'child-1',
+      parent_id: 'root-1',
+      relation_type: 'update',
+      content: 'Older child',
+      created_at: '2026-01-02T00:00:00.000Z',
+    })
+    const newerChild = makeEntry({
+      id: 'child-2',
+      parent_id: 'root-1',
+      relation_type: 'update',
+      content: 'Newer child',
+      created_at: '2026-01-03T00:00:00.000Z',
+    })
+    const olderConnection = makeEntry({
+      id: 'connection-1',
+      parent_id: 'root-1',
+      target_id: 'other-1',
+      relation_type: 'connection',
+      content: 'Older connection',
+      created_at: '2026-01-04T00:00:00.000Z',
+    })
+    const newerConnection = makeEntry({
+      id: 'connection-2',
+      parent_id: 'root-1',
+      target_id: 'other-1',
+      relation_type: 'connection',
+      content: 'Newer connection',
+      created_at: '2026-01-05T00:00:00.000Z',
+    })
+
+    const result = reconstructEntryState('root-1', [
+      root,
+      other,
+      olderChild,
+      newerChild,
+      olderConnection,
+      newerConnection,
+    ])
+
+    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
+      'Newer child',
+      'Older child',
+    ])
+    expect(
+      result?.connections.map((connection) => docToPlainText(connection.entry.content)),
+    ).toEqual(['Newer connection', 'Older connection'])
   })
 
   it('keeps a connection’s own children out of both endpoints', () => {
@@ -314,6 +369,25 @@ describe('reconstructEntryState', () => {
 
   it('returns null for an unknown entry', () => {
     expect(reconstructEntryState('missing', [])).toBeNull()
+  })
+
+  it('carries the row’s own relation fields through, for a breadcrumb to read', () => {
+    const root = makeEntry({ id: 'root-1', content: 'Root' })
+    const child = makeEntry({
+      id: 'child-1',
+      parent_id: 'root-1',
+      relation_type: 'update',
+      content: 'Child',
+      created_at: '2026-01-02T00:00:00.000Z',
+    })
+
+    const result = reconstructEntryState('child-1', [root, child])
+
+    expect(result).toMatchObject({
+      parent_id: 'root-1',
+      relation_type: 'update',
+      target_id: null,
+    })
   })
 })
 

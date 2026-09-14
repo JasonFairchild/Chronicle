@@ -196,6 +196,11 @@ export interface ResolvedConnection {
 export interface AggregatedEntry {
   id: string
   created_at: string
+  /** This entry's own relation to its parent, straight off the row. Null for a root entry. */
+  parent_id: string | null
+  relation_type: RelationType | null
+  /** The far endpoint. Connections only. */
+  target_id: string | null
   /**
    * Read from the entry's own row rather than the current version: a revision carries no dates, so
    * folding them through the version chain would blank them on the first edit.

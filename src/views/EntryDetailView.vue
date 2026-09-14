@@ -2,11 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import EntryCard from '@/components/EntryCard.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useMedia } from '@/composables/useMedia'
-import { docToPlainText, hasTitleNode } from '@/domain/entryDocument'
+import { hasTitleNode } from '@/domain/entryDocument'
 import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { entryLabel, entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
@@ -29,6 +30,20 @@ const mediaEl = ref<HTMLElement | null>(null)
 // the right tool. It also keeps Vue's reactive proxy off this data, which matters once it travels
 // into the repository: a proxy is not structured-cloneable.
 const aggregated = shallowRef<AggregatedEntry | null>(null)
+
+/**
+ * What this entry is about, if it's not a root: the parent it annotates/updates, or the two
+ * endpoints it connects. `AggregatedEntry` only carries ids for these, so their labels are a
+ * second, small fetch alongside the entry itself.
+ */
+const breadcrumbEntries = shallowRef<{ id: string; label: string }[]>([])
+
+const breadcrumbKind = computed<'about' | 'connects' | null>(() => {
+  const relation = aggregated.value?.relation_type
+  if (relation === 'annotation' || relation === 'update') return 'about'
+  if (relation === 'connection') return 'connects'
+  return null
+})
 
 /** The open revision session, if the entry's own text is being edited. `isOpen` false means it is being read. */
 const revisionSession = useDraftSession()
@@ -115,15 +130,40 @@ async function loadEntry(entryId: string): Promise<void> {
 
   try {
     aggregated.value = await store.getAggregatedEntry(entryId)
+    breadcrumbEntries.value = aggregated.value ? await loadBreadcrumb(aggregated.value) : []
   } catch (err) {
     // A failed fetch means there is no confirmed data for this id, so any previously-loaded
     // entry (from before navigating here) is cleared rather than left on screen under a
     // mismatched id.
     aggregated.value = null
+    breadcrumbEntries.value = []
     error.value = toErrorMessage(err, 'Failed to load entry')
   } finally {
     loading.value = false
   }
+}
+
+/** The label(s) an entry's breadcrumb line links to — its parent, or both ends of a connection. */
+async function loadBreadcrumb(entry: AggregatedEntry): Promise<{ id: string; label: string }[]> {
+  const ids: string[] =
+    entry.relation_type === 'annotation' || entry.relation_type === 'update'
+      ? entry.parent_id
+        ? [entry.parent_id]
+        : []
+      : entry.relation_type === 'connection'
+        ? [entry.parent_id, entry.target_id].filter((id): id is string => id !== null)
+        : []
+
+  if (ids.length === 0) return []
+
+  // The aggregated form, not the raw row: a title lives in the document and is only cached on the
+  // row (ENTRY_MODEL.md), so reading the row directly here would show a stale or blank name for an
+  // entry that has since been renamed by a revision.
+  const found = await Promise.all(ids.map((id) => store.getAggregatedEntry(id)))
+  return ids.flatMap((id, index) => {
+    const other = found[index]
+    return other ? [{ id, label: entryLabel(other) }] : []
+  })
 }
 
 /** Discards an in-progress revision rather than leaving it open. */
@@ -290,6 +330,22 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         {{ actionError }}
       </p>
 
+      <p
+        v-if="breadcrumbKind"
+        class="flex flex-wrap items-center gap-1 text-sm text-[var(--color-text-muted)]"
+      >
+        <span>{{ breadcrumbKind === 'connects' ? 'Connects' : 'About' }}</span>
+        <template v-for="(crumb, index) in breadcrumbEntries" :key="crumb.id">
+          <RouterLink
+            :to="{ name: 'entry-detail', params: { id: crumb.id } }"
+            class="text-[var(--color-accent)] hover:underline"
+          >
+            {{ crumb.label }}
+          </RouterLink>
+          <span v-if="index < breadcrumbEntries.length - 1" aria-hidden="true">↔</span>
+        </template>
+      </p>
+
       <article class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
         <header
           class="mb-4 flex items-start justify-between gap-4 border-b border-[var(--color-border)] pb-4"
@@ -419,70 +475,46 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             Related entries
           </h2>
 
-          <article
+          <EntryCard
             v-for="child in aggregated.children"
             :key="child.entry.id"
-            class="rounded-lg border border-[var(--color-border)] p-3"
+            :entry="child.entry"
           >
-            <div class="mb-1 flex items-center gap-2">
+            <template #badge>
               <span class="text-xs uppercase tracking-wide text-[var(--color-accent)]">
                 {{ child.relation_type }}
               </span>
-              <span v-if="child.has_children" class="text-xs text-[var(--color-text-muted)]">
+            </template>
+
+            <template #extra>
+              <p v-if="child.has_children" class="mt-2 text-xs text-[var(--color-text-muted)]">
                 has related entries
-              </span>
-            </div>
+              </p>
 
-            <p class="whitespace-pre-wrap text-sm leading-relaxed">
-              {{ docToPlainText(child.entry.content) }}
-            </p>
-
-            <p
-              v-for="line in entryWhenLines(child.entry.dates)"
-              :key="line"
-              class="mt-1 text-xs text-[var(--color-text-muted)]"
-            >
-              {{ line }}
-            </p>
-
-            <ul v-if="child.anchors.length > 0" class="mt-2 space-y-1">
-              <li
-                v-for="resolved in child.anchors"
-                :key="resolved.anchor_id"
-                class="text-xs text-[var(--color-text-muted)]"
-                :class="{ italic: resolved.status === 'orphaned' }"
-              >
-                {{ describeAnchor(resolved) }}
-              </li>
-            </ul>
-          </article>
+              <ul v-if="child.anchors.length > 0" class="mt-2 space-y-1">
+                <li
+                  v-for="resolved in child.anchors"
+                  :key="resolved.anchor_id"
+                  class="text-xs text-[var(--color-text-muted)]"
+                  :class="{ italic: resolved.status === 'orphaned' }"
+                >
+                  {{ describeAnchor(resolved) }}
+                </li>
+              </ul>
+            </template>
+          </EntryCard>
         </section>
 
-        <section v-if="aggregated.connections.length > 0" class="mt-6 space-y-2">
+        <section v-if="aggregated.connections.length > 0" class="mt-6 space-y-3">
           <h2 class="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Connections
           </h2>
 
-          <p
+          <EntryCard
             v-for="connection in aggregated.connections"
             :key="connection.entry.id"
-            class="text-sm text-[var(--color-text-muted)]"
-          >
-            <span aria-hidden="true">{{ connection.direction === 'outgoing' ? '→' : '←' }}</span>
-            <RouterLink
-              :to="{ name: 'entry-detail', params: { id: connection.other_id } }"
-              class="text-[var(--color-accent)] hover:underline"
-            >
-              {{ entryLabel(connection.entry) }}
-            </RouterLink>
-            <!--
-              Only when there's a real title: otherwise `entryLabel` above already used the content
-              preview as the link text, and repeating it here would just say the same thing twice.
-            -->
-            <span v-if="connection.entry.title && docToPlainText(connection.entry.content)">
-              · {{ docToPlainText(connection.entry.content) }}
-            </span>
-          </p>
+            :entry="connection.entry"
+          />
         </section>
       </article>
     </template>

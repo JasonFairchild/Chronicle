@@ -13,8 +13,8 @@ duplicated specs for tool comparison.
 | `*.cy.ts`           | Cypress             | real browser  | Components, mirroring the `.browser.test.ts` spec              |
 | `*.contract.ts`     | imported, never run | either        | A shared suite run against multiple implementations            |
 
-**Duplicate component specs are intentional.** `TimelineCard.browser.test.ts` and
-`TimelineCard.cy.ts` cover the same cases on purpose, to compare the two runners. Don't consolidate
+**Duplicate component specs are intentional.** `EntryCard.browser.test.ts` and
+`EntryCard.cy.ts` cover the same cases on purpose, to compare the two runners. Don't consolidate
 them.
 
 **Cypress should keep up with Vitest Browser Mode.** Default to mirroring every `.browser.test.ts`
@@ -157,7 +157,7 @@ merely shortens an assertion does not.
   reason to pass it by hand. `cy.mount` additionally accepts `routePath`, which builds a real
   router (the app's real route table, from `src/testing/testRouter.ts`, on isolated in-memory
   history), pushes to that path, and waits for it to be ready before mounting — useful for a spec
-  like `TimelineCard` or `EntryDetailView` that renders a `<router-link>` or calls `useRoute()`.
+  like `EntryCard` or `EntryDetailView` that renders a `<router-link>` or calls `useRoute()`.
   Vitest specs needing a router build one directly with `createTestRouter()` and `await` its
   `push`/`isReady` inline; there's no `routePath` equivalent there because Vitest has no command
   queue to thread the wait through — plain `await` already does it.

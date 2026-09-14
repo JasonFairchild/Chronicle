@@ -171,6 +171,9 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
   return {
     id: entry.id,
     created_at: entry.created_at,
+    parent_id: entry.parent_id,
+    relation_type: entry.relation_type,
+    target_id: entry.target_id,
     dates: {
       recorded_at: entry.recorded_at,
       recorded_time_note: entry.recorded_time_note,
@@ -223,7 +226,10 @@ function resolveChildren(
     })
   }
 
-  return resolved
+  // `descendants` runs oldest-first — the order the version chain's own folding depends on — but a
+  // reader wants the newest related entry on top, so display order is reversed only here, after
+  // that folding is done.
+  return resolved.reverse()
 }
 
 /**
@@ -254,7 +260,9 @@ function resolveConnections(
     resolved.push({ entry, other_id: otherId, direction })
   }
 
-  return resolved
+  // Same reasoning as `resolveChildren`: the merge above has to run oldest-first to break ties the
+  // same way `compareEntries` does everywhere else, but a reader wants the newest connection first.
+  return resolved.reverse()
 }
 
 /** Length of the entry's full version chain: the original, plus one per revision. */

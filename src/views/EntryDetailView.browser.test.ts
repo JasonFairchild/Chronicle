@@ -15,6 +15,7 @@ import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import { createEntryInput } from '@/types/entry'
+import { formatDate } from '@/utils/format'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
@@ -145,6 +146,91 @@ describe('EntryDetailView (browser)', () => {
     const screen = await mountDetail(target.id)
 
     await expect.element(screen.getByRole('link', { name: 'led_to' })).toBeVisible()
+  })
+
+  it('shows a child card’s created date', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const child = await repository.create(
+      createEntryInput({
+        content: textContent('It was actually Donner Lake'),
+        parent_id: parent.id,
+        relation_type: 'update',
+      }),
+    )
+
+    const screen = await mountDetail(parent.id)
+
+    await expect.element(screen.getByText(formatDate(child.created_at))).toBeVisible()
+  })
+
+  it('opens the connection’s own page, not the far endpoint, when its card is clicked', async () => {
+    const target = await repository.create(
+      createEntryInput({ content: textContent('Started the degree') }),
+    )
+    const source = await repository.create(
+      createEntryInput({ content: textContent('Left my job') }),
+    )
+    const connection = await repository.create(
+      createEntryInput({
+        content: textContent('One made the other possible', 'led_to'),
+        parent_id: source.id,
+        target_id: target.id,
+        relation_type: 'connection',
+      }),
+    )
+
+    const screen = await mountDetail(target.id)
+
+    await expect
+      .element(screen.getByRole('link', { name: 'led_to' }))
+      .toHaveAttribute('href', `/entries/${connection.id}`)
+  })
+
+  it('shows a breadcrumb back to the parent on a child’s own detail page', async () => {
+    const parent = await repository.create(
+      createEntryInput({ content: textContent('Left my job', 'Career change') }),
+    )
+    const child = await repository.create(
+      createEntryInput({
+        content: textContent('Started the degree'),
+        parent_id: parent.id,
+        relation_type: 'update',
+      }),
+    )
+
+    const screen = await mountDetail(child.id)
+
+    await expect.element(screen.getByText('About')).toBeVisible()
+    await expect
+      .element(screen.getByRole('link', { name: 'Career change' }))
+      .toHaveAttribute('href', `/entries/${parent.id}`)
+  })
+
+  it('shows a breadcrumb linking both sides on a connection’s own detail page', async () => {
+    const target = await repository.create(
+      createEntryInput({ content: textContent('Started the degree') }),
+    )
+    const source = await repository.create(
+      createEntryInput({ content: textContent('Left my job') }),
+    )
+    const connection = await repository.create(
+      createEntryInput({
+        content: textContent('One made the other possible', 'led_to'),
+        parent_id: source.id,
+        target_id: target.id,
+        relation_type: 'connection',
+      }),
+    )
+
+    const screen = await mountDetail(connection.id)
+
+    await expect.element(screen.getByText('Connects')).toBeVisible()
+    await expect
+      .element(screen.getByRole('link', { name: 'Left my job' }))
+      .toHaveAttribute('href', `/entries/${source.id}`)
+    await expect
+      .element(screen.getByRole('link', { name: 'Started the degree' }))
+      .toHaveAttribute('href', `/entries/${target.id}`)
   })
 
   it('reports a missing entry instead of failing silently', async () => {

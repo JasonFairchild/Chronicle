@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import TimelineCard from '@/components/TimelineCard.vue'
+import EntryCard from '@/components/EntryCard.vue'
 import type { AggregatedEntry } from '@/types/entry'
 
 defineProps<{
@@ -19,7 +19,7 @@ defineProps<{
 
     <ul v-else class="space-y-3">
       <li v-for="entry in entries" :key="entry.id">
-        <TimelineCard :entry="entry" />
+        <EntryCard :entry="entry" />
       </li>
     </ul>
   </section>

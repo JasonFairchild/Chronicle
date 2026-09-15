@@ -89,9 +89,9 @@ function anchorInsertStorage(editor: Editor): AnchorInsertStorage {
  *
  * A wording box opens immediately after the mark, empty and focused, in the **same** transaction —
  * one undo removes both, and there is no hidden "type to discover it" step between marking a
- * passage and seeing somewhere to write about it (Piece 1, "After placing a mark"). `inclusive:
- * false` on the mark (`extensions.ts`) is what keeps that box's position outside the anchor's own
- * range, so accepting it empty and later widening the highlight can never absorb it.
+ * passage and seeing somewhere to write about it. `inclusive: false` on the mark (`extensions.ts`)
+ * is what keeps that box's position outside the anchor's own range, so accepting it empty and later
+ * widening the highlight can never absorb it.
  */
 export function addAnchorMark(
   editor: Editor,
@@ -125,8 +125,8 @@ export function addAnchorMark(
  * first character and marks it the open one, so its node view (`AnchorInsertView.vue`) mounts an
  * input and focuses it. Called from `DocumentEditor`'s `handleTextInput` hook, on the first
  * character typed at an empty selection with nothing marked to pair it with — a bare insertion
- * standing alone (Piece 1, "Opening it"). A mark's own wording box opens eagerly instead, from
- * `addAnchorMark` above, rather than waiting on this.
+ * standing alone. A mark's own wording box opens eagerly instead, from `addAnchorMark` above,
+ * rather than waiting on this.
  *
  * `pairWith` is the anchor id this wording pairs with — a mark placed earlier this session whose
  * own box was left empty and closed, per `pairableAnchorAt` — or undefined for a bare insertion
@@ -160,7 +160,7 @@ export function updateAnchorInsertText(editor: Editor, pos: number, text: string
 
 /**
  * Commits an open wording session: keeps the node with its trimmed text, or drops it outright if
- * nothing was typed — an insert with no wording says nothing (Piece 1, "Enter or ✓ commits").
+ * nothing was typed — an insert with no wording says nothing.
  */
 export function commitAnchorInsert(editor: Editor, pos: number, text: string): void {
   anchorInsertStorage(editor).openAnchorId.value = null

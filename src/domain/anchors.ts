@@ -104,7 +104,7 @@ export function anchorIdsIn(content: string | EntryDocument): string[] {
  * the same document, and pairing with one would attach this entry's wording to another entry's
  * anchor. `addedAnchorIds(initialDocument, document)` is exactly that set — deriving the answer from
  * position rather than from session state kept in a ref is what makes this pure and node-testable,
- * and what makes highlight-plus-inline-wording work for free (Piece 1, "The pairing rule").
+ * and what makes highlight-plus-inline-wording work for free.
  */
 export function pairableAnchorAt(
   marksBefore: DocMark[],

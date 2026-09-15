@@ -10,13 +10,13 @@
   --color-accent: #2563eb;
   --color-accent-hover: #1d4ed8;
   /* Failure text: a dead repository write, a rejected save. Its own token rather than a Tailwind
-     red, so the dark theme can lighten it the way every other colour here is lightened. */
+     red, so the dark theme can lighten it the way every other color here is lightened. */
   --color-error: #dc2626;
   /* The visible :focus-visible ring on controls that suppress the browser's own outline, such as
-     the editor surface and AnchorMenu's buttons (Piece 1, "Accessibility"). */
+     the editor surface and AnchorMenu's buttons. */
   --color-focus-ring: #2563eb;
   /*
-    Anchor colours are the *system scheme* — the default of several (see ENTRY_MODEL.md, "Colour"),
+    Anchor colors are the *system scheme* — the default of several (see ENTRY_MODEL.md, "Color"),
     picked at render time from the op kind and never stored on the mark. Swapping schemes later is
     a change here and in the render, not a migration of history.
   */

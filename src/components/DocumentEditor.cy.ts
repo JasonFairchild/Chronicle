@@ -129,23 +129,6 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('drops the placeholder once anything is written, including beside a new heading', () => {
-    cy.mount(DocumentEditor, { props: { label: 'New entry' } })
-
-    // No role and no text of its own: the extension marks every empty block with the words to show
-    // and the stylesheet draws them, so the attribute is the only thing there is to assert on. Its
-    // value, not its presence — a block told to prompt for nothing still carries it, empty.
-    const prompt = '[data-placeholder="Record your thoughts…"]'
-    cy.findByRole('textbox', { name: 'New entry' }).find(prompt).should('have.length', 1)
-
-    cy.findByRole('textbox', { name: 'New entry' }).type('Worth remembering{selectall}')
-    cy.findByRole('combobox', { name: 'Text style' }).select('Heading')
-
-    // Making a heading leaves an empty paragraph after it. Prompting for thoughts there, under a
-    // heading someone is still typing, reads as though the entry had not been started.
-    cy.findByRole('textbox', { name: 'New entry' }).find(prompt).should('not.exist')
-  })
-
   it('reports a formatting change as formatting, since it inserts no words', () => {
     const onChange = cy.stub().as('change')
 

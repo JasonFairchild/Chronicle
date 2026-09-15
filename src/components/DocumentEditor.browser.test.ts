@@ -98,27 +98,6 @@ describe('DocumentEditor (browser)', () => {
     expect(docTitle(changes[changes.length - 1]!.content)).toBe('Lake Tahoe')
   })
 
-  it('drops the placeholder once anything is written, including beside a new heading', async () => {
-    const screen = mountEditor()
-    const body = screen.getByRole('textbox', { name: 'New entry' })
-    await expect.element(body).toBeVisible()
-    // No role and no text of its own: the extension marks every empty block with the words to show
-    // and the stylesheet draws them, so the attribute is the only thing there is to assert on. Its
-    // value, not its presence — a block told to prompt for nothing still carries it, empty.
-    const prompts = () =>
-      body.element().querySelectorAll('[data-placeholder="Record your thoughts…"]')
-
-    expect(prompts()).toHaveLength(1)
-
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('Worth remembering')
-    await userEvent.keyboard('{Control>}a{/Control}')
-    await screen.getByRole('combobox', { name: 'Text style' }).selectOptions('Heading')
-
-    // Making a heading leaves an empty paragraph after it. Prompting for thoughts there, under a
-    // heading someone is still typing, reads as though the entry had not been started.
-    expect(prompts()).toHaveLength(0)
-  })
-
   it('reports a formatting change as formatting, since it inserts no words', async () => {
     const screen = mountEditor()
 

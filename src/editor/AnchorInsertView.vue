@@ -2,7 +2,7 @@
 /**
  * The wording a child entry proposes at a point in the parent's document, in its own Vue node view
  * so there is one mechanism for typing wording whether it pairs with a highlight, a strike, or
- * stands alone (Piece 1, "Wording: one mechanism, a node view").
+ * stands alone.
  *
  * Committed, it renders the same markup `AnchorInsert.renderHTML` (`extensions.ts`) produces, so the
  * live editor and the read-only view agree on shape. Open — `editor.storage.anchorInsert` names this

@@ -142,16 +142,16 @@ const ANCHOR_MARKUP_MODE: 'inline' | 'interlinear' = 'inline'
  * `data-anchor-markup` only belongs on a document that actually carries an anchor — plain writing
  * surfaces keep the ordinary line height regardless of which mode above is active. Read from
  * whatever the document currently holds rather than only `initialDocument`, so an anchor placed
- * mid-session (Piece 1) switches this on live, the same as one sealed earlier.
+ * mid-session switches this on live, the same as one sealed earlier.
  */
 function anchorMarkupAttr(document: EntryDocument): Record<string, string> {
   return collectAnchors(document).length > 0 ? { 'data-anchor-markup': ANCHOR_MARKUP_MODE } : {}
 }
 
 /**
- * What the polite live region below announces — see Piece 1, "Accessibility". The only feedback an
- * anchor placement used to give was a colour change inside a contenteditable, invisible to
- * assistive tech; this is read out for every placement instead.
+ * What the polite live region below announces. The only feedback an anchor placement used to give
+ * was a color change inside a contenteditable, invisible to assistive tech; this is read out for
+ * every placement instead.
  */
 const liveRegionMessage = ref('')
 
@@ -179,9 +179,9 @@ const editor = useEditor({
       ...anchorMarkupAttr(initialDocument),
     },
     handleTextInput: (view: EditorView, from: number, to: number, text: string): boolean => {
-      // Opening a wording session at the caret — see Piece 1, "Opening it: handleTextInput". Only
-      // an empty selection in anchor mode qualifies; anything else falls through to the guard,
-      // which rejects it like any other ordinary edit in this mode.
+      // Opening a wording session at the caret. Only an empty selection in anchor mode qualifies;
+      // anything else falls through to the guard, which rejects it like any other ordinary edit in
+      // this mode.
       if (!props.anchorMode || from !== to) return false
 
       const instance = editor.value
@@ -603,10 +603,10 @@ defineExpose({
     <AnchorMenu v-if="editor && anchorMode" :editor="editor" @mark="handleAnchorMark" />
 
     <!--
-      A polite live region: the only feedback an anchor placement used to give was a colour change
-      inside a contenteditable, which assistive tech cannot see at all (Piece 1, "Accessibility").
-      Always in the DOM, even outside anchor mode, since a live region has to exist before its first
-      update to be announced reliably — an empty one the rest of the time costs nothing.
+      A polite live region: the only feedback an anchor placement used to give was a color change
+      inside a contenteditable, which assistive tech cannot see at all. Always in the DOM, even
+      outside anchor mode, since a live region has to exist before its first update to be announced
+      reliably — an empty one the rest of the time costs nothing.
     -->
     <p v-if="anchorMode" class="sr-only" role="status" aria-live="polite">
       {{ liveRegionMessage }}
@@ -794,22 +794,8 @@ defineExpose({
 <style scoped>
 /*
   The editor renders ProseMirror's own DOM, so these have to pierce scoping. Sizes and weights
-  only — every colour stays on a CSS variable so dark mode is a token swap.
+  only — every color stays on a CSS variable so dark mode is a token swap.
 */
-/*
-  The Placeholder extension marks an empty text block `is-empty` and carries the words to show in
-  `data-placeholder`; this is only the styling for that. `float: left` plus `height: 0` is the
-  extension's own recommended pairing, so the ghost text doesn't add a line the real content never
-  had once it's typed over.
-*/
-:deep(.chronicle-document .is-empty::before) {
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  color: var(--color-text-muted);
-  pointer-events: none;
-}
-
 :deep(.chronicle-document p) {
   margin-bottom: 0.5rem;
 }
@@ -853,8 +839,8 @@ defineExpose({
 }
 
 /*
-  Anchor highlight colours come from the system scheme (main.css) rather than anything stored on
-  the mark — see ENTRY_MODEL.md, "Colour". Comment and strike share the mark and differ only by the
+  Anchor highlight colors come from the system scheme (main.css) rather than anything stored on
+  the mark — see ENTRY_MODEL.md, "Color". Comment and strike share the mark and differ only by the
   `data-anchor-kind` attribute the mark renders.
 */
 :deep(.chronicle-document .chronicle-anchor) {
@@ -932,9 +918,9 @@ defineExpose({
 */
 
 /*
-  A visible ring wherever the browser's own outline was suppressed for layout reasons — see Piece 1,
-  "Accessibility". Kept off `outline-none` at rest so a mouse click never shows one, matching the
-  formatting toolbar's own buttons above.
+  A visible ring wherever the browser's own outline was suppressed for layout reasons. Kept off
+  `outline-none` at rest so a mouse click never shows one, matching the formatting toolbar's own
+  buttons above.
 */
 :deep(.chronicle-document:focus-visible) {
   outline: 2px solid var(--color-focus-ring);

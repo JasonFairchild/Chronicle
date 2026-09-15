@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * Anchor mode's whole action set as a floating menu over the current selection, replacing the fixed
- * toolbar this mode used to show (Piece 1, "The inline anchor menu"). Built on TipTap's `BubbleMenu`
- * so positioning and show/hide timing come from the library rather than being reinvented here.
+ * toolbar this mode used to show. Built on TipTap's `BubbleMenu` so positioning and show/hide timing
+ * come from the library rather than being reinvented here.
  *
  * Actions come from the **selection** on every render, not from anything remembered between clicks —
  * see `DocumentEditor`'s deleted `pendingStrikeId`. A range of ordinary text offers the two mark
@@ -48,8 +48,7 @@ function shouldShow({ state }: { state: { selection: Editor['state']['selection'
 
 /**
  * Roving tabindex: one Tab stop for the whole toolbar, arrow keys move within it. Worth doing
- * properly rather than leaving each button independently tabbable — there are only two controls
- * here, ever (Piece 1, "role=toolbar with a roving tabindex").
+ * properly rather than leaving each button independently tabbable, even with only two controls here.
  */
 const buttons = ref<(HTMLButtonElement | null)[]>([])
 const activeIndex = ref(0)

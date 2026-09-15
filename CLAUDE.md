@@ -44,6 +44,10 @@ they are better tools than `cat`, `grep` and `find` for the same job.
 - Composition API + `<script setup>`; all data access behind the repository layer.
 - No hard-coded colors that block dark mode.
 - Small, focused changes, in code an employer can read and I can explain.
+- **Comments cite nothing that outlives the session.** A plan, a chat, or "Piece N" of a design
+  discussion isn't something future code — or a future session — can look up; cite a checked-in doc
+  (`ENTRY_MODEL.md`, `PRODUCT.md`, ...) or nothing at all. Keep comments proportional to what they sit
+  next to: the non-obvious why, stated once, not a walkthrough.
 - When two options are equally good, take the one that costs less context.
 - Commit messages: a subject line, then only what the diff can't say — why a choice was made, and
   anything a reviewer couldn't discover from the code. No tour of the changes.

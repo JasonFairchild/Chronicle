@@ -126,7 +126,7 @@ export function pairableAnchorAt(
  * with the document.
  *
  * `sealed` is the ids the document already carried when the session began — `anchorIdsIn` of its
- * base (`Draft.parent_base_content`). Taking it as a set rather than a document is what lets the
+ * base (`Draft.parent.base_content`). Taking it as a set rather than a document is what lets the
  * editor compute it once, at mount, and answer "may I still edit this one?" per keystroke.
  */
 export function sessionAnchorIds(
@@ -141,7 +141,7 @@ export function sessionAnchorIds(
  * of two documents rather than a precomputed set, for callers that hold the session's base document
  * instead (`draftsStore`, `entriesStore` at seal time).
  *
- * A session's base is persisted (`Draft.parent_base_content`) rather than inferred from whatever the
+ * A session's base is persisted (`Draft.parent.base_content`) rather than inferred from whatever the
  * editor happened to mount with, which is what makes this survive a resume: a reload reseeds the
  * editor from the draft's *current* parent document, where an anchor this session placed before the
  * reload is indistinguishable from one an earlier child sealed. Against the base it stays legible.
@@ -150,8 +150,8 @@ export function anchorsPlacedSince(
   base: string | EntryDocument | null,
   current: string | EntryDocument | null,
 ): string[] {
-  // Nullable because both are `Draft` fields a non-`new_child` target never fills in — no parent
-  // document at all means no anchors placed on one, rather than an error worth raising.
+  // Nullable because a non-`new_child` target's `Draft.parent` is null — no parent document at all
+  // means no anchors placed on one, rather than an error worth raising.
   if (!current) return []
   return sessionAnchorIds(new Set(base ? anchorIdsIn(base) : []), current)
 }

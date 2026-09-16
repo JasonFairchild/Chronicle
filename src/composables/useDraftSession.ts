@@ -24,8 +24,8 @@ export function useDraftSession() {
   const dates = ref<EntryDates>(emptyEntryDates())
   const saving = ref(false)
   /**
-   * The parent document as an anchor-mode session has provisionally marked it — the second document
-   * such a session edits (`Draft.parent_content`), empty for every other target.
+   * The parent document as an anchor-mode session has provisionally marked it — `Draft.parent`,
+   * empty for every other target.
    *
    * It lives here rather than beside the session in whichever view opened it because resuming is
    * what makes the difference: a view that tracked it separately would restore the child's prose
@@ -33,7 +33,7 @@ export function useDraftSession() {
    */
   const parentContent = ref('')
   /**
-   * The parent as it stood when this session began — `Draft.parent_base_content`, mirrored here the
+   * The parent as it stood when this session began — `Draft.parent.base_content`, mirrored here the
    * same way `parentContent` itself is, and never reassigned while the session runs. What
    * `DocumentEditor`'s `anchor-base-content` prop is seeded from on a resume, so an anchor placed
    * before a reload still reads as this session's own rather than as an earlier child's.
@@ -59,9 +59,9 @@ export function useDraftSession() {
     const resumed = await drafts.resumeDraft(existingSessionId)
     if (!resumed) return null
 
-    content.value = resumed.content
-    parentContent.value = resumed.parent_content ?? ''
-    parentBaseContent.value = resumed.parent_base_content ?? ''
+    content.value = resumed.child.content
+    parentContent.value = resumed.parent?.content ?? ''
+    parentBaseContent.value = resumed.parent?.base_content ?? ''
     dates.value = resumed.dates ?? emptyEntryDates()
     sessionId.value = existingSessionId
     return resumed

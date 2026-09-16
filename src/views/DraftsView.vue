@@ -220,7 +220,7 @@ async function discard(sessionId: string): Promise<void> {
 
         <template v-else>
           <p class="whitespace-pre-wrap text-sm leading-relaxed">
-            {{ previewText(draft.content, PREVIEW_LIMIT) }}
+            {{ previewText(draft.child.content, PREVIEW_LIMIT) }}
           </p>
 
           <div class="mt-3 flex justify-end gap-2">

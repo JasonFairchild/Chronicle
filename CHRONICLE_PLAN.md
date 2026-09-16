@@ -136,7 +136,7 @@ built (PRODUCT.md §4.4); a real resize gesture is not — remove-and-recreate c
 another pass once it turns out to actually get reached for in anger, not a blocker.
 
 A stale anchor draft against a revised parent is a related, deliberately unhandled gap: sealing an
-anchor-mode session writes `Draft.parent_content` as a full-state revision
+anchor-mode session writes `Draft.parent.content` as a full-state revision
 (`entriesStore.sealAnchorChild`), so if the parent was text-revised — or another child's anchor-mode
 session sealed on it — after this session began, sealing silently reverts the parent to the stale
 snapshot the session started from, orphaning whatever the other revision or child added. The
@@ -197,7 +197,7 @@ Genuinely deferred rather than rejected — worth another look later, but not no
   sealed trace's steps and ticks never change afterward, and even mid-session they're append-only
   (undo/redo only ever adds inverse steps, never rewrites history), so a snapshot computed for a
   given tick is valid forever once computed. It should be stored as a plain document — the same
-  shape `content`/`parent_content` already are — not as "steps, cached": that's what lets a snapshot
+  shape `child.content`/`parent.content` already are — not as "steps, cached": that's what lets a snapshot
   survive a future schema change the same way `content` already does, per Authoring capture's "the
   loss is scrubbing, never words" in ENTRY_MODEL.md, rather than being just as fragile as the raw
   replay it's standing in for. The steps themselves should never be deleted once snapshots exist —

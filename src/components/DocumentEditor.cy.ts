@@ -686,7 +686,7 @@ describe('DocumentEditor', () => {
           20,
           'Donner Lake',
         )
-        // The base — the parent as the session first found it, `Draft.parent_base_content` — is
+        // The base — the parent as the session first found it, `Draft.parent.base_content` — is
         // what still tells it apart from an anchor an earlier child sealed.
         expect(anchorsPlacedSince(base, seeded)).to.deep.equal(['resumed-1'])
 

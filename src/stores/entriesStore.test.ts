@@ -46,16 +46,15 @@ describe('useEntriesStore', () => {
       target: { kind: 'new_root' },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
+      dates: emptyEntryDates(),
       // A title node with no text: the field was offered and not filled in. Nothing is owed — a
       // journal entry that would only ever be named "Tuesday" is better left unnamed.
-      content: serializeDocument(titledDocument(plainTextDocument('We drove up on Friday.'), '')),
-      dates: emptyEntryDates(),
-      parent_base_content: null,
-      parent_content: null,
-      steps: [],
-      parent_steps: [],
-      ticks: [],
-      parent_ticks: [],
+      child: {
+        content: serializeDocument(titledDocument(plainTextDocument('We drove up on Friday.'), '')),
+        steps: [],
+        ticks: [],
+      },
+      parent: null,
     }
 
     const sealed = await store.createFromDraft(draft, null)
@@ -74,16 +73,15 @@ describe('useEntriesStore', () => {
       target: { kind: 'new_child', parent_id: parent.id },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
-      content: serializeDocument(
-        titledDocument(plainTextDocument('Still think about this trip'), 'A later thought'),
-      ),
       dates: emptyEntryDates(),
-      parent_base_content: null,
-      parent_content: null,
-      steps: [],
-      parent_steps: [],
-      ticks: [],
-      parent_ticks: [],
+      child: {
+        content: serializeDocument(
+          titledDocument(plainTextDocument('Still think about this trip'), 'A later thought'),
+        ),
+        steps: [],
+        ticks: [],
+      },
+      parent: null,
     }
 
     const sealed = await store.createFromDraft(draft, null)
@@ -124,15 +122,15 @@ describe('useEntriesStore', () => {
       target: { kind: 'new_child', parent_id: parent.id },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
-      content: textContent('It was actually Donner Lake'),
       dates: emptyEntryDates(),
+      child: { content: textContent('It was actually Donner Lake'), steps: [], ticks: [] },
       // "anchor-1 is this session's" is the difference between these two documents, not a list.
-      parent_base_content: textContent('I went to Lake Tahoe with Dad'),
-      parent_content: marked,
-      steps: [],
-      parent_steps: [],
-      ticks: [],
-      parent_ticks: [],
+      parent: {
+        content: marked,
+        base_content: textContent('I went to Lake Tahoe with Dad'),
+        steps: [],
+        ticks: [],
+      },
     }
 
     await store.createFromDraft(draft, null)
@@ -165,14 +163,14 @@ describe('useEntriesStore', () => {
       target: { kind: 'new_child', parent_id: parent.id },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
-      content: textContent('It was actually Donner Lake'),
       dates: emptyEntryDates(),
-      parent_base_content: textContent('I went to Lake Tahoe with Dad'),
-      parent_content: struck,
-      steps: [],
-      parent_steps: [],
-      ticks: [],
-      parent_ticks: [],
+      child: { content: textContent('It was actually Donner Lake'), steps: [], ticks: [] },
+      parent: {
+        content: struck,
+        base_content: textContent('I went to Lake Tahoe with Dad'),
+        steps: [],
+        ticks: [],
+      },
     }
 
     await store.createFromDraft(draft, null)
@@ -189,19 +187,18 @@ describe('useEntriesStore', () => {
       target: { kind: 'new_root' },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
-      content: textContent('Transcribed out of the green notebook'),
       dates: {
         recorded_at: '1994-06-12',
         recorded_time_note: 'evening',
         occurred_at: '1994-06-11',
         occurred_time_note: 'late morning',
       },
-      parent_base_content: null,
-      parent_content: null,
-      steps: [],
-      parent_steps: [],
-      ticks: [],
-      parent_ticks: [],
+      child: {
+        content: textContent('Transcribed out of the green notebook'),
+        steps: [],
+        ticks: [],
+      },
+      parent: null,
     }
 
     const created = await store.createFromDraft(draft, null)
@@ -259,20 +256,19 @@ describe('useEntriesStore', () => {
       target: { kind: 'revision', parent_id: created.id },
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
-      content: serializeDocument({
-        type: 'doc',
-        content: [
-          { type: 'paragraph', content: [{ type: 'text', text: 'A day at Donner Lake' }] },
-          { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } },
-        ],
-      }),
       dates: emptyEntryDates(),
-      parent_base_content: null,
-      parent_content: null,
-      steps: [],
-      parent_steps: [],
-      ticks: [],
-      parent_ticks: [],
+      child: {
+        content: serializeDocument({
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'A day at Donner Lake' }] },
+            { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } },
+          ],
+        }),
+        steps: [],
+        ticks: [],
+      },
+      parent: null,
     }
 
     await store.createFromDraft(draft, null)

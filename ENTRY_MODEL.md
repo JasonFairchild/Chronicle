@@ -108,8 +108,8 @@ an unsealed draft has not settled the question, which is also why the drafts lis
 "related entry" rather than naming a kind it would sometimes get wrong.
 
 **Drafts.** An anchor-mode session edits two documents — the parent (gaining provisional anchors,
-tracked in `Draft.parent_content` / `parent_steps` / `parent_ticks`, alongside `parent_base_content`
-below) and the child's own prose (`Draft.content` / `steps`) — sealing atomically into two entries
+tracked in `Draft.parent`, an `AuthoringBuffer` plus the `base_content` described below) and the
+child's own prose (`Draft.child`, an `AuthoringBuffer` on its own) — sealing atomically into two entries
 via `EntryRepository.createMany`: a parent revision (`revision_mode: 'anchor'`) and the child
 (`anchors` pointing at what just landed). A draft also holds the dates typed beside the words
 (`Draft.dates`), so a reload loses neither. `createMany` writes all-or-nothing, so a half-sealed
@@ -119,12 +119,12 @@ exactly as it would for an unanchored note — no revision for a parent nothing 
 
 Anchors may be freely added, changed, or undone before that seal. **Which ids this session may still
 change** is never stored as a list at all — it is the _difference_ between two documents:
-`Draft.parent_base_content`, the parent exactly as this session found it, set once and never
-rewritten, and `parent_content`, the parent as it stands right now. `anchorsPlacedSince(base,
+`Draft.parent.base_content`, the parent exactly as this session found it, set once and never
+rewritten, and `parent.content`, the parent as it stands right now. `anchorsPlacedSince(base,
 current)` (`domain/anchors.ts`) reads that difference on demand, which is what lets a
 placed-then-undone anchor leave no trace to subtract without a second record to keep in step with
 the document. Persisting the _base_ rather than a running list of ids is also what survives a
-resume: a reload reseeds the editor from `parent_content`, which already carries whatever this
+resume: a reload reseeds the editor from `parent.content`, which already carries whatever this
 session placed before the reload — indistinguishable from an earlier child's sealed anchor unless
 something fixed predates the session to compare against. The base is that fixed point; it is also,
 not incidentally, the version the session started revising from, which a future check for "this
@@ -270,6 +270,12 @@ costs nothing: every debounced flush writes to disk through the same local-first
 the entries use, in its own `drafts` store.
 
 ```ts
+interface AuthoringBuffer {
+  content: string
+  steps: AuthoringStep[]
+  ticks: AuthoringTick[]
+}
+
 interface Draft {
   session_id: string // key
   target:
@@ -277,23 +283,19 @@ interface Draft {
     | { kind: 'new_child'; parent_id: string } // anchor-mode
     | { kind: 'new_connection'; parent_id: string; target_id: string }
     | { kind: 'revision'; parent_id: string } // text-mode
-  started_at: string
+  started_at: string // shared by child and parent — one session, two documents
   updated_at: string
-  content: string // the child's own prose, or the entry's own document for the other targets
-  parent_content: string | null // the parent, provisionally marked. `new_child` only
-  parent_base_content: string | null // the parent as this session found it — see "Drafts" below
-  steps: AuthoringStep[]
-  parent_steps: AuthoringStep[] // the parent's own step chain. `new_child` only
-  ticks: AuthoringTick[]
-  parent_ticks: AuthoringTick[] // the parent's own bookmarks. `new_child` only
+  dates: EntryDates
+  child: AuthoringBuffer // the entry this draft is chiefly for
+  parent: (AuthoringBuffer & { base_content: string }) | null // provisional anchors. `new_child` only
 }
 ```
 
 Sealing turns one draft into one or two entries, per "Two creation experiences" above: `new_root`
-and `revision` each become one entry, carrying `content`/`steps`/`ticks` into it as
+and `revision` each become one entry, carrying `child.content`/`.steps`/`.ticks` into it as
 `authoring_trace`; `new_child` becomes the child alone when nothing was placed since
-`parent_base_content` (`anchorsPlacedSince`), or the atomic parent-revision-plus-child pair when
-something was, with `parent_content`/`parent_steps`/`parent_ticks` sealing into the revision's own
+`parent.base_content` (`anchorsPlacedSince`), or the atomic parent-revision-plus-child pair when
+something was, with `parent.content`/`.steps`/`.ticks` sealing into the revision's own
 `authoring_trace`. Either way the draft row is deleted once its contents live in a committed entry. A
 draft is therefore very nearly the entry (or entries) it will become, which is exactly why it must
 not live in the entries table. Entries are immutable and a draft rewrites itself

@@ -8,14 +8,9 @@ function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft
     target: { kind: 'new_root' },
     started_at: '2026-09-05T10:00:00.000Z',
     updated_at: '2026-09-05T10:00:00.000Z',
-    content: '',
     dates: emptyEntryDates(),
-    parent_base_content: null,
-    parent_content: null,
-    steps: [],
-    parent_steps: [],
-    ticks: [],
-    parent_ticks: [],
+    child: { content: '', steps: [], ticks: [] },
+    parent: null,
     ...overrides,
   }
 }
@@ -41,25 +36,29 @@ export function runDraftRepositoryContract(
         makeDraft({
           session_id: 'session-1',
           target: { kind: 'new_child', parent_id: 'entry-9' },
-          content: 'Half a thought',
           dates: {
             recorded_at: '1994-06-12',
             recorded_time_note: 'evening',
             occurred_at: '1994-06-11',
             occurred_time_note: 'morning',
           },
-          parent_base_content: 'The full parent document, as this session found it',
-          parent_content: 'The full parent document, with a provisional anchor mark',
-          steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
-          parent_steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
-          ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
-          parent_ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
+          child: {
+            content: 'Half a thought',
+            steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
+            ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
+          },
+          parent: {
+            content: 'The full parent document, with a provisional anchor mark',
+            base_content: 'The full parent document, as this session found it',
+            steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
+            ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
+          },
         }),
       )
 
       const fetched = await repository.getById('session-1')
 
-      expect(fetched?.content).toBe('Half a thought')
+      expect(fetched?.child.content).toBe('Half a thought')
       expect(fetched?.target).toEqual({ kind: 'new_child', parent_id: 'entry-9' })
       expect(fetched?.dates).toEqual({
         recorded_at: '1994-06-12',
@@ -67,30 +66,32 @@ export function runDraftRepositoryContract(
         occurred_at: '1994-06-11',
         occurred_time_note: 'morning',
       })
-      expect(fetched?.parent_base_content).toBe(
+      expect(fetched?.parent?.base_content).toBe(
         'The full parent document, as this session found it',
       )
-      expect(fetched?.parent_content).toBe(
+      expect(fetched?.parent?.content).toBe(
         'The full parent document, with a provisional anchor mark',
       )
-      expect(fetched?.steps).toHaveLength(1)
-      expect(fetched?.parent_steps).toHaveLength(1)
-      expect(fetched?.ticks[0]?.reason).toBe('punctuation')
-      expect(fetched?.parent_ticks[0]?.reason).toBe('anchor')
+      expect(fetched?.child.steps).toHaveLength(1)
+      expect(fetched?.parent?.steps).toHaveLength(1)
+      expect(fetched?.child.ticks[0]?.reason).toBe('punctuation')
+      expect(fetched?.parent?.ticks[0]?.reason).toBe('anchor')
     })
 
     it('overwrites in place, because a live session is working space rather than history', async () => {
-      await repository.save(makeDraft({ session_id: 'session-1', content: 'It rai' }))
+      await repository.save(
+        makeDraft({ session_id: 'session-1', child: { content: 'It rai', steps: [], ticks: [] } }),
+      )
       await repository.save(
         makeDraft({
           session_id: 'session-1',
-          content: 'It rained all day.',
+          child: { content: 'It rained all day.', steps: [], ticks: [] },
           updated_at: '2026-09-05T10:00:05.000Z',
         }),
       )
 
       expect(await repository.list()).toHaveLength(1)
-      expect((await repository.getById('session-1'))?.content).toBe('It rained all day.')
+      expect((await repository.getById('session-1'))?.child.content).toBe('It rained all day.')
     })
 
     it('lists drafts most recently touched first', async () => {

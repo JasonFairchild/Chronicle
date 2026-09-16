@@ -586,7 +586,7 @@ describe('DocumentEditor (browser)', () => {
       it('lets a session placed before a resume keep editing an anchor placed before the resume', async () => {
         // Stands for a draft resumed after a reload: "resumed-1" was placed and persisted before
         // the reload, so it's already in the document this editor mounts with. The base — the
-        // parent as the session first found it, `Draft.parent_base_content` — is what still tells
+        // parent as the session first found it, `Draft.parent.base_content` — is what still tells
         // it apart from an anchor an earlier child sealed.
         const base = serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad'))
         const seeded = withAnchorMarkAndWording(

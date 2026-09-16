@@ -286,7 +286,7 @@ describe('EntryDetailView', () => {
 
         cy.then(() => drafts.list()).then((saved) => {
           expect(saved[0]?.target).to.deep.equal({ kind: 'new_child', parent_id: parent.id })
-          expect(docToPlainText(saved[0]!.content)).to.equal('Half a thought about this')
+          expect(docToPlainText(saved[0]!.child.content)).to.equal('Half a thought about this')
         })
       })
     })

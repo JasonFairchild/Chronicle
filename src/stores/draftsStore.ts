@@ -82,16 +82,19 @@ export const useDraftsStore = defineStore('drafts', () => {
         target,
         started_at: startedAt,
         updated_at: startedAt,
-        content: seed.content ?? '',
         dates: emptyEntryDates(),
-        parent_content: seed.parentContent ?? null,
-        // The same document as `parent_content` at this instant, and the one that stays put: what
-        // the session started from, so "which anchors are this session's" stays answerable.
-        parent_base_content: seed.parentContent ?? null,
-        steps: [],
-        parent_steps: [],
-        ticks: [],
-        parent_ticks: [],
+        child: { content: seed.content ?? '', steps: [], ticks: [] },
+        // `base_content` starts equal to `content`: nothing has been marked yet, so this is also
+        // what "which anchors are this session's" (`anchorsPlacedSince`) diffs against.
+        parent:
+          seed.parentContent !== undefined
+            ? {
+                content: seed.parentContent,
+                base_content: seed.parentContent,
+                steps: [],
+                ticks: [],
+              }
+            : null,
       },
       session: new AuthoringSession({ sessionId, startedAt }),
       parentSession: new AuthoringSession({ sessionId, startedAt }),
@@ -117,8 +120,8 @@ export const useDraftsStore = defineStore('drafts', () => {
       session: AuthoringSession.resume({
         sessionId,
         startedAt: draft.started_at,
-        steps: draft.steps,
-        ticks: draft.ticks,
+        steps: draft.child.steps,
+        ticks: draft.child.ticks,
       }),
       // Its own step chain, so the parent revision gets an honest authoring trace too — the same
       // `AuthoringSession` class and the same tick policy as `session` above, just a second
@@ -126,8 +129,8 @@ export const useDraftsStore = defineStore('drafts', () => {
       parentSession: AuthoringSession.resume({
         sessionId,
         startedAt: draft.started_at,
-        steps: draft.parent_steps,
-        ticks: draft.parent_ticks,
+        steps: draft.parent?.steps ?? [],
+        ticks: draft.parent?.ticks ?? [],
       }),
       timer: null,
       // Nothing new to write until this session is typed in, but the row is already on disk, so
@@ -174,10 +177,8 @@ export const useDraftsStore = defineStore('drafts', () => {
 
     entry.draft = {
       ...entry.draft,
-      content: change.content,
       updated_at: newEntryTimestamp(),
-      steps: entry.session.steps,
-      ticks: entry.session.ticks,
+      child: { content: change.content, steps: entry.session.steps, ticks: entry.session.ticks },
     }
     entry.dirty = true
 
@@ -188,18 +189,26 @@ export const useDraftsStore = defineStore('drafts', () => {
    * Records a change to the **parent's** provisional document, for an anchor-mode session only —
    * an ordinary `DraftChange` like the child's own, against the session's second document. Which
    * anchors the session has placed is nowhere in here: it is the difference between
-   * `parent_base_content` and `parent_content` (`anchorsPlacedSince`), read when someone asks.
+   * `parent.base_content` and `parent.content` (`anchorsPlacedSince`), read when someone asks.
    */
   function recordParentChange(sessionId: string, change: DraftChange): void {
     const entry = requireActive(sessionId)
+    const baseContent = entry.draft.parent?.base_content
+    if (baseContent === undefined) {
+      throw new Error('recordParentChange called on a session with no parent document')
+    }
+
     recordInto(entry.parentSession, change)
 
     entry.draft = {
       ...entry.draft,
-      parent_content: change.content,
       updated_at: newEntryTimestamp(),
-      parent_steps: entry.parentSession.steps,
-      parent_ticks: entry.parentSession.ticks,
+      parent: {
+        content: change.content,
+        base_content: baseContent,
+        steps: entry.parentSession.steps,
+        ticks: entry.parentSession.ticks,
+      },
     }
     entry.dirty = true
 
@@ -225,7 +234,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     const entry = requireActive(sessionId)
 
     entry.session.mark(reason)
-    entry.draft = { ...entry.draft, ticks: entry.session.ticks }
+    entry.draft = { ...entry.draft, child: { ...entry.draft.child, ticks: entry.session.ticks } }
     scheduleFlush(sessionId)
   }
 
@@ -250,10 +259,10 @@ export const useDraftsStore = defineStore('drafts', () => {
       // A blank child note is not yet a draft worth keeping, unless anchors have already been
       // placed on the parent — that is real, crash-worthy work even before a word of prose exists.
       const placedAnchors = anchorsPlacedSince(
-        entry.draft.parent_base_content,
-        entry.draft.parent_content,
+        entry.draft.parent?.base_content ?? null,
+        entry.draft.parent?.content ?? null,
       )
-      if (isEmptyDocument(entry.draft.content) && placedAnchors.length === 0) {
+      if (isEmptyDocument(entry.draft.child.content) && placedAnchors.length === 0) {
         if (entry.persisted) {
           await draftRepository.delete(sessionId)
           entry.persisted = false
@@ -299,7 +308,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     // already become a real entry.
     await entry.flushing?.catch(() => {})
 
-    if (isEmptyDocument(entry.draft.content)) {
+    if (isEmptyDocument(entry.draft.child.content)) {
       throw new Error('Entry content cannot be empty')
     }
 

@@ -7,20 +7,35 @@ import { withAnchorMark } from '@/testing/anchorFixtures'
 import type { Draft } from '@/types/draft'
 import { createEntryInput, emptyEntryDates } from '@/types/entry'
 
-function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft {
+function makeDraft(
+  overrides: Partial<Omit<Draft, 'child' | 'parent'>> &
+    Pick<Draft, 'session_id'> & {
+      content?: string
+      parentContent?: string
+      parentBaseContent?: string
+    },
+): Draft {
+  const { content, parentContent, parentBaseContent, ...rest } = overrides
   return {
     target: { kind: 'new_root' },
     started_at: '2026-09-05T10:00:00.000Z',
     updated_at: '2026-09-05T10:00:02.000Z',
-    content: '',
     dates: emptyEntryDates(),
-    parent_base_content: null,
-    parent_content: null,
-    steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
-    parent_steps: [],
-    ticks: [],
-    parent_ticks: [],
-    ...overrides,
+    child: {
+      content: content ?? '',
+      steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
+      ticks: [],
+    },
+    parent:
+      parentContent !== undefined
+        ? {
+            content: parentContent,
+            base_content: parentBaseContent ?? parentContent,
+            steps: [],
+            ticks: [],
+          }
+        : null,
+    ...rest,
   }
 }
 
@@ -97,8 +112,8 @@ describe('DraftsView', () => {
           content: textContent('Wrong lake'),
           // The parent as this session found it, against which "anchor-1 is ours" still reads after
           // the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
-          parent_base_content: textContent('I went to Lake Tahoe with Dad'),
-          parent_content: withAnchorMark(
+          parentBaseContent: textContent('I went to Lake Tahoe with Dad'),
+          parentContent: withAnchorMark(
             'I went to Lake Tahoe with Dad',
             'anchor-1',
             10,

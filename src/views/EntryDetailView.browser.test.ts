@@ -312,7 +312,7 @@ describe('EntryDetailView (browser)', () => {
     await vi.waitFor(async () => {
       const [draft] = await drafts.list()
       expect(draft?.target).toEqual({ kind: 'new_child', parent_id: parent.id })
-      expect(docToPlainText(draft!.content)).toBe('Half a thought about this')
+      expect(docToPlainText(draft!.child.content)).toBe('Half a thought about this')
     })
   })
 

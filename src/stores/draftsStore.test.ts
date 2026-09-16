@@ -60,8 +60,8 @@ describe('useDraftsStore', () => {
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(docToPlainText(flushed!.content)).toBe('It rained all day.')
-    expect(flushed?.steps).toHaveLength(3)
+    expect(docToPlainText(flushed!.child.content)).toBe('It rained all day.')
+    expect(flushed?.child.steps).toHaveLength(3)
   })
 
   it('moves the snapshot but not the trace for a change that produced no steps', async () => {
@@ -83,8 +83,8 @@ describe('useDraftsStore', () => {
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(flushed?.content).toBe(textContent('We drove up on Friday', 'Lake Tahoe'))
-    expect(flushed?.steps).toHaveLength(1)
+    expect(flushed?.child.content).toBe(textContent('We drove up on Friday', 'Lake Tahoe'))
+    expect(flushed?.child.steps).toHaveLength(1)
   })
 
   it('leaves a snapshot pending when its write fails, rather than retiring it unwritten', async () => {
@@ -110,7 +110,7 @@ describe('useDraftsStore', () => {
     // the failed attempt as written would have retired these words unsaved.
     await store.abandonDraft(sessionId)
 
-    expect(docToPlainText((await draftRepository.getById(sessionId))!.content)).toBe(
+    expect(docToPlainText((await draftRepository.getById(sessionId))!.child.content)).toBe(
       'It rained all day.',
     )
   })
@@ -239,14 +239,14 @@ describe('useDraftsStore', () => {
       target: { kind: 'new_child', parent_id: parent.id },
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
-      content: '',
       dates: emptyEntryDates(),
-      parent_base_content: textContent(parentContent),
-      parent_content: markedParentContent,
-      steps: [],
-      parent_steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
-      ticks: [],
-      parent_ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
+      child: { content: '', steps: [], ticks: [] },
+      parent: {
+        content: markedParentContent,
+        base_content: textContent(parentContent),
+        steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
+        ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
+      },
     })
 
     await store.resumeDraft('interrupted-anchor')
@@ -284,8 +284,8 @@ describe('useDraftsStore', () => {
     })
     await store.flush(sessionId)
 
-    expect(store.currentDraft(sessionId)?.parent_steps).toEqual([])
-    expect(store.currentDraft(sessionId)?.parent_ticks).toEqual([])
+    expect(store.currentDraft(sessionId)?.parent?.steps).toEqual([])
+    expect(store.currentDraft(sessionId)?.parent?.ticks).toEqual([])
   })
 
   it('seals a revision draft as a new version rather than touching the entry it edits', async () => {
@@ -315,14 +315,13 @@ describe('useDraftsStore', () => {
       target: { kind: 'new_root' },
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
-      content: textContent('Half a thought'),
       dates: emptyEntryDates(),
-      parent_base_content: null,
-      parent_content: null,
-      steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
-      parent_steps: [],
-      ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
-      parent_ticks: [],
+      child: {
+        content: textContent('Half a thought'),
+        steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
+        ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
+      },
+      parent: null,
     })
 
     const resumed = await store.resumeDraft('interrupted')
@@ -332,7 +331,7 @@ describe('useDraftsStore', () => {
     })
     const sealed = await store.sealDraft('interrupted')
 
-    expect(docToPlainText(resumed!.content)).toBe('Half a thought')
+    expect(docToPlainText(resumed!.child.content)).toBe('Half a thought')
     const trace = (await useEntriesStore().getEntry(sealed.id))?.authoring_trace
     expect(trace?.started_at).toBe('2026-09-05T10:00:00.000Z')
     expect(trace?.steps).toHaveLength(2)
@@ -350,7 +349,10 @@ describe('useDraftsStore', () => {
 
     await store.loadDrafts()
 
-    expect(store.drafts.map((draft) => docToPlainText(draft.content))).toEqual(['Newer', 'Older'])
+    expect(store.drafts.map((draft) => docToPlainText(draft.child.content))).toEqual([
+      'Newer',
+      'Older',
+    ])
   })
 
   it('abandons an untouched session outright, rather than leaving it open forever', async () => {
@@ -372,7 +374,7 @@ describe('useDraftsStore', () => {
 
     await store.abandonDraft(sessionId)
 
-    expect(docToPlainText(store.currentDraft(sessionId)!.content)).toBe('Half a thought')
+    expect(docToPlainText(store.currentDraft(sessionId)!.child.content)).toBe('Half a thought')
     expect(await draftRepository.getById(sessionId)).not.toBeNull()
   })
 
@@ -462,6 +464,6 @@ describe('useDraftsStore', () => {
     })
 
     await expect(store.sealDraft(sessionId)).rejects.toThrow('Entry content cannot be empty')
-    expect(docToPlainText(store.currentDraft(sessionId)!.content)).toBe('   ')
+    expect(docToPlainText(store.currentDraft(sessionId)!.child.content)).toBe('   ')
   })
 })

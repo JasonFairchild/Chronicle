@@ -168,7 +168,7 @@ export interface EntryExtensionOptions {
   anchorMode?: boolean
   /**
    * The document as it stood when this **session** began — a resumed draft's
-   * `Draft.parent_base_content`. Omitted for a fresh session, where the document the editor opens
+   * `Draft.parent.base_content`. Omitted for a fresh session, where the document the editor opens
    * with is already that base. Every anchor it carries belongs to an earlier, already-sealed child;
    * everything that appears afterward is this session's own. See ENTRY_MODEL.md, "Drafts".
    */

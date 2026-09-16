@@ -170,13 +170,16 @@ export const useEntriesStore = defineStore('entries', () => {
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null = null,
   ): Promise<Entry> {
-    const content = requireContent(draft.content)
+    const content = requireContent(draft.child.content)
     const { target } = draft
 
     if (target.kind === 'new_child') {
       // Read off the two documents rather than a list kept alongside them, so an anchor placed and
       // then removed before sealing leaves nothing behind to subtract — see `anchorsPlacedSince`.
-      const anchorIds = anchorsPlacedSince(draft.parent_base_content, draft.parent_content)
+      const anchorIds = anchorsPlacedSince(
+        draft.parent?.base_content ?? null,
+        draft.parent?.content ?? null,
+      )
 
       if (anchorIds.length === 0) {
         // Nothing was placed on the parent, so this is a note about the entry at large: one entry,
@@ -257,8 +260,8 @@ export const useEntriesStore = defineStore('entries', () => {
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null,
   ): Promise<Entry> {
-    const parentContent = draft.parent_content
-    if (parentContent === null) {
+    const parentContent = draft.parent?.content
+    if (parentContent === undefined) {
       throw new Error('An anchor-mode draft is missing its parent document')
     }
 

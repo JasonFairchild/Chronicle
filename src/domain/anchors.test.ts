@@ -150,7 +150,7 @@ describe('anchorsPlacedSince', () => {
   })
 
   it('keeps reporting an anchor placed before a reload, since the base does not move', () => {
-    // A resumed draft mounts from `parent_content` — which already carries the anchor placed
+    // A resumed draft mounts from `Draft.parent.content` — which already carries the anchor placed
     // before the reload — but is measured against the base it started from, where it is absent.
     expect(anchorsPlacedSince(base, marked)).toEqual(['a1'])
   })

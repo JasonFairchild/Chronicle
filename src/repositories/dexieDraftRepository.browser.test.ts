@@ -30,14 +30,13 @@ describe('DexieDraftRepository persistence', () => {
       target: { kind: 'new_root' },
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
-      content: 'Never got round to finishing this',
       dates: emptyEntryDates(),
-      parent_base_content: null,
-      parent_content: null,
-      steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
-      parent_steps: [],
-      ticks: [],
-      parent_ticks: [],
+      child: {
+        content: 'Never got round to finishing this',
+        steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
+        ticks: [],
+      },
+      parent: null,
     })
 
     // A fresh connection sharing no in-memory state with the first — the closest an automated
@@ -46,8 +45,8 @@ describe('DexieDraftRepository persistence', () => {
     const afterReload = new DexieDraftRepository(databaseName)
     const recovered = await afterReload.getById('session-1')
 
-    expect(recovered?.content).toBe('Never got round to finishing this')
-    expect(recovered?.steps).toHaveLength(1)
+    expect(recovered?.child.content).toBe('Never got round to finishing this')
+    expect(recovered?.child.steps).toHaveLength(1)
 
     await afterReload.dispose()
   })

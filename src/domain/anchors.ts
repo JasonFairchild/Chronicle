@@ -102,38 +102,58 @@ export function anchorIdsIn(content: string | EntryDocument): string[] {
  *
  * Only an anchor placed **this session** may absorb it: a sealed anchor from an earlier child sits in
  * the same document, and pairing with one would attach this entry's wording to another entry's
- * anchor. `addedAnchorIds(initialDocument, document)` is exactly that set — deriving the answer from
- * position rather than from session state kept in a ref is what makes this pure and node-testable,
+ * anchor. `sealed` is that earlier child's ids — the ones the session's base document already
+ * carried, computed once when the editor mounts — which is what makes this pure and node-testable,
  * and what makes highlight-plus-inline-wording work for free.
  */
 export function pairableAnchorAt(
   marksBefore: DocMark[],
-  document: string | EntryDocument,
-  initialDocument: string | EntryDocument,
+  sealed: ReadonlySet<string>,
 ): string | null {
-  const addedIds = new Set(addedAnchorIds(initialDocument, document))
-
   for (const mark of marksBefore) {
     if (mark.type !== ANCHOR_MARK) continue
     const anchorId = attrString(mark.attrs, 'anchorId')
-    if (anchorId && addedIds.has(anchorId)) return anchorId
+    if (anchorId && !sealed.has(anchorId)) return anchorId
   }
 
   return null
 }
 
 /**
- * Anchors present in `after` but not in `before`: exactly what the session being sealed placed.
+ * The anchors this session has placed, read off the document as it stands right now: everything
+ * present that isn't sealed. Derived rather than tallied as the user works, so undoing an anchor
+ * drops it from this list for free — there is no second record of what was placed to keep in step
+ * with the document.
  *
- * Derived rather than tallied as the user works, so undoing an anchor removes it from the list for
- * free — there is no second record of what was placed to keep in step with the document.
+ * `sealed` is the ids the document already carried when the session began — `anchorIdsIn` of its
+ * base (`Draft.parent_base_content`). Taking it as a set rather than a document is what lets the
+ * editor compute it once, at mount, and answer "may I still edit this one?" per keystroke.
  */
-export function addedAnchorIds(
-  before: string | EntryDocument,
-  after: string | EntryDocument,
+export function sessionAnchorIds(
+  sealed: ReadonlySet<string>,
+  content: string | EntryDocument,
 ): string[] {
-  const existing = new Set(anchorIdsIn(before))
-  return anchorIdsIn(after).filter((anchorId) => !existing.has(anchorId))
+  return anchorIdsIn(content).filter((anchorId) => !sealed.has(anchorId))
+}
+
+/**
+ * The anchors placed in `current` since `base` — the same question `sessionAnchorIds` answers, asked
+ * of two documents rather than a precomputed set, for callers that hold the session's base document
+ * instead (`draftsStore`, `entriesStore` at seal time).
+ *
+ * A session's base is persisted (`Draft.parent_base_content`) rather than inferred from whatever the
+ * editor happened to mount with, which is what makes this survive a resume: a reload reseeds the
+ * editor from the draft's *current* parent document, where an anchor this session placed before the
+ * reload is indistinguishable from one an earlier child sealed. Against the base it stays legible.
+ */
+export function anchorsPlacedSince(
+  base: string | EntryDocument | null,
+  current: string | EntryDocument | null,
+): string[] {
+  // Nullable because both are `Draft` fields a non-`new_child` target never fills in — no parent
+  // document at all means no anchors placed on one, rather than an error worth raising.
+  if (!current) return []
+  return sessionAnchorIds(new Set(base ? anchorIdsIn(base) : []), current)
 }
 
 /**
@@ -213,6 +233,48 @@ export function resolveAnchors(
       insertion: anchor.insertion,
     }
   })
+}
+
+/**
+ * One anchor's mark extent, in whatever positional units the caller measures in — ProseMirror
+ * document positions for every caller today (`editor/anchorCommands.ts`'s `anchorMarkRanges` /
+ * `editableAnchorRanges`), kept as plain numbers here the same way `AnchorMapping`
+ * (`anchorWarnings.ts`) is, so the judgment below stays pure and node-testable.
+ */
+export interface AnchorRange {
+  anchor_id: string
+  from: number
+  to: number
+}
+
+/**
+ * The smallest range containing `pos`, among possibly several that overlap — a click inside an
+ * anchor placed over part of an earlier one should resolve to the inner, more specific anchor.
+ * Null when nothing covers `pos` at all.
+ */
+export function innermostAnchorAt<T extends AnchorRange>(ranges: T[], pos: number): T | null {
+  let best: T | null = null
+
+  for (const range of ranges) {
+    if (pos < range.from || pos > range.to) continue
+    if (!best || range.to - range.from < best.to - best.from) best = range
+  }
+
+  return best
+}
+
+/**
+ * The first of `ranges` that overlaps `[from, to)` at all, or null when none does — what keeps
+ * anchors exclusive: `markAnchor` (`editor/anchorCommands.ts`) refuses to place a new one wherever
+ * this finds a hit, whether that range is this session's own or an earlier child's already-sealed
+ * one. Two ranges that only touch, sharing an endpoint with no space between, are not overlapping.
+ */
+export function anchorRangeOverlapping<T extends AnchorRange>(
+  ranges: T[],
+  from: number,
+  to: number,
+): T | null {
+  return ranges.find((range) => range.from < to && from < range.to) ?? null
 }
 
 function anchorKind(attrs: Record<string, unknown> | undefined): AnchorKind | null {

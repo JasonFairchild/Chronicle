@@ -2,9 +2,21 @@ import { Extension, mergeAttributes, Mark, Node, type Extensions } from '@tiptap
 import { Plugin } from '@tiptap/pm/state'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
-import { ANCHOR_INSERT_NODE, ANCHOR_MARK, MEDIA_NODE } from '@/domain/entryDocument'
+import { anchorIdsIn } from '@/domain/anchors'
+import {
+  ANCHOR_INSERT_NODE,
+  ANCHOR_MARK,
+  MEDIA_NODE,
+  type EntryDocument,
+} from '@/domain/entryDocument'
 import AnchorInsertView from './AnchorInsertView.vue'
-import { addAnchorMark, createAnchorInsertStorage, isAnchorEdit } from './anchorCommands'
+import {
+  createAnchorInsertStorage,
+  createAnchorModeStorage,
+  isAnchorEdit,
+  markAnchor,
+  type AnchorModeStorage,
+} from './anchorCommands'
 
 /**
  * The editor schema: node and mark types, and the extensions list assembled from them. This is the
@@ -52,9 +64,13 @@ const MediaImage = Node.create({
  * on the text it is about.
  *
  * `inclusive: false` so typing at an edge isn't silently absorbed into the anchor. `excludes: ''`
- * lets anchors overlap — two children may point at the same sentence, and a mark excludes itself by
- * default, which would let the second anchor replace the first. The unique `anchorId` is also what
- * stops ProseMirror from merging adjacent anchors into one.
+ * overrides a mark type's default of excluding itself — without it, adding this mark somewhere would
+ * silently strip any *other* anchor's mark already sitting in that span, since ProseMirror's default
+ * `addMark` behavior treats two marks of the same type as mutually exclusive regardless of their
+ * attrs. Anchors are kept from actually overlapping at the command level instead (`markAnchor`,
+ * `editor/anchorCommands.ts`; PRODUCT.md §4.4): a fresh selection touching an existing anchor's
+ * marked passage, sealed or this session's own, never places a new one over it. The unique `anchorId`
+ * is what stops ProseMirror from merging adjacent anchors into one.
  *
  * No color attribute: color is computed at render time from the scheme in force (ENTRY_MODEL.md, "Color").
  */
@@ -150,9 +166,19 @@ const AnchorInsert = Node.create({
 export interface EntryExtensionOptions {
   /** True for an anchor-mode session: installs the guard that blocks every other kind of edit. */
   anchorMode?: boolean
+  /**
+   * The document as it stood when this **session** began — a resumed draft's
+   * `Draft.parent_base_content`. Omitted for a fresh session, where the document the editor opens
+   * with is already that base. Every anchor it carries belongs to an earlier, already-sealed child;
+   * everything that appears afterward is this session's own. See ENTRY_MODEL.md, "Drafts".
+   */
+  baseContent?: string
 }
 
-export function entryExtensions({ anchorMode = false }: EntryExtensionOptions = {}): Extensions {
+export function entryExtensions({
+  anchorMode = false,
+  baseContent,
+}: EntryExtensionOptions = {}): Extensions {
   return [
     StarterKit,
     MediaImage,
@@ -160,30 +186,39 @@ export function entryExtensions({ anchorMode = false }: EntryExtensionOptions = 
     // read, render, and carry forward the anchors already in the document it is editing.
     Anchor,
     AnchorInsert,
-    ...(anchorMode ? [AnchorMode] : []),
+    ...(anchorMode ? [AnchorMode.configure({ baseContent })] : []),
   ]
 }
 
 /**
- * Anchor mode's own extension: the guard that keeps the two creation experiences from mixing, plus
- * the keyboard shortcuts that are now this mode's first-class entry point since the fixed toolbar is
- * gone. Named for both jobs since it no longer only guards.
+ * Installs `isAnchorEdit` (`anchorCommands.ts`) as a ProseMirror plugin's `filterTransaction` —
+ * which lives on a plugin spec, not on the `EditorProps` TipTap types for DOM-facing options, hence
+ * its own one-plugin extension. That's what makes "the two experiences can't mix" a property of the
+ * editor, not a rule the UI is trusted to follow: in anchor mode only the anchor commands and
+ * undoing them may produce a step; everything else is rejected first.
  *
- * The guard installs `isAnchorEdit` (`anchorCommands.ts`) as a ProseMirror plugin's
- * `filterTransaction` — which lives on a plugin spec, not on the `EditorProps` TipTap types for
- * DOM-facing options, hence its own one-plugin extension. That's what makes "the two experiences
- * can't mix" a property of the editor, not a rule the UI is trusted to follow: in anchor mode only
- * the anchor commands and undoing them may produce a step; everything else is rejected first.
+ * Also where "which anchors may still be edited" lives (`AnchorModeStorage`, `anchorCommands.ts`):
+ * seeded once, on creation, with every anchor the session's base document already carried. Falling
+ * back to the mounted document is right for a fresh session and wrong for a resumed one, which is
+ * exactly why a resumed draft passes its own base rather than letting the editor assume one.
  */
-const AnchorMode = Extension.create({
+const AnchorMode = Extension.create<{ baseContent?: string }, AnchorModeStorage>({
   name: 'anchorMode',
+  addOptions() {
+    return { baseContent: undefined }
+  },
+  addStorage: createAnchorModeStorage,
+  onCreate() {
+    const base = this.options.baseContent ?? (this.editor.getJSON() as EntryDocument)
+    this.storage.sealedAnchorIds = new Set(anchorIdsIn(base))
+  },
   addProseMirrorPlugins() {
     return [new Plugin({ filterTransaction: isAnchorEdit })]
   },
   addKeyboardShortcuts() {
     return {
-      'Mod-Alt-h': () => addAnchorMark(this.editor, 'comment') !== null,
-      'Mod-Alt-s': () => addAnchorMark(this.editor, 'strike') !== null,
+      'Mod-Alt-h': () => markAnchor(this.editor, 'comment') !== null,
+      'Mod-Alt-s': () => markAnchor(this.editor, 'strike') !== null,
     }
   },
 })

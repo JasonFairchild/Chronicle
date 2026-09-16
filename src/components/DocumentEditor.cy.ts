@@ -1,6 +1,8 @@
 import DocumentEditor from '@/components/DocumentEditor.vue'
-import { collectAnchors } from '@/domain/anchors'
+import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
 import {
+  ANCHOR_INSERT_NODE,
+  ANCHOR_MARK,
   collectMediaRefs,
   docTitle,
   docToPlainText,
@@ -14,7 +16,9 @@ import { selectTextRange } from '@/testing/selectTextRange'
 interface ObservedChange {
   content: string
   steps: unknown[]
+  insertedText: string
   isFormatting: boolean
+  isAnchorOp: boolean
   anchorIds?: string[]
 }
 
@@ -291,14 +295,48 @@ describe('DocumentEditor', () => {
   })
 
   describe('anchor mode', () => {
-    function mountAnchorEditor(onChange: (change: ObservedChange) => void, content?: string) {
+    function mountAnchorEditor(
+      onChange: (change: ObservedChange) => void,
+      content?: string,
+      props: Record<string, unknown> = {},
+    ) {
       cy.mount(DocumentEditor, {
         props: {
           label: 'New entry',
           anchorMode: true,
           content: content ?? serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad')),
+          ...props,
         },
         attrs: { onChange },
+      })
+    }
+
+    /** A document carrying one anchor mark plus its committed wording, sharing one id. */
+    function withAnchorMarkAndWording(
+      text: string,
+      anchorId: string,
+      from: number,
+      to: number,
+      wording: string,
+      kind: 'comment' | 'strike' = 'comment',
+    ): string {
+      return serializeDocument({
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: text.slice(0, from) },
+              {
+                type: 'text',
+                text: text.slice(from, to),
+                marks: [{ type: ANCHOR_MARK, attrs: { anchorId, kind } }],
+              },
+              { type: ANCHOR_INSERT_NODE, attrs: { anchorId, text: wording } },
+              { type: 'text', text: text.slice(to) },
+            ].filter((node) => node.text !== ''),
+          },
+        ],
       })
     }
 
@@ -370,6 +408,38 @@ describe('DocumentEditor', () => {
         expect(change.anchorIds).to.have.length(1)
         const [anchor] = collectAnchors(change.content)
         expect(anchor).to.include({ kind: null, insertion: 'perhaps' })
+      })
+    })
+
+    it('removes a bare insertion via its own trash button, same as a marked anchor', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 0, 0),
+      )
+      cy.findByRole('textbox', { name: 'New entry' }).type('perhaps')
+      cy.findByRole('button', { name: 'Remove anchor' }).click()
+
+      cy.get('@change').then((stub) => {
+        expect(lastChange(stub).anchorIds).to.deep.equal([])
+      })
+    })
+
+    it('trims whitespace off a selection’s edges before anchoring it', () => {
+      const onChange = cy.stub().as('change')
+      mountAnchorEditor(onChange)
+
+      // " Lake Tahoe " (9-21) carries a space on both sides of the word "Lake Tahoe" (10-20).
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 9, 21),
+      )
+      cy.findByRole('button', { name: 'Highlight' }).click()
+      cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
+
+      cy.get('@change').then((stub) => {
+        const [anchor] = collectAnchors(lastChange(stub).content)
+        expect(anchor).to.include({ quote: 'Lake Tahoe', kind: 'comment' })
       })
     })
 
@@ -445,6 +515,200 @@ describe('DocumentEditor', () => {
       cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+z}')
 
       cy.get('@change').then((stub) => expect(lastChange(stub).anchorIds).to.deep.equal([]))
+    })
+
+    describe('editing an anchor already placed this session', () => {
+      /** Places a highlight over "Lake Tahoe" and commits "Donner Lake" as its wording. */
+      function placeHighlightWithWording() {
+        cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+          selectTextRange($editor[0]!, 10, 20),
+        )
+        cy.findByRole('button', { name: 'Highlight' }).click()
+        cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
+      }
+
+      it('reopens a placed anchor’s wording box by clicking it, with the wording already there', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange)
+        placeHighlightWithWording()
+
+        cy.findByRole('button', { name: 'Edit wording' }).click()
+        cy.findByRole('textbox', { name: 'Wording' }).should('have.value', 'Donner Lake')
+        cy.findByRole('textbox', { name: 'Wording' }).type('{end} Tahoe{enter}')
+
+        cy.get('@change').then((stub) => {
+          const change = lastChange(stub)
+          const [anchor] = collectAnchors(change.content)
+          expect(anchor).to.include({ insertion: 'Donner Lake Tahoe' })
+          // Typing wording is typing, not a structural anchor op — see `anchorCommands.ts`'s
+          // `ANCHOR_TICK_META`; it earns a bookmark the same way prose does.
+          expect(change.isAnchorOp).to.equal(false)
+          expect(change.isFormatting).to.equal(false)
+        })
+      })
+
+      it('reports a keystroke in a reopened wording box as ordinary, tickable text entry', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange)
+        placeHighlightWithWording()
+
+        cy.findByRole('button', { name: 'Edit wording' }).click()
+        cy.findByRole('textbox', { name: 'Wording' }).type('{end}.')
+
+        cy.get('@change').then((stub) => {
+          const change = lastChange(stub)
+          expect(change.insertedText.endsWith('.')).to.equal(true)
+          expect(change.isAnchorOp).to.equal(false)
+          expect(change.isFormatting).to.equal(false)
+        })
+      })
+
+      it('switches a placed anchor’s kind from its reopened wording box', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange)
+        placeHighlightWithWording()
+
+        cy.findByRole('button', { name: 'Edit wording' }).click()
+        cy.findByRole('button', { name: 'Strike' }).click()
+
+        cy.get('@change').then((stub) => {
+          const change = lastChange(stub)
+          const [anchor] = collectAnchors(change.content)
+          expect(anchor).to.include({ kind: 'strike', insertion: 'Donner Lake' })
+          expect(change.isAnchorOp).to.equal(true)
+        })
+      })
+
+      it('removes a placed anchor entirely from its reopened wording box', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange)
+        placeHighlightWithWording()
+        cy.get('@change').then((stub) => expect(lastChange(stub).anchorIds).to.have.length(1))
+
+        cy.findByRole('button', { name: 'Edit wording' }).click()
+        cy.findByRole('button', { name: 'Remove anchor' }).click()
+
+        cy.get('@change').then((stub) => {
+          const change = lastChange(stub)
+          expect(collectAnchors(change.content)).to.deep.equal([])
+          expect(change.anchorIds).to.deep.equal([])
+          expect(change.isAnchorOp).to.equal(true)
+          expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad')
+        })
+      })
+
+      it('restores a reopened anchor’s prior wording on Escape, rather than discarding it', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange)
+        placeHighlightWithWording()
+
+        cy.findByRole('button', { name: 'Edit wording' }).click()
+        cy.findByRole('textbox', { name: 'Wording' }).type('{selectall}Something else entirely')
+        cy.get('@change').then((stub) => {
+          expect(collectAnchors(lastChange(stub).content)[0]).to.include({
+            insertion: 'Something else entirely',
+          })
+        })
+
+        cy.findByRole('textbox', { name: 'Wording' }).type('{esc}')
+
+        cy.get('@change').then((stub) => {
+          const [anchor] = collectAnchors(lastChange(stub).content)
+          expect(anchor).to.include({ insertion: 'Donner Lake' })
+        })
+      })
+
+      it('does not let a click reopen a sealed anchor from an earlier child', () => {
+        const onChange = cy.stub().as('change')
+        // "sealed-1" stands for an anchor an earlier child already placed and sealed.
+        mountAnchorEditor(
+          onChange,
+          withAnchorMark('I went to Lake Tahoe with Dad', 'sealed-1', 10, 20),
+        )
+
+        cy.findByText('Lake Tahoe').click()
+
+        cy.findByRole('button', { name: 'Edit wording' }).should('not.exist')
+        cy.get('@change').should('not.have.been.called')
+      })
+
+      it('reopens a placed anchor selected exactly, instead of changing its kind or layering a second one over it', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange)
+        placeHighlightWithWording()
+        let callsBefore = 0
+        cy.get('@change').then((stub) => {
+          callsBefore = (stub as unknown as { args: unknown[][] }).args.length
+        })
+
+        // The same range the highlight covers, selected again from scratch.
+        cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+          selectTextRange($editor[0]!, 10, 20),
+        )
+        cy.findByRole('button', { name: 'Strike' }).click()
+
+        cy.findByRole('textbox', { name: 'Wording' }).should('have.value', 'Donner Lake')
+        cy.get('@change').then((stub) => {
+          // Opening the box changes nothing about the document itself, so no new update fires.
+          expect((stub as unknown as { args: unknown[][] }).args.length).to.equal(callsBefore)
+        })
+      })
+
+      it('opens a placed anchor’s box for a selection overlapping it at all, rather than creating a second anchor', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange)
+        placeHighlightWithWording()
+        let callsBefore = 0
+        cy.get('@change').then((stub) => {
+          callsBefore = (stub as unknown as { args: unknown[][] }).args.length
+        })
+
+        // "Tahoe with" (15-25) overlaps the placed "Lake Tahoe" highlight (10-20) without matching it.
+        cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+          selectTextRange($editor[0]!, 15, 25),
+        )
+        cy.findByRole('button', { name: 'Highlight' }).click()
+
+        cy.findByRole('textbox', { name: 'Wording' }).should('have.value', 'Donner Lake')
+        cy.get('@change').then((stub) => {
+          expect((stub as unknown as { args: unknown[][] }).args.length).to.equal(callsBefore)
+        })
+      })
+
+      it('lets a session placed before a resume keep editing an anchor placed before the resume', () => {
+        // Stands for a draft resumed after a reload: "resumed-1" was placed and persisted before
+        // the reload, so it's already in the document this editor mounts with.
+        const base = serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad'))
+        const seeded = withAnchorMarkAndWording(
+          'I went to Lake Tahoe with Dad',
+          'resumed-1',
+          10,
+          20,
+          'Donner Lake',
+        )
+        // The base — the parent as the session first found it, `Draft.parent_base_content` — is
+        // what still tells it apart from an anchor an earlier child sealed.
+        expect(anchorsPlacedSince(base, seeded)).to.deep.equal(['resumed-1'])
+
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange, seeded, { anchorBaseContent: base })
+
+        cy.findByRole('button', { name: 'Edit wording' }).click()
+        cy.findByRole('textbox', { name: 'Wording' }).should('have.value', 'Donner Lake')
+        cy.findByRole('textbox', { name: 'Wording' }).type('{esc}')
+
+        cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+          selectTextRange($editor[0]!, 21, 25),
+        )
+        cy.findByRole('button', { name: 'Highlight' }).click()
+        cy.findByRole('textbox', { name: 'Wording' }).type('note{enter}')
+
+        cy.get('@change').then((stub) => {
+          const change = lastChange(stub)
+          expect(change.anchorIds).to.include('resumed-1')
+          expect(change.anchorIds).to.have.length(2)
+        })
+      })
     })
   })
 })

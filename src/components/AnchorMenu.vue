@@ -8,7 +8,12 @@
  * see `DocumentEditor`'s deleted `pendingStrikeId`. A range of ordinary text offers the two mark
  * actions; a selected media node offers none yet (PRODUCT.md §6, image anchoring); an empty
  * selection shows nothing at all — placing a mark opens its own wording box immediately
- * (`addAnchorMark`), so there is no in-between state this menu needs to cover.
+ * (`markAnchor`), so there is no in-between state this menu needs to cover.
+ *
+ * Anchors are exclusive (PRODUCT.md §4.4): either button opens that anchor's wording box instead of
+ * marking a new one whenever the selection touches an anchor already there, this session's own or an
+ * earlier child's sealed one — `markAnchor` (`editor/anchorCommands.ts`) decides which, so this menu
+ * stays two plain buttons with no state of its own to track.
  */
 import { ref } from 'vue'
 import { BubbleMenu } from '@tiptap/vue-3/menus'

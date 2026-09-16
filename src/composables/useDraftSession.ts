@@ -32,6 +32,13 @@ export function useDraftSession() {
    * from the draft and silently leave the parent half behind.
    */
   const parentContent = ref('')
+  /**
+   * The parent as it stood when this session began — `Draft.parent_base_content`, mirrored here the
+   * same way `parentContent` itself is, and never reassigned while the session runs. What
+   * `DocumentEditor`'s `anchor-base-content` prop is seeded from on a resume, so an anchor placed
+   * before a reload still reads as this session's own rather than as an earlier child's.
+   */
+  const parentBaseContent = ref('')
 
   const isOpen = computed(() => sessionId.value !== null)
 
@@ -42,6 +49,7 @@ export function useDraftSession() {
   function begin(target: DraftTarget, seed: { content?: string; parentContent?: string } = {}) {
     content.value = seed.content ?? ''
     parentContent.value = seed.parentContent ?? ''
+    parentBaseContent.value = seed.parentContent ?? ''
     dates.value = emptyEntryDates()
     sessionId.value = drafts.beginDraft(target, seed)
   }
@@ -53,6 +61,7 @@ export function useDraftSession() {
 
     content.value = resumed.content
     parentContent.value = resumed.parent_content ?? ''
+    parentBaseContent.value = resumed.parent_base_content ?? ''
     dates.value = resumed.dates ?? emptyEntryDates()
     sessionId.value = existingSessionId
     return resumed
@@ -67,18 +76,17 @@ export function useDraftSession() {
   }
 
   /**
-   * Forwards one change to the **parent's** provisional document, anchor-mode only. `anchorIds` is
-   * the full set placed so far rather than a delta — see `draftsStore.recordParentChange`.
+   * Forwards one change to the **parent's** provisional document, anchor-mode only. The whole
+   * change is passed through — not a hand-picked subset — so the parent's own authoring stream is
+   * recorded exactly the way the child's own is (see `draftsStore.recordInto`). Which anchors this
+   * session placed is not forwarded at all: it is derived from the base whenever it's asked for
+   * (`anchorsPlacedSince`), so there is no second copy to keep in step with the document.
    */
   function handleParentChange(change: EditorChange): void {
     if (!sessionId.value) return
 
     parentContent.value = change.content
-    drafts.recordParentChange(sessionId.value, {
-      content: change.content,
-      steps: change.steps,
-      anchorIds: change.anchorIds ?? [],
-    })
+    drafts.recordParentChange(sessionId.value, change)
   }
 
   /** Mirrors the dates a form holds into the session, so a reload keeps them too. */
@@ -145,6 +153,7 @@ export function useDraftSession() {
     void abandon()
     content.value = ''
     parentContent.value = ''
+    parentBaseContent.value = ''
     dates.value = emptyEntryDates()
     saving.value = false
   }
@@ -153,6 +162,7 @@ export function useDraftSession() {
     sessionId,
     content,
     parentContent,
+    parentBaseContent,
     dates,
     saving,
     isOpen,

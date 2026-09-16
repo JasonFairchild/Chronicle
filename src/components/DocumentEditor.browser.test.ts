@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
-import { collectAnchors } from '@/domain/anchors'
+import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import {
+  ANCHOR_INSERT_NODE,
+  ANCHOR_MARK,
   collectMediaRefs,
   docTitle,
   docToPlainText,
@@ -230,8 +232,38 @@ describe('DocumentEditor (browser)', () => {
   describe('anchor mode', () => {
     function mountAnchorEditor(
       content: string = serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad')),
+      props: Record<string, unknown> = {},
     ) {
-      return mountEditor({ anchorMode: true, content })
+      return mountEditor({ anchorMode: true, content, ...props })
+    }
+
+    /** A document carrying one anchor mark plus its committed wording, sharing one id. */
+    function withAnchorMarkAndWording(
+      text: string,
+      anchorId: string,
+      from: number,
+      to: number,
+      wording: string,
+      kind: 'comment' | 'strike' = 'comment',
+    ): string {
+      return serializeDocument({
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: text.slice(0, from) },
+              {
+                type: 'text',
+                text: text.slice(from, to),
+                marks: [{ type: ANCHOR_MARK, attrs: { anchorId, kind } }],
+              },
+              { type: ANCHOR_INSERT_NODE, attrs: { anchorId, text: wording } },
+              { type: 'text', text: text.slice(to) },
+            ].filter((node) => node.text !== ''),
+          },
+        ],
+      })
     }
 
     it('offers the anchor menu over a selection instead of ordinary formatting', async () => {
@@ -305,6 +337,34 @@ describe('DocumentEditor (browser)', () => {
       expect(anchor).toMatchObject({ kind: null, insertion: 'perhaps' })
     })
 
+    it('removes a bare insertion via its own trash button, same as a marked anchor', async () => {
+      const screen = mountAnchorEditor()
+      const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+      await expect.element(editorLocator).toBeVisible()
+      editorLocator.element().focus()
+      selectTextRange(editorLocator.element(), 0, 0)
+
+      await userEvent.keyboard('perhaps')
+      await screen.getByRole('button', { name: 'Remove anchor' }).click()
+
+      expect(changes[changes.length - 1]!.anchorIds).toEqual([])
+    })
+
+    it('trims whitespace off a selection’s edges before anchoring it', async () => {
+      const screen = mountAnchorEditor()
+      const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+      await expect.element(editorLocator).toBeVisible()
+      editorLocator.element().focus()
+
+      // " Lake Tahoe " (9-21) carries a space on both sides of the word "Lake Tahoe" (10-20).
+      selectTextRange(editorLocator.element(), 9, 21)
+      await screen.getByRole('button', { name: 'Highlight' }).click()
+      await userEvent.keyboard('Donner Lake{Enter}')
+
+      const [anchor] = collectAnchors(changes[changes.length - 1]!.content)
+      expect(anchor).toMatchObject({ quote: 'Lake Tahoe', kind: 'comment' })
+    })
+
     it('places a highlight and its wording through the keyboard alone', async () => {
       const screen = mountAnchorEditor()
       const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
@@ -376,6 +436,189 @@ describe('DocumentEditor (browser)', () => {
       await userEvent.keyboard('{Control>}z{/Control}')
 
       expect(changes[changes.length - 1]!.anchorIds).toEqual([])
+    })
+
+    describe('editing an anchor already placed this session', () => {
+      /** Places a highlight over "Lake Tahoe" and commits "Donner Lake" as its wording. */
+      async function placeHighlightWithWording(screen: ReturnType<typeof mountAnchorEditor>) {
+        const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+        await expect.element(editorLocator).toBeVisible()
+        editorLocator.element().focus()
+        selectTextRange(editorLocator.element(), 10, 20)
+        await screen.getByRole('button', { name: 'Highlight' }).click()
+        await userEvent.keyboard('Donner Lake{Enter}')
+        return editorLocator
+      }
+
+      it('reopens a placed anchor’s wording box by clicking it, with the wording already there', async () => {
+        const screen = mountAnchorEditor()
+        await placeHighlightWithWording(screen)
+
+        await screen.getByRole('button', { name: 'Edit wording' }).click()
+
+        await expect
+          .element(screen.getByRole('textbox', { name: 'Wording' }))
+          .toHaveValue('Donner Lake')
+
+        await userEvent.keyboard('{End} Tahoe{Enter}')
+
+        const latest = changes[changes.length - 1]!
+        const [anchor] = collectAnchors(latest.content)
+        expect(anchor).toMatchObject({ insertion: 'Donner Lake Tahoe' })
+        // Typing wording is typing — it isn't a structural anchor op the way placing, converting,
+        // or removing one is (see `anchorCommands.ts`'s `ANCHOR_TICK_META`); it earns a bookmark
+        // the same way prose does, which the next test covers.
+        expect(latest.isAnchorOp).toBe(false)
+        expect(latest.isFormatting).toBe(false)
+      })
+
+      it('reports a keystroke in a reopened wording box as ordinary, tickable text entry', async () => {
+        const screen = mountAnchorEditor()
+        await placeHighlightWithWording(screen)
+
+        await screen.getByRole('button', { name: 'Edit wording' }).click()
+        await userEvent.keyboard('{End}.')
+
+        const latest = changes[changes.length - 1]!
+        // What the tick policy's punctuation check reads — see `insertedTextOf`
+        // (`DocumentEditor.vue`) and `evaluateTick` (`domain/tickPolicy.ts`).
+        expect(latest.insertedText.endsWith('.')).toBe(true)
+        expect(latest.isAnchorOp).toBe(false)
+        expect(latest.isFormatting).toBe(false)
+      })
+
+      it('switches a placed anchor’s kind from its reopened wording box', async () => {
+        const screen = mountAnchorEditor()
+        await placeHighlightWithWording(screen)
+
+        await screen.getByRole('button', { name: 'Edit wording' }).click()
+        await screen.getByRole('button', { name: 'Strike', exact: true }).click()
+
+        const latest = changes[changes.length - 1]!
+        const [anchor] = collectAnchors(latest.content)
+        expect(anchor).toMatchObject({ kind: 'strike', insertion: 'Donner Lake' })
+        expect(latest.isAnchorOp).toBe(true)
+        // The relation this note reads as follows the final kind at seal time — switching to a
+        // strike here is exactly what makes the note read as a correction rather than a comment.
+      })
+
+      it('removes a placed anchor entirely from its reopened wording box', async () => {
+        const screen = mountAnchorEditor()
+        await placeHighlightWithWording(screen)
+        expect(changes[changes.length - 1]!.anchorIds).toHaveLength(1)
+
+        await screen.getByRole('button', { name: 'Edit wording' }).click()
+        await screen.getByRole('button', { name: 'Remove anchor' }).click()
+
+        const latest = changes[changes.length - 1]!
+        expect(collectAnchors(latest.content)).toEqual([])
+        expect(latest.anchorIds).toEqual([])
+        expect(latest.isAnchorOp).toBe(true)
+        // The marked text itself is never touched — only the mark on it.
+        expect(docToPlainText(latest.content)).toBe('I went to Lake Tahoe with Dad')
+      })
+
+      it('restores a reopened anchor’s prior wording on Escape, rather than discarding it', async () => {
+        const screen = mountAnchorEditor()
+        await placeHighlightWithWording(screen)
+
+        await screen.getByRole('button', { name: 'Edit wording' }).click()
+        await userEvent.keyboard('{End}{Shift>}{Home}{/Shift}Something else entirely')
+
+        // Proves Escape is discarding something real, not just leaving the original untouched.
+        const beforeEscape = changes[changes.length - 1]!
+        expect(collectAnchors(beforeEscape.content)[0]).toMatchObject({
+          insertion: 'Something else entirely',
+        })
+
+        await userEvent.keyboard('{Escape}')
+
+        const latest = changes[changes.length - 1]!
+        const [anchor] = collectAnchors(latest.content)
+        expect(anchor).toMatchObject({ insertion: 'Donner Lake' })
+      })
+
+      it('does not let a click reopen a sealed anchor from an earlier child', async () => {
+        // "sealed-1" stands for an anchor an earlier child already placed and sealed.
+        const screen = mountAnchorEditor(
+          withAnchorMark('I went to Lake Tahoe with Dad', 'sealed-1', 10, 20),
+        )
+        const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+        await expect.element(editorLocator).toBeVisible()
+
+        await editorLocator.getByText('Lake Tahoe').click()
+
+        expect(screen.getByRole('button', { name: 'Edit wording' }).query()).toBeNull()
+        expect(changes).toHaveLength(0)
+      })
+
+      it('reopens a placed anchor selected exactly, instead of changing its kind or layering a second one over it', async () => {
+        const screen = mountAnchorEditor()
+        const editorLocator = await placeHighlightWithWording(screen)
+        const placed = changes[changes.length - 1]!
+
+        // The same range the highlight covers, selected again from scratch.
+        selectTextRange(editorLocator.element(), 10, 20)
+        await screen.getByRole('button', { name: 'Strike', exact: true }).click()
+
+        await expect
+          .element(screen.getByRole('textbox', { name: 'Wording' }))
+          .toHaveValue('Donner Lake')
+        // Opening the box changes nothing about the document itself, so no new update fires.
+        expect(changes[changes.length - 1]).toBe(placed)
+      })
+
+      it('opens a placed anchor’s box for a selection overlapping it at all, rather than creating a second anchor', async () => {
+        const screen = mountAnchorEditor()
+        const editorLocator = await placeHighlightWithWording(screen)
+        const placed = changes[changes.length - 1]!
+
+        // "Tahoe with" (15-25) overlaps the placed "Lake Tahoe" highlight (10-20) without matching it.
+        selectTextRange(editorLocator.element(), 15, 25)
+        await screen.getByRole('button', { name: 'Highlight' }).click()
+
+        await expect
+          .element(screen.getByRole('textbox', { name: 'Wording' }))
+          .toHaveValue('Donner Lake')
+        expect(changes[changes.length - 1]).toBe(placed)
+      })
+
+      it('lets a session placed before a resume keep editing an anchor placed before the resume', async () => {
+        // Stands for a draft resumed after a reload: "resumed-1" was placed and persisted before
+        // the reload, so it's already in the document this editor mounts with. The base — the
+        // parent as the session first found it, `Draft.parent_base_content` — is what still tells
+        // it apart from an anchor an earlier child sealed.
+        const base = serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad'))
+        const seeded = withAnchorMarkAndWording(
+          'I went to Lake Tahoe with Dad',
+          'resumed-1',
+          10,
+          20,
+          'Donner Lake',
+        )
+        expect(anchorsPlacedSince(base, seeded)).toEqual(['resumed-1'])
+
+        const screen = mountAnchorEditor(seeded, { anchorBaseContent: base })
+        const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+        await expect.element(editorLocator).toBeVisible()
+
+        // The anchor from before the resume is still clickable...
+        await screen.getByRole('button', { name: 'Edit wording' }).click()
+        await expect
+          .element(screen.getByRole('textbox', { name: 'Wording' }))
+          .toHaveValue('Donner Lake')
+        await userEvent.keyboard('{Escape}')
+
+        // ...and placing a new one this session reports both ids as this session's own.
+        editorLocator.element().focus()
+        selectTextRange(editorLocator.element(), 21, 25)
+        await screen.getByRole('button', { name: 'Highlight' }).click()
+        await userEvent.keyboard('note{Enter}')
+
+        const latest = changes[changes.length - 1]!
+        expect(latest.anchorIds).toContain('resumed-1')
+        expect(latest.anchorIds).toHaveLength(2)
+      })
     })
   })
 })

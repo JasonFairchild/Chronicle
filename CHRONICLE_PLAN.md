@@ -130,16 +130,19 @@ Still genuinely out of scope:
 - Video/audio support, optional Tauri desktop shell, encryption, multi-device sync.
 
 Not carried over from the anchor model redesign (see ENTRY_MODEL.md, "Child entries and anchors"):
-making each anchor placed so far in the current draft session individually interactable before
-sealing — click one to reopen its wording for editing, toggle it between highlight and strike, or
-remove it entirely; possibly widen or shrink its span too, though that might just be remove-and-
-recreate rather than a real resize gesture. `editor/anchorCommands.ts` has the commands to add or
-read anchors, but nothing to reopen or retarget one already placed; undoing one before sealing today
-means the browser's own undo (Ctrl+Z), which only ever undoes the most recent placement, not an
-arbitrary earlier one in the same session. A small, well-scoped follow-up once anchor-mode (the
-bubble menu plus inline wording, PRODUCT.md §4.4) has seen real use, not a blocker — worth scoping
-down to whichever of these actions turn out to actually get reached for once anchor-mode is used in
-anger, rather than building all of them speculatively.
+widening or shrinking the span of an anchor already placed earlier in the current draft session.
+Reopening one to edit its wording, switch it between highlight and strike, or remove it outright is
+built (PRODUCT.md §4.4); a real resize gesture is not — remove-and-recreate covers it for now. Worth
+another pass once it turns out to actually get reached for in anger, not a blocker.
+
+A stale anchor draft against a revised parent is a related, deliberately unhandled gap: sealing an
+anchor-mode session writes `Draft.parent_content` as a full-state revision
+(`entriesStore.sealAnchorChild`), so if the parent was text-revised — or another child's anchor-mode
+session sealed on it — after this session began, sealing silently reverts the parent to the stale
+snapshot the session started from, orphaning whatever the other revision or child added. The
+intended fix is to detect it and offer to discard, not to rebase, which needs a recorded base version
+on the draft — the same mechanism parked under "Detecting a stale revision session" below, since it's
+the identical problem for a text-mode revision session.
 
 ### Parked, not decided against
 

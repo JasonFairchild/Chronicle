@@ -169,13 +169,12 @@ describe('useDraftsStore', () => {
 
     const sessionId = store.beginDraft(
       { kind: 'new_child', parent_id: parent.id },
-      { parentContent },
+      { parentContent: textContent(parentContent) },
     )
     const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
     store.recordParentChange(sessionId, {
       content: markedParentContent,
       steps: [{ stepType: 'addMark' }],
-      anchorIds: ['anchor-1'],
     })
     store.recordChange(sessionId, {
       content: textContent('It was salvaged later.'),
@@ -194,6 +193,99 @@ describe('useDraftsStore', () => {
     expect(revisions).toHaveLength(1)
     expect(revisions[0]?.revision_mode).toBe('anchor')
     expect(revisions[0]?.content).toBe(markedParentContent)
+  })
+
+  it('records an anchor op into the parent stream as a tick, the same way the child stream would', async () => {
+    // One authoring pipeline, not two (CLAUDE.md, "anchor mode limits what the editor allows, not
+    // what the authoring session records"): `recordParentChange` and `recordChange` both have to
+    // reach the same `AuthoringSession.record`, so a structural anchor op bookmarks the parent's
+    // own chain exactly the way it would the child's.
+    const store = useDraftsStore()
+    const parentContent = 'The meeting went badly'
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent(parentContent) }),
+    )
+
+    const sessionId = store.beginDraft(
+      { kind: 'new_child', parent_id: parent.id },
+      { parentContent: textContent(parentContent) },
+    )
+    store.recordParentChange(sessionId, {
+      content: withAnchorMark(parentContent, 'anchor-1', 4, 11),
+      steps: [{ stepType: 'addMark' }],
+      isAnchorOp: true,
+    })
+    store.recordChange(sessionId, {
+      content: textContent('It was salvaged later.'),
+      steps: [{ stepType: 'replace' }],
+    })
+    const sealed = await store.sealDraft(sessionId)
+
+    const [parentRevision] = await entryRepository.listRevisions(parent.id)
+    expect(parentRevision?.authoring_trace?.ticks.map((tick) => tick.reason)).toEqual(['anchor'])
+    expect((await entryRepository.getById(sealed.id))?.authoring_trace).toBeTruthy()
+  })
+
+  it('carries the parent’s own ticks through a resume, not only its steps', async () => {
+    const store = useDraftsStore()
+    const parentContent = 'The meeting went badly'
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent(parentContent) }),
+    )
+    const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
+
+    await draftRepository.save({
+      session_id: 'interrupted-anchor',
+      target: { kind: 'new_child', parent_id: parent.id },
+      started_at: '2026-09-05T10:00:00.000Z',
+      updated_at: '2026-09-05T10:00:02.000Z',
+      content: '',
+      dates: emptyEntryDates(),
+      parent_base_content: textContent(parentContent),
+      parent_content: markedParentContent,
+      steps: [],
+      parent_steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
+      ticks: [],
+      parent_ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
+    })
+
+    await store.resumeDraft('interrupted-anchor')
+    store.recordChange('interrupted-anchor', {
+      content: textContent('Worth revisiting.'),
+      steps: [{ stepType: 'replace' }],
+    })
+    await store.sealDraft('interrupted-anchor')
+
+    const [parentRevision] = await entryRepository.listRevisions(parent.id)
+    // Resumed intact, not restarted: the tick recorded before the reload is still there, at the
+    // same `step_index` its one prior step earned it.
+    expect(parentRevision?.authoring_trace?.ticks).toEqual([
+      expect.objectContaining({ step_index: 1, reason: 'anchor' }),
+    ])
+  })
+
+  it('records nothing into the parent stream for a change with no steps', async () => {
+    const store = useDraftsStore()
+    const parentContent = 'The meeting went badly'
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent(parentContent) }),
+    )
+
+    const sessionId = store.beginDraft(
+      { kind: 'new_child', parent_id: parent.id },
+      { parentContent: textContent(parentContent) },
+    )
+    // A stray update with nothing on the transaction — no step for the trace to append and no
+    // moment for the tick policy to judge.
+    store.recordParentChange(sessionId, { content: textContent(parentContent), steps: [] })
+    store.recordChange(sessionId, {
+      content: textContent('Nothing marked.'),
+      steps: [{ stepType: 'replace' }],
+    })
+    await store.flush(sessionId)
+
+    expect(store.currentDraft(sessionId)?.parent_steps).toEqual([])
+    expect(store.currentDraft(sessionId)?.parent_ticks).toEqual([])
   })
 
   it('seals a revision draft as a new version rather than touching the entry it edits', async () => {
@@ -225,11 +317,12 @@ describe('useDraftsStore', () => {
       updated_at: '2026-09-05T10:00:02.000Z',
       content: textContent('Half a thought'),
       dates: emptyEntryDates(),
-      anchor_ids: [],
+      parent_base_content: null,
       parent_content: null,
       steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
       parent_steps: [],
       ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
+      parent_ticks: [],
     })
 
     const resumed = await store.resumeDraft('interrupted')

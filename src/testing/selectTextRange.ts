@@ -5,14 +5,22 @@
  *
  * Walks every text node under the editor in document order rather than assuming the content is one
  * text node — true for a freshly-seeded paragraph, false the moment a mark splits it into siblings
- * (e.g. an anchor already covering part of the text being revised).
+ * (e.g. an anchor already covering part of the text being revised). Skips any text sitting inside a
+ * `contenteditable="false"` subtree — an anchor's own committed wording (`AnchorInsertView.vue`) —
+ * since a real selection can never reach into one of those either; offsets here walk the same text a
+ * person could actually select, not the presentational wording sitting beside it.
  *
  * Shared between `DocumentEditor` and `EntryDetailView` specs in both runners, since none of them
  * has any other way to drive a ProseMirror selection without a real mouse.
  */
 export function selectTextRange(editorEl: Element, from: number, to: number): void {
   const doc = editorEl.ownerDocument
-  const walker = doc.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT)
+  const walker = doc.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      (node.parentElement as HTMLElement | null)?.closest('[contenteditable="false"]')
+        ? NodeFilter.FILTER_SKIP
+        : NodeFilter.FILTER_ACCEPT,
+  })
   const textNodes: Text[] = []
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     textNodes.push(node as Text)

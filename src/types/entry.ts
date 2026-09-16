@@ -34,9 +34,9 @@ export type AnchorKind = 'comment' | 'strike'
 /**
  * A child's reference to an anchor that lives in its **parent's** document.
  *
- * ENTRY_MODEL.md describes this as `anchor_ids` plus one `quote` captured at seal time. It is one
- * array of pairs rather than two parallel arrays for the obvious reason: parallel arrays can drift
- * out of step and this cannot. The quote is not a growing history — the parent's own step chain is
+ * ENTRY_MODEL.md describes this as `anchors: AnchorRef[]`, each `{ anchor_id, quote }` — one array
+ * of pairs rather than two parallel arrays for the obvious reason: parallel arrays can drift out of
+ * step and this cannot. The quote is not a growing history — the parent's own step chain is
  * that — it is what lets an anchor whose mark a later revision deleted still say what it was
  * attached to, once nothing in the current document carries its id.
  */
@@ -54,7 +54,7 @@ export interface AnchorRef {
 export type RevisionMode = 'text' | 'anchor'
 
 /** Why a moment was bookmarked while writing. Ticks are navigation aids, never saves. */
-export type TickReason = 'pause' | 'punctuation' | 'interval' | 'format' | 'manual'
+export type TickReason = 'pause' | 'punctuation' | 'interval' | 'format' | 'anchor' | 'manual'
 
 /** One serialized ProseMirror step with the moment it happened. */
 export interface AuthoringStep {

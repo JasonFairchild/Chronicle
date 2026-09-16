@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
+import { anchorsPlacedSince } from '@/domain/anchors'
 import { AuthoringSession } from '@/domain/authoringSession'
 import { isEmptyDocument } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
@@ -33,18 +34,8 @@ export interface DraftChange {
   /** Text the change added, used only to spot a finished sentence. */
   insertedText?: string
   isFormatting?: boolean
-}
-
-/**
- * What one anchor-mode edit to the **parent** tells the buffer. `anchorIds` is the full set this
- * session has placed so far, not a delta — the caller already knows it exactly, since every id
- * comes from `addAnchorMark`/`openAnchorInsert` it just called, and undoing one is removing it from
- * this same list rather than the store guessing at a diff.
- */
-export interface ParentAnchorChange {
-  content: string
-  steps?: unknown[]
-  anchorIds: string[]
+  /** A structural anchor op — see `TickEvent.isAnchorOp` (`domain/tickPolicy.ts`). */
+  isAnchorOp?: boolean
 }
 
 interface ActiveSession {
@@ -93,11 +84,14 @@ export const useDraftsStore = defineStore('drafts', () => {
         updated_at: startedAt,
         content: seed.content ?? '',
         dates: emptyEntryDates(),
-        anchor_ids: [],
         parent_content: seed.parentContent ?? null,
+        // The same document as `parent_content` at this instant, and the one that stays put: what
+        // the session started from, so "which anchors are this session's" stays answerable.
+        parent_base_content: seed.parentContent ?? null,
         steps: [],
         parent_steps: [],
         ticks: [],
+        parent_ticks: [],
       },
       session: new AuthoringSession({ sessionId, startedAt }),
       parentSession: new AuthoringSession({ sessionId, startedAt }),
@@ -126,13 +120,14 @@ export const useDraftsStore = defineStore('drafts', () => {
         steps: draft.steps,
         ticks: draft.ticks,
       }),
-      // Its own step chain, so the parent revision gets an honest authoring trace too; ticks on
-      // this stream are pause/interval only, since `recordParentChange` reports no inserted text.
+      // Its own step chain, so the parent revision gets an honest authoring trace too — the same
+      // `AuthoringSession` class and the same tick policy as `session` above, just a second
+      // instance for a second document (see `recordInto`).
       parentSession: AuthoringSession.resume({
         sessionId,
         startedAt: draft.started_at,
         steps: draft.parent_steps,
-        ticks: [],
+        ticks: draft.parent_ticks,
       }),
       timer: null,
       // Nothing new to write until this session is typed in, but the row is already on disk, so
@@ -146,24 +141,36 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
+   * Appends a change into an `AuthoringSession` — shared by `recordChange` (the entry's own prose)
+   * and `recordParentChange` (the parent's provisional document in an anchor-mode session), so both
+   * streams are recorded exactly the same way. Anchor mode limits what the *editor* can produce
+   * (ENTRY_MODEL.md, "Two creation experiences, kept separate"); this is the session that records
+   * whatever it does produce, and it has no notion of which mode a change came from.
+   *
+   * A change with no steps did not touch the traced document — a retitling is the one that does
+   * this for `recordChange`, since the title is a plain field beside the editor rather than part of
+   * it. There is nothing for the trace to append and no typing for the tick policy to judge, so it
+   * is skipped entirely; counting it would bookmark a stream for something that never entered it.
+   */
+  function recordInto(session: AuthoringSession, change: DraftChange): void {
+    if ((change.steps ?? []).length === 0) return
+
+    session.record({
+      steps: change.steps ?? [],
+      insertedText: change.insertedText,
+      isFormatting: change.isFormatting,
+      isAnchorOp: change.isAnchorOp,
+    })
+  }
+
+  /**
    * Records a change and schedules a flush. The buffer is append-only while the session runs: steps
    * accumulate and nothing already recorded is rewritten, so no authoring history is lost by
    * design. Only the snapshot moves.
    */
   function recordChange(sessionId: string, change: DraftChange): void {
     const entry = requireActive(sessionId)
-
-    // A change with no steps did not touch the traced document — a retitling is the one that does
-    // this, since the title is a plain field beside the editor rather than part of it. There is
-    // nothing for the trace to append and no typing for the tick policy to judge, so only the
-    // snapshot moves; counting it would bookmark the body's chain for something that never entered it.
-    if ((change.steps ?? []).length > 0) {
-      entry.session.record({
-        steps: change.steps ?? [],
-        insertedText: change.insertedText,
-        isFormatting: change.isFormatting,
-      })
-    }
+    recordInto(entry.session, change)
 
     entry.draft = {
       ...entry.draft,
@@ -178,22 +185,21 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * Records a change to the **parent's** provisional document, for an anchor-mode session only.
-   * `anchorIds` replaces the draft's whole list rather than being merged into it: the caller already
-   * has the authoritative set (every id came from a command in `editor/extensions.ts` that this
-   * store never sees directly), so there is nothing here for a merge to get wrong.
+   * Records a change to the **parent's** provisional document, for an anchor-mode session only —
+   * an ordinary `DraftChange` like the child's own, against the session's second document. Which
+   * anchors the session has placed is nowhere in here: it is the difference between
+   * `parent_base_content` and `parent_content` (`anchorsPlacedSince`), read when someone asks.
    */
-  function recordParentChange(sessionId: string, change: ParentAnchorChange): void {
+  function recordParentChange(sessionId: string, change: DraftChange): void {
     const entry = requireActive(sessionId)
-
-    entry.parentSession.record({ steps: change.steps ?? [] })
+    recordInto(entry.parentSession, change)
 
     entry.draft = {
       ...entry.draft,
       parent_content: change.content,
-      anchor_ids: change.anchorIds,
       updated_at: newEntryTimestamp(),
       parent_steps: entry.parentSession.steps,
+      parent_ticks: entry.parentSession.ticks,
     }
     entry.dirty = true
 
@@ -243,7 +249,11 @@ export const useDraftsStore = defineStore('drafts', () => {
     const write = (async () => {
       // A blank child note is not yet a draft worth keeping, unless anchors have already been
       // placed on the parent — that is real, crash-worthy work even before a word of prose exists.
-      if (isEmptyDocument(entry.draft.content) && entry.draft.anchor_ids.length === 0) {
+      const placedAnchors = anchorsPlacedSince(
+        entry.draft.parent_base_content,
+        entry.draft.parent_content,
+      )
+      if (isEmptyDocument(entry.draft.content) && placedAnchors.length === 0) {
         if (entry.persisted) {
           await draftRepository.delete(sessionId)
           entry.persisted = false

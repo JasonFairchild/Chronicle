@@ -33,10 +33,11 @@ export type DraftTarget =
  * appear in history or a timeline.
  *
  * A `new_child` draft edits **two** documents at once, per "Drafts" in ENTRY_MODEL.md: `content` is
- * the child's own prose, unchanged from every other target; `parent_content` and `parent_steps` are
- * the parent gaining provisional anchors, present only for this target. Two separate fields rather
- * than a variant per target keeps every other target's shape exactly as it already was, and a
- * `new_root` or `revision` draft simply never touches the parent fields.
+ * the child's own prose, unchanged from every other target; `parent_base_content`,
+ * `parent_content`, `parent_steps` and `parent_ticks` are the parent gaining provisional anchors,
+ * present only for this target. Separate fields rather than a variant per target keeps every other
+ * target's shape exactly as it already was, and a `new_root` or `revision` draft simply never
+ * touches the parent fields.
  */
 export interface Draft {
   /** Primary key. One session, one draft. */
@@ -48,12 +49,26 @@ export interface Draft {
   content: string
   /** Dates typed so far, so they survive a reload like the words do. */
   dates: EntryDates
-  /** Ids of the anchors this session has placed in `parent_content`, in the order placed. */
-  anchor_ids: string[]
   /** The parent document as this session has provisionally marked it. `new_child` only. */
   parent_content: string | null
+  /**
+   * The parent as it stood when this session began, never rewritten afterward. `new_child` only.
+   *
+   * Which anchors this session placed is read from the difference between this and
+   * `parent_content` (`anchorsPlacedSince`, `domain/anchors.ts`) rather than tallied into a list of
+   * its own — one fact, derived, so undoing or removing an anchor needs nothing kept in step. It is
+   * also the record of *which version this session started from*, which is what a future check for
+   * a parent revised out from under an open draft would compare against (CHRONICLE_PLAN.md).
+   */
+  parent_base_content: string | null
   steps: AuthoringStep[]
   /** The parent document's own step chain for this session. `new_child` only. */
   parent_steps: AuthoringStep[]
   ticks: AuthoringTick[]
+  /**
+   * Bookmarks on the parent's own step chain — one `AuthoringSession` per document (`draftsStore`
+   * runs two), each ticked by the same policy, so this is `ticks`' exact counterpart for
+   * `parent_steps` rather than a second mechanism. `new_child` only.
+   */
+  parent_ticks: AuthoringTick[]
 }

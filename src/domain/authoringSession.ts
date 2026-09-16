@@ -16,6 +16,8 @@ export interface AuthoringChange {
   /** Text this change added, used only to spot a finished sentence. */
   insertedText?: string
   isFormatting?: boolean
+  /** A structural anchor op — see `TickEvent.isAnchorOp` (`tickPolicy.ts`). */
+  isAnchorOp?: boolean
 }
 
 /**
@@ -68,7 +70,12 @@ export class AuthoringSession {
     }
 
     const reason = evaluateTick(
-      { at, insertedText: change.insertedText ?? '', isFormatting: change.isFormatting ?? false },
+      {
+        at,
+        insertedText: change.insertedText ?? '',
+        isFormatting: change.isFormatting ?? false,
+        isAnchorOp: change.isAnchorOp ?? false,
+      },
       this.state,
       this.policy,
     )

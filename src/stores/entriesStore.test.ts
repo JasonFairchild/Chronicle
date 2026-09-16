@@ -50,11 +50,12 @@ describe('useEntriesStore', () => {
       // journal entry that would only ever be named "Tuesday" is better left unnamed.
       content: serializeDocument(titledDocument(plainTextDocument('We drove up on Friday.'), '')),
       dates: emptyEntryDates(),
-      anchor_ids: [],
+      parent_base_content: null,
       parent_content: null,
       steps: [],
       parent_steps: [],
       ticks: [],
+      parent_ticks: [],
     }
 
     const sealed = await store.createFromDraft(draft, null)
@@ -77,11 +78,12 @@ describe('useEntriesStore', () => {
         titledDocument(plainTextDocument('Still think about this trip'), 'A later thought'),
       ),
       dates: emptyEntryDates(),
-      anchor_ids: [],
+      parent_base_content: null,
       parent_content: null,
       steps: [],
       parent_steps: [],
       ticks: [],
+      parent_ticks: [],
     }
 
     const sealed = await store.createFromDraft(draft, null)
@@ -124,11 +126,13 @@ describe('useEntriesStore', () => {
       updated_at: '2026-01-01T00:00:00.000Z',
       content: textContent('It was actually Donner Lake'),
       dates: emptyEntryDates(),
-      anchor_ids: ['anchor-1'],
+      // "anchor-1 is this session's" is the difference between these two documents, not a list.
+      parent_base_content: textContent('I went to Lake Tahoe with Dad'),
       parent_content: marked,
       steps: [],
       parent_steps: [],
       ticks: [],
+      parent_ticks: [],
     }
 
     await store.createFromDraft(draft, null)
@@ -163,11 +167,12 @@ describe('useEntriesStore', () => {
       updated_at: '2026-01-01T00:00:00.000Z',
       content: textContent('It was actually Donner Lake'),
       dates: emptyEntryDates(),
-      anchor_ids: ['anchor-1'],
+      parent_base_content: textContent('I went to Lake Tahoe with Dad'),
       parent_content: struck,
       steps: [],
       parent_steps: [],
       ticks: [],
+      parent_ticks: [],
     }
 
     await store.createFromDraft(draft, null)
@@ -191,11 +196,12 @@ describe('useEntriesStore', () => {
         occurred_at: '1994-06-11',
         occurred_time_note: 'late morning',
       },
-      anchor_ids: [],
+      parent_base_content: null,
       parent_content: null,
       steps: [],
       parent_steps: [],
       ticks: [],
+      parent_ticks: [],
     }
 
     const created = await store.createFromDraft(draft, null)
@@ -261,11 +267,12 @@ describe('useEntriesStore', () => {
         ],
       }),
       dates: emptyEntryDates(),
-      anchor_ids: [],
+      parent_base_content: null,
       parent_content: null,
       steps: [],
       parent_steps: [],
       ticks: [],
+      parent_ticks: [],
     }
 
     await store.createFromDraft(draft, null)

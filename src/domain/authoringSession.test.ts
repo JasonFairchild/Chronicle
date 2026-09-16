@@ -34,6 +34,14 @@ describe('AuthoringSession', () => {
     expect(trace?.session_id).toBe('session-1')
   })
 
+  it('bookmarks a structural anchor op the same way any other session does', () => {
+    const session = new AuthoringSession({ sessionId: 'session-anchor' })
+
+    session.record({ steps: [{ stepType: 'addMark' }], isAnchorOp: true })
+
+    expect(session.ticks).toEqual([expect.objectContaining({ step_index: 1, reason: 'anchor' })])
+  })
+
   it('takes a manual bookmark wherever the writer asks for one', () => {
     const session = new AuthoringSession({ sessionId: 'session-2' })
 

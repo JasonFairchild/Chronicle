@@ -158,6 +158,19 @@ either — they are names for what a note turned out to be, not a choice to make
 - An anchor is fixed once its note is saved. Pointing differently at the same passage later means
   writing another note, not editing the first one's anchor (see §6, "Editing a child entry's
   anchors").
+- An anchor already placed earlier in the _same_, still-open session can be clicked to reopen it —
+  either its highlighted or struck passage, or its wording, both take you to the same box. From
+  there: edit the wording, switch the passage between highlight and strike (Ctrl+Alt+H / Ctrl+Alt+S
+  work here too), or remove it outright. Escape restores whatever the box held when it opened rather
+  than discarding it.
+- Anchors are exclusive: a passage already covered by one — this session's own, or an earlier
+  child's already-sealed one — can't be covered by a second. Selecting or clicking into an existing
+  anchor's passage at all, whether that's the whole thing, part of it, or a range that only partly
+  overlaps it, opens that anchor's box instead of creating a new one, provided it's this session's
+  own; touching a sealed anchor from an earlier child does nothing, since only the child that placed
+  one may still change it (see §6, "Editing a child entry's anchors"). A selection touching no
+  anchor at all marks a fresh one, same as always. Widening or shrinking an anchor's span isn't
+  offered; remove and recreate covers that.
 - Highlight color is a display setting, not something stored with the note — today that means one
   system scheme by note kind; switching schemes later never touches history.
 
@@ -358,12 +371,15 @@ built:
 - Voice to text dictating
 - Editing a child entry's anchors after it's sealed. Decided against for now (§4.4, ENTRY_MODEL.md):
   anchors are fixed once sealed, and pointing differently at the same passage means adding another
-  child entry. Re-opening a sealed child's anchors is architecturally possible — they'd be ordinary
-  document steps on the parent — just not offered as a feature.
-- Interacting with an anchor already placed earlier in the _same_ still-open draft session — before
-  sealing, unlike the point above: click one to reopen its wording, toggle highlight/strike, or
-  remove it, and maybe widen or shrink its span (or just remove-and-recreate for that). Not decided
-  against, just not built (CHRONICLE_PLAN.md, "Not carried over from the anchor model redesign").
+  child entry today. Re-opening a sealed child's anchors is architecturally possible — they'd be
+  ordinary document steps on the parent, captured the same way any other revision is — just not
+  offered as a feature yet. This is also the intended answer to anchor exclusivity's one real
+  limit: since a passage can only carry one anchor at a time (§4.4), a second opinion on an
+  already-anchored passage waits on this being built, not on reintroducing overlap.
+- Widening or shrinking the span of an anchor already placed earlier in the _same_, still-open
+  draft session — before sealing, unlike the point above, where reopening it to edit wording,
+  switch kind, or remove it outright is built (§4.4). Remove-and-recreate covers a resize today;
+  a real resize gesture is not decided against, just not built.
 - A distraction-free writing mode.
 - Templates or prompts for recurring kinds of entry.
 - Keyboard-first navigation throughout.

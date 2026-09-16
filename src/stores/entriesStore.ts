@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
-import { anchorRefsFor, relationTypeForAnchors } from '@/domain/anchors'
+import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
 import {
   collectMediaRefs,
   docTitle,
@@ -174,7 +174,11 @@ export const useEntriesStore = defineStore('entries', () => {
     const { target } = draft
 
     if (target.kind === 'new_child') {
-      if (draft.anchor_ids.length === 0) {
+      // Read off the two documents rather than a list kept alongside them, so an anchor placed and
+      // then removed before sealing leaves nothing behind to subtract — see `anchorsPlacedSince`.
+      const anchorIds = anchorsPlacedSince(draft.parent_base_content, draft.parent_content)
+
+      if (anchorIds.length === 0) {
         // Nothing was placed on the parent, so this is a note about the entry at large: one entry,
         // no revision, exactly like `createChildEntry`. With nothing anchored there is nothing for
         // `relationTypeForAnchors` to read, and its answer for that case is annotation.
@@ -186,7 +190,7 @@ export const useEntriesStore = defineStore('entries', () => {
         )
       }
 
-      return sealAnchorChild(draft, target.parent_id, content, trace, parentTrace)
+      return sealAnchorChild(draft, target.parent_id, content, anchorIds, trace, parentTrace)
     }
 
     if (target.kind === 'revision') {
@@ -242,12 +246,14 @@ export const useEntriesStore = defineStore('entries', () => {
    * half-written (ENTRY_MODEL.md, "Drafts").
    *
    * Whether the child reads as an annotation or an update is derived from what was anchored rather
-   * than asked for up front — see `relationTypeForAnchors`.
+   * than asked for up front — see `relationTypeForAnchors`. `anchorIds` is likewise derived, by the
+   * caller, from the difference between the draft's base and current parent documents.
    */
   async function sealAnchorChild(
     draft: Draft,
     parentId: string,
     content: string,
+    anchorIds: string[],
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null,
   ): Promise<Entry> {
@@ -270,16 +276,10 @@ export const useEntriesStore = defineStore('entries', () => {
         current.metadata,
         parentTrace,
       ),
-      childInput(
-        content,
-        parentId,
-        relationTypeForAnchors(draft.anchor_ids, parentContent),
-        draft.dates,
-        {
-          anchors: anchorRefsFor(draft.anchor_ids, parentContent),
-          authoring_trace: trace,
-        },
-      ),
+      childInput(content, parentId, relationTypeForAnchors(anchorIds, parentContent), draft.dates, {
+        anchors: anchorRefsFor(anchorIds, parentContent),
+        authoring_trace: trace,
+      }),
     ])
 
     await refreshRoot(parentId)

@@ -10,11 +10,12 @@ function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft
     updated_at: '2026-09-05T10:00:00.000Z',
     content: '',
     dates: emptyEntryDates(),
-    anchor_ids: [],
+    parent_base_content: null,
     parent_content: null,
     steps: [],
     parent_steps: [],
     ticks: [],
+    parent_ticks: [],
     ...overrides,
   }
 }
@@ -47,11 +48,12 @@ export function runDraftRepositoryContract(
             occurred_at: '1994-06-11',
             occurred_time_note: 'morning',
           },
-          anchor_ids: ['anchor-1'],
+          parent_base_content: 'The full parent document, as this session found it',
           parent_content: 'The full parent document, with a provisional anchor mark',
           steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
           parent_steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
           ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
+          parent_ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
         }),
       )
 
@@ -65,13 +67,16 @@ export function runDraftRepositoryContract(
         occurred_at: '1994-06-11',
         occurred_time_note: 'morning',
       })
-      expect(fetched?.anchor_ids).toEqual(['anchor-1'])
+      expect(fetched?.parent_base_content).toBe(
+        'The full parent document, as this session found it',
+      )
       expect(fetched?.parent_content).toBe(
         'The full parent document, with a provisional anchor mark',
       )
       expect(fetched?.steps).toHaveLength(1)
       expect(fetched?.parent_steps).toHaveLength(1)
       expect(fetched?.ticks[0]?.reason).toBe('punctuation')
+      expect(fetched?.parent_ticks[0]?.reason).toBe('anchor')
     })
 
     it('overwrites in place, because a live session is working space rather than history', async () => {

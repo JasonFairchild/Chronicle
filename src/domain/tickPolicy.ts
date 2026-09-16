@@ -32,6 +32,14 @@ export interface TickEvent {
   insertedText: string
   /** True when the change applied a mark or changed a node type rather than text. */
   isFormatting: boolean
+  /**
+   * True when the change was a one-shot structural anchor op — placing an anchor, switching its
+   * kind, or removing it — rather than ordinary typing or formatting. A keystroke inside an open
+   * wording box is deliberately never this: typing wording is typing, and it earns a bookmark the
+   * same way prose does, from a pause, a finished sentence, or the interval — never from being the
+   * last keystroke before Enter. See `editor/anchorCommands.ts`'s `ANCHOR_TICK_META`.
+   */
+  isAnchorOp: boolean
 }
 
 /** What the session has seen so far. Held by the caller so the policy itself stays stateless. */
@@ -57,6 +65,10 @@ export function evaluateTick(
 
   if (policy.sentenceEnd.test(event.insertedText)) {
     return 'punctuation'
+  }
+
+  if (event.isAnchorOp) {
+    return 'anchor'
   }
 
   if (event.isFormatting) {

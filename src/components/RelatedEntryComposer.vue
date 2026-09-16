@@ -39,7 +39,9 @@ const parentHasTitle = computed(() => hasTitleNode(props.session.parentContent))
       <h2 class="mb-2 text-sm font-medium">This entry</h2>
       <p id="anchor-mode-instructions" class="mb-2 text-sm text-[var(--color-text-muted)]">
         Select a passage, then Highlight or Strike it (Ctrl+Alt+H / Ctrl+Alt+S) — or place the
-        cursor and type to propose wording. Surrounding text cannot be changed from here.
+        cursor and type to propose wording. Click an anchor you've placed to change its wording,
+        switch it between highlight and strike, or remove it. Surrounding text cannot otherwise be
+        changed from here.
       </p>
 
       <DocumentEditor
@@ -47,6 +49,7 @@ const parentHasTitle = computed(() => hasTitleNode(props.session.parentContent))
         anchor-mode
         :with-title="parentHasTitle"
         :content="session.parentContent"
+        :anchor-base-content="session.parentBaseContent"
         :disabled="session.saving"
         described-by="anchor-mode-instructions"
         @change="session.handleParentChange"

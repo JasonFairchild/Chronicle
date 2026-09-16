@@ -9,9 +9,18 @@ export interface EditorChange {
   insertedText: string
   isFormatting: boolean
   /**
-   * Anchors placed since this editor mounted, in `anchor-mode` only. Derived by diffing against
-   * the document this editor started from, so undoing an anchor drops back out on its own —
-   * nothing here has to notice an undo and subtract it.
+   * Whether this change was a one-shot structural anchor op — place, change kind, or remove —
+   * reported in every mode, the same way `isFormatting` is. See `TickEvent.isAnchorOp`
+   * (`domain/tickPolicy.ts`): the parent's and the child's authoring streams share one tick policy,
+   * and this is the fact it judges alongside `isFormatting`. Typing wording is deliberately never
+   * this — it's ordinary text entry, tickable the same way prose is, from `insertedText` below.
+   */
+  isAnchorOp: boolean
+  /**
+   * Anchors this session has placed, in `anchor-mode` only. Derived by reading which of the
+   * document's current ids aren't sealed (`sessionAnchorIds`, `domain/anchors.ts`) rather than
+   * tallied as commands run, so undoing an anchor drops back out on its own — nothing here has to
+   * notice an undo and subtract it.
    */
   anchorIds?: string[]
   /**
@@ -44,7 +53,12 @@ import {
   Undo2,
   type LucideIcon,
 } from '@lucide/vue'
-import { addedAnchorIds, collectAnchors, pairableAnchorAt } from '@/domain/anchors'
+import {
+  collectAnchors,
+  innermostAnchorAt,
+  pairableAnchorAt,
+  sessionAnchorIds as sessionAnchorIdsIn,
+} from '@/domain/anchors'
 import { anchorsAffectedBy } from '@/domain/anchorWarnings'
 import { useMedia } from '@/composables/useMedia'
 import {
@@ -58,11 +72,17 @@ import {
   type EntryDocument,
 } from '@/domain/entryDocument'
 import {
-  addAnchorMark,
   anchorSpans,
+  editableAnchorRanges,
+  isAnchorCommand,
   mapAnchorSpans,
+  markAnchor,
   openAnchorInsert,
+  openAnchorWording,
   readAnchorAnnouncement,
+  readAnchorTick,
+  readAnchorWordingText,
+  sealedAnchorIdsOf,
   type AnchorSpan,
 } from '@/editor/anchorCommands'
 import { entryExtensions } from '@/editor/extensions'
@@ -86,10 +106,25 @@ const props = withDefaults(
      * gives way to it.
      */
     anchorMode?: boolean
+    /**
+     * The document as it stood when this **session** began, in `anchor-mode` only — a resumed
+     * draft's `Draft.parent_base_content`. Omitted for a fresh session, where `content` is already
+     * that base. Read once, on mount, alongside `content`: it is what tells an anchor this session
+     * placed before a reload apart from one an earlier child sealed, since both are simply *there*
+     * in the document a resumed editor mounts with (ENTRY_MODEL.md, "Drafts").
+     */
+    anchorBaseContent?: string
     /** Id of an element describing how to use this editor, wired to `aria-describedby`. */
     describedBy?: string
   }>(),
-  { content: '', withTitle: false, disabled: false, anchorMode: false, describedBy: undefined },
+  {
+    content: '',
+    withTitle: false,
+    disabled: false,
+    anchorMode: false,
+    anchorBaseContent: undefined,
+    describedBy: undefined,
+  },
 )
 
 const emit = defineEmits<{
@@ -159,7 +194,10 @@ const editor = useEditor({
   // In anchor mode, `entryExtensions` installs the guard that lets through only the anchor
   // commands below and undo/redo of them — see `isAnchorEdit`. That is what makes "no child entry
   // is destructive" a property of the editor rather than a rule the UI is trusted to follow.
-  extensions: entryExtensions({ anchorMode: props.anchorMode }),
+  extensions: entryExtensions({
+    anchorMode: props.anchorMode,
+    baseContent: props.anchorBaseContent,
+  }),
   content: initialDocument,
   editable: !props.disabled,
   editorProps: {
@@ -178,6 +216,22 @@ const editor = useEditor({
       ...(props.describedBy ? { 'aria-describedby': props.describedBy } : {}),
       ...anchorMarkupAttr(initialDocument),
     },
+    handleClick: (_view: EditorView, pos: number): boolean => {
+      // Reopening an anchor this session placed, by clicking its highlighted or struck text — the
+      // wording node's own span handles clicks on itself (`AnchorInsertView.vue`); this is only for
+      // the marked text beside it, which has no node view of its own to hook a click into. A click
+      // on a sealed anchor from an earlier child falls through to ordinary caret placement instead.
+      if (!props.anchorMode) return false
+
+      const instance = editor.value
+      if (!instance) return false
+
+      const hit = innermostAnchorAt(editableAnchorRanges(instance), pos)
+      if (!hit) return false
+
+      openAnchorWording(instance, hit.anchor_id)
+      return true
+    },
     handleTextInput: (view: EditorView, from: number, to: number, text: string): boolean => {
       // Opening a wording session at the caret. Only an empty selection in anchor mode qualifies;
       // anything else falls through to the guard, which rejects it like any other ordinary edit in
@@ -190,10 +244,14 @@ const editor = useEditor({
       const marksBefore = (view.state.doc.resolve(from).nodeBefore?.marks ?? []).map((mark) =>
         mark.toJSON(),
       ) as DocMark[]
-      const document = view.state.doc.toJSON() as EntryDocument
-      const pairWith = pairableAnchorAt(marksBefore, document, initialDocument) ?? undefined
+      const pairWith = pairableAnchorAt(marksBefore, sealedAnchorIdsOf(instance))
 
-      return openAnchorInsert(instance, from, text, pairWith) !== null
+      // Pairing appends to the anchor's existing node (or creates its first one) rather than
+      // inserting a fresh node under the same id — see `openAnchorWording`'s own note on why a
+      // second call site inserting blindly used to be able to produce two nodes sharing one id.
+      return pairWith
+        ? openAnchorWording(instance, pairWith, text) !== null
+        : openAnchorInsert(instance, from, text) !== null
     },
   },
   onUpdate: ({ editor: instance, transaction }) => {
@@ -233,9 +291,16 @@ const editor = useEditor({
       insertedText: insertedTextOf(transaction),
       // Judged by what the document says before and after, not by which steps did it. A heading,
       // a list, or an alignment leaves every word in place while producing steps that look
-      // nothing like a mark's.
-      isFormatting: sameContent(transaction.before.toJSON() as EntryDocument, document),
-      anchorIds: props.anchorMode ? addedAnchorIds(initialDocument, document) : undefined,
+      // nothing like a mark's — and so, by the same measure, does every anchor command: the
+      // non-destructive invariant means `sameContent` alone can't tell one from real formatting, so
+      // an anchor command is excluded explicitly rather than misread as one.
+      isFormatting:
+        sameContent(transaction.before.toJSON() as EntryDocument, document) &&
+        !isAnchorCommand(transaction),
+      isAnchorOp: readAnchorTick(transaction),
+      anchorIds: props.anchorMode
+        ? sessionAnchorIdsIn(sealedAnchorIdsOf(instance), document)
+        : undefined,
       affectedAnchorIds: props.anchorMode ? undefined : [...affectedAnchorIds],
     })
 
@@ -277,6 +342,7 @@ function handleTitleInput(event: Event): void {
     steps: [],
     insertedText: '',
     isFormatting: false,
+    isAnchorOp: false,
     affectedAnchorIds: [...affectedAnchorIds],
   })
 }
@@ -299,8 +365,16 @@ function focusBody(): void {
 /**
  * The text a change added, for the tick policy alone: it only ever asks whether a sentence just
  * finished. The steps remain the authoritative record of what happened.
+ *
+ * An anchor-mode wording keystroke (`updateAnchorInsertText`) carries its current text as meta
+ * instead of a step slice — it's an attribute change on an atom, not a text-insertion step this
+ * loop can read — so that's checked first. `evaluateTick`'s punctuation check only ever looks at the
+ * trailing character, so the box's current full text works exactly the same as a true delta would.
  */
 function insertedTextOf(transaction: Transaction): string {
+  const wordingText = readAnchorWordingText(transaction)
+  if (wordingText !== null) return wordingText
+
   let inserted = ''
 
   for (const step of transaction.steps) {
@@ -322,16 +396,17 @@ function insertedTextOf(transaction: Transaction): string {
 
 /**
  * `AnchorMenu`'s one entry point back into the editor. The range is read explicitly rather than
- * left to `addAnchorMark`'s own default, because the button that calls this lives in a menu whose
+ * left to `markAnchor`'s own default, because the button that calls this lives in a menu whose
  * own controls can hold focus — see `anchorCommands.ts`'s note on why the range is an explicit,
- * optional parameter there.
+ * optional parameter there. Opens an existing anchor's wording box rather than marking a new one
+ * when the selection overlaps one at all — see `markAnchor`.
  */
 function handleAnchorMark(kind: AnchorKind): void {
   const instance = editor.value
   if (!instance) return
 
   const { from, to } = instance.state.selection
-  addAnchorMark(instance, kind, { from, to })
+  markAnchor(instance, kind, { from, to })
 }
 
 const linkOpen = ref(false)
@@ -859,6 +934,14 @@ defineExpose({
 
 :deep(.chronicle-document .chronicle-anchor-insert) {
   text-decoration: none;
+  /*
+    A fixed visual gap ahead of the wording, independent of whatever whitespace the marked passage
+    behind it does or doesn't have — `addAnchorMark` (`anchorCommands.ts`) trims a placed anchor's
+    own span down to real characters, so there's never a space character here to lean on for
+    spacing. Applied to the `<ins>` wrapper rather than the wording span inside it, so it covers the
+    open input box too, not just the closed rendering.
+  */
+  margin-inline-start: 0.25em;
 }
 
 /*
@@ -966,5 +1049,45 @@ defineExpose({
 :deep(.chronicle-anchor-insert-accept) {
   color: var(--color-anchor-insert);
   flex-shrink: 0;
+}
+
+/*
+  Remove is shown for every open anchor; the Highlight/Strike toggles only for one with a mark to
+  switch — a bare insertion has no kind. `--active` marks whichever kind the anchor currently
+  carries, echoing the same two colors `.chronicle-anchor[data-anchor-kind]` above renders on the
+  passage itself.
+*/
+:deep(.chronicle-anchor-insert-kind),
+:deep(.chronicle-anchor-insert-remove) {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  border-radius: 0.2rem;
+  padding: 0.05rem;
+}
+
+:deep(.chronicle-anchor-insert-kind:hover),
+:deep(.chronicle-anchor-insert-remove:hover) {
+  background-color: var(--color-bg-muted);
+  color: var(--color-text);
+}
+
+:deep(.chronicle-anchor-insert-kind--active) {
+  color: var(--color-anchor-insert);
+}
+
+/*
+  A placed anchor this session may still edit is itself clickable — see PRODUCT.md §4.4,
+  "Interacting with an anchor already placed" — so its wording reads as something to act on rather
+  than plain text, without disturbing the italic/color styling above that marks it as proposed
+  wording in the first place.
+*/
+:deep(.chronicle-anchor-wording--editable) {
+  cursor: pointer;
+  border-radius: 0.15rem;
+}
+
+:deep(.chronicle-anchor-wording--editable:hover) {
+  text-decoration: underline;
 }
 </style>

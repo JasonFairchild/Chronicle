@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addedAnchorIds,
+  anchorRangeOverlapping,
   anchorRefsFor,
+  anchorsPlacedSince,
   collectAnchors,
+  innermostAnchorAt,
   pairableAnchorAt,
   relationTypeForAnchors,
   resolveAnchors,
+  sessionAnchorIds,
+  type AnchorRange,
 } from '@/domain/anchors'
 import { serializeDocument, type DocMark, type EntryDocument } from '@/domain/entryDocument'
 
@@ -106,28 +110,54 @@ describe('collectAnchors', () => {
   })
 })
 
-describe('addedAnchorIds', () => {
-  it('reports only the ids that appeared since the earlier document', () => {
-    const before = doc('The meeting went badly')
-    const after = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'comment',
-      from: 4,
-      to: 11,
-    })
-
-    expect(addedAnchorIds(before, after)).toEqual(['a1'])
+describe('sessionAnchorIds', () => {
+  const marked = doc('The meeting went badly', {
+    anchorId: 'a1',
+    kind: 'comment',
+    from: 4,
+    to: 11,
   })
 
-  it('drops back out once undone, since it diffs the documents rather than tallying', () => {
-    const before = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'comment',
-      from: 4,
-      to: 11,
-    })
+  it('reports the ids present now that are not sealed', () => {
+    expect(sessionAnchorIds(new Set(), marked)).toEqual(['a1'])
+  })
 
-    expect(addedAnchorIds(before, before)).toEqual([])
+  it('drops back out once undone, since it reads the document rather than tallying', () => {
+    expect(sessionAnchorIds(new Set(['a1']), doc('The meeting went badly'))).toEqual([])
+  })
+
+  it('leaves out an anchor an earlier child sealed into the same document', () => {
+    expect(sessionAnchorIds(new Set(['a1']), marked)).toEqual([])
+  })
+})
+
+describe('anchorsPlacedSince', () => {
+  const base = doc('The meeting went badly')
+  const marked = doc('The meeting went badly', {
+    anchorId: 'a1',
+    kind: 'comment',
+    from: 4,
+    to: 11,
+  })
+
+  it('reports what appeared since the session’s base document', () => {
+    expect(anchorsPlacedSince(base, marked)).toEqual(['a1'])
+  })
+
+  it('reports nothing for an anchor the base already carried', () => {
+    // An earlier child's, sealed before this session opened.
+    expect(anchorsPlacedSince(marked, marked)).toEqual([])
+  })
+
+  it('keeps reporting an anchor placed before a reload, since the base does not move', () => {
+    // A resumed draft mounts from `parent_content` — which already carries the anchor placed
+    // before the reload — but is measured against the base it started from, where it is absent.
+    expect(anchorsPlacedSince(base, marked)).toEqual(['a1'])
+  })
+
+  it('treats a target with no parent document at all as having placed nothing', () => {
+    expect(anchorsPlacedSince(null, null)).toEqual([])
+    expect(anchorsPlacedSince(null, marked)).toEqual(['a1'])
   })
 })
 
@@ -179,36 +209,69 @@ describe('pairableAnchorAt', () => {
     { type: 'anchor', attrs: { anchorId, kind } },
   ]
 
-  it('pairs with an anchor mark placed this session', () => {
-    const before = doc('The meeting went badly')
-    const after = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'comment',
-      from: 4,
-      to: 11,
-    })
-
-    expect(pairableAnchorAt(mark('a1'), after, before)).toBe('a1')
+  it('pairs with an anchor mark not in the sealed set', () => {
+    expect(pairableAnchorAt(mark('a1'), new Set())).toBe('a1')
   })
 
   it('refuses to pair with a sealed anchor from an earlier child', () => {
-    const sealed = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'comment',
-      from: 4,
-      to: 11,
-    })
-
-    // The anchor is present in *both* documents — this session never placed it.
-    expect(pairableAnchorAt(mark('a1'), sealed, sealed)).toBeNull()
+    expect(pairableAnchorAt(mark('a1'), new Set(['a1']))).toBeNull()
   })
 
   it('returns null when the text before the caret carries no anchor mark at all', () => {
-    const before = doc('Plain text')
-    const after = doc('Plain text')
+    expect(pairableAnchorAt([], new Set())).toBeNull()
+    expect(pairableAnchorAt([{ type: 'bold' }], new Set())).toBeNull()
+  })
+})
 
-    expect(pairableAnchorAt([], after, before)).toBeNull()
-    expect(pairableAnchorAt([{ type: 'bold' }], after, before)).toBeNull()
+describe('innermostAnchorAt', () => {
+  const range = (anchor_id: string, from: number, to: number): AnchorRange => ({
+    anchor_id,
+    from,
+    to,
+  })
+
+  it('picks the smaller of two overlapping ranges', () => {
+    const ranges = [range('outer', 0, 20), range('inner', 5, 10)]
+
+    expect(innermostAnchorAt(ranges, 7)?.anchor_id).toBe('inner')
+  })
+
+  it('matches a position sitting exactly on an edge', () => {
+    const ranges = [range('a1', 5, 10)]
+
+    expect(innermostAnchorAt(ranges, 5)?.anchor_id).toBe('a1')
+    expect(innermostAnchorAt(ranges, 10)?.anchor_id).toBe('a1')
+  })
+
+  it('returns null when nothing covers the position', () => {
+    expect(innermostAnchorAt([range('a1', 5, 10)], 20)).toBeNull()
+  })
+})
+
+describe('anchorRangeOverlapping', () => {
+  const ranges: AnchorRange[] = [{ anchor_id: 'a1', from: 10, to: 20 }]
+
+  it('returns null for a range that touches nothing', () => {
+    expect(anchorRangeOverlapping(ranges, 0, 5)).toBeNull()
+    expect(anchorRangeOverlapping(ranges, 25, 30)).toBeNull()
+  })
+
+  it('returns null for a range that only touches an edge with no space between', () => {
+    expect(anchorRangeOverlapping(ranges, 0, 10)).toBeNull()
+    expect(anchorRangeOverlapping(ranges, 20, 30)).toBeNull()
+  })
+
+  it('finds a range a selection only partly overlaps', () => {
+    expect(anchorRangeOverlapping(ranges, 15, 25)?.anchor_id).toBe('a1')
+    expect(anchorRangeOverlapping(ranges, 5, 15)?.anchor_id).toBe('a1')
+  })
+
+  it('finds a range that swallows the selection entirely', () => {
+    expect(anchorRangeOverlapping(ranges, 12, 18)?.anchor_id).toBe('a1')
+  })
+
+  it('finds a range the selection exactly matches', () => {
+    expect(anchorRangeOverlapping(ranges, 10, 20)?.anchor_id).toBe('a1')
   })
 })
 

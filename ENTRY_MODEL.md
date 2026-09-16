@@ -29,8 +29,11 @@ comment — sharing one `anchor_id` _is_ the pairing, declared rather than infer
 proximity or from which kind of mark it happens to be: `pairableAnchorAt` (`domain/anchors.ts`)
 derives it from whichever anchor mark this session placed immediately before the caret, comment or
 strike alike, never asking which. The mark is `inclusive: false`, so typing at an anchor's edge is
-not silently absorbed into it, and `excludes: ''`, so two children anchoring the same passage can
-overlap freely.
+not silently absorbed into it, and `excludes: ''`, so adding one anchor's mark can never silently
+strip a _different_ anchor's mark sharing the same span — a mark type excludes itself by default,
+which would do exactly that. Anchors themselves stay exclusive at the command level instead
+(`markAnchor`, `editor/anchorCommands.ts`): a selection touching an existing anchor's marked passage
+at all, sealed or this session's own, never places a new one over it.
 
 There is deliberately no `replace` op. Since nothing a child does hides the parent's text, "I would
 have written this differently" is a strike over the original plus an `anchorInsert` of the new
@@ -105,20 +108,42 @@ an unsealed draft has not settled the question, which is also why the drafts lis
 "related entry" rather than naming a kind it would sometimes get wrong.
 
 **Drafts.** An anchor-mode session edits two documents — the parent (gaining provisional anchors,
-tracked in `Draft.parent_content` / `parent_steps`) and the child's own prose (`Draft.content` /
-`steps`) — sealing atomically into two entries via `EntryRepository.createMany`: a parent revision
-(`revision_mode: 'anchor'`) and the child (`anchors` pointing at what just landed). A draft also
-holds the dates typed beside the words (`Draft.dates`), so a reload loses neither. `createMany`
-writes all-or-nothing, so a half-sealed pair — a revision whose anchors no entry explains, or a child
-pointing at ids nothing in the parent carries — is never representable. If nothing was actually
-anchored (`Draft.anchor_ids` empty), sealing writes only the child, exactly as it would for an
-unanchored note — no revision for a parent nothing touched. Anchors may be freely added, changed, or
-undone before that seal; undoing is diffed against the session's starting document
-(`addedAnchorIds`), not tallied, so a placed-then-undone anchor leaves no trace to subtract. **No
-editing or deleting an anchor after sealing** — append-only for the parent's anchor history, same as
-entries generally. Pointing differently at the same passage later means adding another child entry.
-Re-opening a sealed child's anchors is possible in principle (they're ordinary document steps on the
-parent) but is deliberately not offered.
+tracked in `Draft.parent_content` / `parent_steps` / `parent_ticks`, alongside `parent_base_content`
+below) and the child's own prose (`Draft.content` / `steps`) — sealing atomically into two entries
+via `EntryRepository.createMany`: a parent revision (`revision_mode: 'anchor'`) and the child
+(`anchors` pointing at what just landed). A draft also holds the dates typed beside the words
+(`Draft.dates`), so a reload loses neither. `createMany` writes all-or-nothing, so a half-sealed
+pair — a revision whose anchors no entry explains, or a child pointing at ids nothing in the parent
+carries — is never representable. If nothing was actually anchored, sealing writes only the child,
+exactly as it would for an unanchored note — no revision for a parent nothing touched.
+
+Anchors may be freely added, changed, or undone before that seal. **Which ids this session may still
+change** is never stored as a list at all — it is the _difference_ between two documents:
+`Draft.parent_base_content`, the parent exactly as this session found it, set once and never
+rewritten, and `parent_content`, the parent as it stands right now. `anchorsPlacedSince(base,
+current)` (`domain/anchors.ts`) reads that difference on demand, which is what lets a
+placed-then-undone anchor leave no trace to subtract without a second record to keep in step with
+the document. Persisting the _base_ rather than a running list of ids is also what survives a
+resume: a reload reseeds the editor from `parent_content`, which already carries whatever this
+session placed before the reload — indistinguishable from an earlier child's sealed anchor unless
+something fixed predates the session to compare against. The base is that fixed point; it is also,
+not incidentally, the version the session started revising from, which a future check for "this
+draft has gone stale against a parent revised elsewhere" (CHRONICLE_PLAN.md) would compare against
+too.
+
+Editing reaches only what a session placed and hasn't sealed yet: reopen an anchor's wording box by
+clicking it (its marked passage or its wording), switch it between highlight and strike, or remove it
+outright — all ordinary document steps captured the same way any other edit in the session is. A
+fresh selection may never overlap an anchor already in the document, sealed or this session's own
+(`markAnchor`, `editor/anchorCommands.ts`) — touching a sealed one does nothing at all, since only the
+child that placed it may still change it.
+
+**No editing or deleting an anchor once sealed** — append-only for the parent's anchor history, same
+as entries generally. Pointing differently at the same passage later means adding another child entry
+today. Re-opening a _sealed_ child's anchors is possible in principle (they'd be ordinary document
+steps on the parent too, captured the same way a revision is) but is deliberately not offered yet —
+see PRODUCT.md's Future Considerations. That, not reintroducing overlap, is the intended way to say
+something different about an already-anchored passage once it's built.
 
 **Color.** Never stored — the mark/node carries only `{ anchor_id, kind }`. Color is computed at
 render time from `(active scheme, child entry, kind)`, so a scheme can be swapped without touching
@@ -197,10 +222,22 @@ identifying moments worth stopping at when reviewing how something was written. 
 persisted; only some moments are bookmarked.
 
 So ticks are not entries and are not saves. They are timestamped bookmarks into the step chain,
-`{ at, step_index, reason }` with reason `pause | punctuation | interval | format | manual`, all
-tunable. A pause or a sentence-ending period appends a bookmark; it does not trigger a write, because
-the writing already happened. A trace belongs on any entry that was typed, not only revisions, so a
-first draft is captured the same way as a later edit.
+`{ at, step_index, reason }` with reason `pause | punctuation | interval | format | anchor | manual`,
+all tunable. A pause or a sentence-ending period appends a bookmark; it does not trigger a write,
+because the writing already happened. A trace belongs on any entry that was typed, not only
+revisions, so a first draft is captured the same way as a later edit.
+
+One policy judges every stream the same way: the parent's provisional document in an anchor-mode
+session and the child's own prose are two `AuthoringSession` instances, not two mechanisms — anchor
+mode limits what the _editor_ can produce (see "Two creation experiences, kept separate" below), not
+how the session records what it does produce. `anchor` is a one-shot structural op — placing an
+anchor, switching it between highlight and strike, or removing it (`editor/anchorCommands.ts`'s
+`ANCHOR_TICK_META`) — never a keystroke inside an open wording box: typing wording is typing, and it
+earns a bookmark the way prose does, from `pause`, `punctuation`, or `interval`, not from being the
+last keystroke before Enter. That last part isn't a policy choice so much as a fact about the editor:
+every keystroke there already writes straight through to the document (`updateAnchorInsertText`), so
+by the time a box is committed the value is already in place and the commit's own transaction is a
+content no-op TipTap won't even emit an update for — there is no separate "settling" moment to tick.
 
 ## Two stores, one of them history
 
@@ -237,26 +274,29 @@ interface Draft {
   session_id: string // key
   target:
     | { kind: 'new_root' }
-    | { kind: 'new_child'; parent_id: string; relation_type: NarrativeRelation } // anchor-mode
+    | { kind: 'new_child'; parent_id: string } // anchor-mode
+    | { kind: 'new_connection'; parent_id: string; target_id: string }
     | { kind: 'revision'; parent_id: string } // text-mode
   started_at: string
   updated_at: string
-  content: string // the child's own prose, or the entry's own document for the other two targets
-  anchor_ids: string[] // ids this session has placed in parent_content, in the order placed
+  content: string // the child's own prose, or the entry's own document for the other targets
   parent_content: string | null // the parent, provisionally marked. `new_child` only
+  parent_base_content: string | null // the parent as this session found it — see "Drafts" below
   steps: AuthoringStep[]
   parent_steps: AuthoringStep[] // the parent's own step chain. `new_child` only
   ticks: AuthoringTick[]
+  parent_ticks: AuthoringTick[] // the parent's own bookmarks. `new_child` only
 }
 ```
 
 Sealing turns one draft into one or two entries, per "Two creation experiences" above: `new_root`
 and `revision` each become one entry, carrying `content`/`steps`/`ticks` into it as
-`authoring_trace`; `new_child` becomes the child alone when `anchor_ids` is empty, or the atomic
-parent-revision-plus-child pair when it isn't, with `parent_content`/`parent_steps` sealing into the
-revision's own `authoring_trace`. Either way the draft row is deleted once its contents live in a
-committed entry. A draft is therefore very nearly the entry (or entries) it will become, which is
-exactly why it must not live in the entries table. Entries are immutable and a draft rewrites itself
+`authoring_trace`; `new_child` becomes the child alone when nothing was placed since
+`parent_base_content` (`anchorsPlacedSince`), or the atomic parent-revision-plus-child pair when
+something was, with `parent_content`/`parent_steps`/`parent_ticks` sealing into the revision's own
+`authoring_trace`. Either way the draft row is deleted once its contents live in a committed entry. A
+draft is therefore very nearly the entry (or entries) it will become, which is exactly why it must
+not live in the entries table. Entries are immutable and a draft rewrites itself
 every few hundred milliseconds. Keeping them apart means no entry query ever has to filter drafts
 out, and a half-written thought never appears in history or a timeline. The `target` field is what
 lets an unsealed draft know what it will become, so the drafts list can show what each one is

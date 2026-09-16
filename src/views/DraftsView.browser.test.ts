@@ -17,11 +17,12 @@ function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft
     updated_at: '2026-09-05T10:00:02.000Z',
     content: '',
     dates: emptyEntryDates(),
-    anchor_ids: [],
+    parent_base_content: null,
     parent_content: null,
     steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
     parent_steps: [],
     ticks: [],
+    parent_ticks: [],
     ...overrides,
   }
 }
@@ -98,6 +99,9 @@ describe('DraftsView (browser)', () => {
         session_id: 'session-1',
         target: { kind: 'new_child', parent_id: parent.id },
         content: textContent('Wrong lake'),
+        // The parent as this session found it, against which "anchor-1 is ours" still reads after
+        // the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
+        parent_base_content: textContent('I went to Lake Tahoe with Dad'),
         parent_content: withAnchorMark(
           'I went to Lake Tahoe with Dad',
           'anchor-1',
@@ -105,7 +109,6 @@ describe('DraftsView (browser)', () => {
           20,
           'strike',
         ),
-        anchor_ids: ['anchor-1'],
       }),
     )
 

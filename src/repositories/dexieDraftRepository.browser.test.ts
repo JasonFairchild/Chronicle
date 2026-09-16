@@ -32,11 +32,12 @@ describe('DexieDraftRepository persistence', () => {
       updated_at: '2026-09-05T10:00:02.000Z',
       content: 'Never got round to finishing this',
       dates: emptyEntryDates(),
-      anchor_ids: [],
+      parent_base_content: null,
       parent_content: null,
       steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
       parent_steps: [],
       ticks: [],
+      parent_ticks: [],
     })
 
     // A fresh connection sharing no in-memory state with the first — the closest an automated

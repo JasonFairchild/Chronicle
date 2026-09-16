@@ -184,6 +184,31 @@ Genuinely deferred rather than rejected — worth another look later, but not no
   out not to force a shape change here after all — the anchor-carried-wording skip landed in the
   shared `nodeText` helper `docToPlainText` already called, so `sameContent` itself never changed —
   but the walk-per-keystroke cost itself is unaddressed and still worth revisiting sometime.
+- **Snapshotting ticks, so scrubbing a long history doesn't replay steps from scratch.** Today
+  nothing caches a document snapshot at a tick — reconstructing the state at tick N means replaying
+  every step from zero, every time. A heavily-edited entry can carry far more steps than its final
+  character count (retyping and correcting, not just the net words), plausibly tens of thousands for
+  a couple thousand words; at roughly 100-150 bytes of JSON per step that's low-single-digit
+  megabytes of trace against maybe 10-15KB of actual final content, and replaying all of it on every
+  drag of a scrub UI could get slow well before the storage size itself is a problem. Since a tick is
+  already "a moment worth stopping at," the idea is to compute a plain document snapshot at each one
+  (once) and persist that small chain of dated snapshots alongside the trace, for the scrub view to
+  read directly instead of replaying. This has an unusually clean cache-invalidation story: a
+  sealed trace's steps and ticks never change afterward, and even mid-session they're append-only
+  (undo/redo only ever adds inverse steps, never rewrites history), so a snapshot computed for a
+  given tick is valid forever once computed. It should be stored as a plain document — the same
+  shape `content`/`parent_content` already are — not as "steps, cached": that's what lets a snapshot
+  survive a future schema change the same way `content` already does, per Authoring capture's "the
+  loss is scrubbing, never words" in ENTRY_MODEL.md, rather than being just as fragile as the raw
+  replay it's standing in for. The steps themselves should never be deleted once snapshots exist —
+  they stay the actual source of truth and the snapshots a regenerable cache, since reconstructible
+  history is the whole point of this app and a bug in the snapshotting logic must not become
+  unrecoverable data loss. Unrelated to, and no threat to, the anchor-position-mapping use of steps
+  (moving a child's anchor forward as the parent is later edited) — that's a live-session concern
+  applied incrementally as edits happen, not a scrub-time read. Held off because Phase 3's scrubbing
+  UI doesn't exist yet, so there's no way to measure whether naive replay is actually too slow at
+  realistic entry sizes before building a caching layer for it speculatively — revisit once that UI
+  exists and can be profiled.
 
 ## Implementation Rules for the AI
 

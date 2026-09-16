@@ -1,59 +1,25 @@
-/**
- * The unified Entry model. See ENTRY_MODEL.md for the reasoning behind these shapes.
- *
- * Two invariants govern everything here:
- *  - No child entry is ever destructive. A parent's stored text is never altered by its children.
- *  - Only the version family (`revision`) writes content.
- */
+/** The unified Entry model. See ENTRY_MODEL.md for the reasoning behind these shapes. */
 
-/** Children that say something about a parent. Identical to the fold; the split is a UI label. */
 export type NarrativeRelation = 'annotation' | 'update'
-
-/** An edge between two entries. Gathered onto both endpoints, never traversed as containment. */
 export type EdgeRelation = 'connection'
-
-/** A new version of the entry itself. The only relation that writes content. */
 export type VersionRelation = 'revision'
 
-/**
- * `connection` and `revision` are structural: they change how the domain layer treats an entry.
- * `annotation` and `update` are a label. They drive icons, defaults, and filtering, and are
- * deliberately identical to the fold.
- */
+/** `connection` and `revision` are structural; `annotation`/`update` are a label only. */
 export type RelationType = NarrativeRelation | EdgeRelation | VersionRelation
 
-/**
- * What a span anchor does to the passage it covers. Both are marks on the parent's own text.
- *
- * There is deliberately no `replace`: since nothing hides the parent's text, "I'd have written this
- * differently" is a `strike` whose replacement wording rides along as an `anchorInsert` node
- * sharing its `anchor_id`.
- */
+/** What a span anchor does to the passage it covers — marks on the parent's own text. */
 export type AnchorKind = 'comment' | 'strike'
 
-/**
- * A child's reference to an anchor that lives in its **parent's** document.
- *
- * ENTRY_MODEL.md describes this as `anchors: AnchorRef[]`, each `{ anchor_id, quote }` — one array
- * of pairs rather than two parallel arrays for the obvious reason: parallel arrays can drift out of
- * step and this cannot. The quote is not a growing history — the parent's own step chain is
- * that — it is what lets an anchor whose mark a later revision deleted still say what it was
- * attached to, once nothing in the current document carries its id.
- */
+/** A child's reference to an anchor living in its parent's document. */
 export interface AnchorRef {
   anchor_id: string
-  /** The parent's wording under the anchor when the child was sealed. */
   quote: string
 }
 
-/**
- * Which of the two creation experiences produced a revision. Not `metadata`, because it is
- * filtered on: a card's revision count reads `'text'` revisions only, so the revisions that merely
- * carry someone else's annotation never inflate it.
- */
+/** Which creation experience produced a revision. */
 export type RevisionMode = 'text' | 'anchor'
 
-/** Why a moment was bookmarked while writing. Ticks are navigation aids, never saves. */
+/** Why a moment in a writing session was bookmarked. */
 export type TickReason = 'pause' | 'punctuation' | 'interval' | 'format' | 'anchor' | 'manual'
 
 /** One serialized ProseMirror step with the moment it happened. */
@@ -62,17 +28,7 @@ export interface AuthoringStep {
   step: unknown
 }
 
-/**
- * The dates a person supplies, as one unit: a day, plus freeform wording for the time within it.
- *
- * A day is date-only (`YYYY-MM-DD`), not an instant. Storing midnight as a timestamp would claim a
- * precision nobody entered and would shift the day itself across timezones; the time note is where
- * any precision actually lives, and it is text because "morning" and "3:30 pm" are equally valid
- * answers and neither is worth parsing until something needs to sort by it.
- *
- * Required and nullable here, though optional on a stored `Entry` — this is the shape a form and a
- * draft work in, where "not filled in" is a real state rather than a missing property.
- */
+/** A day plus freeform wording for the time within it — the shape a form or draft edits directly. */
 export interface EntryDates {
   recorded_at: string | null
   recorded_time_note: string | null
@@ -89,14 +45,14 @@ export function emptyEntryDates(): EntryDates {
   }
 }
 
-/** A bookmark into the step chain, marking a state worth stopping at when reviewing. */
+/** A bookmark into the step chain, marking a moment worth stopping at when reviewing. */
 export interface AuthoringTick {
   at: string
   step_index: number
   reason: TickReason
 }
 
-/** How one snapshot came to be written. Null when typing was not captured. */
+/** How one writing session produced its snapshot. */
 export interface AuthoringTrace {
   session_id: string
   started_at: string
@@ -106,32 +62,27 @@ export interface AuthoringTrace {
 }
 
 export interface Entry {
-  /** UUIDv7: time-ordered and sortable as text, so `created_at` ties resolve deterministically. */
+  /** UUIDv7 — sortable as text; ties in `created_at` resolve via id, see `compareEntries`. */
   id: string
-  /** When the entry entered Chronicle. System-set and immutable. */
+  /** System-set, immutable. */
   created_at: string
-  /** When the record was originally recorded elsewhere, as `YYYY-MM-DD`. Null if authored in-app. */
   recorded_at: string | null
-  /** Freeform time within `recorded_at` — see `EntryDates`. */
   recorded_time_note: string | null
-  /** When the event being recorded actually happened, as `YYYY-MM-DD`, if known. */
   occurred_at: string | null
-  /** Freeform time within `occurred_at` — see `EntryDates`. */
   occurred_time_note: string | null
   parent_id: string | null
   relation_type: RelationType | null
-  /** The far endpoint. Connections only. */
+  /** Connections only. */
   target_id: string | null
-  /** Cache of the document's title node. Never edited on its own. */
+  /** Cache of the document's title node. */
   title: string | null
-  /** Serialized document. */
   content: string
-  /** Anchors in the parent's document. Empty means the entry is about its parent at large. */
+  /** Empty means the entry is about its parent at large. */
   anchors: AnchorRef[]
-  /** Revisions only: which creation experience wrote this version. Null for everything else. */
+  /** Revisions only. */
   revision_mode: RevisionMode | null
   authoring_trace: AuthoringTrace | null
-  /** Blob ids in the media store that this document depends on. */
+  /** Blob ids in the media store. */
   media_refs: string[]
   /** Only what neither drives domain logic nor gets queried. See ENTRY_MODEL.md. */
   metadata: Record<string, unknown>
@@ -139,20 +90,16 @@ export interface Entry {
 
 export type CreateEntryInput = Omit<Entry, 'id' | 'created_at'>
 
-/**
- * Whether the parent's document still carries this anchor. There is no ladder of degrees any more:
- * an anchor is a mark in the document being read, so either its id is there or it is not.
- */
+/** Whether the parent's document still carries this anchor. */
 export type AnchorStatus = 'present' | 'orphaned'
 
 export interface ResolvedAnchor {
   anchor_id: string
   status: AnchorStatus
-  /** What the anchor covers now, or the wording recorded at seal time once it is orphaned. */
+  /** Current wording if present, the sealed quote if orphaned. */
   quote: string
-  /** Null when the anchor is orphaned, or when it is a bare insertion with no span to mark. */
+  /** Null when orphaned or a bare insertion. */
   kind: AnchorKind | null
-  /** Wording the anchor carries in the parent's document. Null when it has none. */
   insertion: string | null
 }
 
@@ -188,26 +135,19 @@ export interface ResolvedConnection {
   direction: 'outgoing' | 'incoming'
 }
 
-/**
- * An entry's own state at a point in time, plus its relations as collections.
- * Children are never concatenated into `content`: that would make anchoring impossible and
- * would make `content` untrue for any given moment.
- */
+/** An entry's own state at a point in time, plus its relations as collections. */
 export interface AggregatedEntry {
   id: string
   created_at: string
-  /** This entry's own relation to its parent, straight off the row. Null for a root entry. */
+  /** Null for a root entry. */
   parent_id: string | null
   relation_type: RelationType | null
-  /** The far endpoint. Connections only. */
+  /** Connections only. */
   target_id: string | null
-  /**
-   * Read from the entry's own row rather than the current version: a revision carries no dates, so
-   * folding them through the version chain would blank them on the first edit.
-   */
+  /** Read from the entry's own row, not the version chain — a revision carries no dates. */
   dates: EntryDates
   title: string | null
-  /** This entry's OWN text at the requested time. */
+  /** This entry's own text at the requested time. */
   content: string
   media_refs: string[]
   metadata: Record<string, unknown>
@@ -241,16 +181,9 @@ let sameMsCounter = 0
 const MAX_SAME_MS_COUNTER = 0x0fff
 
 /**
- * A UUIDv7: a 48-bit millisecond timestamp in the leading bits, then a 12-bit counter, then
- * randomness. Ids therefore sort correctly as plain text, and two entries created in the same
- * millisecond still come back in the order they were made.
- *
- * `crypto.randomUUID()` only emits v4, whose random ordering would make history unreconstructible.
- *
- * The timestamp used is a floor rather than a straight clock read. `compareEntries` leans on ids
- * for its tiebreak, so an id that sorts before one already issued would corrupt the fold — and both
- * a backwards clock adjustment and a counter overflow would produce exactly that. Borrowing a
- * millisecond from the future costs nothing and keeps the sequence monotonic through either.
+ * UUIDv7, not v4 (ENTRY_MODEL.md) — sortable as plain text since the millisecond timestamp leads.
+ * The timestamp is a floor, not a straight clock read: `compareEntries` ties on id, so a backwards
+ * clock adjustment or a counter overflow must never emit an id that sorts before one already issued.
  */
 export function newEntryId(): string {
   const ms = Math.max(Date.now(), lastTimestampMs)
@@ -298,10 +231,7 @@ export function newEntryTimestamp(): string {
   return new Date().toISOString()
 }
 
-/**
- * The total order every list and fold uses. `created_at` alone is only millisecond-resolution,
- * so the id breaks ties; because ids are UUIDv7 that tiebreak matches creation order.
- */
+/** Total order every list and fold uses. See CLAUDE.md, "Ordering". */
 export function compareEntries(a: Entry, b: Entry): number {
   return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 }

@@ -193,9 +193,13 @@ watch(
 )
 
 // `post` because this reaches into the rendered <img> elements: running before the DOM updates
-// would resolve the previous entry's attachments, or none at all on first load.
+// would resolve the previous entry's attachments, or none at all on first load. `loading` is part
+// of the source, not just a guard, because the attachments section is behind `v-else` on it: on
+// first load, `aggregated` (and its `media_refs`) is set a tick before `loading` turns false, so a
+// watch on `media_refs` alone fires while that section is still absent from the DOM and `mediaEl`
+// is null. Keying on both means the watch re-fires once loading actually flips.
 watch(
-  () => aggregated.value?.media_refs,
+  () => (loading.value ? undefined : aggregated.value?.media_refs),
   () => {
     void media.applyTo(mediaEl.value)
   },

@@ -168,33 +168,34 @@ export function createEntryInput(
   }
 }
 
-let lastTimestampMs = -1
-let sameMsCounter = 0
-
-// The counter occupies 12 bits, so this is the last value that still encodes faithfully.
-const MAX_SAME_MS_COUNTER = 0x0fff
+/** Which millisecond an id lands in, and its place within that millisecond. */
+export interface IdClock {
+  ms: number
+  counter: number
+}
 
 /**
- * UUIDv7, not v4 — sortable as plain text since the millisecond timestamp leads.
- * The timestamp is a floor, not a straight clock read: `compareEntries` ties on id, so a backwards
- * clock adjustment or a counter overflow must never emit an id that sorts before one already issued.
+ * Advances the clock by one id. The millisecond is a floor, not a straight clock read:
+ * `compareEntries` ties on id, so a backwards clock adjustment or a counter overflow must never
+ * emit an id that sorts before one already issued.
  */
+export function advanceIdClock(previous: IdClock, now: number): IdClock {
+  const maxCounter = 0x0fff // 12 bits — the widest value the UUIDv7 rand_a field can hold.
+
+  if (now > previous.ms) return { ms: now, counter: 0 }
+  if (previous.counter >= maxCounter) return { ms: previous.ms + 1, counter: 0 }
+
+  return { ms: previous.ms, counter: previous.counter + 1 }
+}
+
+// Reassigned on every call; -1 sorts before any real timestamp so the first id starts fresh.
+let idClock: IdClock = { ms: -1, counter: 0 }
+
+/** UUIDv7, not v4 — sortable as plain text since the millisecond timestamp leads. */
 export function newEntryId(): string {
-  const ms = Math.max(Date.now(), lastTimestampMs)
+  idClock = advanceIdClock(idClock, Date.now())
 
-  if (ms === lastTimestampMs) {
-    sameMsCounter += 1
-
-    if (sameMsCounter > MAX_SAME_MS_COUNTER) {
-      lastTimestampMs += 1
-      sameMsCounter = 0
-    }
-  } else {
-    lastTimestampMs = ms
-    sameMsCounter = 0
-  }
-
-  const timestamp = lastTimestampMs
+  const { ms: timestamp, counter } = idClock
   const bytes = crypto.getRandomValues(new Uint8Array(16))
 
   bytes[0] = Math.floor(timestamp / 2 ** 40) & 0xff
@@ -205,8 +206,8 @@ export function newEntryId(): string {
   bytes[5] = timestamp & 0xff
 
   // Version 7 in the high nibble, then the counter across the remaining 12 bits.
-  bytes[6] = 0x70 | ((sameMsCounter >> 8) & 0x0f)
-  bytes[7] = sameMsCounter & 0xff
+  bytes[6] = 0x70 | ((counter >> 8) & 0x0f)
+  bytes[7] = counter & 0xff
   bytes[8] = (bytes[8] & 0x3f) | 0x80 // RFC 9562 variant bits.
 
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')

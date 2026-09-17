@@ -197,3 +197,9 @@ Cypress isn't wired into coverage yet; only Vitest is.
   against reading a test without leaving the file. Flattening it into a single
   `cy.then(async () => { ... })` that seeds everything and yields what the test needs would read far
   better; it wants a Cypress run alongside the change to confirm.
+
+deleting database note:
+const req = indexedDB.open('chronicle')
+req.onsuccess = () => {
+req.result.transaction('drafts', 'readwrite').objectStore('drafts').clear()
+}

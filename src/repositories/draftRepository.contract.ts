@@ -9,6 +9,7 @@ function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft
     started_at: '2026-09-05T10:00:00.000Z',
     updated_at: '2026-09-05T10:00:00.000Z',
     dates: emptyEntryDates(),
+    title: null,
     child: { content: '', steps: [], ticks: [] },
     parent: null,
     ...overrides,
@@ -42,6 +43,7 @@ export function runDraftRepositoryContract(
             occurred_at: '1994-06-11',
             occurred_time_note: 'morning',
           },
+          title: 'Lake Tahoe',
           child: {
             content: 'Half a thought',
             steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
@@ -49,6 +51,7 @@ export function runDraftRepositoryContract(
           },
           parent: {
             content: 'The full parent document, with a provisional anchor mark',
+            title: null,
             base_content: 'The full parent document, as this session found it',
             steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
             ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
@@ -59,6 +62,7 @@ export function runDraftRepositoryContract(
       const fetched = await repository.getById('session-1')
 
       expect(fetched?.child.content).toBe('Half a thought')
+      expect(fetched?.title).toBe('Lake Tahoe')
       expect(fetched?.target).toEqual({ kind: 'new_child', parent_id: 'entry-9' })
       expect(fetched?.dates).toEqual({
         recorded_at: '1994-06-12',
@@ -80,7 +84,10 @@ export function runDraftRepositoryContract(
 
     it('overwrites in place, because a live session is working space rather than history', async () => {
       await repository.save(
-        makeDraft({ session_id: 'session-1', child: { content: 'It rai', steps: [], ticks: [] } }),
+        makeDraft({
+          session_id: 'session-1',
+          child: { content: 'It rai', steps: [], ticks: [] },
+        }),
       )
       await repository.save(
         makeDraft({

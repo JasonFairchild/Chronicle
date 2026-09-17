@@ -1,8 +1,10 @@
 <script lang="ts">
 /** One editor change, reduced to what the draft buffer and the tick policy need. */
 export interface EditorChange {
-  /** The document as it now stands, serialized the way an entry stores it. */
+  /** The document's body as it now stands, serialized the way an entry stores it. */
   content: string
+  /** The title field as it now stands, when this editor offers one; null when it doesn't. */
+  title: string | null
   /** Serialized ProseMirror steps for this change, in order. */
   steps: unknown[]
   /** Text this change added. Empty for a deletion or a formatting change. */
@@ -62,11 +64,8 @@ import {
 import { anchorsAffectedBy } from '@/domain/anchorWarnings'
 import { useMedia } from '@/composables/useMedia'
 import {
-  docBody,
-  docTitle,
   parseDocument,
   sameContent,
-  titledDocument,
   MEDIA_NODE,
   type DocMark,
   type EntryDocument,
@@ -96,6 +95,8 @@ const props = withDefaults(
     label: string
     /** Seed content, serialized. Read once, on mount: the editor owns the document after that. */
     content?: string
+    /** Seed title, when `withTitle` is set. Read once, on mount, same as `content`. */
+    title?: string | null
     /** Titled entries get the title field above the toolbar; untitled ones do not. */
     withTitle?: boolean
     disabled?: boolean
@@ -119,6 +120,7 @@ const props = withDefaults(
   }>(),
   {
     content: '',
+    title: null,
     withTitle: false,
     disabled: false,
     anchorMode: false,
@@ -135,22 +137,22 @@ const media = useMedia()
 const fileInput = ref<HTMLInputElement | null>(null)
 const attachError = ref<string | null>(null)
 
-// Seeded once, on mount. The stored document holds both, and this is where they come apart: the
-// title into its own plain field below, the body into the editor.
-const seeded = parseDocument(props.content)
-const titleText = ref(props.withTitle ? (docTitle(seeded) ?? '') : '')
+// Seeded once, on mount: the editor owns the document after that, and the title field owns
+// `titleText` the same way.
+const titleText = ref(props.withTitle ? (props.title ?? '') : '')
 
 // Captured once, so anchor mode can tell "placed this session" apart from "was already there" for
 // as long as this editor instance lives — the same document this editor opened, never reassigned.
-const initialDocument = docBody(seeded)
+const initialDocument = parseDocument(props.content)
 
 /**
- * The two halves rejoined, which is the only shape that ever leaves this component. Keeping the
- * stored document whole is what lets a rename ride along in the same revision as an edit, and what
- * keeps every reader — search, previews, the version chain — looking in one place for a title.
+ * The title half of every emitted change. Blank collapses to null the same way a stored title
+ * always has, so an abandoned keystroke in the field doesn't outlive the session as an empty
+ * string, and a session where the field isn't offered at all can never report one.
  */
-function storedContent(body: EntryDocument): string {
-  return JSON.stringify(props.withTitle ? titledDocument(body, titleText.value) : body)
+function emittedTitle(): string | null {
+  if (!props.withTitle) return null
+  return titleText.value.trim() || null
 }
 
 /**
@@ -286,7 +288,8 @@ const editor = useEditor({
     }
 
     emit('change', {
-      content: storedContent(document),
+      content: JSON.stringify(document),
+      title: emittedTitle(),
       steps,
       insertedText: insertedTextOf(transaction),
       // Judged by what the document says before and after, not by which steps did it. A heading,
@@ -338,7 +341,8 @@ function handleTitleInput(event: Event): void {
   if (!instance) return
 
   emit('change', {
-    content: storedContent(instance.getJSON() as EntryDocument),
+    content: JSON.stringify(instance.getJSON() as EntryDocument),
+    title: emittedTitle(),
     steps: [],
     insertedText: '',
     isFormatting: false,

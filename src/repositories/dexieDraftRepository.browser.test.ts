@@ -31,6 +31,7 @@ describe('DexieDraftRepository persistence', () => {
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
       dates: emptyEntryDates(),
+      title: null,
       child: {
         content: 'Never got round to finishing this',
         steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],

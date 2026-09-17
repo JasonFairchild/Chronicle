@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import type { EditorChange } from '@/components/DocumentEditor.vue'
-import { isEmptyDocument } from '@/domain/entryDocument'
+import { isEmptyEntry } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import type { Draft, DraftTarget } from '@/types/draft'
 import { emptyEntryDates, type Entry, type EntryDates } from '@/types/entry'
@@ -21,6 +21,7 @@ export function useDraftSession() {
 
   const sessionId = ref<string | null>(null)
   const content = ref('')
+  const title = ref<string | null>(null)
   const dates = ref<EntryDates>(emptyEntryDates())
   const saving = ref(false)
   /**
@@ -32,6 +33,8 @@ export function useDraftSession() {
    * from the draft and silently leave the parent half behind.
    */
   const parentContent = ref('')
+  /** The parent's own title, mirrored the same way `parentContent` is. Never editable from here. */
+  const parentTitle = ref<string | null>(null)
   /**
    * The parent as it stood when this session began — `Draft.parent.base_content`, mirrored here the
    * same way `parentContent` itself is, and never reassigned while the session runs. What
@@ -43,12 +46,22 @@ export function useDraftSession() {
   const isOpen = computed(() => sessionId.value !== null)
 
   /** The same condition `entriesStore.requireContent` enforces, asked before the button is offered. */
-  const canSave = computed(() => !isEmptyDocument(content.value))
+  const canSave = computed(() => !isEmptyEntry(content.value, title.value))
 
   /** Opens a brand-new session — nothing is written until the first real change. */
-  function begin(target: DraftTarget, seed: { content?: string; parentContent?: string } = {}) {
+  function begin(
+    target: DraftTarget,
+    seed: {
+      content?: string
+      title?: string | null
+      parentContent?: string
+      parentTitle?: string | null
+    } = {},
+  ) {
     content.value = seed.content ?? ''
+    title.value = seed.title ?? null
     parentContent.value = seed.parentContent ?? ''
+    parentTitle.value = seed.parentTitle ?? null
     parentBaseContent.value = seed.parentContent ?? ''
     dates.value = emptyEntryDates()
     sessionId.value = drafts.beginDraft(target, seed)
@@ -60,7 +73,9 @@ export function useDraftSession() {
     if (!resumed) return null
 
     content.value = resumed.child.content
+    title.value = resumed.title
     parentContent.value = resumed.parent?.content ?? ''
+    parentTitle.value = resumed.parent?.title ?? null
     parentBaseContent.value = resumed.parent?.base_content ?? ''
     dates.value = resumed.dates ?? emptyEntryDates()
     sessionId.value = existingSessionId
@@ -72,6 +87,7 @@ export function useDraftSession() {
     if (!sessionId.value) return
 
     content.value = change.content
+    title.value = change.title
     drafts.recordChange(sessionId.value, change)
   }
 
@@ -152,7 +168,9 @@ export function useDraftSession() {
   function reset(): void {
     void abandon()
     content.value = ''
+    title.value = null
     parentContent.value = ''
+    parentTitle.value = null
     parentBaseContent.value = ''
     dates.value = emptyEntryDates()
     saving.value = false
@@ -161,7 +179,9 @@ export function useDraftSession() {
   return reactive({
     sessionId,
     content,
+    title,
     parentContent,
+    parentTitle,
     parentBaseContent,
     dates,
     saving,

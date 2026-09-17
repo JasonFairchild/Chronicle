@@ -6,7 +6,6 @@ import {
   plainTextDocument,
   serializeDocument,
   textContent,
-  titledDocument,
 } from '@/domain/entryDocument'
 import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
@@ -47,10 +46,12 @@ describe('useEntriesStore', () => {
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
       dates: emptyEntryDates(),
-      // A title node with no text: the field was offered and not filled in. Nothing is owed — a
-      // journal entry that would only ever be named "Tuesday" is better left unnamed.
+      // The field was offered and not filled in — whitespace typed and abandoned collapses to null
+      // the same way. Nothing is owed — a journal entry that would only ever be named "Tuesday" is
+      // better left unnamed.
+      title: '   ',
       child: {
-        content: serializeDocument(titledDocument(plainTextDocument('We drove up on Friday.'), '')),
+        content: serializeDocument(plainTextDocument('We drove up on Friday.')),
         steps: [],
         ticks: [],
       },
@@ -64,7 +65,7 @@ describe('useEntriesStore', () => {
     expect(await entryRepository.listRootEntries()).toHaveLength(1)
   })
 
-  it('gives a related entry the title its own document carries', async () => {
+  it('gives a related entry the title its draft carries', async () => {
     const store = useEntriesStore()
     const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
 
@@ -74,10 +75,9 @@ describe('useEntriesStore', () => {
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
       dates: emptyEntryDates(),
+      title: 'A later thought',
       child: {
-        content: serializeDocument(
-          titledDocument(plainTextDocument('Still think about this trip'), 'A later thought'),
-        ),
+        content: serializeDocument(plainTextDocument('Still think about this trip')),
         steps: [],
         ticks: [],
       },
@@ -123,10 +123,16 @@ describe('useEntriesStore', () => {
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
       dates: emptyEntryDates(),
-      child: { content: textContent('It was actually Donner Lake'), steps: [], ticks: [] },
+      title: null,
+      child: {
+        content: textContent('It was actually Donner Lake'),
+        steps: [],
+        ticks: [],
+      },
       // "anchor-1 is this session's" is the difference between these two documents, not a list.
       parent: {
         content: marked,
+        title: null,
         base_content: textContent('I went to Lake Tahoe with Dad'),
         steps: [],
         ticks: [],
@@ -164,9 +170,15 @@ describe('useEntriesStore', () => {
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
       dates: emptyEntryDates(),
-      child: { content: textContent('It was actually Donner Lake'), steps: [], ticks: [] },
+      title: null,
+      child: {
+        content: textContent('It was actually Donner Lake'),
+        steps: [],
+        ticks: [],
+      },
       parent: {
         content: struck,
+        title: null,
         base_content: textContent('I went to Lake Tahoe with Dad'),
         steps: [],
         ticks: [],
@@ -193,6 +205,7 @@ describe('useEntriesStore', () => {
         occurred_at: '1994-06-11',
         occurred_time_note: 'late morning',
       },
+      title: null,
       child: {
         content: textContent('Transcribed out of the green notebook'),
         steps: [],
@@ -257,6 +270,7 @@ describe('useEntriesStore', () => {
       started_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
       dates: emptyEntryDates(),
+      title: null,
       child: {
         content: serializeDocument({
           type: 'doc',
@@ -313,6 +327,7 @@ describe('useEntriesStore', () => {
         occurred_at: '1994-06-11',
         occurred_time_note: 'morning',
       },
+      title: null,
       child: {
         content: serializeDocument(plainTextDocument('From the notebook')),
         steps: [],

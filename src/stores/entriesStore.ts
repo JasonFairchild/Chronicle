@@ -1,13 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
-import {
-  collectMediaRefs,
-  docTitle,
-  isEmptyDocument,
-  sameContent,
-  textContent,
-} from '@/domain/entryDocument'
+import { collectMediaRefs, isEmptyEntry, sameContent, textContent } from '@/domain/entryDocument'
 import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
 import { entryRepository } from '@/repositories'
 import type { Draft } from '@/types/draft'
@@ -78,7 +72,7 @@ export const useEntriesStore = defineStore('entries', () => {
    */
   async function createTextEntry(content: string): Promise<Entry> {
     const entry = await entryRepository.create(
-      rootInput(requireContent(textContent(content)), null, emptyEntryDates()),
+      rootInput(requireContent(textContent(content)), null, null, emptyEntryDates()),
     )
 
     await addRoot(entry.id)
@@ -95,6 +89,7 @@ export const useEntriesStore = defineStore('entries', () => {
     return entryRepository.create(
       childInput(
         requireContent(textContent(options.content)),
+        null,
         options.parentId,
         options.relationType,
         emptyEntryDates(),
@@ -142,6 +137,7 @@ export const useEntriesStore = defineStore('entries', () => {
       revisionInput(
         current,
         content,
+        current.title,
         'direct',
         options.mediaRefs ?? collectMediaRefs(content),
         options.metadata ?? current.metadata,
@@ -170,7 +166,7 @@ export const useEntriesStore = defineStore('entries', () => {
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null = null,
   ): Promise<Entry> {
-    const content = requireContent(draft.child.content)
+    const content = requireContent(draft.child.content, draft.title)
     const { target } = draft
 
     if (target.kind === 'new_child') {
@@ -186,7 +182,7 @@ export const useEntriesStore = defineStore('entries', () => {
         // no revision, exactly like `createChildEntry`. With nothing anchored there is nothing for
         // `relationTypeForAnchors` to read, and its answer for that case is annotation.
         return entryRepository.create(
-          childInput(content, target.parent_id, 'annotation', draft.dates, {
+          childInput(content, draft.title, target.parent_id, 'annotation', draft.dates, {
             anchors: [],
             authoring_trace: trace,
           }),
@@ -201,7 +197,7 @@ export const useEntriesStore = defineStore('entries', () => {
       if (!current) {
         throw new Error('Cannot revise an entry that does not exist')
       }
-      if (sameContent(current.content, content)) {
+      if (sameContent(current.content, content) && current.title === draft.title) {
         throw new Error('No changes to save')
       }
 
@@ -209,6 +205,7 @@ export const useEntriesStore = defineStore('entries', () => {
         revisionInput(
           current,
           content,
+          draft.title,
           'direct',
           collectMediaRefs(content),
           current.metadata,
@@ -226,7 +223,7 @@ export const useEntriesStore = defineStore('entries', () => {
       return entryRepository.create(
         createEntryInput({
           content,
-          title: docTitle(content),
+          title: normalizeTitle(draft.title),
           parent_id: target.parent_id,
           target_id: target.target_id,
           relation_type: 'connection',
@@ -237,7 +234,7 @@ export const useEntriesStore = defineStore('entries', () => {
       )
     }
 
-    const entry = await entryRepository.create(rootInput(content, trace, draft.dates))
+    const entry = await entryRepository.create(rootInput(content, draft.title, trace, draft.dates))
 
     await addRoot(entry.id)
     return entry
@@ -271,18 +268,25 @@ export const useEntriesStore = defineStore('entries', () => {
     }
 
     const [, child] = await entryRepository.createMany([
+      // The parent's own title cannot change from here — anchor mode never offers that field — so
+      // it is forwarded unchanged rather than read from the draft.
       revisionInput(
         current,
         parentContent,
+        current.title,
         'anchor',
         collectMediaRefs(parentContent),
         current.metadata,
         parentTrace,
       ),
-      childInput(content, parentId, relationTypeForAnchors(anchorIds, parentContent), draft.dates, {
-        anchors: anchorRefsFor(anchorIds, parentContent),
-        authoring_trace: trace,
-      }),
+      childInput(
+        content,
+        draft.title,
+        parentId,
+        relationTypeForAnchors(anchorIds, parentContent),
+        draft.dates,
+        { anchors: anchorRefsFor(anchorIds, parentContent), authoring_trace: trace },
+      ),
     ])
 
     await refreshRoot(parentId)
@@ -362,15 +366,15 @@ export const useEntriesStore = defineStore('entries', () => {
     rootEntries.value = [state, ...rootEntries.value]
   }
 
-  /** A root caches its document's title node; media is whatever the document points at. */
   function rootInput(
     content: string,
+    title: string | null,
     trace: AuthoringTrace | null,
     dates: EntryDates,
   ): CreateEntryInput {
     return createEntryInput({
       content,
-      title: docTitle(content),
+      title: normalizeTitle(title),
       media_refs: collectMediaRefs(content),
       authoring_trace: trace,
       dates,
@@ -379,6 +383,7 @@ export const useEntriesStore = defineStore('entries', () => {
 
   function childInput(
     content: string,
+    title: string | null,
     parentId: string,
     relationType: NarrativeRelation,
     dates: EntryDates,
@@ -386,7 +391,7 @@ export const useEntriesStore = defineStore('entries', () => {
   ): CreateEntryInput {
     return createEntryInput({
       content,
-      title: docTitle(content),
+      title: normalizeTitle(title),
       parent_id: parentId,
       relation_type: relationType,
       media_refs: collectMediaRefs(content),
@@ -402,12 +407,13 @@ export const useEntriesStore = defineStore('entries', () => {
    * media/metadata values the caller has already resolved.
    *
    * It takes the current aggregate rather than an id because a version carries the author's dates,
-   * location and medium as well as the document: anything this revision is not changing has to be
-   * written forward onto it, or the fold would read the newest version and find nulls.
+   * location, medium, and title as well as the document: anything this revision is not changing has
+   * to be written forward onto it, or the fold would read the newest version and find nulls.
    */
   function revisionInput(
     current: AggregatedEntry,
     content: string,
+    title: string | null,
     revisionMode: RevisionMode,
     mediaRefs: string[],
     metadata: Record<string, unknown>,
@@ -415,6 +421,7 @@ export const useEntriesStore = defineStore('entries', () => {
   ): CreateEntryInput {
     return createEntryInput({
       content,
+      title: normalizeTitle(title),
       parent_id: current.id,
       relation_type: 'revision',
       revision_mode: revisionMode,
@@ -430,16 +437,26 @@ export const useEntriesStore = defineStore('entries', () => {
 
   /**
    * The one thing that must be true of any document about to become an entry: it has to say
-   * something. A title is not among the conditions — an entry may be saved unnamed, and
+   * something, in its body or its title. `title` is optional here because the store's simple
+   * non-session creation methods never offer one at all — an entry may be saved unnamed, and
    * `entryLabel` names it by its opening words wherever one line is all there is room for.
    */
-  function requireContent(content: string): string {
+  function requireContent(content: string, title: string | null = null): string {
     error.value = null
     const trimmed = content.trim()
-    if (isEmptyDocument(trimmed)) {
+    if (isEmptyEntry(trimmed, title)) {
       throw new Error('Entry content cannot be empty')
     }
     return trimmed
+  }
+
+  /**
+   * Blank collapses to null, the same as an untyped field: whitespace left behind in a title input
+   * is not a name any more than it would be if typed into the body and abandoned. Every write path
+   * funnels through here, rather than trusting each caller to have normalized it already.
+   */
+  function normalizeTitle(title: string | null): string | null {
+    return title?.trim() || null
   }
 
   return {

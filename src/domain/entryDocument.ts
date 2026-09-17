@@ -31,16 +31,6 @@ export interface EntryDocument extends DocNode {
   content: DocNode[]
 }
 
-/**
- * The first node of a titled entry's document. Untitled entries omit it.
- *
- * Nothing in the editor's schema knows this node: a title is typed in its own plain field, and this
- * module is what joins that field's text to the body on its way to storage (`titledDocument`) and
- * splits it back off on the way out (`docBody`). Storing them as one document is what makes renaming
- * an entry an ordinary revision rather than a second kind of write.
- */
-export const TITLE_NODE = 'title'
-
 /** An image whose bytes live in the media store; the node carries only the blob's id. */
 export const MEDIA_NODE = 'mediaImage'
 
@@ -89,43 +79,37 @@ export function serializeDocument(doc: EntryDocument): string {
 }
 
 /** Wraps plain text as a document, one paragraph per line. */
-export function plainTextDocument(text: string, title?: string | null): EntryDocument {
+export function plainTextDocument(text: string): EntryDocument {
   const paragraphs = text.split('\n').map((line): DocNode => {
     return line
       ? { type: 'paragraph', content: [{ type: 'text', text: line }] }
       : { type: 'paragraph' }
   })
 
-  const heading: DocNode[] = title
-    ? [{ type: TITLE_NODE, content: [{ type: 'text', text: title }] }]
-    : []
-
-  return { type: 'doc', content: [...heading, ...paragraphs] }
+  return { type: 'doc', content: paragraphs }
 }
 
 /**
- * Plain text as stored content — the real document `Entry.content` always holds, built from a body
- * and an optional title. The one deliberate, named way to turn plain text into a document, used by
- * the store's simple non-session creation methods and by tests that don't care about rich formatting.
+ * Plain text as stored content — the real document `Entry.content` always holds. The one
+ * deliberate, named way to turn plain text into a document, used by the store's simple non-session
+ * creation methods and by tests that don't care about rich formatting. A title is never part of
+ * this: it is a sibling field on the entry, not something the document carries (ENTRY_MODEL.md,
+ * "Title").
  */
-export function textContent(body: string, title?: string | null): string {
-  return serializeDocument(plainTextDocument(body, title))
+export function textContent(body: string): string {
+  return serializeDocument(plainTextDocument(body))
 }
 
 /**
  * The canonical flattening: the document's body as plain text, one line per block.
  *
- * The title node is deliberately excluded: a title is a name for the record, not part of what it
- * says, and a preview or a search hit made of the title alone would be noise. `docTitle` is how the
- * title is read instead. Anchor-carried wording is excluded for its own reason — see `nodeText`.
+ * Anchor-carried wording is excluded — see `nodeText` — but nothing else is: a title lives outside
+ * the document entirely now, so there is no second node type for this to know to skip.
  */
 export function docToPlainText(content: string | EntryDocument): string {
   const doc = parseDocument(content)
 
-  return doc.content
-    .filter((node) => node.type !== TITLE_NODE)
-    .map(nodeText)
-    .join('\n')
+  return doc.content.map(nodeText).join('\n')
 }
 
 /**
@@ -140,47 +124,6 @@ export function docToPlainText(content: string | EntryDocument): string {
 export function previewText(content: string | EntryDocument, limit = 160): string {
   const singleLine = docToPlainText(content).replace(/\s+/g, ' ').trim()
   return singleLine.length > limit ? `${singleLine.slice(0, limit - 3)}...` : singleLine
-}
-
-/** Whether the document has a title node at all, regardless of whether it holds any text. */
-export function hasTitleNode(content: string | EntryDocument): boolean {
-  return parseDocument(content).content.some((node) => node.type === TITLE_NODE)
-}
-
-/** The document's title, or null when it has none or it is blank. */
-export function docTitle(content: string | EntryDocument): string | null {
-  const doc = parseDocument(content)
-  const title = doc.content.find((node) => node.type === TITLE_NODE)
-  if (!title) return null
-
-  const text = nodeText(title).trim()
-  return text || null
-}
-
-/**
- * Everything but the title: the document the body editor actually opens.
- *
- * An empty result becomes a blank paragraph rather than nothing, because the body's schema is
- * `block+` — a document with no blocks at all is one the editor cannot hold.
- */
-export function docBody(content: string | EntryDocument): EntryDocument {
-  const body = parseDocument(content).content.filter((node) => node.type !== TITLE_NODE)
-  return { type: 'doc', content: body.length > 0 ? body : [{ type: 'paragraph' }] }
-}
-
-/**
- * The inverse: a body and a title text, rejoined into the one document that gets stored.
- *
- * A blank title still leaves the node behind. Nothing is owed — a title is optional everywhere — but
- * the node is what `hasTitleNode` reads to decide whether to offer the field again, so dropping it
- * would mean a draft resumed after being left unnamed came back with nowhere to put a name.
- */
-export function titledDocument(body: EntryDocument, title: string): EntryDocument {
-  const node: DocNode = title
-    ? { type: TITLE_NODE, content: [{ type: 'text', text: title }] }
-    : { type: TITLE_NODE }
-
-  return { type: 'doc', content: [node, ...docBody(body).content] }
 }
 
 /**
@@ -200,27 +143,33 @@ export function collectMediaRefs(content: string | EntryDocument): string[] {
   return [...refs]
 }
 
-/** True when there is nothing worth saving: no body text, no title, and no media. */
+/** True when there is nothing worth saving in the document itself: no body text and no media. */
 export function isEmptyDocument(content: string | EntryDocument): boolean {
   const doc = parseDocument(content)
 
-  return (
-    docToPlainText(doc).trim() === '' &&
-    docTitle(doc) === null &&
-    collectMediaRefs(doc).length === 0
-  )
+  return docToPlainText(doc).trim() === '' && collectMediaRefs(doc).length === 0
 }
 
 /**
- * True when two documents say the same thing: the same title, the same body text, and the same
- * attachments. Only their presentation differs.
+ * True when there is nothing worth saving anywhere an entry keeps text — the document plus the
+ * title beside it. `title` is trimmed the same way a stored one would be, so whitespace typed and
+ * abandoned in the field doesn't count as a name any more than it would count as body text.
+ */
+export function isEmptyEntry(content: string | EntryDocument, title: string | null): boolean {
+  return isEmptyDocument(content) && !title?.trim()
+}
+
+/**
+ * True when two documents say the same thing: the same body text and the same attachments. Only
+ * their presentation differs.
  *
  * This is how a formatting change is told apart from an edit, and it is deliberately a comparison
  * of outcomes rather than a list of editor operations. Marks arrive as `addMark`/`removeMark`, but
  * alignment and spacing arrive as attribute steps, and wrapping a paragraph in a list arrives as a
- * `replaceAround` that no step type distinguishes from a real edit. Measuring against the same
- * three things `isEmptyDocument` calls content cannot be broken by whichever extension is added
- * next.
+ * `replaceAround` that no step type distinguishes from a real edit. Measuring against the same two
+ * things `isEmptyDocument` calls content cannot be broken by whichever extension is added next. The
+ * title is not part of it — it lives beside the document now, not in it — so a caller comparing a
+ * full entry's before and after must check it separately.
  */
 export function sameContent(a: string | EntryDocument, b: string | EntryDocument): boolean {
   const before = parseDocument(a)
@@ -232,7 +181,6 @@ export function sameContent(a: string | EntryDocument, b: string | EntryDocument
     // a heading. That scaffolding is the editor's, not the author's, and counting it would report
     // every heading as an edit.
     docToPlainText(before).trim() === docToPlainText(after).trim() &&
-    docTitle(before) === docTitle(after) &&
     collectMediaRefs(before).join('\n') === collectMediaRefs(after).join('\n')
   )
 }

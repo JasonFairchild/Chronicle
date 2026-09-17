@@ -4,7 +4,6 @@ import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
   collectMediaRefs,
-  docTitle,
   docToPlainText,
   plainTextDocument,
   serializeDocument,
@@ -15,6 +14,7 @@ import { selectTextRange } from '@/testing/selectTextRange'
 
 interface ObservedChange {
   content: string
+  title: string | null
   steps: unknown[]
   insertedText: string
   isFormatting: boolean
@@ -47,7 +47,7 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('joins the title typed beside the editor to the body typed inside it', () => {
+  it('reports the title beside the body it types into, as a separate field', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, {
@@ -55,14 +55,12 @@ describe('DocumentEditor', () => {
       attrs: { onChange },
     })
 
-    // Two fields, one stored document: the title is an ordinary input, and this is where the two
-    // halves come back together.
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
     cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
 
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
-      expect(docTitle(change.content)).to.equal('Lake Tahoe')
+      expect(change.title).to.equal('Lake Tahoe')
       expect(docToPlainText(change.content)).to.equal('We drove up on Friday.')
     })
   })
@@ -80,7 +78,7 @@ describe('DocumentEditor', () => {
 
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
-      expect(docTitle(change.content)).to.equal('Lake Tahoe')
+      expect(change.title).to.equal('Lake Tahoe')
       expect(docToPlainText(change.content)).to.equal('We drove up on Friday.')
     })
   })
@@ -108,7 +106,7 @@ describe('DocumentEditor', () => {
 
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
-      expect(docTitle(change.content)).to.equal('Lake Tahoe')
+      expect(change.title).to.equal('Lake Tahoe')
       expect(docToPlainText(change.content)).to.equal('We drove up on Friday.')
     })
   })
@@ -125,11 +123,10 @@ describe('DocumentEditor', () => {
     cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.{selectall}')
     cy.findByRole('combobox', { name: 'Text style' }).select('Heading')
 
-    // The title is not in the editor's document at all, so a block-type command cannot reach it —
-    // where a title node sitting first in that document could be replaced by one.
+    // The title is not in the editor's document at all, so a block-type command cannot reach it.
     cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
     cy.get('@change').then((stub) => {
-      expect(docTitle(lastChange(stub).content)).to.equal('Lake Tahoe')
+      expect(lastChange(stub).title).to.equal('Lake Tahoe')
     })
   })
 
@@ -180,7 +177,7 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('reports a title as content, but produces no steps for it', () => {
+  it('reports a title change, but produces no steps for it', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, {
@@ -192,7 +189,7 @@ describe('DocumentEditor', () => {
 
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
-      expect(docTitle(change.content)).to.equal('Lake Tahoe')
+      expect(change.title).to.equal('Lake Tahoe')
       // The title is a plain field beside the editor, so there is no step chain it belongs to. Its
       // history is the value at each save point, read back from the entry's version chain.
       expect(change.steps).to.deep.equal([])
@@ -205,7 +202,8 @@ describe('DocumentEditor', () => {
         label: 'New entry',
         withTitle: true,
         disabled: true,
-        content: serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe')),
+        title: 'Lake Tahoe',
+        content: serializeDocument(plainTextDocument('We drove up on Friday.')),
       },
     })
 
@@ -257,7 +255,8 @@ describe('DocumentEditor', () => {
       props: {
         label: 'New entry',
         withTitle: true,
-        content: serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe')),
+        title: 'Lake Tahoe',
+        content: serializeDocument(plainTextDocument('We drove up on Friday.')),
       },
     })
 

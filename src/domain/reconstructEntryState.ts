@@ -5,10 +5,8 @@ import {
   type EntryVersion,
   type ResolvedChild,
   type ResolvedConnection,
-  type TitleVersion,
 } from '@/types/entry'
 import { resolveAnchors } from './anchors'
-import { docTitle } from './entryDocument'
 
 export interface ReconstructOptions {
   /** Reconstruct the state as it stood at this moment. Omit for current state. */
@@ -45,30 +43,6 @@ export function buildEntryHistory(
 ): EntryVersion[] | null {
   const index = buildIndex(entries)
   return historyFor(entryId, index, asOf?.toISOString())
-}
-
-/**
- * What the entry has been called, at each point it was saved, oldest first.
- *
- * A title needs no authoring trace of its own to have a history. It lives in the document, and a
- * revision snapshots the whole document, so the version chain already records both the name and the
- * moment it was saved — this is that chain read through one field. It is the record a title is held
- * to in exchange for being a plain field rather than part of the traced editor: the value at each
- * save point, not the keystrokes between them.
- */
-export function titleHistory(
-  entryId: string,
-  entries: Entry[],
-  asOf?: Date,
-): TitleVersion[] | null {
-  const versions = buildEntryHistory(entryId, entries, asOf)
-  if (!versions) return null
-
-  return versions.map((version) => ({
-    revision_id: version.revision_id,
-    at: version.at,
-    title: docTitle(version.content),
-  }))
 }
 
 export function reconstructEntryState(
@@ -157,12 +131,13 @@ function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): Entry
  */
 function authoredFields(
   entry: Entry,
-): Pick<EntryVersion, 'dates' | 'location' | 'original_medium' | 'original_medium_note'> {
+): Pick<EntryVersion, 'dates' | 'location' | 'original_medium' | 'original_medium_note' | 'title'> {
   return {
     dates: entry.dates,
     location: entry.location,
     original_medium: entry.original_medium,
     original_medium_note: entry.original_medium_note,
+    title: entry.title,
   }
 }
 
@@ -197,10 +172,7 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
     location: current.location,
     original_medium: current.original_medium,
     original_medium_note: current.original_medium_note,
-    // The title lives in the document, so the current version is the authority on it and renaming
-    // an entry is an ordinary edit. `Entry.title` is a cache written at save time for readers that
-    // must not parse a document, never a second source of truth to fall back to.
-    title: docTitle(current.content),
+    title: current.title,
     content: current.content,
     media_refs: current.media_refs,
     metadata: current.metadata,

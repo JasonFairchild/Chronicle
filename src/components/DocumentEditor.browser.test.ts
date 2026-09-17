@@ -7,7 +7,6 @@ import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
   collectMediaRefs,
-  docTitle,
   docToPlainText,
   plainTextDocument,
   serializeDocument,
@@ -51,16 +50,14 @@ describe('DocumentEditor (browser)', () => {
     expect(latest.isFormatting).toBe(false)
   })
 
-  it('joins the title typed beside the editor to the body typed inside it', async () => {
+  it('reports the title beside the body it types into, as a separate field', async () => {
     const screen = mountEditor({ withTitle: true })
 
-    // Two fields, one stored document: the title is an ordinary input, and this is where the two
-    // halves come back together.
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
 
     const latest = changes[changes.length - 1]!
-    expect(docTitle(latest.content)).toBe('Lake Tahoe')
+    expect(latest.title).toBe('Lake Tahoe')
     expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
   })
 
@@ -71,7 +68,7 @@ describe('DocumentEditor (browser)', () => {
     await userEvent.keyboard('{Enter}We drove up on Friday.')
 
     const latest = changes[changes.length - 1]!
-    expect(docTitle(latest.content)).toBe('Lake Tahoe')
+    expect(latest.title).toBe('Lake Tahoe')
     expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
   })
 
@@ -82,7 +79,7 @@ describe('DocumentEditor (browser)', () => {
     await userEvent.keyboard('{Tab}We drove up on Friday.')
 
     const latest = changes[changes.length - 1]!
-    expect(docTitle(latest.content)).toBe('Lake Tahoe')
+    expect(latest.title).toBe('Lake Tahoe')
     expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
   })
 
@@ -94,10 +91,9 @@ describe('DocumentEditor (browser)', () => {
     await userEvent.keyboard('{Control>}a{/Control}')
     await screen.getByRole('combobox', { name: 'Text style' }).selectOptions('Heading')
 
-    // The title is not in the editor's document at all, so a block-type command cannot reach it —
-    // where a title node sitting first in that document could be replaced by one.
+    // The title is not in the editor's document at all, so a block-type command cannot reach it.
     await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
-    expect(docTitle(changes[changes.length - 1]!.content)).toBe('Lake Tahoe')
+    expect(changes[changes.length - 1]!.title).toBe('Lake Tahoe')
   })
 
   it('reports a formatting change as formatting, since it inserts no words', async () => {
@@ -138,13 +134,13 @@ describe('DocumentEditor (browser)', () => {
     expect(docToPlainText(latest.content).trim()).toBe('Worth remembering, and worth keeping')
   })
 
-  it('reports a title as content, but produces no steps for it', async () => {
+  it('reports a title change, but produces no steps for it', async () => {
     const screen = mountEditor({ withTitle: true })
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
 
     const latest = changes[changes.length - 1]!
-    expect(docTitle(latest.content)).toBe('Lake Tahoe')
+    expect(latest.title).toBe('Lake Tahoe')
     // The title is a plain field beside the editor, so there is no step chain it belongs to. Its
     // history is the value at each save point, read back from the entry's version chain.
     expect(latest.steps).toEqual([])
@@ -186,7 +182,8 @@ describe('DocumentEditor (browser)', () => {
   it('opens an existing document where its author left it', async () => {
     const screen = mountEditor({
       withTitle: true,
-      content: serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe')),
+      title: 'Lake Tahoe',
+      content: serializeDocument(plainTextDocument('We drove up on Friday.')),
     })
 
     await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
@@ -197,7 +194,8 @@ describe('DocumentEditor (browser)', () => {
     const screen = mountEditor({
       withTitle: true,
       disabled: true,
-      content: serializeDocument(plainTextDocument('We drove up on Friday.', 'Lake Tahoe')),
+      title: 'Lake Tahoe',
+      content: serializeDocument(plainTextDocument('We drove up on Friday.')),
     })
 
     expect(screen.getByRole('textbox', { name: 'Title' }).query()).toBeNull()

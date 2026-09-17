@@ -76,14 +76,16 @@ describe('useDraftsStore', () => {
     // What retitling looks like from here: the title is a plain field beside the editor, so it
     // produces no steps and the body's own chain has nothing to record.
     store.recordChange(sessionId, {
-      content: textContent('We drove up on Friday', 'Lake Tahoe'),
+      content: textContent('We drove up on Friday'),
+      title: 'Lake Tahoe',
       steps: [],
     })
 
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(flushed?.child.content).toBe(textContent('We drove up on Friday', 'Lake Tahoe'))
+    expect(flushed?.child.content).toBe(textContent('We drove up on Friday'))
+    expect(flushed?.title).toBe('Lake Tahoe')
     expect(flushed?.child.steps).toHaveLength(1)
   })
 
@@ -143,10 +145,11 @@ describe('useDraftsStore', () => {
     const store = useDraftsStore()
     const entries = useEntriesStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
-    const content = textContent('We drove up on Friday.', 'Lake Tahoe')
+    const content = textContent('We drove up on Friday.')
 
     store.recordChange(sessionId, {
       content,
+      title: 'Lake Tahoe',
       steps: [{ stepType: 'replace' }],
       insertedText: 'We drove up on Friday.',
     })
@@ -240,9 +243,11 @@ describe('useDraftsStore', () => {
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
       dates: emptyEntryDates(),
+      title: null,
       child: { content: '', steps: [], ticks: [] },
       parent: {
         content: markedParentContent,
+        title: null,
         base_content: textContent(parentContent),
         steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
         ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
@@ -316,6 +321,7 @@ describe('useDraftsStore', () => {
       started_at: '2026-09-05T10:00:00.000Z',
       updated_at: '2026-09-05T10:00:02.000Z',
       dates: emptyEntryDates(),
+      title: null,
       child: {
         content: textContent('Half a thought'),
         steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],

@@ -33,6 +33,8 @@ export interface Draft {
   started_at: string
   updated_at: string
   dates: EntryDates
+  title: string | null
   child: AuthoringBuffer
-  parent: (AuthoringBuffer & { base_content: string }) | null
+  // Its own `title`, mirrored once when the session begins
+  parent: (AuthoringBuffer & { base_content: string; title: string | null }) | null
 }

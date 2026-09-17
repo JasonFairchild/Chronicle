@@ -54,8 +54,8 @@ position in the parent (an insert's text, a strike's replacement); the child hol
 explanation. Per-op commentary is not a separate field — it's another child entry. Batching several
 ops under one explanation stays available; splitting one per child is the common case, not a rule.
 Inline wording is plain, single-line text with no formatting; a thought needing more is prose and
-belongs on the child. `docToPlainText` skips anchor-carried wording the same way it already skips
-the title node, so previews and search never fill up with words the parent's author didn't write.
+belongs on the child. `docToPlainText` skips anchor-carried wording, so previews and search never
+fill up with words the parent's author didn't write.
 
 This subsumes the annotation/update distinction structurally. An entry carrying a strike plus an
 insert behaves like an update; one carrying a bare comment behaves like an annotation. The
@@ -94,8 +94,8 @@ commands below and undoing them, so surrounding text is unreachable at the edito
 question of what counts as "content" even comes up. And within what those anchor commands _can_
 produce, `docToPlainText` is blind to both shapes: a mark is metadata riding on existing text, which
 the flattening never reads at all, and an `anchorInsert` node is a real node with real text that
-`docToPlainText` is specifically required to skip, the same way it already skips the title node (see
-"Where wording lives" above). `revision_mode: 'direct' | 'anchor' | null` is a real column on `Entry`
+`docToPlainText` is specifically required to skip (see "Where wording lives" above).
+`revision_mode: 'direct' | 'anchor' | null` is a real column on `Entry`
 (not `metadata`, since it's filtered on: a card's revision count reads only `revision_mode ===
 'direct'` revisions, so an anchor-mode session's parent revision doesn't inflate it).
 
@@ -116,6 +116,15 @@ via `EntryRepository.createMany`: a parent revision (`revision_mode: 'anchor'`) 
 pair — a revision whose anchors no entry explains, or a child pointing at ids nothing in the parent
 carries — is never representable. If nothing was actually anchored, sealing writes only the child,
 exactly as it would for an unanchored note — no revision for a parent nothing touched.
+
+`title` sits beside `child` at the top of `Draft`, the same way `dates` does, rather than inside
+`AuthoringBuffer`: only the child's title is ever writer-set, so there is nothing for it to do
+living in a shape meant for two independently-authored documents. `Draft.parent`'s own `title` is a
+different thing entirely — the parent's title as it stood when the session began, mirrored there
+once purely so a resumed anchor-mode session can display it without a second fetch. Sealing never
+reads it: `sealAnchorChild` (`stores/entriesStore.ts`) forwards the freshly aggregated `current.title`
+for the parent's own revision, since anchor mode offers no way to retitle a parent in the first
+place.
 
 Anchors may be freely added, changed, or undone before that seal. **Which ids this session may still
 change** is never stored as a list at all — it is the _difference_ between two documents:
@@ -170,9 +179,8 @@ on the child, and `resolveAnchor.ts`'s four-status ladder (`stillHolds`, `mapLoc
 `findByQuote`, `findCollapsed`, `isReplacementPair`) built to reinterpret it — both deleted once
 anchors became native to the parent's document rather than numbers requiring a ruler and a fallback
 search. See "Considered and rejected" below for why that shape was worth trying and worth leaving.
-`docToPlainText`, `docTitle`, `collectMediaRefs`, and `isEmptyDocument` were unaffected by the move —
-they stayed for previews, search, and validation, just without being safety-critical for anchor
-offsets anymore.
+`docToPlainText`, `collectMediaRefs`, and `isEmptyDocument` were unaffected by the move — they stayed
+for previews, search, and validation, just without being safety-critical for anchor offsets anymore.
 
 ## Version chains
 
@@ -191,16 +199,16 @@ holds identically for an entry and for each of its revisions, which is what make
 A revision's content is a real snapshot, not a trace.
 
 A revision is a full-state snapshot of `{ content, media_refs, metadata }` plus the author-supplied
-fields below (the two dates and their notes, `location`, `original_medium` and its note) — not
-content alone, or revising an entry silently drops its images. The edit surface seeds from the
+fields below (`title`, the two dates and their notes, `location`, `original_medium` and its note) —
+not content alone, or revising an entry silently drops its images. The edit surface seeds from the
 current aggregate state, never a raw stored row, which is also how a revision that changes only
 wording carries everything else forward unchanged. A revision's parent may not itself be a revision.
 
 Snapshotting those fields rather than reading them off the entry's row is what makes them
-correctable: changing a date is an ordinary revision, the value it replaced stays on record with the
-version it belonged to, and scrubbing to an earlier version shows what the entry said its date was
-then. `created_at` is the exception and stays untouchable, being the ledger's own stamp rather than
-anything a person said.
+correctable: changing a date — or a title — is an ordinary revision, the value it replaced stays on
+record with the version it belonged to, and scrubbing to an earlier version shows what the entry was
+called then. `created_at` is the exception and stays untouchable, being the ledger's own stamp
+rather than anything a person said.
 
 `media_refs` is **derived from the document**, not maintained alongside it: an image is a node
 carrying a blob id, so the document is the authority on what it depends on and the column cannot
@@ -285,7 +293,7 @@ interface AuthoringBuffer {
 }
 
 interface Draft {
-  session_id: string // key
+  session_id: string
   target:
     | { kind: 'new_root' }
     | { kind: 'new_child'; parent_id: string } // anchor-mode
@@ -294,8 +302,9 @@ interface Draft {
   started_at: string // shared by child and parent — one session, two documents
   updated_at: string
   dates: EntryDates
+  title: string | null
   child: AuthoringBuffer // the entry this draft is chiefly for
-  parent: (AuthoringBuffer & { base_content: string }) | null // provisional anchors. `new_child` only
+  parent: (AuthoringBuffer & { base_content: string; title: string | null }) | null
 }
 ```
 
@@ -380,7 +389,7 @@ interface Entry {
   parent_id: string | null
   relation_type: RelationType | null
   target_id: string | null // connections only
-  title: string | null // cache of the document's title node
+  title: string | null // a name the author gave it; never required
   content: string // serialized ProseMirror document
   anchors: AnchorRef[] // empty = about the parent at large
   revision_mode: RevisionMode | null // revisions only; null everywhere else
@@ -410,37 +419,32 @@ support, and the shorter string is worth nothing here. `crypto.randomUUID()` emi
 generation is a small helper. A sequence column looks simpler but needs an owner, so each storage
 adapter would maintain one and they would have to agree.
 
-**The title lives inside the document; the column is only a cache.** A stored document is a title
-node followed by the body, so changing a title is an ordinary revision — no extra op kind, no second
-field to keep in sync, and an entry's old names stay on record with the versions they belonged to.
-The column is written at save time so timeline lists, search, and naming an entry from the far end
-of a connection do not parse every document. It is never edited on its own, and it is never read as
-a fallback: the aggregate reads the title from the current version's document, full stop, or a
-rename would show the old name forever.
+**The title is a plain field beside the document, folded through the version chain like `location`
+or the dates.** It rides in `EntryVersion` and `AggregatedEntry` next to them, and a revision that
+renames an entry carries it forward exactly the way it carries forward a date it isn't correcting —
+see "Revisions" above. `Entry.title` is the one place it lives: never a cache of something else,
+never re-derived by parsing `content`.
 
-**But the title is not part of the editor.** It is a plain `<input>` beside the editing surface, and
-`entryDocument.ts` joins the two halves on the way to storage (`titledDocument`) and splits them
-again on the way out (`docBody`). The editor's schema has no title node in it at all.
+This was not always so. Title used to be a node at the head of the stored document — present or
+absent, with or without text — joined onto the body on the way to storage and split back off on the
+way out, with `Entry.title` a cache written at save time for readers that must not parse a document.
+The editor's own schema never had a title node in it either way: a title was always a plain `<input>`
+beside the editing surface, because the alternative — a dedicated node inside the one contenteditable
+region the toolbar acts on — needed a `filterTransaction` guard to stop `setHeading` from swapping it
+out, custom Enter and Tab handlers to get the caret across the boundary, and a node kept out of the
+`block` group so a second one couldn't appear further down. Each guard was correct; all of them
+together were a list of ways to reach a title the design should never have offered, and an `<input>`
+is immune to a toolbar button, a `## ` shortcut, or a paste by construction.
 
-This started as a single document with a `title? block+` schema and a dedicated title node, which
-put the title inside the one contenteditable region the toolbar acts on — and nothing there is meant
-for a title. Guarding that took a `filterTransaction` plugin to stop `setHeading` from swapping the
-title node out, custom Enter and Tab handlers to get the caret across the boundary, and a node
-deliberately kept out of the `block` group so a second title could not appear further down. Each
-guard was correct; all of them together were a list of ways to reach a title that the design should
-never have offered. An `<input>` cannot be turned into a heading by a toolbar button, a `## `
-shortcut, or a paste, so the guards are gone rather than relocated.
-
-The exchange is that a title produces no ProseMirror steps, so it is absent from the authoring trace
-and invisible to the tick policy (`draftsStore.recordChange` skips a change with no steps). Its
-history is the coarser one: the value at each save point, read straight back out of the version
-chain by `titleHistory`. That is enough for what a title is for, and the finer record is not — a
-keystroke-level trace of a name nobody scrubs through.
-
-A consequence worth naming: **the steps in an authoring trace are relative to the body document, not
-to the stored one.** Every position in them is short by the title node's length. Nothing replays
-them yet — the snapshot is authoritative and always has been (`authoringSession.ts`) — but whatever
-does replay them in Phase 3 must reconstruct the body, not the stored document.
+Pulling the title out of the stored document as well cost nothing a revision's document-snapshot
+model was already relying on: a title produces no ProseMirror steps regardless of where it's stored,
+so it was always absent from the authoring trace and invisible to the tick policy
+(`draftsStore.recordChange` skips a change with no steps) — its history was always the coarser one,
+the value at each save point, which `EntryVersion.title` gives for free now that it's an ordinary
+folded field. What it did buy: `docToPlainText` no longer has a title node to skip, `entryDocument.ts`
+has no join/split pair to keep symmetric, and the authoring trace's steps are relative to the same
+document that gets stored — no more "short by the title node's length" offset for a future replay to
+account for.
 
 **A title is never required.** Not on a root entry, not on a connection. `Entry.title` is nullable
 and genuinely so — the untitled case is the ordinary one, not an edge.
@@ -452,17 +456,15 @@ the list it was meant to protect harder to read. Nor does requiring a title let 
 untitled entry is still routine even where a title is offered, so every untitled-rendering path has
 to exist and work either way. What the rule bought was a save button that refused, and nothing else.
 
-So a title is an affordance, offered wherever it makes sense and skipped without comment. Naming an
-entry falls to `entryLabel` (`utils/format.ts`): the title if it has one, otherwise the opening of
-what it says. Surfaces with room for both — a timeline card, the detail header — show the title only
-when there is one rather than falling back, since the text is already on screen and a fallback there
-would print it twice. The detail header uses the creation date instead, which is the half every
-entry has and the half that does not move.
-
-A title node with no text is still meaningful: it records that the field was offered, which is what
-`hasTitleNode` reads when a draft is resumed or an entry revised. Whether an entry carries a name at
-all is settled when it is written; filling that name in later, or clearing it, is an ordinary
-revision.
+So a title is an affordance, offered wherever it makes sense and skipped without comment. In
+practice every composer offers it (`DocumentEditor`'s `with-title`) — `EntryForm`, `RelatedEntryComposer`,
+`NewConnectionView`, and a revision or a resumed draft all show the field, since whether to name an
+entry is a choice the author should always have, not one settled once and then withheld. Naming an
+entry that stayed unnamed falls to `entryLabel` (`utils/format.ts`): the title if it has one,
+otherwise the opening of what it says. Surfaces with room for both — a timeline card, the detail
+header — show the title only when there is one rather than falling back, since the text is already
+on screen and a fallback there would print it twice. The detail header uses the creation date
+instead, which is the half every entry has and the half that does not move.
 
 **The two user-supplied dates are days, not instants, and each has a free-text companion.**
 `created_at` is a full timestamp because the ledger sets it. `recorded_at` and `occurred_at` are

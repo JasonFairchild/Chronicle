@@ -135,6 +135,7 @@ onBeforeUnmount(() => {
           <DocumentEditor
             label="New connection"
             with-title
+            :title="session.title"
             :disabled="session.saving"
             @change="session.handleChange"
           />

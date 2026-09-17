@@ -1,23 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectMediaRefs,
-  docBody,
-  docTitle,
   docToPlainText,
   isEmptyDocument,
+  isEmptyEntry,
   parseDocument,
   plainTextDocument,
   previewText,
   sameContent,
   serializeDocument,
-  titledDocument,
   type EntryDocument,
 } from '@/domain/entryDocument'
 
 const document: EntryDocument = {
   type: 'doc',
   content: [
-    { type: 'title', content: [{ type: 'text', text: 'Lake Tahoe' }] },
     { type: 'paragraph', content: [{ type: 'text', text: 'We drove up on Friday.' }] },
     { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } },
     {
@@ -37,7 +34,7 @@ const document: EntryDocument = {
 }
 
 describe('docToPlainText', () => {
-  it('flattens the body one line per block and leaves the title out of it', () => {
+  it('flattens the body one line per block', () => {
     expect(docToPlainText(document)).toBe('We drove up on Friday.\n\nSnow\nPines')
   })
 
@@ -70,7 +67,7 @@ describe('docToPlainText', () => {
 })
 
 describe('previewText', () => {
-  it('collapses the body onto one line and leaves the title out of it', () => {
+  it('collapses the body onto one line', () => {
     expect(previewText(document)).toBe('We drove up on Friday. Snow Pines')
   })
 
@@ -103,47 +100,6 @@ describe('previewText', () => {
   })
 })
 
-describe('docTitle', () => {
-  it('returns the title node text, and null when there is none or it is blank', () => {
-    expect(docTitle(document)).toBe('Lake Tahoe')
-    expect(docTitle(plainTextDocument('No heading here'))).toBeNull()
-    expect(docTitle({ type: 'doc', content: [{ type: 'title' }] })).toBeNull()
-  })
-})
-
-describe('docBody and titledDocument', () => {
-  it('splits the stored document into the two fields that produced it', () => {
-    expect(docBody(document).content).toEqual(document.content.slice(1))
-    expect(docTitle(docBody(document))).toBeNull()
-  })
-
-  it('gives an editor something to hold when the body is empty', () => {
-    // `block+`: a document with no blocks at all is one the editor cannot open.
-    expect(docBody({ type: 'doc', content: [{ type: 'title' }] })).toEqual({
-      type: 'doc',
-      content: [{ type: 'paragraph' }],
-    })
-  })
-
-  it('rejoins them into the document that was stored', () => {
-    expect(titledDocument(docBody(document), 'Lake Tahoe')).toEqual(document)
-  })
-
-  it('keeps an empty title node, which is what says a title is owed', () => {
-    const untitled = titledDocument(plainTextDocument('We drove up on Friday.'), '')
-
-    expect(untitled.content[0]).toEqual({ type: 'title' })
-    expect(docTitle(untitled)).toBeNull()
-  })
-
-  it('replaces the title it is given a new one for rather than stacking a second', () => {
-    const renamed = titledDocument(document, 'Donner Lake')
-
-    expect(docTitle(renamed)).toBe('Donner Lake')
-    expect(renamed.content.filter((node) => node.type === 'title')).toHaveLength(1)
-  })
-})
-
 describe('collectMediaRefs', () => {
   it('collects every media id once, in document order', () => {
     const twice: EntryDocument = {
@@ -162,15 +118,24 @@ describe('collectMediaRefs', () => {
 })
 
 describe('isEmptyDocument', () => {
-  it('is true only when there is no text, no title, and no media', () => {
+  it('is true only when there is no text and no media', () => {
     expect(isEmptyDocument(plainTextDocument('   \n  '))).toBe(true)
-    expect(isEmptyDocument(plainTextDocument('', 'Just a title'))).toBe(false)
     expect(
       isEmptyDocument({
         type: 'doc',
         content: [{ type: 'mediaImage', attrs: { mediaRef: 'blob-1' } }],
       }),
     ).toBe(false)
+  })
+})
+
+describe('isEmptyEntry', () => {
+  it('is rescued from an empty document by a real title, but not by a blank one', () => {
+    const blank = plainTextDocument('   \n  ')
+
+    expect(isEmptyEntry(blank, null)).toBe(true)
+    expect(isEmptyEntry(blank, '   ')).toBe(true)
+    expect(isEmptyEntry(blank, 'Just a title')).toBe(false)
   })
 })
 
@@ -232,16 +197,14 @@ describe('sameContent', () => {
     expect(sameContent(paragraph, withTrailingBlock)).toBe(true)
   })
 
-  it('sees a change of words, of title, or of attachments', () => {
+  it('sees a change of words or of attachments — a title lives beside the document now', () => {
     const reworded = plainTextDocument('We drove up on Saturday.')
-    const titled = plainTextDocument('We drove up on Friday.', 'Lake Tahoe')
     const withImage: EntryDocument = {
       type: 'doc',
       content: [...paragraph.content, { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } }],
     }
 
     expect(sameContent(paragraph, reworded)).toBe(false)
-    expect(sameContent(paragraph, titled)).toBe(false)
     expect(sameContent(paragraph, withImage)).toBe(false)
   })
 

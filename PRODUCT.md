@@ -183,10 +183,10 @@ either — they are names for what a note turned out to be, not a choice to make
   goes up.
 - Revising an entry that already has images keeps them.
 - Renaming is an ordinary revision — you retype the title and save. The entry's old names stay on
-  record with the versions they belonged to, since the title is saved as part of the document.
-- A revision cannot add a title field to a related entry that never had one, or take the field away
-  from an entry that has it: whether an entry carries a name at all is settled when it is written.
-  Filling that name in later, or clearing it, is an ordinary revision.
+  record with the versions they belonged to, since the title rides the version chain alongside the
+  text.
+- The title field is offered every time an entry is written or revised, the same as when it was
+  first created — naming it, renaming it, or clearing it out are all just an ordinary revision.
 - Existing anchors show natively while you edit, since they live in the entry's own document. If the
   edit would change the text underneath one — inserting into it, or deleting part or all of it — a
   warning names the note before you save. Moving an anchor by editing elsewhere is not a change and

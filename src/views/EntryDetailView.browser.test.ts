@@ -136,7 +136,8 @@ describe('EntryDetailView (browser)', () => {
     )
     await repository.create(
       createEntryInput({
-        content: textContent('One made the other possible', 'led_to'),
+        content: textContent('One made the other possible'),
+        title: 'led_to',
         parent_id: source.id,
         target_id: target.id,
         relation_type: 'connection',
@@ -172,7 +173,8 @@ describe('EntryDetailView (browser)', () => {
     )
     const connection = await repository.create(
       createEntryInput({
-        content: textContent('One made the other possible', 'led_to'),
+        content: textContent('One made the other possible'),
+        title: 'led_to',
         parent_id: source.id,
         target_id: target.id,
         relation_type: 'connection',
@@ -188,7 +190,7 @@ describe('EntryDetailView (browser)', () => {
 
   it('shows a breadcrumb back to the parent on a child’s own detail page', async () => {
     const parent = await repository.create(
-      createEntryInput({ content: textContent('Left my job', 'Career change') }),
+      createEntryInput({ content: textContent('Left my job'), title: 'Career change' }),
     )
     const child = await repository.create(
       createEntryInput({
@@ -215,7 +217,8 @@ describe('EntryDetailView (browser)', () => {
     )
     const connection = await repository.create(
       createEntryInput({
-        content: textContent('One made the other possible', 'led_to'),
+        content: textContent('One made the other possible'),
+        title: 'led_to',
         parent_id: source.id,
         target_id: target.id,
         relation_type: 'connection',
@@ -317,6 +320,24 @@ describe('EntryDetailView (browser)', () => {
       expect(draft?.target).toEqual({ kind: 'new_child', parent_id: parent.id })
       expect(docToPlainText(draft!.child.content)).toBe('Half a thought about this')
     })
+  })
+
+  it('shows the parent’s own title in the anchor-mode composer, not just its body', async () => {
+    const parent = await repository.create(
+      createEntryInput({ content: PARENT_CONTENT, title: 'The Tahoe trip' }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Create related entry' }).click()
+
+    const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
+    await expect.element(parentEditor).toBeVisible()
+
+    // The page heading reads the parent's title too, so this checks specifically inside the
+    // anchor-mode composer's own "Entry being annotated" half, which used to open blank — nothing
+    // ever seeded `parentTitle` for it — rather than reading the entry's actual name.
+    const editorRoot = parentEditor.element().closest('.rounded-lg')
+    expect(editorRoot?.textContent).toContain('The Tahoe trip')
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', async () => {

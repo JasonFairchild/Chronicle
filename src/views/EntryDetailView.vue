@@ -7,7 +7,6 @@ import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useMedia } from '@/composables/useMedia'
-import { hasTitleNode } from '@/domain/entryDocument'
 import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { entryLabel, entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
@@ -72,7 +71,7 @@ const layoutWidth = useLayoutWidth()
 const heading = computed(() => {
   const entry = aggregated.value
   if (!entry) return 'Entry detail'
-  return entry.title ?? formatDate(entry.created_at, 'full')
+  return entry.title || formatDate(entry.created_at, 'full')
 })
 
 /**
@@ -97,13 +96,6 @@ const versionLabel = computed(() => {
   if (!version || version.total <= 1) return null
   return `Version ${version.index} of ${version.total}`
 })
-
-/**
- * Whether the document being read has a title node. Every editor this view opens on it follows —
- * reading it, revising it, or anchoring on it — so none of them can add a title where there was
- * never one or drop one that is there.
- */
-const entryHasTitle = computed(() => hasTitleNode(aggregated.value?.content ?? ''))
 
 /**
  * The note each disturbed anchor belongs to, named rather than just counted (PRODUCT.md §5.3: "say
@@ -156,9 +148,9 @@ async function loadBreadcrumb(entry: AggregatedEntry): Promise<{ id: string; lab
 
   if (ids.length === 0) return []
 
-  // The aggregated form, not the raw row: a title lives in the document and is only cached on the
-  // row (ENTRY_MODEL.md), so reading the row directly here would show a stale or blank name for an
-  // entry that has since been renamed by a revision.
+  // The aggregated form, not the raw row: title folds through the version chain like the rest of
+  // the author-supplied fields (ENTRY_MODEL.md), so reading the row directly here would show a
+  // stale or blank name for an entry that has since been renamed by a revision.
   const found = await Promise.all(ids.map((id) => store.getAggregatedEntry(id)))
   return ids.flatMap((id, index) => {
     const other = found[index]
@@ -233,7 +225,10 @@ function startRevising(): void {
   const current = aggregated.value
   if (!current) return
 
-  revisionSession.begin({ kind: 'revision', parent_id: props.id }, { content: current.content })
+  revisionSession.begin(
+    { kind: 'revision', parent_id: props.id },
+    { content: current.content, title: current.title },
+  )
 }
 
 function handleRevisionChange(change: EditorChange): void {
@@ -267,7 +262,10 @@ function startRelatedEntry(): void {
   const current = aggregated.value
   if (!current) return
 
-  childSession.begin({ kind: 'new_child', parent_id: props.id }, { parentContent: current.content })
+  childSession.begin(
+    { kind: 'new_child', parent_id: props.id },
+    { parentContent: current.content, parentTitle: current.title },
+  )
 }
 
 async function saveChildEntry(): Promise<void> {
@@ -395,16 +393,10 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             Editing appends a new version. The current text stays in the entry's history either way.
           </p>
 
-          <!--
-            The title field is offered exactly when this entry has one, the same question the
-            read-only view above asks. A revision cannot add a title where there was never one or
-            drop the field from an entry that has it: whether an entry carries a name at all is
-            settled when it is written. Filling that name in, or clearing it, is an ordinary
-            revision like any other.
-          -->
           <DocumentEditor
             label="Revised entry"
-            :with-title="entryHasTitle"
+            with-title
+            :title="revisionSession.title"
             :content="revisionSession.content"
             :disabled="revisionSession.saving"
             @change="handleRevisionChange"
@@ -450,7 +442,8 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         <template v-else>
           <DocumentEditor
             label="Entry content"
-            :with-title="entryHasTitle"
+            with-title
+            :title="aggregated.title"
             :content="aggregated.content"
             disabled
           />

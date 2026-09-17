@@ -122,7 +122,8 @@ describe('EntryDetailView', () => {
     seed({ content: textContent('Started the degree') }).then((target) => {
       seed({ content: textContent('Left my job') }).then((source) => {
         seed({
-          content: textContent('One made the other possible', 'led_to'),
+          content: textContent('One made the other possible'),
+          title: 'led_to',
           parent_id: source.id,
           target_id: target.id,
           relation_type: 'connection',
@@ -153,7 +154,8 @@ describe('EntryDetailView', () => {
     seed({ content: textContent('Started the degree') }).then((target) => {
       seed({ content: textContent('Left my job') }).then((source) => {
         seed({
-          content: textContent('One made the other possible', 'led_to'),
+          content: textContent('One made the other possible'),
+          title: 'led_to',
           parent_id: source.id,
           target_id: target.id,
           relation_type: 'connection',
@@ -171,7 +173,7 @@ describe('EntryDetailView', () => {
   })
 
   it('shows a breadcrumb back to the parent on a child’s own detail page', () => {
-    seed({ content: textContent('Left my job', 'Career change') }).then((parent) => {
+    seed({ content: textContent('Left my job'), title: 'Career change' }).then((parent) => {
       seed({
         content: textContent('Started the degree'),
         parent_id: parent.id,
@@ -193,7 +195,8 @@ describe('EntryDetailView', () => {
     seed({ content: textContent('Started the degree') }).then((target) => {
       seed({ content: textContent('Left my job') }).then((source) => {
         seed({
-          content: textContent('One made the other possible', 'led_to'),
+          content: textContent('One made the other possible'),
+          title: 'led_to',
           parent_id: source.id,
           target_id: target.id,
           relation_type: 'connection',
@@ -292,6 +295,21 @@ describe('EntryDetailView', () => {
           expect(docToPlainText(saved[0]!.child.content)).to.equal('Half a thought about this')
         })
       })
+    })
+  })
+
+  it('shows the parent’s own title in the anchor-mode composer, not just its body', () => {
+    seed({ content: PARENT_CONTENT, title: 'The Tahoe trip' }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Create related entry' }).click()
+
+      // The page heading reads the parent's title too, so this checks specifically inside the
+      // anchor-mode composer's own "Entry being annotated" half, which used to open blank —
+      // nothing ever seeded `parentTitle` for it — rather than reading the entry's actual name.
+      cy.findByRole('textbox', { name: 'Entry being annotated' })
+        .closest('.rounded-lg')
+        .should('contain.text', 'The Tahoe trip')
     })
   })
 

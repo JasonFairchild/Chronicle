@@ -5,7 +5,7 @@ import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
-import { hasTitleNode, isEmptyDocument, previewText } from '@/domain/entryDocument'
+import { isEmptyEntry, previewText } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { Draft, DraftTarget } from '@/types/draft'
@@ -104,7 +104,7 @@ async function resume(draft: Draft): Promise<void> {
 }
 
 async function seal(): Promise<void> {
-  if (isEmptyDocument(session.content)) return
+  if (isEmptyEntry(session.content, session.title)) return
 
   error.value = null
 
@@ -185,16 +185,11 @@ async function discard(sessionId: string): Promise<void> {
             @update:model-value="session.handleDatesChange"
           />
 
-          <!--
-            Read off the draft's own document rather than inferred from what it will become: the
-            document already carries a title node or it doesn't, settled when the session started.
-            Guessing from the target kind would offer a title on a revision of a child entry, which
-            has none.
-          -->
           <DocumentEditor
             label="Draft"
+            with-title
+            :title="session.title"
             :content="session.content"
-            :with-title="hasTitleNode(session.content)"
             :disabled="session.saving"
             @change="session.handleChange"
           />

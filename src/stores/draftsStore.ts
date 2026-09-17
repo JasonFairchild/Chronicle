@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 import { anchorsPlacedSince } from '@/domain/anchors'
 import { AuthoringSession } from '@/domain/authoringSession'
-import { isEmptyDocument } from '@/domain/entryDocument'
+import { isEmptyEntry } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import type { Draft, DraftTarget } from '@/types/draft'
 import {
@@ -29,6 +29,12 @@ export const DRAFT_FLUSH_MS = 300
 export interface DraftChange {
   /** The document as it now stands. */
   content: string
+  /**
+   * The title field as it now stands, when the editor offers one; null when it doesn't. Optional
+   * because a caller focused on the body alone — most tests among them — has nothing to say about
+   * it; omitting it reads as "unchanged from null," the same way a fresh buffer starts.
+   */
+  title?: string | null
   /** Serialized ProseMirror steps for this change. The session never interprets them. */
   steps?: unknown[]
   /** Text the change added, used only to spot a finished sentence. */
@@ -71,7 +77,12 @@ export const useDraftsStore = defineStore('drafts', () => {
    */
   function beginDraft(
     target: DraftTarget,
-    seed: { content?: string; parentContent?: string } = {},
+    seed: {
+      content?: string
+      title?: string | null
+      parentContent?: string
+      parentTitle?: string | null
+    } = {},
   ) {
     const sessionId = newEntryId()
     const startedAt = newEntryTimestamp()
@@ -83,13 +94,16 @@ export const useDraftsStore = defineStore('drafts', () => {
         started_at: startedAt,
         updated_at: startedAt,
         dates: emptyEntryDates(),
+        title: seed.title ?? null,
         child: { content: seed.content ?? '', steps: [], ticks: [] },
         // `base_content` starts equal to `content`: nothing has been marked yet, so this is also
-        // what "which anchors are this session's" (`anchorsPlacedSince`) diffs against.
+        // what "which anchors are this session's" (`anchorsPlacedSince`) diffs against. The
+        // parent's title is captured the same way, once, since anchor mode never offers it again.
         parent:
           seed.parentContent !== undefined
             ? {
                 content: seed.parentContent,
+                title: seed.parentTitle ?? null,
                 base_content: seed.parentContent,
                 steps: [],
                 ticks: [],
@@ -178,7 +192,12 @@ export const useDraftsStore = defineStore('drafts', () => {
     entry.draft = {
       ...entry.draft,
       updated_at: newEntryTimestamp(),
-      child: { content: change.content, steps: entry.session.steps, ticks: entry.session.ticks },
+      title: change.title ?? null,
+      child: {
+        content: change.content,
+        steps: entry.session.steps,
+        ticks: entry.session.ticks,
+      },
     }
     entry.dirty = true
 
@@ -193,8 +212,8 @@ export const useDraftsStore = defineStore('drafts', () => {
    */
   function recordParentChange(sessionId: string, change: DraftChange): void {
     const entry = requireActive(sessionId)
-    const baseContent = entry.draft.parent?.base_content
-    if (baseContent === undefined) {
+    const parent = entry.draft.parent
+    if (!parent) {
       throw new Error('recordParentChange called on a session with no parent document')
     }
 
@@ -205,7 +224,10 @@ export const useDraftsStore = defineStore('drafts', () => {
       updated_at: newEntryTimestamp(),
       parent: {
         content: change.content,
-        base_content: baseContent,
+        // Never re-read from `change`: anchor mode offers no way to retitle the parent, so this
+        // stays whatever it was seeded with.
+        title: parent.title,
+        base_content: parent.base_content,
         steps: entry.parentSession.steps,
         ticks: entry.parentSession.ticks,
       },
@@ -262,7 +284,10 @@ export const useDraftsStore = defineStore('drafts', () => {
         entry.draft.parent?.base_content ?? null,
         entry.draft.parent?.content ?? null,
       )
-      if (isEmptyDocument(entry.draft.child.content) && placedAnchors.length === 0) {
+      if (
+        isEmptyEntry(entry.draft.child.content, entry.draft.title) &&
+        placedAnchors.length === 0
+      ) {
         if (entry.persisted) {
           await draftRepository.delete(sessionId)
           entry.persisted = false
@@ -308,7 +333,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     // already become a real entry.
     await entry.flushing?.catch(() => {})
 
-    if (isEmptyDocument(entry.draft.child.content)) {
+    if (isEmptyEntry(entry.draft.child.content, entry.draft.title)) {
       throw new Error('Entry content cannot be empty')
     }
 

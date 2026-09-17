@@ -64,7 +64,7 @@ export interface Entry {
   parent_id: string | null
   relation_type: RelationType | null
   target_id: string | null // Connections only.
-  title: string | null // Cache of the document's title node.
+  title: string | null
   content: string
   anchors: AnchorRef[] // Empty means the entry is about its parent at large.
   revision_mode: RevisionMode | null // Revisions only.
@@ -104,12 +104,6 @@ export interface EntryVersion {
   location: string | null
   original_medium: string | null
   original_medium_note: string | null
-}
-
-/** The same chain read through one field: what the entry was called, and when. */
-export interface TitleVersion {
-  revision_id: string | null
-  at: string
   title: string | null
 }
 

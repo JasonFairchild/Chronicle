@@ -21,6 +21,7 @@ function makeDraft(
     started_at: '2026-09-05T10:00:00.000Z',
     updated_at: '2026-09-05T10:00:02.000Z',
     dates: emptyEntryDates(),
+    title: null,
     child: {
       content: content ?? '',
       steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
@@ -30,6 +31,7 @@ function makeDraft(
       parentContent !== undefined
         ? {
             content: parentContent,
+            title: null,
             base_content: parentBaseContent ?? parentContent,
             steps: [],
             ticks: [],
@@ -57,7 +59,8 @@ describe('DraftsView', () => {
       drafts.save(
         makeDraft({
           session_id: 'session-1',
-          content: textContent('Half a thought', 'Lake Tahoe'),
+          content: textContent('Half a thought'),
+          title: 'Lake Tahoe',
         }),
       ),
     )

@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import DocumentEditor from '@/components/DocumentEditor.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
-import { hasTitleNode } from '@/domain/entryDocument'
 
 /**
  * The anchor-mode composer: the parent gaining provisional anchors on the left, the child entry's
@@ -16,7 +14,7 @@ import { hasTitleNode } from '@/domain/entryDocument'
  * Deliberately holds no session of its own: whoever opens one decides whether it is beginning
  * (`session.begin`) or resuming (`session.resume`), and owns what happens after it is sealed.
  */
-const props = defineProps<{
+defineProps<{
   session: DraftSession
 }>()
 
@@ -24,13 +22,6 @@ defineEmits<{
   save: []
   discard: []
 }>()
-
-/**
- * Read off the parent's own document, the same question the read-only view asks of it. Anchoring
- * cannot add a name to an entry that has none or drop one it has — nothing in the parent may change
- * here — so this only decides whether the field is shown at all.
- */
-const parentHasTitle = computed(() => hasTitleNode(props.session.parentContent))
 </script>
 
 <template>
@@ -47,7 +38,8 @@ const parentHasTitle = computed(() => hasTitleNode(props.session.parentContent))
       <DocumentEditor
         label="Entry being annotated"
         anchor-mode
-        :with-title="parentHasTitle"
+        with-title
+        :title="session.parentTitle"
         :content="session.parentContent"
         :anchor-base-content="session.parentBaseContent"
         :disabled="session.saving"
@@ -72,6 +64,7 @@ const parentHasTitle = computed(() => hasTitleNode(props.session.parentContent))
       <DocumentEditor
         label="Your note"
         with-title
+        :title="session.title"
         :content="session.content"
         :disabled="session.saving"
         @change="session.handleChange"

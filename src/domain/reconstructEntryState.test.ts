@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import {
-  buildEntryHistory,
-  reconstructEntryState,
-  titleHistory,
-} from '@/domain/reconstructEntryState'
+import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
 import { emptyEntryDates, type Entry } from '@/types/entry'
 
 /**
@@ -32,14 +28,6 @@ function makeEntry(overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>): E
     ...overrides,
     content: textContent(overrides.content),
   }
-}
-
-/** The same, with a title node — the shape a titled entry's document really has. */
-function makeTitledEntry(
-  overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>,
-  title: string,
-): Entry {
-  return { ...makeEntry(overrides), content: textContent(overrides.content, title) }
 }
 
 describe('reconstructEntryState', () => {
@@ -378,26 +366,24 @@ describe('reconstructEntryState', () => {
     expect(result?.children[0]?.entry.children).toEqual([])
   })
 
-  it('reads the title from the current version rather than the column beside it', () => {
-    const root = makeTitledEntry(
-      { id: 'root-1', content: 'One', title: 'Lake Tahoe' },
-      'Lake Tahoe',
-    )
-    const renamed = makeTitledEntry(
-      {
-        id: 'revision-1',
-        parent_id: 'root-1',
-        relation_type: 'revision',
-        content: 'Two',
-        created_at: '2026-01-02T00:00:00.000Z',
-      },
-      'Donner Lake',
-    )
+  it('lets a revision rename an entry without losing the name it replaced', () => {
+    const root = makeEntry({ id: 'root-1', content: 'One', title: 'Lake Tahoe' })
+    const renamed = makeEntry({
+      id: 'revision-1',
+      parent_id: 'root-1',
+      relation_type: 'revision',
+      content: 'Two',
+      title: 'Donner Lake',
+      created_at: '2026-01-02T00:00:00.000Z',
+    })
 
-    // The column still says "Lake Tahoe" — a revision never writes it — so reading it would show
-    // the old name forever. Renaming is an ordinary edit precisely because the document is what
-    // answers here.
-    expect(reconstructEntryState('root-1', [root, renamed])?.title).toBe('Donner Lake')
+    const current = reconstructEntryState('root-1', [root, renamed])
+    const before = reconstructEntryState('root-1', [root, renamed], {
+      asOf: new Date('2026-01-01T12:00:00.000Z'),
+    })
+
+    expect(current?.title).toBe('Donner Lake')
+    expect(before?.title).toBe('Lake Tahoe')
   })
 
   it('returns null for an unknown entry', () => {
@@ -443,13 +429,19 @@ describe('buildEntryHistory', () => {
   })
 
   it('records the author’s fields at each save point, beside the document', () => {
-    const root = makeEntry({ id: 'root-1', content: 'One', original_medium: 'Google Docs' })
+    const root = makeEntry({
+      id: 'root-1',
+      content: 'One',
+      original_medium: 'Google Docs',
+      title: 'Lake Tahoe',
+    })
     const revision = makeEntry({
       id: 'revision-1',
       parent_id: 'root-1',
       relation_type: 'revision',
       content: 'Two',
       original_medium: 'paper journal',
+      title: 'Donner Lake',
       created_at: '2026-01-02T00:00:00.000Z',
     })
 
@@ -459,6 +451,7 @@ describe('buildEntryHistory', () => {
       'Google Docs',
       'paper journal',
     ])
+    expect(history?.map((version) => version.title)).toEqual(['Lake Tahoe', 'Donner Lake'])
   })
 
   it('ignores annotations and updates, which never write content', () => {
@@ -472,32 +465,5 @@ describe('buildEntryHistory', () => {
     })
 
     expect(buildEntryHistory('root-1', [root, update])).toHaveLength(1)
-  })
-})
-
-describe('titleHistory', () => {
-  it('reads what the entry was called at each save point, and when', () => {
-    const root = makeTitledEntry({ id: 'root-1', content: 'One' }, 'Lake Tahoe')
-    const renamed = makeTitledEntry(
-      {
-        id: 'revision-1',
-        parent_id: 'root-1',
-        relation_type: 'revision',
-        content: 'Two',
-        created_at: '2026-01-02T00:00:00.000Z',
-      },
-      'Donner Lake',
-    )
-
-    // No authoring trace is involved: the title rides in the document, and a revision snapshots the
-    // whole document, so the version chain has already recorded this.
-    expect(titleHistory('root-1', [root, renamed])).toEqual([
-      { revision_id: null, at: '2026-01-01T00:00:00.000Z', title: 'Lake Tahoe' },
-      { revision_id: 'revision-1', at: '2026-01-02T00:00:00.000Z', title: 'Donner Lake' },
-    ])
-  })
-
-  it('returns null for an unknown entry, like the chain it reads', () => {
-    expect(titleHistory('missing', [])).toBeNull()
   })
 })

@@ -1,5 +1,6 @@
 import {
   compareEntries,
+  versionedFieldsOf,
   type AggregatedEntry,
   type Entry,
   type EntryVersion,
@@ -98,10 +99,7 @@ function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): Entry
     {
       revision_id: null,
       at: entry.created_at,
-      content: entry.content,
-      media_refs: [...entry.media_refs],
-      metadata: { ...entry.metadata },
-      ...authoredFields(entry),
+      ...versionedFieldsOf(entry),
     },
   ]
 
@@ -115,30 +113,11 @@ function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): Entry
     versions.push({
       revision_id: revision.id,
       at: revision.created_at,
-      content: revision.content,
-      media_refs: [...revision.media_refs],
-      metadata: { ...revision.metadata },
-      ...authoredFields(revision),
+      ...versionedFieldsOf(revision),
     })
   }
 
   return versions
-}
-
-/**
- * The fields the author supplied about the entry rather than wrote inside it, read off one stored
- * row, grouped here because a version is what the aggregate copies from.
- */
-function authoredFields(
-  entry: Entry,
-): Pick<EntryVersion, 'dates' | 'location' | 'original_medium' | 'original_medium_note' | 'title'> {
-  return {
-    dates: entry.dates,
-    location: entry.location,
-    original_medium: entry.original_medium,
-    original_medium_note: entry.original_medium_note,
-    title: entry.title,
-  }
 }
 
 function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry | null {
@@ -168,14 +147,7 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
     target_id: entry.target_id,
     // Read off the current version, not the entry's own row: a revision may correct a date or a
     // location, and the row only ever holds what version one said.
-    dates: current.dates,
-    location: current.location,
-    original_medium: current.original_medium,
-    original_medium_note: current.original_medium_note,
-    title: current.title,
-    content: current.content,
-    media_refs: current.media_refs,
-    metadata: current.metadata,
+    ...versionedFieldsOf(current),
     version: {
       index: versions.length,
       // Counted over the whole chain, not just the part that existed at `asOf`. Scrubbing back

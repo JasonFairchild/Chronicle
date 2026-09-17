@@ -8,6 +8,7 @@ import type { Draft } from '@/types/draft'
 import {
   createEntryInput,
   emptyEntryDates,
+  versionedFieldsOf,
   type AggregatedEntry,
   type AuthoringTrace,
   type CreateEntryInput,
@@ -420,6 +421,7 @@ export const useEntriesStore = defineStore('entries', () => {
     trace: AuthoringTrace | null,
   ): CreateEntryInput {
     return createEntryInput({
+      ...versionedFieldsOf(current),
       content,
       title: normalizeTitle(title),
       parent_id: current.id,
@@ -428,10 +430,6 @@ export const useEntriesStore = defineStore('entries', () => {
       media_refs: mediaRefs,
       metadata,
       authoring_trace: trace,
-      dates: current.dates,
-      location: current.location,
-      original_medium: current.original_medium,
-      original_medium_note: current.original_medium_note,
     })
   }
 

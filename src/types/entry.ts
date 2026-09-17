@@ -54,23 +54,41 @@ export function emptyEntryDates(): EntryDates {
   }
 }
 
-export interface Entry {
-  id: string // UUIDv7 — sortable as text.
-  created_at: string // System-set, immutable.
+/** Everything a revision replaces. See ENTRY_MODEL.md, "Version chains". */
+export interface VersionedFields {
   dates: EntryDates
   location: string | null // A name the author reuses, not coordinates.
   original_medium: string | null // Where it was first written, for imports and recreations.
   original_medium_note: string | null
+  title: string | null
+  content: string
+  media_refs: string[] // Blob ids in the media store.
+  metadata: Record<string, unknown> // Only what neither drives domain logic nor gets queried.
+}
+
+/** Shallow-copies the versioned fields off any carrier, so a version never aliases the row it came from. */
+export function versionedFieldsOf(source: VersionedFields): VersionedFields {
+  return {
+    dates: { ...source.dates },
+    location: source.location,
+    original_medium: source.original_medium,
+    original_medium_note: source.original_medium_note,
+    title: source.title,
+    content: source.content,
+    media_refs: [...source.media_refs],
+    metadata: { ...source.metadata },
+  }
+}
+
+export interface Entry extends VersionedFields {
+  id: string // UUIDv7 — sortable as text.
+  created_at: string // System-set, immutable.
   parent_id: string | null
   relation_type: RelationType | null
   target_id: string | null // Connections only.
-  title: string | null
-  content: string
   anchors: AnchorRef[] // Empty means the entry is about its parent at large.
   revision_mode: RevisionMode | null // Revisions only.
   authoring_trace: AuthoringTrace | null
-  media_refs: string[] // Blob ids in the media store.
-  metadata: Record<string, unknown> // Only what neither drives domain logic nor gets queried.
 }
 
 /** From here down: shapes derived from or about Entry, not one of its own field types. */
@@ -94,17 +112,9 @@ export interface ResolvedAnchor {
  * A version carries every field a revision may change, not the document alone, so correcting
  * a date or a location is an ordinary revision and the value it replaced stays on record.
  */
-export interface EntryVersion {
+export interface EntryVersion extends VersionedFields {
   revision_id: string | null
   at: string
-  content: string
-  media_refs: string[]
-  metadata: Record<string, unknown>
-  dates: EntryDates
-  location: string | null
-  original_medium: string | null
-  original_medium_note: string | null
-  title: string | null
 }
 
 export interface ResolvedChild {
@@ -120,22 +130,16 @@ export interface ResolvedConnection {
   direction: 'outgoing' | 'incoming'
 }
 
-/** An entry's own state at a point in time, plus its relations as collections. */
-export interface AggregatedEntry {
+/**
+ * An entry's own state at a point in time, plus its relations as collections. The inherited
+ * fields are the newest applicable revision's, not necessarily the entry's own row.
+ */
+export interface AggregatedEntry extends VersionedFields {
   id: string
   created_at: string
   parent_id: string | null // Null for a root entry.
   relation_type: RelationType | null
   target_id: string | null // Connections only.
-  // Folded through the version chain like content, so the newest revision at `asOf` wins.
-  dates: EntryDates
-  location: string | null
-  original_medium: string | null
-  original_medium_note: string | null
-  title: string | null
-  content: string // This entry's own text at the requested time.
-  media_refs: string[]
-  metadata: Record<string, unknown>
   version: { index: number; total: number; at: string; revision_id: string | null }
   children: ResolvedChild[]
   connections: ResolvedConnection[]

@@ -200,9 +200,11 @@ A revision's content is a real snapshot, not a trace.
 
 A revision is a full-state snapshot of `{ content, media_refs, metadata }` plus the author-supplied
 fields below (`title`, the two dates and their notes, `location`, `original_medium` and its note) —
-not content alone, or revising an entry silently drops its images. The edit surface seeds from the
-current aggregate state, never a raw stored row, which is also how a revision that changes only
-wording carries everything else forward unchanged. A revision's parent may not itself be a revision.
+not content alone, or revising an entry silently drops its images. In code that group is named
+`VersionedFields`, extended by `Entry`, `EntryVersion`, and `AggregatedEntry` alike, so the fields a
+revision may change are declared in exactly one place. The edit surface seeds from the current
+aggregate state, never a raw stored row, which is also how a revision that changes only wording
+carries everything else forward unchanged. A revision's parent may not itself be a revision.
 
 Snapshotting those fields rather than reading them off the entry's row is what makes them
 correctable: changing a date — or a title — is an ordinary revision, the value it replaced stays on
@@ -376,26 +378,34 @@ interface AnchorRef {
   quote: string // what the parent said under it at seal time; the orphaned fallback
 }
 
-interface Entry {
-  id: string // UUIDv7: time-ordered and sortable as text
-  created_at: string
+interface EntryDates {
   recorded_at: string | null // YYYY-MM-DD, user-supplied
   recorded_time_note: string | null // freeform: "evening", "after dinner"
   occurred_at: string | null // YYYY-MM-DD, user-supplied
   occurred_time_note: string | null // freeform: "morning", "3:30 pm"
+}
+
+// The fields a revision replaces as a full-state snapshot. See "Version chains" above.
+interface VersionedFields {
+  dates: EntryDates
   location: string | null // a name the author reuses: "home", "grandma's"
   original_medium: string | null // what it was first recorded in: "paper journal"
   original_medium_note: string | null // freeform: "blue Moleskine, 2014-2016"
+  title: string | null // a name the author gave it; never required
+  content: string // serialized ProseMirror document
+  media_refs: string[] // OPFS blob ids the document depends on
+  metadata: Record<string, unknown>
+}
+
+interface Entry extends VersionedFields {
+  id: string // UUIDv7: time-ordered and sortable as text
+  created_at: string
   parent_id: string | null
   relation_type: RelationType | null
   target_id: string | null // connections only
-  title: string | null // a name the author gave it; never required
-  content: string // serialized ProseMirror document
   anchors: AnchorRef[] // empty = about the parent at large
   revision_mode: RevisionMode | null // revisions only; null everywhere else
   authoring_trace: AuthoringTrace | null
-  media_refs: string[] // OPFS blob ids the document depends on
-  metadata: Record<string, unknown>
 }
 ```
 
@@ -530,18 +540,17 @@ serialized document whatever the entry was first written on.
 Children are exposed as collections, never concatenated into the parent's text. Concatenation would
 make anchoring impossible and would make `content` at a given time untrue.
 
+`VersionedFields` is the eight fields a revision replaces as a full-state snapshot (see "Version
+chains" above): `dates`, `location`, `original_medium`, `original_medium_note`, `title`, `content`,
+`media_refs`, `metadata`. `Entry`, `EntryVersion`, and `AggregatedEntry` each extend it, so the group
+is named once rather than repeated per shape.
+
 ```ts
-interface AggregatedEntry {
+interface AggregatedEntry extends VersionedFields {
   id: string
   created_at: string
-  dates: EntryDates // folded from the version chain, like content
-  location: string | null
-  original_medium: string | null
-  original_medium_note: string | null
-  title: string | null
-  content: string // this entry's OWN text at asOf
-  media_refs: string[]
-  metadata: Record<string, unknown>
+  // dates, location, title, content, etc. are folded from the version chain, like content —
+  // this entry's OWN state at asOf, not concatenated with its children's.
   version: { index: number; total: number; at: string; revision_id: string | null }
   children: ResolvedChild[] // annotations and updates, in created_at order
   connections: ResolvedConnection[]

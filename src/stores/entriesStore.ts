@@ -140,9 +140,9 @@ export const useEntriesStore = defineStore('entries', () => {
 
     const entry = await entryRepository.create(
       revisionInput(
-        options.entryId,
+        current,
         content,
-        'text',
+        'direct',
         options.mediaRefs ?? collectMediaRefs(content),
         options.metadata ?? current.metadata,
         null,
@@ -207,9 +207,9 @@ export const useEntriesStore = defineStore('entries', () => {
 
       const entry = await entryRepository.create(
         revisionInput(
-          target.parent_id,
+          current,
           content,
-          'text',
+          'direct',
           collectMediaRefs(content),
           current.metadata,
           trace,
@@ -232,7 +232,7 @@ export const useEntriesStore = defineStore('entries', () => {
           relation_type: 'connection',
           media_refs: collectMediaRefs(content),
           authoring_trace: trace,
-          ...draft.dates,
+          dates: draft.dates,
         }),
       )
     }
@@ -272,7 +272,7 @@ export const useEntriesStore = defineStore('entries', () => {
 
     const [, child] = await entryRepository.createMany([
       revisionInput(
-        parentId,
+        current,
         parentContent,
         'anchor',
         collectMediaRefs(parentContent),
@@ -373,7 +373,7 @@ export const useEntriesStore = defineStore('entries', () => {
       title: docTitle(content),
       media_refs: collectMediaRefs(content),
       authoring_trace: trace,
-      ...dates,
+      dates,
     })
   }
 
@@ -390,19 +390,23 @@ export const useEntriesStore = defineStore('entries', () => {
       parent_id: parentId,
       relation_type: relationType,
       media_refs: collectMediaRefs(content),
-      ...dates,
+      dates,
       ...extra,
     })
   }
 
   /**
    * A revision's `CreateEntryInput`. Shared by `reviseEntry` and the two revision-writing branches
-   * of `createFromDraft` (an ordinary text-mode revision, and the parent half of an anchor-mode
+   * of `createFromDraft` (an ordinary direct revision, and the parent half of an anchor-mode
    * seal) — the only differences between them are the revision mode and which trace and
    * media/metadata values the caller has already resolved.
+   *
+   * It takes the current aggregate rather than an id because a version carries the author's dates,
+   * location and medium as well as the document: anything this revision is not changing has to be
+   * written forward onto it, or the fold would read the newest version and find nulls.
    */
   function revisionInput(
-    parentId: string,
+    current: AggregatedEntry,
     content: string,
     revisionMode: RevisionMode,
     mediaRefs: string[],
@@ -411,12 +415,16 @@ export const useEntriesStore = defineStore('entries', () => {
   ): CreateEntryInput {
     return createEntryInput({
       content,
-      parent_id: parentId,
+      parent_id: current.id,
       relation_type: 'revision',
       revision_mode: revisionMode,
       media_refs: mediaRefs,
       metadata,
       authoring_trace: trace,
+      dates: current.dates,
+      location: current.location,
+      original_medium: current.original_medium,
+      original_medium_note: current.original_medium_note,
     })
   }
 

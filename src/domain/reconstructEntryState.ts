@@ -127,6 +127,7 @@ function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): Entry
       content: entry.content,
       media_refs: [...entry.media_refs],
       metadata: { ...entry.metadata },
+      ...authoredFields(entry),
     },
   ]
 
@@ -143,10 +144,26 @@ function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): Entry
       content: revision.content,
       media_refs: [...revision.media_refs],
       metadata: { ...revision.metadata },
+      ...authoredFields(revision),
     })
   }
 
   return versions
+}
+
+/**
+ * The fields the author supplied about the entry rather than wrote inside it, read off one stored
+ * row, grouped here because a version is what the aggregate copies from.
+ */
+function authoredFields(
+  entry: Entry,
+): Pick<EntryVersion, 'dates' | 'location' | 'original_medium' | 'original_medium_note'> {
+  return {
+    dates: entry.dates,
+    location: entry.location,
+    original_medium: entry.original_medium,
+    original_medium_note: entry.original_medium_note,
+  }
 }
 
 function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry | null {
@@ -174,12 +191,12 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
     parent_id: entry.parent_id,
     relation_type: entry.relation_type,
     target_id: entry.target_id,
-    dates: {
-      recorded_at: entry.recorded_at,
-      recorded_time_note: entry.recorded_time_note,
-      occurred_at: entry.occurred_at,
-      occurred_time_note: entry.occurred_time_note,
-    },
+    // Read off the current version, not the entry's own row: a revision may correct a date or a
+    // location, and the row only ever holds what version one said.
+    dates: current.dates,
+    location: current.location,
+    original_medium: current.original_medium,
+    original_medium_note: current.original_medium_note,
     // The title lives in the document, so the current version is the authority on it and renaming
     // an entry is an ordinary edit. `Entry.title` is a cache written at save time for readers that
     // must not parse a document, never a second source of truth to fall back to.

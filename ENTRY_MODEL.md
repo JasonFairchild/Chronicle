@@ -95,9 +95,9 @@ question of what counts as "content" even comes up. And within what those anchor
 produce, `docToPlainText` is blind to both shapes: a mark is metadata riding on existing text, which
 the flattening never reads at all, and an `anchorInsert` node is a real node with real text that
 `docToPlainText` is specifically required to skip, the same way it already skips the title node (see
-"Where wording lives" above). `revision_mode: 'text' | 'anchor' | null` is a real column on `Entry`
+"Where wording lives" above). `revision_mode: 'direct' | 'anchor' | null` is a real column on `Entry`
 (not `metadata`, since it's filtered on: a card's revision count reads only `revision_mode ===
-'text'` revisions, so an anchor-mode session's parent revision doesn't inflate it).
+'direct'` revisions, so an anchor-mode session's parent revision doesn't inflate it).
 
 **`annotation` vs `update` is derived at seal time, never asked.** `relationTypeForAnchors`
 (`domain/anchors.ts`) reads the anchors a session placed out of the parent's document: a `strike`, or
@@ -190,9 +190,17 @@ resulting document snapshot; `authoring_trace` is the record of how that snapsho
 holds identically for an entry and for each of its revisions, which is what makes the chain uniform.
 A revision's content is a real snapshot, not a trace.
 
-A revision is a full-state snapshot of `{ content, media_refs, metadata }`, not content alone, or
-revising an entry silently drops its images. The edit surface seeds from the current aggregate
-state, never a raw stored row. A revision's parent may not itself be a revision.
+A revision is a full-state snapshot of `{ content, media_refs, metadata }` plus the author-supplied
+fields below (the two dates and their notes, `location`, `original_medium` and its note) — not
+content alone, or revising an entry silently drops its images. The edit surface seeds from the
+current aggregate state, never a raw stored row, which is also how a revision that changes only
+wording carries everything else forward unchanged. A revision's parent may not itself be a revision.
+
+Snapshotting those fields rather than reading them off the entry's row is what makes them
+correctable: changing a date is an ordinary revision, the value it replaced stays on record with the
+version it belonged to, and scrubbing to an earlier version shows what the entry said its date was
+then. `created_at` is the exception and stays untouchable, being the ledger's own stamp rather than
+anything a person said.
 
 `media_refs` is **derived from the document**, not maintained alongside it: an image is a node
 carrying a blob id, so the document is the authority on what it depends on and the column cannot
@@ -352,7 +360,7 @@ be annotated, revised, and have children like any other entry; they simply displ
 ```ts
 type RelationType = 'annotation' | 'update' | 'connection' | 'revision'
 
-type RevisionMode = 'text' | 'anchor' // which creation experience wrote a revision
+type RevisionMode = 'direct' | 'anchor' // which creation experience wrote a revision
 
 interface AnchorRef {
   anchor_id: string // references a mark/node in the parent's own document
@@ -366,6 +374,9 @@ interface Entry {
   recorded_time_note: string | null // freeform: "evening", "after dinner"
   occurred_at: string | null // YYYY-MM-DD, user-supplied
   occurred_time_note: string | null // freeform: "morning", "3:30 pm"
+  location: string | null // a name the author reuses: "home", "grandma's"
+  original_medium: string | null // what it was first recorded in: "paper journal"
+  original_medium_note: string | null // freeform: "blue Moleskine, 2014-2016"
   parent_id: string | null
   relation_type: RelationType | null
   target_id: string | null // connections only
@@ -468,23 +479,49 @@ graduation the rule describes, with real journal data already entered by then. A
 required and nullable, like everything else on `Entry`, never optional: this is pre-users, so there
 is no row predating them to tolerate, and there will not be a code path for one until real data
 needs to survive a shape change (CLAUDE.md, "No backward compatibility until we deliberately decide
-it's needed"). **A revision carries no dates**, so the aggregate reads them from the entry's own row
-rather than folding them through the version chain — which is also why a date cannot yet be
-corrected (PRODUCT.md §5.3).
+it's needed"). A revision carries them, so the aggregate reads them from the current version rather
+than the entry's own row — see "Revisions" above. The model supports correcting a date; no UI offers
+it yet (PRODUCT.md §5.3).
+
+**`location` and `original_medium` are small vocabularies the author grows, not free text and not a
+taxonomy.** Location is a name a person reuses — "home", "grandma's" — not coordinates: the question
+a journal asks of a place is which one it was, and a lat/long answers a question nobody posed while
+losing the one that matters. `original_medium` records what an entry was first written in — a paper
+journal, Google Docs, a voice memo — which only means anything for imports and for entries a person
+recreates here from somewhere else; most entries leave it null. `original_medium_note` qualifies it
+the way a `*_time_note` qualifies a date ("blue Moleskine, 2014-2016"), and is a column for the same
+reason: a note split from the thing it describes makes every reader look in two places.
+
+Both are stored as plain strings, with the select's options derived from the distinct values already
+in use rather than kept in a vocabulary table. For one person the list stays coherent on its own,
+and deriving it means the options can never drift from the data — the same reconstruct-don't-store
+reasoning the rest of the model runs on. A vocabulary table earns its place when renaming a value
+across every entry that carries it becomes worth doing, and that rename is itself a correction, so
+it would want the revision mechanism above rather than an UPDATE.
+
+They are separate fields rather than tags, though a user-defined single-select is close kin to one.
+Two reasons: filtering by where something happened is a different question from filtering by topic,
+and a tag list that has to carry places and media alongside subjects gets noisy enough that none of
+the three is easy to find. If tags arrive and this turns out wrong, the fields collapse into them.
 
 **`authoring_trace` is null when typing was not captured, never because an entry lacks content.**
 Imports, seeds, test fixtures, and programmatic creation all produce a null trace. Whether a
 user-facing switch for disabling capture should exist is a later product question.
 
-**`metadata` holds only what neither drives domain logic nor gets queried:** provenance for imports,
-originating device or app version, a pinned or color flag. The rule is that anything filtered,
-sorted, or joined on graduates to a real column. Without it, an open bag becomes where columns hide,
-unindexed and unvalidated. Tags are the likeliest first graduate. Ambient data such as weather
-belongs in a third-party overlay, not here.
+**`metadata` holds only what neither drives domain logic nor gets queried:** the mechanical residue
+of an import such as a source filename or row number, originating device or app version, a pinned or
+color flag. The rule is that anything filtered, sorted, or joined on graduates to a real column.
+Without it, an open bag becomes where columns hide, unindexed and unvalidated. `original_medium` is
+the graduation already taken — what an import came _from_ is something a person filters by, unlike
+the bookkeeping of which file it arrived in. Tags are the likeliest next one. Ambient data such as
+weather belongs in a third-party overlay, not here.
 
 **There is no `type` field and no `content_format` field.** An entry with an image is a document
 containing an image node, not a different kind of entry, and with no data to migrate every entry is a
 document from the start. A display kind for icons and filtering is derived when needed.
+`original_medium` is not a quiet return of `content_format`: it records where the writing lived
+before Chronicle, and nothing reads it to decide how to parse or render `content`, which is always a
+serialized document whatever the entry was first written on.
 
 ## Aggregate
 
@@ -495,6 +532,10 @@ make anchoring impossible and would make `content` at a given time untrue.
 interface AggregatedEntry {
   id: string
   created_at: string
+  dates: EntryDates // folded from the version chain, like content
+  location: string | null
+  original_medium: string | null
+  original_medium_note: string | null
   title: string | null
   content: string // this entry's OWN text at asOf
   media_refs: string[]

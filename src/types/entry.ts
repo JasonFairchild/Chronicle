@@ -7,20 +7,21 @@ export type VersionRelation = 'revision'
 /** `connection` and `revision` are structural; `annotation`/`update` are a label only. */
 export type RelationType = NarrativeRelation | EdgeRelation | VersionRelation
 
-/** What a span anchor does to the passage it covers — marks on the parent's own text. */
-export type AnchorKind = 'comment' | 'strike'
-
-/** A child's reference to an anchor living in its parent's document. */
 export interface AnchorRef {
   anchor_id: string
   quote: string
 }
 
-/** Which creation experience produced a revision. */
-export type RevisionMode = 'text' | 'anchor'
+export type RevisionMode = 'direct' | 'anchor'
 
-/** Why a moment in a writing session was bookmarked. */
 export type TickReason = 'pause' | 'punctuation' | 'interval' | 'format' | 'anchor' | 'manual'
+
+/** A bookmark into the step chain, marking a moment worth stopping at when reviewing. */
+export interface AuthoringTick {
+  at: string
+  step_index: number
+  reason: TickReason
+}
 
 /** One serialized ProseMirror step with the moment it happened. */
 export interface AuthoringStep {
@@ -28,7 +29,15 @@ export interface AuthoringStep {
   step: unknown
 }
 
-/** A day plus freeform wording for the time within it — the shape a form or draft edits directly. */
+/** How one writing session produced its snapshot. */
+export interface AuthoringTrace {
+  session_id: string
+  started_at: string
+  ended_at: string
+  steps: AuthoringStep[]
+  ticks: AuthoringTick[]
+}
+
 export interface EntryDates {
   recorded_at: string | null
   recorded_time_note: string | null
@@ -45,50 +54,28 @@ export function emptyEntryDates(): EntryDates {
   }
 }
 
-/** A bookmark into the step chain, marking a moment worth stopping at when reviewing. */
-export interface AuthoringTick {
-  at: string
-  step_index: number
-  reason: TickReason
-}
-
-/** How one writing session produced its snapshot. */
-export interface AuthoringTrace {
-  session_id: string
-  started_at: string
-  ended_at: string
-  steps: AuthoringStep[]
-  ticks: AuthoringTick[]
-}
-
 export interface Entry {
-  /** UUIDv7 — sortable as text; ties in `created_at` resolve via id, see `compareEntries`. */
-  id: string
-  /** System-set, immutable. */
-  created_at: string
-  recorded_at: string | null
-  recorded_time_note: string | null
-  occurred_at: string | null
-  occurred_time_note: string | null
+  id: string // UUIDv7 — sortable as text.
+  created_at: string // System-set, immutable.
+  dates: EntryDates
+  location: string | null // A name the author reuses, not coordinates.
+  original_medium: string | null // Where it was first written, for imports and recreations.
+  original_medium_note: string | null
   parent_id: string | null
   relation_type: RelationType | null
-  /** Connections only. */
-  target_id: string | null
-  /** Cache of the document's title node. */
-  title: string | null
+  target_id: string | null // Connections only.
+  title: string | null // Cache of the document's title node.
   content: string
-  /** Empty means the entry is about its parent at large. */
-  anchors: AnchorRef[]
-  /** Revisions only. */
-  revision_mode: RevisionMode | null
+  anchors: AnchorRef[] // Empty means the entry is about its parent at large.
+  revision_mode: RevisionMode | null // Revisions only.
   authoring_trace: AuthoringTrace | null
-  /** Blob ids in the media store. */
-  media_refs: string[]
-  /** Only what neither drives domain logic nor gets queried. See ENTRY_MODEL.md. */
-  metadata: Record<string, unknown>
+  media_refs: string[] // Blob ids in the media store.
+  metadata: Record<string, unknown> // Only what neither drives domain logic nor gets queried.
 }
 
-export type CreateEntryInput = Omit<Entry, 'id' | 'created_at'>
+/** From here down: shapes derived from or about Entry, not one of its own field types. */
+
+export type AnchorKind = 'comment' | 'strike'
 
 /** Whether the parent's document still carries this anchor. */
 export type AnchorStatus = 'present' | 'orphaned'
@@ -96,20 +83,27 @@ export type AnchorStatus = 'present' | 'orphaned'
 export interface ResolvedAnchor {
   anchor_id: string
   status: AnchorStatus
-  /** Current wording if present, the sealed quote if orphaned. */
-  quote: string
-  /** Null when orphaned or a bare insertion. */
-  kind: AnchorKind | null
+  quote: string // Current wording if present, the sealed quote if orphaned.
+  kind: AnchorKind | null // Null when orphaned or a bare insertion.
   insertion: string | null
 }
 
-/** One link in an entry's version chain. Version one has a null `revision_id`. */
+/**
+ * One link in an entry's version chain. Version one has a null `revision_id`.
+ *
+ * A version carries every field a revision may change, not the document alone, so correcting
+ * a date or a location is an ordinary revision and the value it replaced stays on record.
+ */
 export interface EntryVersion {
   revision_id: string | null
   at: string
   content: string
   media_refs: string[]
   metadata: Record<string, unknown>
+  dates: EntryDates
+  location: string | null
+  original_medium: string | null
+  original_medium_note: string | null
 }
 
 /** The same chain read through one field: what the entry was called, and when. */
@@ -122,16 +116,13 @@ export interface TitleVersion {
 export interface ResolvedChild {
   entry: AggregatedEntry
   relation_type: RelationType
-  /** This child's anchors, read out of the parent's current document. */
-  anchors: ResolvedAnchor[]
-  /** Grandchildren are indicated, not expanded. */
-  has_children: boolean
+  anchors: ResolvedAnchor[] // This child's anchors, read out of the parent's current document.
+  has_children: boolean // Grandchildren are indicated, not expanded.
 }
 
 export interface ResolvedConnection {
   entry: AggregatedEntry
-  /** The endpoint that is not the entry being viewed. */
-  other_id: string
+  other_id: string // The endpoint that is not the entry being viewed.
   direction: 'outgoing' | 'incoming'
 }
 
@@ -139,16 +130,16 @@ export interface ResolvedConnection {
 export interface AggregatedEntry {
   id: string
   created_at: string
-  /** Null for a root entry. */
-  parent_id: string | null
+  parent_id: string | null // Null for a root entry.
   relation_type: RelationType | null
-  /** Connections only. */
-  target_id: string | null
-  /** Read from the entry's own row, not the version chain — a revision carries no dates. */
+  target_id: string | null // Connections only.
+  // Folded through the version chain like content, so the newest revision at `asOf` wins.
   dates: EntryDates
+  location: string | null
+  original_medium: string | null
+  original_medium_note: string | null
   title: string | null
-  /** This entry's own text at the requested time. */
-  content: string
+  content: string // This entry's own text at the requested time.
   media_refs: string[]
   metadata: Record<string, unknown>
   version: { index: number; total: number; at: string; revision_id: string | null }
@@ -156,11 +147,16 @@ export interface AggregatedEntry {
   connections: ResolvedConnection[]
 }
 
+export type CreateEntryInput = Omit<Entry, 'id' | 'created_at'>
+
 export function createEntryInput(
   partial: Partial<CreateEntryInput> & Pick<CreateEntryInput, 'content'>,
 ): CreateEntryInput {
   return {
-    ...emptyEntryDates(),
+    dates: emptyEntryDates(),
+    location: null,
+    original_medium: null,
+    original_medium_note: null,
     parent_id: null,
     relation_type: null,
     target_id: null,
@@ -177,11 +173,11 @@ export function createEntryInput(
 let lastTimestampMs = -1
 let sameMsCounter = 0
 
-/** The counter occupies 12 bits, so this is the last value that still encodes faithfully. */
+// The counter occupies 12 bits, so this is the last value that still encodes faithfully.
 const MAX_SAME_MS_COUNTER = 0x0fff
 
 /**
- * UUIDv7, not v4 (ENTRY_MODEL.md) — sortable as plain text since the millisecond timestamp leads.
+ * UUIDv7, not v4 — sortable as plain text since the millisecond timestamp leads.
  * The timestamp is a floor, not a straight clock read: `compareEntries` ties on id, so a backwards
  * clock adjustment or a counter overflow must never emit an id that sorts before one already issued.
  */
@@ -213,8 +209,7 @@ export function newEntryId(): string {
   // Version 7 in the high nibble, then the counter across the remaining 12 bits.
   bytes[6] = 0x70 | ((sameMsCounter >> 8) & 0x0f)
   bytes[7] = sameMsCounter & 0xff
-  // RFC 9562 variant bits.
-  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  bytes[8] = (bytes[8] & 0x3f) | 0x80 // RFC 9562 variant bits.
 
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 

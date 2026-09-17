@@ -203,8 +203,8 @@ describe('useEntriesStore', () => {
 
     const created = await store.createFromDraft(draft, null)
 
-    expect(created.occurred_at).toBe('1994-06-11')
-    expect(created.recorded_time_note).toBe('evening')
+    expect(created.dates.occurred_at).toBe('1994-06-11')
+    expect(created.dates.recorded_time_note).toBe('evening')
 
     const aggregated = await store.getAggregatedEntry(created.id)
     expect(aggregated?.dates).toEqual({
@@ -298,6 +298,39 @@ describe('useEntriesStore', () => {
 
     const history = await store.getEntryHistory(created.id)
     expect(history.map((version) => docToPlainText(version.content))).toEqual(['One', 'Two'])
+  })
+
+  it('carries the author’s dates through a revision instead of dropping them', async () => {
+    const store = useEntriesStore()
+    const draft: Draft = {
+      session_id: 'session-dated',
+      target: { kind: 'new_root' },
+      started_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      dates: {
+        recorded_at: '1994-06-12',
+        recorded_time_note: 'evening',
+        occurred_at: '1994-06-11',
+        occurred_time_note: 'morning',
+      },
+      child: {
+        content: serializeDocument(plainTextDocument('From the notebook')),
+        steps: [],
+        ticks: [],
+      },
+      parent: null,
+    }
+    const created = await store.createFromDraft(draft, null)
+
+    await store.reviseEntry({ entryId: created.id, content: 'From the notebook, typed up' })
+
+    const aggregated = await store.getAggregatedEntry(created.id)
+    expect(aggregated?.dates).toEqual({
+      recorded_at: '1994-06-12',
+      recorded_time_note: 'evening',
+      occurred_at: '1994-06-11',
+      occurred_time_note: 'morning',
+    })
   })
 
   it('rejects a revision that changes nothing', async () => {

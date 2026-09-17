@@ -58,11 +58,11 @@ describe('EntryForm (browser)', () => {
     })
 
     const [saved] = await entries.listRootEntries()
-    expect(saved?.occurred_at).toBe('1994-06-11')
-    expect(saved?.occurred_time_note).toBe('late morning')
-    expect(saved?.recorded_at).toBe('1994-06-12')
+    expect(saved?.dates.occurred_at).toBe('1994-06-11')
+    expect(saved?.dates.occurred_time_note).toBe('late morning')
+    expect(saved?.dates.recorded_at).toBe('1994-06-12')
     // Not asked for, so not invented.
-    expect(saved?.recorded_time_note).toBeNull()
+    expect(saved?.dates.recorded_time_note).toBeNull()
   })
 
   it('starts a fresh empty session after a save rather than reopening the last one', async () => {

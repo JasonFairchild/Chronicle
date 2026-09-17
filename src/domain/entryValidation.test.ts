@@ -6,7 +6,10 @@ function entry(partial: Partial<Entry>): Entry {
   return {
     id: 'entry-1',
     created_at: '2026-01-01T00:00:00.000Z',
-    ...emptyEntryDates(),
+    dates: emptyEntryDates(),
+    location: null,
+    original_medium: null,
+    original_medium_note: null,
     parent_id: null,
     relation_type: null,
     target_id: null,

@@ -14,7 +14,7 @@ import {
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import { createEntryInput } from '@/types/entry'
+import { createEntryInput, emptyEntryDates } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
@@ -101,7 +101,7 @@ describe('EntryDetailView (browser)', () => {
         content: textContent('I stayed home that summer'),
         parent_id: parent.id,
         relation_type: 'revision',
-        revision_mode: 'text',
+        revision_mode: 'direct',
       }),
     )
 
@@ -117,7 +117,7 @@ describe('EntryDetailView (browser)', () => {
         content: textContent('I went to Donner Lake with Dad'),
         parent_id: parent.id,
         relation_type: 'revision',
-        revision_mode: 'text',
+        revision_mode: 'direct',
       }),
     )
 
@@ -243,9 +243,12 @@ describe('EntryDetailView (browser)', () => {
     const parent = await repository.create(
       createEntryInput({
         content: PARENT_CONTENT,
-        occurred_at: '1994-06-11',
-        occurred_time_note: 'late morning',
-        recorded_at: '1994-06-12',
+        dates: {
+          ...emptyEntryDates(),
+          occurred_at: '1994-06-11',
+          occurred_time_note: 'late morning',
+          recorded_at: '1994-06-12',
+        },
       }),
     )
 
@@ -461,7 +464,7 @@ describe('EntryDetailView (browser)', () => {
 
     const revisions = await repository.listRevisions(parent.id)
     expect(docToPlainText(revisions[0]!.content)).toBe(`${PARENT_TEXT}, or so I remembered it.`)
-    expect(revisions[0]?.revision_mode).toBe('text')
+    expect(revisions[0]?.revision_mode).toBe('direct')
     expect(revisions[0]?.authoring_trace?.steps.length).toBeGreaterThan(0)
     // The entry itself is never rewritten; the version chain is what carries the change.
     expect(docToPlainText((await repository.getById(parent.id))!.content)).toBe(PARENT_TEXT)

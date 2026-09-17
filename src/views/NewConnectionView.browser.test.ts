@@ -51,7 +51,7 @@ describe('NewConnectionView (browser)', () => {
 
     const [connection] = await repository.listConnectionsFor(source.id)
     expect(connection?.title).toBe('Led to it')
-    expect(connection?.occurred_at).toBe('2020-01-01')
+    expect(connection?.dates.occurred_at).toBe('2020-01-01')
     expect(connection?.parent_id).toBe(source.id)
     expect(connection?.target_id).toBe(destination.id)
   })

@@ -10,7 +10,7 @@ import {
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import { createEntryInput, type Entry } from '@/types/entry'
+import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
@@ -92,7 +92,7 @@ describe('EntryDetailView', () => {
           content: textContent('I stayed home that summer'),
           parent_id: parent.id,
           relation_type: 'revision',
-          revision_mode: 'text',
+          revision_mode: 'direct',
         }).then(() => {
           mountDetail(parent.id)
 
@@ -108,7 +108,7 @@ describe('EntryDetailView', () => {
         content: textContent('I went to Donner Lake with Dad'),
         parent_id: parent.id,
         relation_type: 'revision',
-        revision_mode: 'text',
+        revision_mode: 'direct',
       }).then(() => {
         mountDetail(parent.id)
 
@@ -225,9 +225,12 @@ describe('EntryDetailView', () => {
   it('shows the dates the writer gave, alongside when the entry was created', () => {
     seed({
       content: PARENT_CONTENT,
-      occurred_at: '1994-06-11',
-      occurred_time_note: 'late morning',
-      recorded_at: '1994-06-12',
+      dates: {
+        ...emptyEntryDates(),
+        occurred_at: '1994-06-11',
+        occurred_time_note: 'late morning',
+        recorded_at: '1994-06-12',
+      },
     }).then((parent) => {
       mountDetail(parent.id)
 
@@ -411,7 +414,7 @@ describe('EntryDetailView', () => {
         expect(docToPlainText(revisions[0]!.content)).to.equal(
           `${PARENT_TEXT}, or so I remembered it.`,
         )
-        expect(revisions[0]?.revision_mode).to.equal('text')
+        expect(revisions[0]?.revision_mode).to.equal('direct')
         expect(revisions[0]?.authoring_trace?.steps.length).to.be.greaterThan(0)
       })
       // The entry itself is never rewritten; the version chain is what carries the change.

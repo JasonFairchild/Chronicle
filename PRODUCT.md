@@ -250,11 +250,13 @@ removals marked in the familiar way, rather than two blocks of text to compare b
 
 ### 5.3 Known gaps in what exists
 
-- **A date, once given, cannot be corrected.** Dates are supplied when an entry is written (§4.1)
-  and there is no way to change one afterwards — a typed-in wrong year stays wrong. When this is
-  built, correcting a date must leave a history the way everything else does: the old date stays on
-  record with the new one beside it, not overwritten. `created_at` is the exception and stays
-  untouchable, being the ledger's own stamp rather than anything a person said.
+- **A date, once given, cannot be corrected — from the screen.** Dates are supplied when an entry is
+  written (§4.1) and no screen offers to change one afterwards, so a typed-in wrong year stays
+  wrong. What's missing is only the UI: a version now carries the dates it was saved with, so
+  correcting one is an ordinary revision and the old date stays on record with the new one beside
+  it, exactly the way changed wording does. The same holds for where an entry happened and what it
+  was first written in, which nothing offers to fill in yet either. `created_at` is the exception
+  and stays untouchable, being the ledger's own stamp rather than anything a person said.
 - **Nothing sorts by when things happened.** The timeline is ordered by when entries were added.
   The dates a person supplies are shown but do not yet change any ordering, and the free-text time
   beside each one is deliberately not interpreted.

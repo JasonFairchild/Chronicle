@@ -2,7 +2,7 @@
 
 Local-first PWA life-mapping / journaling app; portfolio demo + personal tool. Every record is one
 immutable `Entry` — updates, annotations, connections, and revisions are Entries too. Offline is
-non-negotiable; immutability and reconstructible history are the core feature, not a nicety.
+non-negotiable; immutability and reconstructible history are core features, not niceties.
 
 Stack: Vue 3 + TypeScript + Vite, Tailwind (dark-mode ready), Pinia, Vue Router, TipTap,
 vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser Mode) + Cypress CT.
@@ -48,9 +48,17 @@ they are better tools than `cat`, `grep` and `find` for the same job.
   discussion isn't something future code — or a future session — can look up; cite a checked-in doc
   (`ENTRY_MODEL.md`, `PRODUCT.md`, ...) or nothing at all. Keep comments proportional to what they sit
   next to: the non-obvious why, stated once, not a walkthrough.
+- **Comment style marks scope, not length.** `/** */` heads a unit — file, function (including one
+  nested inside another), type, or class — even if the comment is one line. `//` covers a few lines
+  within a unit, even if the comment itself spans several lines. A short description or imperative
+  on a single field or statement goes as a trailing `//` on that same line, not above it as its own
+  comment — move it above only if it doesn't fit on the line. Going forward only; existing comments
+  get fixed opportunistically, not in a sweep.
 - When two options are equally good, take the one that costs less context.
 - Commit messages: a subject line, then only what the diff can't say — why a choice was made, and
   anything a reviewer couldn't discover from the code. No tour of the changes.
+- **Draft commits, don't run them.** Propose the message; staging and `git commit` are mine to run,
+  every time — don't stage files unless asked directly.
 - **No backward compatibility until we deliberately decide it's needed.** This includes entries
   already sitting in a browser's local IndexedDB — at this stage that's all test data. Change a
   shape and update every call site; don't add a fallback to read an old one. If old local data
@@ -61,18 +69,12 @@ they are better tools than `cat`, `grep` and `find` for the same job.
 
 - `src/domain/entryDocument.ts` — the **only** flattening. Anchors, previews, search, and diff must
   all measure against `docToPlainText`, or an anchor recorded on one ruler resolves on another.
-- `src/editor/` — the only place that knows TipTap exists: `extensions.ts` (schema) and
-  `anchorCommands.ts` (imperative commands over an editor already built from it). The domain layer
-  reads documents as plain JSON either way, which is what keeps it pure and node-testable.
+- `src/editor/` — schema and the guarded, anchor-aware commands that mutate the document live only
+  in `extensions.ts` and `anchorCommands.ts`; a second definition or a hand-rolled transaction is how
+  "no child entry is destructive" or anchor-mode exclusivity gets silently violated. Components may
+  still hold an `Editor` instance to mount it or drive built-in TipTap UI (`DocumentEditor.vue`,
+  `AnchorMenu.vue`) — that's ordinary UI wiring against an editor built elsewhere, not a second
+  source of schema or command truth. The domain layer reads documents as plain JSON either way,
+  which is what keeps it pure and node-testable.
 - `src/repositories/index.ts` — the composition root. Three interfaces, each with an in-memory
   adapter for tests and a persistent one for the app, each proven by a shared `.contract.ts`.
-
-## Where the work is
-
-Phase 2 is feature-complete and covered by tests; PRODUCT.md §4 is the list of what that means.
-The anchor model redesign (ENTRY_MODEL.md, "Anchors live in the parent's document") is built:
-anchors are marks/nodes in the parent, anchor-mode child creation is its own session distinct from
-a text-mode revision, and the orphaned-anchor and text-under-anchor warnings both work off it.
-Next: Phase 3's scrubbable per-entry history and revision diffs, which is what that redesign was
-for. The SQLite WASM + OPFS adapter behind `EntryRepository` / `DraftRepository` remains deferred
-until the Dexie path has been used in anger.

@@ -16,7 +16,10 @@ import { emptyEntryDates, type Entry } from '@/types/entry'
 function makeEntry(overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>): Entry {
   return {
     created_at: '2026-01-01T00:00:00.000Z',
-    ...emptyEntryDates(),
+    dates: emptyEntryDates(),
+    location: null,
+    original_medium: null,
+    original_medium_note: null,
     parent_id: null,
     relation_type: null,
     target_id: null,
@@ -163,6 +166,36 @@ describe('reconstructEntryState', () => {
     const result = reconstructEntryState('root-1', [root, revision])
 
     expect(result?.media_refs).toEqual(['blob-1'])
+  })
+
+  it('lets a revision correct a date without losing the one it replaced', () => {
+    const root = makeEntry({
+      id: 'root-1',
+      content: 'From the blue notebook',
+      dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
+      location: 'home',
+      original_medium: 'paper journal',
+    })
+    const revision = makeEntry({
+      id: 'revision-1',
+      parent_id: 'root-1',
+      relation_type: 'revision',
+      content: 'From the blue notebook',
+      dates: { ...emptyEntryDates(), occurred_at: '1994-06-12' },
+      location: 'grandma’s',
+      original_medium: 'paper journal',
+      created_at: '2026-01-02T00:00:00.000Z',
+    })
+
+    const corrected = reconstructEntryState('root-1', [root, revision])
+    const before = reconstructEntryState('root-1', [root, revision], {
+      asOf: new Date('2026-01-01T12:00:00.000Z'),
+    })
+
+    expect(corrected?.dates.occurred_at).toBe('1994-06-12')
+    expect(corrected?.location).toBe('grandma’s')
+    expect(before?.dates.occurred_at).toBe('1994-06-11')
+    expect(before?.location).toBe('home')
   })
 
   it('respects asOf when reconstructing historical state', () => {
@@ -407,6 +440,25 @@ describe('buildEntryHistory', () => {
     expect(history?.map((version) => docToPlainText(version.content))).toEqual(['One', 'Two'])
     expect(history?.[0]?.revision_id).toBeNull()
     expect(history?.[1]?.revision_id).toBe('revision-1')
+  })
+
+  it('records the author’s fields at each save point, beside the document', () => {
+    const root = makeEntry({ id: 'root-1', content: 'One', original_medium: 'Google Docs' })
+    const revision = makeEntry({
+      id: 'revision-1',
+      parent_id: 'root-1',
+      relation_type: 'revision',
+      content: 'Two',
+      original_medium: 'paper journal',
+      created_at: '2026-01-02T00:00:00.000Z',
+    })
+
+    const history = buildEntryHistory('root-1', [root, revision])
+
+    expect(history?.map((version) => version.original_medium)).toEqual([
+      'Google Docs',
+      'paper journal',
+    ])
   })
 
   it('ignores annotations and updates, which never write content', () => {

@@ -40,7 +40,7 @@ describe('NewConnectionView', () => {
         // post-save route directly against the router instance it built itself.
         cy.then(() => repository.listConnectionsFor(source.id)).then((connections) => {
           expect(connections[0]?.title).to.equal('Led to it')
-          expect(connections[0]?.occurred_at).to.equal('2020-01-01')
+          expect(connections[0]?.dates.occurred_at).to.equal('2020-01-01')
           expect(connections[0]?.parent_id).to.equal(source.id)
           expect(connections[0]?.target_id).to.equal(destination.id)
         })

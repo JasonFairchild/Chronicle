@@ -51,11 +51,11 @@ describe('EntryForm', () => {
 
     cy.then(async () => {
       const [saved] = await entries.listRootEntries()
-      expect(saved?.occurred_at).to.equal('1994-06-11')
-      expect(saved?.occurred_time_note).to.equal('late morning')
-      expect(saved?.recorded_at).to.equal('1994-06-12')
+      expect(saved?.dates.occurred_at).to.equal('1994-06-11')
+      expect(saved?.dates.occurred_time_note).to.equal('late morning')
+      expect(saved?.dates.recorded_at).to.equal('1994-06-12')
       // Not asked for, so not invented.
-      expect(saved?.recorded_time_note).to.equal(null)
+      expect(saved?.dates.recorded_time_note).to.equal(null)
     })
   })
 

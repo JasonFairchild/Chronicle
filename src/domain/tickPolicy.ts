@@ -1,44 +1,33 @@
 import type { TickReason } from '@/types/entry'
 
 /**
- * When a moment in a writing session is worth bookmarking.
+ * When a moment in a writing session is worth bookmarking. See PRODUCT.md §4.9 for reasoning.
  *
- * Ticks are not saves. Every step is persisted regardless (see the draft buffer); a tick only marks
- * a place worth stopping at when someone later scrubs back through how a piece was written.
- * Confusing the two would either lose work or fill the chain with bookmarks nobody wants.
+ * Ticks are not saves — every step is persisted regardless, via the draft buffer. Confusing the
+ * two would either lose work or fill the chain with bookmarks nobody wants.
  *
  * Pure and tunable on purpose: the thresholds are the product decision, and they are the part most
  * likely to be wrong at first, so they are data rather than constants buried in an editor callback.
  */
 export interface TickPolicy {
-  /** A gap this long before a change means the writer stopped and came back. */
-  pauseMs: number
-  /** No matter how steadily someone types, bookmark at least this often. */
-  intervalMs: number
-  /** Text whose last character ends a sentence. */
-  sentenceEnd: RegExp
+  pauseMs: number // A gap this long before a change means the writer stopped and came back.
+  intervalMs: number // No matter how steadily someone types, bookmark at least this often.
+  triggerPatterns: RegExp[] // Inserted text matching any of these ends a bookmarkable unit.
 }
 
 export const DEFAULT_TICK_POLICY: TickPolicy = {
-  pauseMs: 2_500,
+  pauseMs: 30_000,
   intervalMs: 60_000,
-  sentenceEnd: /[.!?]$/,
+  triggerPatterns: [/[.!?]$/],
 }
 
 /** One editor change, reduced to only what the policy needs to judge it. */
 export interface TickEvent {
   at: number
-  /** Text this change added. Empty for a deletion or a pure formatting change. */
-  insertedText: string
-  /** True when the change applied a mark or changed a node type rather than text. */
-  isFormatting: boolean
-  /**
-   * True when the change was a one-shot structural anchor op — placing an anchor, switching its
-   * kind, or removing it — rather than ordinary typing or formatting. A keystroke inside an open
-   * wording box is deliberately never this: typing wording is typing, and it earns a bookmark the
-   * same way prose does, from a pause, a finished sentence, or the interval — never from being the
-   * last keystroke before Enter. See `editor/anchorCommands.ts`'s `ANCHOR_TICK_META`.
-   */
+  insertedText: string // Text this change added. Empty for a deletion or a pure formatting change.
+  isFormatting: boolean // True when the change applied a mark or changed a node type rather than text.
+  // True for a structural anchor op (placing, switching, or removing one) — not for typing inside
+  // an anchor's wording box. See PRODUCT.md §4.4 and `ANCHOR_TICK_META` in `editor/anchorCommands.ts`.
   isAnchorOp: boolean
 }
 
@@ -63,7 +52,7 @@ export function evaluateTick(
     return 'pause'
   }
 
-  if (policy.sentenceEnd.test(event.insertedText)) {
+  if (policy.triggerPatterns.some((pattern) => pattern.test(event.insertedText))) {
     return 'punctuation'
   }
 

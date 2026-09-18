@@ -3,8 +3,10 @@ import { DEFAULT_TICK_POLICY, evaluateTick } from '@/domain/tickPolicy'
 
 describe('evaluateTick', () => {
   it('bookmarks a return from silence, and prefers that over the sentence that broke it', () => {
+    const at = DEFAULT_TICK_POLICY.pauseMs + 5_000
+
     const reason = evaluateTick(
-      { at: 10_000, insertedText: '.', isFormatting: false, isAnchorOp: false },
+      { at, insertedText: '.', isFormatting: false, isAnchorOp: false },
       { lastEventAt: 5_000, lastTickAt: 5_000 },
     )
 
@@ -58,14 +60,14 @@ describe('evaluateTick', () => {
   })
 
   it('honours a tuned policy rather than the defaults', () => {
-    const patient = { ...DEFAULT_TICK_POLICY, pauseMs: 30_000 }
+    const impatient = { ...DEFAULT_TICK_POLICY, pauseMs: 3_000 }
 
     expect(
       evaluateTick(
         { at: 10_000, insertedText: 'x', isFormatting: false, isAnchorOp: false },
         { lastEventAt: 5_000, lastTickAt: 5_000 },
-        patient,
+        impatient,
       ),
-    ).toBeNull()
+    ).toBe('pause')
   })
 })

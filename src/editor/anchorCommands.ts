@@ -75,14 +75,9 @@ export function readAnchorAnnouncement(transaction: Transaction): AnchorAnnounce
 }
 
 /**
- * Marks a transaction as a one-shot structural anchor op — place, change kind, or remove — worth
- * its own bookmark in the authoring trace (`TickEvent.isAnchorOp`, `tickPolicy.ts`). Deliberately
- * not set by opening a box, a keystroke inside one, committing non-empty wording, or cancelling:
- * typing wording is typing, and it earns a bookmark the ordinary way (a pause, a finished sentence,
- * the interval), never from being the last keystroke before Enter — see `commitAnchorInsert`'s own
- * note on why that keystroke's own transaction is where such a tick would have to live anyway.
- * Committing wording down to *nothing* is the one exception: dropping a bare insertion's only node
- * is a real structural removal (the same species of change as `removeAnchor`), not a keystroke.
+ * Marks a transaction as a one-shot structural anchor op (place, change kind, remove) — read as
+ * `TickEvent.isAnchorOp`. See `tickPolicy.ts` for what counts and why; `commitAnchorInsert` below
+ * sets it for the one wording-commit case that does.
  */
 const ANCHOR_TICK_META = 'chronicleAnchorTick'
 

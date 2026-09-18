@@ -23,7 +23,7 @@ describe('AuthoringSession', () => {
       steps: [{ stepType: 'replace', from: 10, to: 10 }],
       insertedText: ' all day.',
     })
-    clock.advance(5_000)
+    clock.advance(35_000)
     session.record({ steps: [{ stepType: 'replace', from: 19, to: 19 }], insertedText: 'Then' })
 
     const trace = session.seal()

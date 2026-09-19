@@ -3,6 +3,7 @@ import { textContent } from '@/domain/entryDocument'
 import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
+import type { DraftSummary } from '@/types/draft'
 import { createEntryInput } from '@/types/entry'
 
 function mountNewConnection(id: string): Cypress.Chainable {
@@ -107,7 +108,15 @@ describe('NewConnectionView', () => {
           cy.then(() => wrapper.unmount())
         })
 
-        cy.then(() => drafts.list()).then((saved) => {
+        // `reset()` abandons the session fire-and-forget (`useDraftSession.reset`), so the write
+        // isn't necessarily done the instant `unmount()` returns — poll rather than assume.
+        cy.then(function waitForSavedDraft(): Promise<DraftSummary[]> {
+          return drafts
+            .list()
+            .then((saved) =>
+              saved.length > 0 ? saved : Cypress.Promise.delay(50).then(waitForSavedDraft),
+            )
+        }).then((saved) => {
           expect(saved[0]?.target).to.deep.equal({
             kind: 'new_connection',
             parent_id: source.id,

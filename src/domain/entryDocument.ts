@@ -11,6 +11,8 @@
  * runnable in node, and independent of whichever editor sits on top.
  */
 
+import { collectAnchors, type DocumentAnchor } from './anchors'
+
 /** A ProseMirror mark as it serializes to JSON. */
 export interface DocMark {
   type: string
@@ -159,30 +161,60 @@ export function isEmptyEntry(content: string | EntryDocument, title: string | nu
   return isEmptyDocument(content) && !title?.trim()
 }
 
+/** What changed between two documents, measured as outcomes rather than as editor operations. */
+export interface ContentDelta {
+  sameText: boolean
+  sameMedia: boolean
+  /** Same anchor ids and kinds. Ignores wording text — see `contentDelta`. */
+  sameAnchors: boolean
+}
+
 /**
- * True when two documents say the same thing: the same body text and the same attachments. Only
- * their presentation differs.
+ * Compares two documents along the three axes a tick or a revision cares about, in one pass so
+ * `DocumentEditor` never has to re-walk the document per signal.
  *
- * This is how a formatting change is told apart from an edit, and it is deliberately a comparison
- * of outcomes rather than a list of editor operations. Marks arrive as `addMark`/`removeMark`, but
- * alignment and spacing arrive as attribute steps, and wrapping a paragraph in a list arrives as a
- * `replaceAround` that no step type distinguishes from a real edit. Measuring against the same two
- * things `isEmptyDocument` calls content cannot be broken by whichever extension is added next. The
- * title is not part of it — it lives beside the document now, not in it — so a caller comparing a
- * full entry's before and after must check it separately.
+ * Deliberately a comparison of outcomes rather than a list of editor operations. Marks arrive as
+ * `addMark`/`removeMark`, but alignment and spacing arrive as attribute steps, wrapping a paragraph
+ * in a list arrives as a `replaceAround` that no step type distinguishes from a real edit, and an
+ * anchor command produces ordinary-looking mark/node steps too — no step type is reliable, but what
+ * the document says before and after always is.
+ *
+ * `sameAnchors` compares only `anchor_id` and `kind` (`collectAnchors`, `@/domain/anchors`),
+ * ignoring `quote`/`insertion`: retyping a wording box moves no anchor and covers no different text,
+ * so it must read as ordinary typing, not as a structural anchor op.
  */
-export function sameContent(a: string | EntryDocument, b: string | EntryDocument): boolean {
+export function contentDelta(a: string | EntryDocument, b: string | EntryDocument): ContentDelta {
   const before = parseDocument(a)
   const after = parseDocument(b)
 
-  return (
+  return {
     // Trimmed, as `isEmptyDocument` trims: the editor keeps an empty paragraph at the end of a
     // document so there is always somewhere to click, and appends one when the last block becomes
     // a heading. That scaffolding is the editor's, not the author's, and counting it would report
     // every heading as an edit.
-    docToPlainText(before).trim() === docToPlainText(after).trim() &&
-    collectMediaRefs(before).join('\n') === collectMediaRefs(after).join('\n')
-  )
+    sameText: docToPlainText(before).trim() === docToPlainText(after).trim(),
+    sameMedia: collectMediaRefs(before).join('\n') === collectMediaRefs(after).join('\n'),
+    sameAnchors: anchorKey(collectAnchors(before)) === anchorKey(collectAnchors(after)),
+  }
+}
+
+/**
+ * True when two documents say the same thing: the same body text and the same attachments. Only
+ * their presentation differs.
+ *
+ * The title is not part of it — it lives beside the document now, not in it — so a caller comparing
+ * a full entry's before and after must check it separately.
+ */
+export function sameContent(a: string | EntryDocument, b: string | EntryDocument): boolean {
+  const delta = contentDelta(a, b)
+  return delta.sameText && delta.sameMedia
+}
+
+function anchorKey(anchors: DocumentAnchor[]): string {
+  return anchors
+    .map((anchor) => `${anchor.anchor_id}:${anchor.kind ?? ''}`)
+    .sort()
+    .join('\n')
 }
 
 function nodeText(node: DocNode): string {

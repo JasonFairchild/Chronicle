@@ -234,28 +234,53 @@ The session's end state is stored as a full snapshot and is authoritative. If a 
 change ever makes old steps unreplayable, the loss is fine-grained scrubbing for that session, never
 content.
 
+Each step's and tick's `at` is milliseconds since the trace's `started_at`, not a timestamp of its
+own. A scrub UI must order by `step_index`, never by `at`: `started_at` survives a reload but the
+clock computing later offsets does not as reliably, so a clock adjustment between sessions could
+make a later step's `at` come out smaller than an earlier one's.
+
 **Durability and tick marking are separate jobs and should not be confused.** Persisting steps is
 about never losing work, happens constantly and invisibly, and marks nothing. Tick marking is about
 identifying moments worth stopping at when reviewing how something was written. Every step is
 persisted; only some moments are bookmarked.
 
 So ticks are not entries and are not saves. They are timestamped bookmarks into the step chain,
-`{ at, step_index, reason }` with reason `pause | punctuation | interval | format | anchor | manual`,
-all tunable. A pause or a sentence-ending period appends a bookmark; it does not trigger a write,
-because the writing already happened. A trace belongs on any entry that was typed, not only
-revisions, so a first draft is captured the same way as a later edit.
+`{ at, step_index, reasons }` with each reason among `pause | paste | media | deletion | punctuation
+| interval | format | anchor | manual`, all tunable. A tick fires the moment at least one of those
+applies, and `reasons` can hold several at once — a sentence finished right after a long pause is both — ordered by
+priority so `reasons[0]` is the one worth showing; that ordering is over the result, not a choice
+between candidates the way a first-match-wins check would be. A pause or a sentence-ending period
+appends a bookmark; it does not trigger a write, because the writing already happened. A trace
+belongs on any entry that was typed, not only revisions, so a first draft is captured the same way
+as a later edit.
+
+`deletion` is the one reason judged in retrospect: a run of deletions of any size is bookmarked when
+it ends — at the next change that removes nothing, or the next deletion after a pause — and the tick
+sits at the run's last deleting step, so it covers everything removed in one go.
 
 One policy judges every stream the same way: the parent's provisional document in an anchor-mode
 session and the child's own prose are two `AuthoringSession` instances, not two mechanisms — anchor
 mode limits what the _editor_ can produce (see "Two creation experiences, kept separate" below), not
 how the session records what it does produce. `anchor` is a one-shot structural op — placing an
-anchor, switching it between highlight and strike, or removing it (`editor/anchorCommands.ts`'s
-`ANCHOR_TICK_META`) — never a keystroke inside an open wording box: typing wording is typing, and it
-earns a bookmark the way prose does, from `pause`, `punctuation`, or `interval`, not from being the
-last keystroke before Enter. That last part isn't a policy choice so much as a fact about the editor:
-every keystroke there already writes straight through to the document (`updateAnchorInsertText`), so
-by the time a box is committed the value is already in place and the commit's own transaction is a
-content no-op TipTap won't even emit an update for — there is no separate "settling" moment to tick.
+anchor, switching it between highlight and strike, or removing it — judged by outcome, not by which
+command ran: `contentDelta` (`domain/entryDocument.ts`) compares the document's anchor ids and kinds
+before and after a transaction, ignoring wording text, and a transaction counts as an anchor op iff
+that set changed. Undo and redo fall out of this for free, without reading any transaction meta,
+since they change the same set back. Typing inside an open wording box never counts, since it moves
+no anchor and covers no different text: typing wording is typing, and it earns a bookmark the way
+prose does — from `pause`, `punctuation`, or `interval`, possibly more than one at once — never from
+being the last keystroke before Enter. That last part isn't a policy choice so much as a fact about
+the editor: every keystroke there already writes straight through to the document
+(`updateAnchorInsertText`), so by the time a box is committed the value is already in place and the
+commit's own transaction is a content no-op TipTap won't even emit an update for — there is no
+separate "settling" moment to tick.
+
+`paste` and `media` are read off the transaction and off `contentDelta` respectively, both outcomes
+rather than provenance the same way `anchor` is: `paste` from ProseMirror's own `uiEvent` meta, so a
+drop (`uiEvent: 'drop'`) and content inserted programmatically (the image-attach path, which produces
+`media` on its own) don't count; `media` from `!sameMedia`, so attaching and removing an image both
+count. Neither fires for a paste into an open wording box, which goes through its own plain `<input>`
+and never reaches the document's clipboard handling at all.
 
 ## Two stores, one of them history
 

@@ -47,12 +47,7 @@ export function isAnchorEdit(transaction: Transaction): boolean {
   )
 }
 
-/**
- * Whether a transaction was dispatched by one of this module's commands (every one of them stamps
- * this, via `dispatchAnchorEdit`) — read by `DocumentEditor` so an anchor op is never miscounted as
- * ordinary formatting merely because, like formatting, it changes no plain text. Undo/redo of one
- * still reads as formatting, which is the right answer for the tick policy either way.
- */
+/** Whether a transaction was dispatched by one of this module's commands, via `dispatchAnchorEdit`. */
 export function isAnchorCommand(transaction: Transaction): boolean {
   return transaction.getMeta(ANCHOR_EDIT_META) === true
 }
@@ -72,18 +67,6 @@ const ANCHOR_ANNOUNCE_META = 'chronicleAnchorAnnounce'
 /** Reads the announcement an anchor command attached to its transaction, if any. */
 export function readAnchorAnnouncement(transaction: Transaction): AnchorAnnouncement | null {
   return (transaction.getMeta(ANCHOR_ANNOUNCE_META) as AnchorAnnouncement | undefined) ?? null
-}
-
-/**
- * Marks a transaction as a one-shot structural anchor op (place, change kind, remove) — read as
- * `TickEvent.isAnchorOp`. See `tickPolicy.ts` for what counts and why; `commitAnchorInsert` below
- * sets it for the one wording-commit case that does.
- */
-const ANCHOR_TICK_META = 'chronicleAnchorTick'
-
-/** Reads whether a transaction was stamped as a structural anchor op. */
-export function readAnchorTick(transaction: Transaction): boolean {
-  return transaction.getMeta(ANCHOR_TICK_META) === true
 }
 
 /**
@@ -272,7 +255,6 @@ export function addAnchorMark(
   const transaction = state.tr.addMark(from, to, markType.create({ anchorId, kind }))
   transaction.insert(to, insertNode)
   transaction.setSelection(TextSelection.create(transaction.doc, to + insertNode.nodeSize))
-  transaction.setMeta(ANCHOR_TICK_META, true)
   transaction.setMeta(ANCHOR_ANNOUNCE_META, {
     message: `${kind === 'strike' ? 'Struck' : 'Highlighted'} "${quote}"`,
   } satisfies AnchorAnnouncement)
@@ -342,7 +324,6 @@ export function setAnchorKind(editor: Editor, anchorId: string, kind: AnchorKind
       .addMark(from, to, markType.create({ anchorId, kind }))
   }
 
-  transaction.setMeta(ANCHOR_TICK_META, true)
   transaction.setMeta(ANCHOR_ANNOUNCE_META, {
     message: `Changed to ${kind === 'strike' ? 'strike' : 'highlight'}`,
   } satisfies AnchorAnnouncement)
@@ -382,7 +363,6 @@ export function removeAnchor(editor: Editor, anchorId: string): void {
     transaction = transaction.delete(existing.pos, existing.pos + existing.node.nodeSize)
   }
 
-  transaction.setMeta(ANCHOR_TICK_META, true)
   transaction.setMeta(ANCHOR_ANNOUNCE_META, {
     message: description ? `Removed "${description}"` : 'Removed anchor',
   } satisfies AnchorAnnouncement)
@@ -500,9 +480,10 @@ export function updateAnchorInsertText(editor: Editor, pos: number, text: string
  * `prevState.doc.eq(state.doc)` check silently drops the `update` event for it — there is nothing
  * here left for a tick to attach to, which is the other half of why settling wording isn't the
  * `'anchor'` moment. Dropping the node *is* a real structural change (and always reaches `update`,
- * since the doc shrinks) — that half keeps `ANCHOR_TICK_META`, the same as removing one via the
- * dedicated button (`removeAnchor`): for a bare insertion with no mark, emptying its wording and
- * committing *is* how it's removed.
+ * since the doc shrinks): the anchor's id drops out of the document's anchor set entirely, which is
+ * what `DocumentEditor`'s outcome-based comparison (`contentDelta`) reads as an anchor change, the
+ * same as removing one via the dedicated button (`removeAnchor`) — for a bare insertion with no
+ * mark, emptying its wording and committing *is* how it's removed.
  */
 export function commitAnchorInsert(editor: Editor, pos: number, text: string): void {
   const storage = anchorInsertStorage(editor)
@@ -521,7 +502,6 @@ export function commitAnchorInsert(editor: Editor, pos: number, text: string): v
       message: `Added wording "${trimmed}"`,
     } satisfies AnchorAnnouncement)
   } else if (openedText) {
-    transaction.setMeta(ANCHOR_TICK_META, true)
     transaction.setMeta(ANCHOR_ANNOUNCE_META, {
       message: 'Cleared wording',
     } satisfies AnchorAnnouncement)

@@ -17,8 +17,11 @@ interface ObservedChange {
   title: string | null
   steps: unknown[]
   insertedText: string
+  removedChars: number
   isFormatting: boolean
   isAnchorOp: boolean
+  isPaste: boolean
+  mediaChanged: boolean
   anchorIds?: string[]
 }
 
@@ -161,6 +164,23 @@ describe('DocumentEditor', () => {
     })
   })
 
+  it('reports no deletion for wrapping a paragraph in a list', () => {
+    const onChange = cy.stub().as('change')
+
+    cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
+
+    cy.findByRole('textbox', { name: 'New entry' }).type('Worth remembering{selectall}')
+    cy.findByRole('button', { name: 'List' }).click()
+
+    cy.get('@change').then((stub) => {
+      const change = lastChange(stub)
+      // Wrapping arrives as a `replaceAround` spanning the whole paragraph, with its content
+      // reinserted through the gap — naive arithmetic would report the paragraph as deleted.
+      expect(docToPlainText(change.content).trim()).to.equal('Worth remembering')
+      expect(change.removedChars).to.equal(0)
+    })
+  })
+
   it('leaves the caret in the document after a toolbar click, so typing carries on', () => {
     const onChange = cy.stub().as('change')
 
@@ -286,10 +306,35 @@ describe('DocumentEditor', () => {
       expect(collectMediaRefs(change.content)).to.have.length(1)
       // An attachment adds no words, but it is content all the same.
       expect(change.isFormatting).to.equal(false)
+      expect(change.mediaChanged).to.equal(true)
       // The bytes never enter the document: an object URL is minted per page load and would be a
       // broken reference the moment this entry was read again.
       expect(change.content).to.not.contain('blob:')
       expect(change.content).to.not.contain('data:')
+    })
+  })
+
+  it('bookmarks a paste, distinct from ordinary typing', () => {
+    const onChange = cy.stub().as('change')
+
+    cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
+    cy.findByRole('textbox', { name: 'New entry' }).click()
+
+    // Neither runner has a first-class paste: ProseMirror's own view reads `event.clipboardData`
+    // straight off whatever `paste` event its DOM node receives, trusted or not, so a hand-built
+    // `ClipboardEvent` carrying a `DataTransfer` is dispatched directly at the contenteditable.
+    cy.findByRole('textbox', { name: 'New entry' }).then(($editor) => {
+      const dataTransfer = new DataTransfer()
+      dataTransfer.setData('text/plain', 'Copied from elsewhere')
+      $editor[0]!.dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true }),
+      )
+    })
+
+    cy.get('@change').then((stub) => {
+      const change = lastChange(stub)
+      expect(docToPlainText(change.content)).to.contain('Copied from elsewhere')
+      expect(change.isPaste).to.equal(true)
     })
   })
 
@@ -421,7 +466,12 @@ describe('DocumentEditor', () => {
       cy.findByRole('button', { name: 'Remove anchor' }).click()
 
       cy.get('@change').then((stub) => {
-        expect(lastChange(stub).anchorIds).to.deep.equal([])
+        const change = lastChange(stub)
+        expect(change.anchorIds).to.deep.equal([])
+        // The node shrinks the document, but its wording was never the parent's text to begin with
+        // (`nodeText` skips `anchorInsert`) — `textBetween` over its range reads as empty, not
+        // removed.
+        expect(change.removedChars).to.equal(0)
       })
     })
 
@@ -513,7 +563,15 @@ describe('DocumentEditor', () => {
 
       cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+z}')
 
-      cy.get('@change').then((stub) => expect(lastChange(stub).anchorIds).to.deep.equal([]))
+      cy.get('@change').then((stub) => {
+        const change = lastChange(stub)
+        expect(change.anchorIds).to.deep.equal([])
+        // Judged by outcome, not by transaction provenance (`contentDelta`): undoing a placement
+        // removes the anchor from the document's anchor set the same as `removeAnchor` would, so
+        // this reads as an anchor change rather than formatting, with no undo-specific case needed.
+        expect(change.isAnchorOp).to.equal(true)
+        expect(change.isFormatting).to.equal(false)
+      })
     })
 
     describe('editing an anchor already placed this session', () => {
@@ -539,8 +597,8 @@ describe('DocumentEditor', () => {
           const change = lastChange(stub)
           const [anchor] = collectAnchors(change.content)
           expect(anchor).to.include({ insertion: 'Donner Lake Tahoe' })
-          // Typing wording is typing, not a structural anchor op — see `anchorCommands.ts`'s
-          // `ANCHOR_TICK_META`; it earns a bookmark the same way prose does.
+          // Typing wording is typing, not a structural anchor op — see `contentDelta`'s
+          // `sameAnchors`; it earns a bookmark the same way prose does.
           expect(change.isAnchorOp).to.equal(false)
           expect(change.isFormatting).to.equal(false)
         })

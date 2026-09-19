@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { Draft } from '@/types/draft'
-import type { Entry } from '@/types/entry'
+import type { AuthoringStep, Entry } from '@/types/entry'
 
 /**
  * The row Dexie actually stores. `is_root` is a storage-only indexing helper and never appears
@@ -10,6 +10,17 @@ import type { Entry } from '@/types/entry'
  */
 export interface StoredEntry extends Entry {
   is_root: 0 | 1
+}
+
+/**
+ * One step of a draft's step chain, on its own row rather than inside the draft's own row — see
+ * `ChronicleDatabase`'s docblock. `document` distinguishes a `new_child` session's two chains
+ * (child and parent), which otherwise share nothing but `session_id`.
+ */
+export interface StoredDraftStep extends AuthoringStep {
+  session_id: string
+  document: 'child' | 'parent'
+  index: number
 }
 
 /**
@@ -24,6 +35,7 @@ export interface StoredEntry extends Entry {
 export class ChronicleDatabase extends Dexie {
   entries!: Table<StoredEntry, string>
   drafts!: Table<Draft, string>
+  draftSteps!: Table<StoredDraftStep, [string, 'child' | 'parent', number]>
 
   constructor(name = 'chronicle') {
     super(name)
@@ -38,6 +50,13 @@ export class ChronicleDatabase extends Dexie {
 
     this.version(2).stores({
       drafts: 'session_id, updated_at',
+    })
+
+    // `drafts` rows carry no steps once this ships — the row's `child.steps`/`parent.steps` are
+    // always stored empty and reassembled from here on read. `session_id` alone is indexed
+    // alongside the compound key so a delete or a full-chain read doesn't need `document` too.
+    this.version(3).stores({
+      draftSteps: '[session_id+document+index], session_id',
     })
   }
 }

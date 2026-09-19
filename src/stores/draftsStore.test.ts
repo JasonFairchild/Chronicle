@@ -117,6 +117,26 @@ describe('useDraftsStore', () => {
     )
   })
 
+  it('writes a bookmark taken between flushes, rather than dropping it with the debounce', async () => {
+    vi.useFakeTimers()
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+
+    store.recordChange(sessionId, {
+      content: textContent('It rained all day.'),
+      steps: [{ stepType: 'replace' }],
+    })
+    await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+    expect(await draftRepository.getById(sessionId)).not.toBeNull()
+
+    // Nothing else pending — a manual bookmark alone has to be enough to schedule a write.
+    store.markTick(sessionId)
+    await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+
+    const flushed = await draftRepository.getById(sessionId)
+    expect(flushed?.child.ticks.flatMap((tick) => tick.reasons)).toContain('manual')
+  })
+
   it('keeps the dates alongside the words, so a reload loses neither', async () => {
     vi.useFakeTimers()
     const store = useDraftsStore()
@@ -158,7 +178,7 @@ describe('useDraftsStore', () => {
     const stored = await entries.getEntry(sealed.id)
     expect(stored?.title).toBe('Lake Tahoe')
     expect(stored?.authoring_trace?.session_id).toBe(sessionId)
-    expect(stored?.authoring_trace?.ticks.map((tick) => tick.reason)).toEqual(['punctuation'])
+    expect(stored?.authoring_trace?.ticks.map((tick) => tick.reasons)).toEqual([['punctuation']])
     expect(await draftRepository.getById(sessionId)).toBeNull()
     expect(store.drafts).toEqual([])
   })
@@ -225,7 +245,7 @@ describe('useDraftsStore', () => {
     const sealed = await store.sealDraft(sessionId)
 
     const [parentRevision] = await entryRepository.listRevisions(parent.id)
-    expect(parentRevision?.authoring_trace?.ticks.map((tick) => tick.reason)).toEqual(['anchor'])
+    expect(parentRevision?.authoring_trace?.ticks.map((tick) => tick.reasons)).toEqual([['anchor']])
     expect((await entryRepository.getById(sealed.id))?.authoring_trace).toBeTruthy()
   })
 
@@ -237,22 +257,25 @@ describe('useDraftsStore', () => {
     )
     const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
 
-    await draftRepository.save({
-      session_id: 'interrupted-anchor',
-      target: { kind: 'new_child', parent_id: parent.id },
-      started_at: '2026-09-05T10:00:00.000Z',
-      updated_at: '2026-09-05T10:00:02.000Z',
-      dates: emptyEntryDates(),
-      title: null,
-      child: { content: '', steps: [], ticks: [] },
-      parent: {
-        content: markedParentContent,
+    await draftRepository.save(
+      {
+        session_id: 'interrupted-anchor',
+        target: { kind: 'new_child', parent_id: parent.id },
+        started_at: '2026-09-05T10:00:00.000Z',
+        updated_at: '2026-09-05T10:00:02.000Z',
+        dates: emptyEntryDates(),
         title: null,
-        base_content: textContent(parentContent),
-        steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'addMark' } }],
-        ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'anchor' }],
+        child: { content: '', steps: [], ticks: [] },
+        parent: {
+          content: markedParentContent,
+          title: null,
+          base_content: textContent(parentContent),
+          steps: [{ at: 1_000, step: { stepType: 'addMark' } }],
+          ticks: [{ at: 1_000, step_index: 1, reasons: ['anchor'] }],
+        },
       },
-    })
+      { child: 0, parent: 0 },
+    )
 
     await store.resumeDraft('interrupted-anchor')
     store.recordChange('interrupted-anchor', {
@@ -265,7 +288,7 @@ describe('useDraftsStore', () => {
     // Resumed intact, not restarted: the tick recorded before the reload is still there, at the
     // same `step_index` its one prior step earned it.
     expect(parentRevision?.authoring_trace?.ticks).toEqual([
-      expect.objectContaining({ step_index: 1, reason: 'anchor' }),
+      expect.objectContaining({ step_index: 1, reasons: ['anchor'] }),
     ])
   })
 
@@ -315,20 +338,23 @@ describe('useDraftsStore', () => {
 
   it('resumes a draft left behind by a reload with its history intact', async () => {
     const store = useDraftsStore()
-    await draftRepository.save({
-      session_id: 'interrupted',
-      target: { kind: 'new_root' },
-      started_at: '2026-09-05T10:00:00.000Z',
-      updated_at: '2026-09-05T10:00:02.000Z',
-      dates: emptyEntryDates(),
-      title: null,
-      child: {
-        content: textContent('Half a thought'),
-        steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
-        ticks: [{ at: '2026-09-05T10:00:01.000Z', step_index: 1, reason: 'punctuation' }],
+    await draftRepository.save(
+      {
+        session_id: 'interrupted',
+        target: { kind: 'new_root' },
+        started_at: '2026-09-05T10:00:00.000Z',
+        updated_at: '2026-09-05T10:00:02.000Z',
+        dates: emptyEntryDates(),
+        title: null,
+        child: {
+          content: textContent('Half a thought'),
+          steps: [{ at: 1_000, step: { stepType: 'replace' } }],
+          ticks: [{ at: 1_000, step_index: 1, reasons: ['punctuation'] }],
+        },
+        parent: null,
       },
-      parent: null,
-    })
+      { child: 0, parent: 0 },
+    )
 
     const resumed = await store.resumeDraft('interrupted')
     store.recordChange('interrupted', {
@@ -400,9 +426,9 @@ describe('useDraftsStore', () => {
     const held = new Promise<void>((resolve) => {
       releaseSave = resolve
     })
-    vi.spyOn(draftRepository, 'save').mockImplementationOnce(async (draft) => {
+    vi.spyOn(draftRepository, 'save').mockImplementationOnce(async (draft, persisted) => {
       await held
-      return originalSave(draft)
+      return originalSave(draft, persisted)
     })
 
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)

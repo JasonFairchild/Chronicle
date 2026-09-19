@@ -14,18 +14,39 @@ export interface AnchorRef {
 
 export type RevisionMode = 'direct' | 'anchor'
 
-export type TickReason = 'pause' | 'punctuation' | 'interval' | 'format' | 'anchor' | 'manual'
+export type TickReason =
+  | 'pause'
+  | 'paste'
+  | 'media'
+  | 'deletion'
+  | 'punctuation'
+  | 'interval'
+  | 'format'
+  | 'anchor'
+  | 'manual'
 
-/** A bookmark into the step chain, marking a moment worth stopping at when reviewing. */
+/**
+ * A bookmark into the step chain, marking a moment worth stopping at when reviewing. A tick fires
+ * when at least one reason applies, and it can be several at once — a sentence finished right after
+ * a long pause is both — so `reasons` is ordered by priority rather than picking just one; a scrub
+ * UI showing one label reads `reasons[0]`.
+ */
 export interface AuthoringTick {
-  at: string
+  /** Milliseconds since the trace's `started_at` — see `AuthoringStep.at`. */
+  at: number
   step_index: number
-  reason: TickReason
+  reasons: [TickReason, ...TickReason[]]
 }
 
-/** One serialized ProseMirror step with the moment it happened. */
+/**
+ * One serialized ProseMirror step with the moment it happened.
+ *
+ * `at` is milliseconds since the trace's `started_at`, not a timestamp of its own — `started_at`
+ * survives a reload while a clock does not reliably, so ordering by `step_index` is the total
+ * order; a clock adjustment between sessions could otherwise put two `at` values out of sequence.
+ */
 export interface AuthoringStep {
-  at: string
+  at: number
   step: unknown
 }
 

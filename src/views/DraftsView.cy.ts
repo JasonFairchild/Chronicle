@@ -24,7 +24,7 @@ function makeDraft(
     title: null,
     child: {
       content: content ?? '',
-      steps: [{ at: '2026-09-05T10:00:01.000Z', step: { stepType: 'replace' } }],
+      steps: [{ at: 1_000, step: { stepType: 'replace' } }],
       ticks: [],
     },
     parent:
@@ -62,6 +62,7 @@ describe('DraftsView', () => {
           content: textContent('Half a thought'),
           title: 'Lake Tahoe',
         }),
+        { child: 0, parent: 0 },
       ),
     )
     mountDrafts()
@@ -93,6 +94,7 @@ describe('DraftsView', () => {
           target: { kind: 'new_child', parent_id: parent.id },
           content: textContent('It was salvaged later'),
         }),
+        { child: 0, parent: 0 },
       )
     })
     mountDrafts()
@@ -124,6 +126,7 @@ describe('DraftsView', () => {
             'strike',
           ),
         }),
+        { child: 0, parent: 0 },
       )
     })
     mountDrafts()
@@ -148,7 +151,10 @@ describe('DraftsView', () => {
 
   it('discards a draft on request, the one thing that removes work', () => {
     cy.then(() =>
-      drafts.save(makeDraft({ session_id: 'session-1', content: textContent('Never mind') })),
+      drafts.save(makeDraft({ session_id: 'session-1', content: textContent('Never mind') }), {
+        child: 0,
+        parent: 0,
+      }),
     )
     mountDrafts()
 

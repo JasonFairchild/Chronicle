@@ -1,23 +1,22 @@
 <script lang="ts">
-/** One editor change, reduced to what the draft buffer and the tick policy need. */
-export interface EditorChange {
+import type { ChangeSignals } from '@/domain/tickPolicy'
+
+/**
+ * One editor change, reduced to what the draft buffer and the tick policy need. `ChangeSignals`
+ * (`insertedText`, `isFormatting`, `isAnchorOp`) are required here, not optional as they are on
+ * `AuthoringChange`/`DraftChange`: this is the one emit site actually producing them, so the
+ * compiler should catch a call that forgets one when a signal is added, such as `handleTitleInput`
+ * below.
+ */
+export interface EditorChange extends ChangeSignals {
   /** The document's body as it now stands, serialized the way an entry stores it. */
   content: string
   /** The title field as it now stands, when this editor offers one; null when it doesn't. */
   title: string | null
   /** Serialized ProseMirror steps for this change, in order. */
   steps: unknown[]
-  /** Text this change added. Empty for a deletion or a formatting change. */
-  insertedText: string
-  isFormatting: boolean
-  /**
-   * Whether this change was a one-shot structural anchor op — place, change kind, or remove —
-   * reported in every mode, the same way `isFormatting` is. See `TickEvent.isAnchorOp`
-   * (`domain/tickPolicy.ts`): the parent's and the child's authoring streams share one tick policy,
-   * and this is the fact it judges alongside `isFormatting`. Typing wording is deliberately never
-   * this — it's ordinary text entry, tickable the same way prose is, from `insertedText` below.
-   */
-  isAnchorOp: boolean
+  /** Characters this change removed, for the `deletion` run the session tracks across changes. */
+  removedChars: number
   /**
    * Anchors this session has placed, in `anchor-mode` only. Derived by reading which of the
    * document's current ids aren't sealed (`sessionAnchorIds`, `domain/anchors.ts`) rather than
@@ -64,8 +63,8 @@ import {
 import { anchorsAffectedBy } from '@/domain/anchorWarnings'
 import { useMedia } from '@/composables/useMedia'
 import {
+  contentDelta,
   parseDocument,
-  sameContent,
   MEDIA_NODE,
   type DocMark,
   type EntryDocument,
@@ -73,13 +72,11 @@ import {
 import {
   anchorSpans,
   editableAnchorRanges,
-  isAnchorCommand,
   mapAnchorSpans,
   markAnchor,
   openAnchorInsert,
   openAnchorWording,
   readAnchorAnnouncement,
-  readAnchorTick,
   readAnchorWordingText,
   sealedAnchorIdsOf,
   type AnchorSpan,
@@ -287,20 +284,34 @@ const editor = useEditor({
       if (announcement) liveRegionMessage.value = announcement.message
     }
 
+    // Judged by what the document says before and after, not by which steps produced it — no step
+    // type reliably tells an anchor command, a heading, a list, or an alignment change apart from a
+    // real edit (see `contentDelta`). `isAnchorOp` is an outcome, not a transaction's provenance: it
+    // survives undo/redo for free, since a history transaction carries no meta of its own for this
+    // to read.
+    const delta = contentDelta(transaction.before.toJSON() as EntryDocument, document)
+    // A wording-box keystroke has the identical fingerprint to real formatting — same text, same
+    // media, same anchor set, since wording is excluded from all three — so outcome alone cannot
+    // tell them apart, the same way it cannot tell an anchor command from formatting without
+    // `sameAnchors`. `readAnchorWordingText` is what actually distinguishes them: only a wording
+    // keystroke carries it, since it is not a text-insertion step this loop could otherwise read.
+    const wordingText = readAnchorWordingText(transaction)
+
     emit('change', {
       content: JSON.stringify(document),
       title: emittedTitle(),
       steps,
-      insertedText: insertedTextOf(transaction),
-      // Judged by what the document says before and after, not by which steps did it. A heading,
-      // a list, or an alignment leaves every word in place while producing steps that look
-      // nothing like a mark's — and so, by the same measure, does every anchor command: the
-      // non-destructive invariant means `sameContent` alone can't tell one from real formatting, so
-      // an anchor command is excluded explicitly rather than misread as one.
-      isFormatting:
-        sameContent(transaction.before.toJSON() as EntryDocument, document) &&
-        !isAnchorCommand(transaction),
-      isAnchorOp: readAnchorTick(transaction),
+      insertedText: wordingText ?? insertedTextOf(transaction),
+      removedChars: removedTextOf(transaction),
+      isFormatting: delta.sameText && delta.sameMedia && delta.sameAnchors && wordingText === null,
+      isAnchorOp: !delta.sameAnchors,
+      // ProseMirror's own clipboard handling stamps this, so a real paste is told apart from a
+      // drop (`uiEvent: 'drop'`, deliberately not counted — PRODUCT.md §4.9) or from content
+      // inserted programmatically (`insertContent`, the image-attach path below), which carries no
+      // `uiEvent` at all. A paste into an open wording box is not counted either: it goes through
+      // `AnchorInsertView`'s own `<input>`, never through this editor's clipboard handling.
+      isPaste: transaction.getMeta('uiEvent') === 'paste',
+      mediaChanged: !delta.sameMedia,
       anchorIds: props.anchorMode
         ? sessionAnchorIdsIn(sealedAnchorIdsOf(instance), document)
         : undefined,
@@ -345,8 +356,11 @@ function handleTitleInput(event: Event): void {
     title: emittedTitle(),
     steps: [],
     insertedText: '',
+    removedChars: 0,
     isFormatting: false,
     isAnchorOp: false,
+    isPaste: false,
+    mediaChanged: false,
     affectedAnchorIds: [...affectedAnchorIds],
   })
 }
@@ -396,6 +410,31 @@ function insertedTextOf(transaction: Transaction): string {
   }
 
   return inserted
+}
+
+/**
+ * Characters this change removed, for the deletion run `AuthoringSession` tracks across
+ * changes. Measured against the document each step saw *before* it applied (`transaction.docs[i]`),
+ * not the flattened text before and after: a selection replaced by something longer would net
+ * positive there, missing the destructive edit it actually was, and an anchor op would misregister
+ * as one too, which the non-destructive invariant forbids.
+ *
+ * Filtered to `stepType === 'replace'` — a `replaceAround` (wrapping a paragraph in a list) spans
+ * the whole block with its content reinserted through the gap, and naive arithmetic would report
+ * the entire paragraph as deleted. `textBetween` returns 0 for an `anchorInsert` node on its own,
+ * since it is an atom carrying its text as an attribute rather than as document text.
+ */
+function removedTextOf(transaction: Transaction): number {
+  let removed = 0
+
+  transaction.steps.forEach((step, i) => {
+    if (step.toJSON().stepType !== 'replace') return
+
+    const { from, to } = step as unknown as { from: number; to: number }
+    removed += transaction.docs[i]!.textBetween(from, to, '').length
+  })
+
+  return removed
 }
 
 /**

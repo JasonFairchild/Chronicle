@@ -1,5 +1,12 @@
 import type { AuthoringStep, AuthoringTick, AuthoringTrace, TickReason } from '@/types/entry'
-import { DEFAULT_TICK_POLICY, evaluateTick, type TickPolicy, type TickState } from './tickPolicy'
+import {
+  DEFAULT_TICK_POLICY,
+  evaluateTick,
+  sortByPriority,
+  type ChangeSignals,
+  type TickPolicy,
+  type TickState,
+} from './tickPolicy'
 
 export interface AuthoringSessionOptions {
   sessionId: string
@@ -9,15 +16,20 @@ export interface AuthoringSessionOptions {
   now?: () => number
 }
 
-/** One editor change, as the session needs to see it. */
-export interface AuthoringChange {
+/**
+ * One editor change, as the session needs to see it. `ChangeSignals` are optional here — a caller
+ * focused on the steps alone, most tests among them, has nothing to say about them, and `record`
+ * is the one place their defaults are filled.
+ */
+export interface AuthoringChange extends Partial<ChangeSignals> {
   /** Serialized ProseMirror steps, already JSON. The session never interprets them. */
   steps: unknown[]
-  /** Text this change added, used only to spot a finished sentence. */
-  insertedText?: string
-  isFormatting?: boolean
-  /** A structural anchor op — see `TickEvent.isAnchorOp` (`tickPolicy.ts`). */
-  isAnchorOp?: boolean
+  /**
+   * Characters this change removed. Only whether it is above zero matters: that is what makes it
+   * part of a deletion run (see `record`). Not part of `ChangeSignals`, since the policy never
+   * judges it. Absent or zero means this change removed nothing.
+   */
+  removedChars?: number
 }
 
 /**
@@ -35,17 +47,24 @@ export interface AuthoringChange {
 export class AuthoringSession {
   readonly sessionId: string
   readonly startedAt: string
+  /** `startedAt` parsed once, so every step/tick offset measures from the same instant. */
+  private readonly startedAtMs: number
 
   private readonly policy: TickPolicy
   private readonly now: () => number
   private readonly recordedSteps: AuthoringStep[] = []
   private readonly recordedTicks: AuthoringTick[] = []
   private state: TickState
+  private inDeletionRun = false // Whether the last change removed text and its run is still open.
 
   constructor(options: AuthoringSessionOptions) {
     this.sessionId = options.sessionId
     this.now = options.now ?? (() => Date.now())
     this.startedAt = options.startedAt ?? new Date(this.now()).toISOString()
+    this.startedAtMs = Date.parse(this.startedAt)
+    if (Number.isNaN(this.startedAtMs)) {
+      throw new Error(`AuthoringSession: "${this.startedAt}" is not a parseable timestamp`)
+    }
     this.policy = options.policy ?? DEFAULT_TICK_POLICY
     // Seeded from the start so the interval rule has a baseline to measure from; without it a
     // session that never pauses or punctuates would never be bookmarked at all.
@@ -60,58 +79,125 @@ export class AuthoringSession {
     return [...this.recordedTicks]
   }
 
-  /** Appends a change's steps, then asks the policy whether this moment deserves a bookmark. */
+  /**
+   * Appends a change's steps, then asks the policy whether this moment deserves a bookmark.
+   *
+   * A deletion of any size is bookmarked, but only once its run has ended — the first change that
+   * removes nothing, or the first deletion after a pause, closes it (`closeDeletionRun`), so the
+   * bookmark sits at the last deleting step and covers everything removed in one go. That happens
+   * before this change's steps are appended, which is what keeps the bookmark off the change that
+   * ended the run.
+   *
+   * The state update order is load-bearing: evaluate before setting `lastEventAt`, which must not
+   * happen before `evaluateTick` sees the *previous* value (the pause check measures the gap since
+   * the last event, not since this one).
+   */
   record(change: AuthoringChange): void {
     const at = this.now()
-    const iso = new Date(at).toISOString()
+    const removesText = (change.removedChars ?? 0) > 0
+    const pausedSinceLastEvent =
+      this.state.lastEventAt !== null && at - this.state.lastEventAt >= this.policy.pauseMs
+
+    if (this.inDeletionRun && (!removesText || pausedSinceLastEvent)) this.closeDeletionRun()
+    this.inDeletionRun = removesText
 
     for (const step of change.steps) {
-      this.recordedSteps.push({ at: iso, step })
+      this.recordedSteps.push({ at: at - this.startedAtMs, step })
     }
 
-    const reason = evaluateTick(
+    const [reason, ...rest] = evaluateTick(
       {
         at,
-        insertedText: change.insertedText ?? '',
-        isFormatting: change.isFormatting ?? false,
-        isAnchorOp: change.isAnchorOp ?? false,
+        insertedText: '',
+        isFormatting: false,
+        isAnchorOp: false,
+        isPaste: false,
+        mediaChanged: false,
+        ...change,
       },
       this.state,
       this.policy,
     )
 
     this.state = { ...this.state, lastEventAt: at }
-    if (reason) this.mark(reason)
+    // One tick per change no matter how many rules agree, never one per rule — `mark` requires a
+    // non-empty tuple, which is what forces this destructure-and-check instead of passing the
+    // array straight through. `at` is threaded through rather than read again inside `mark`, so
+    // the step this tick bookmarks and the tick itself share one clock read.
+    if (reason) this.mark([reason, ...rest], at)
   }
 
-  /** Bookmarks the current end of the chain. `manual` is the user asking for one. */
-  mark(reason: TickReason = 'manual'): void {
-    const at = this.now()
+  /**
+   * Bookmarks the current end of the chain. `manual` is the user asking for one — the only caller
+   * that doesn't already have an `at` from a `record()` in progress, hence the default read here.
+   *
+   * A tick landing within `policy.minTickGapMs` of the previous one merges into it rather than
+   * adding a second right beside it — what keeps bolding eight words one at a time from becoming
+   * eight stops on a scrub bar. The merged tick's `at`/`step_index` move up to this event's, so it
+   * sits at the end of the cluster it now represents; reasons union and re-sort, since the merge can
+   * bring in a reason the earlier tick didn't have.
+   */
+  mark(reasons: [TickReason, ...TickReason[]] = ['manual'], at: number = this.now()): void {
+    const last = this.recordedTicks[this.recordedTicks.length - 1]
+    const gapSinceLastTick = this.state.lastTickAt === null ? Infinity : at - this.state.lastTickAt
 
-    this.recordedTicks.push({
-      at: new Date(at).toISOString(),
-      step_index: this.recordedSteps.length,
-      reason,
-    })
-    this.state = { ...this.state, lastTickAt: at }
+    if (last && gapSinceLastTick < this.policy.minTickGapMs) {
+      last.at = at - this.startedAtMs
+      last.step_index = this.recordedSteps.length
+      // Non-empty: a union that includes `reasons`, which is.
+      last.reasons = sortByPriority([...last.reasons, ...reasons]) as [TickReason, ...TickReason[]]
+    } else {
+      this.recordedTicks.push({
+        at: at - this.startedAtMs,
+        step_index: this.recordedSteps.length,
+        reasons,
+      })
+    }
+
+    // `max` because a `deletion` tick is stamped back at its run's last step, which a manual
+    // bookmark taken since may already be later than.
+    this.state = { ...this.state, lastTickAt: Math.max(at, this.state.lastTickAt ?? at) }
   }
 
-  /** Restores a session interrupted by a reload, so a resumed draft keeps its history. */
+  /** Bookmarks the end of the open deletion run, at the last deleting step. */
+  private closeDeletionRun(): void {
+    this.inDeletionRun = false
+    this.mark(['deletion'], this.state.lastEventAt ?? this.now())
+  }
+
+  /**
+   * Restores a session interrupted by a reload, so a resumed draft keeps its history. Seeds
+   * `lastEventAt` from the last step it was given, converting that step's relative offset back to
+   * an absolute instant via this session's own `startedAtMs` — so the first keystroke after a
+   * genuine gap fires `pause` the same way it would have without the reload, and one picked back up
+   * within a moment fires nothing. Left `null` when there are no steps (the normal case for
+   * `parentSession` on a non-anchor draft), same as a fresh session. `lastTickAt` is deliberately
+   * left alone: the constructor already seeds it from `now()`, and seeding it from the last tick
+   * instead would make that same keystroke fire `interval` too.
+   */
   static resume(
     options: AuthoringSessionOptions & { steps: AuthoringStep[]; ticks: AuthoringTick[] },
   ): AuthoringSession {
     const session = new AuthoringSession(options)
     session.recordedSteps.push(...options.steps)
     session.recordedTicks.push(...options.ticks)
+
+    const lastStep = options.steps[options.steps.length - 1]
+    if (lastStep) {
+      session.state = { ...session.state, lastEventAt: session.startedAtMs + lastStep.at }
+    }
+
     return session
   }
 
   /**
    * The finished trace, or null when nothing was captured. Null means "typing was not recorded" —
-   * an import, a seed, a fixture — and never "this entry has no content".
+   * an import, a seed, a fixture — and never "this entry has no content". Closes a deletion run
+   * still open, since nothing after it will.
    */
   seal(): AuthoringTrace | null {
     if (this.recordedSteps.length === 0) return null
+    if (this.inDeletionRun) this.closeDeletionRun()
 
     return {
       session_id: this.sessionId,

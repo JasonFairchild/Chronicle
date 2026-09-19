@@ -226,8 +226,8 @@ either — they are names for what a note turned out to be, not a choice to make
 ### 4.9 How writing is remembered — Built, invisible for now
 
 While you write, Chronicle quietly records how the text came to be — not only the finished result —
-and bookmarks the moments worth returning to: where you paused, where you finished a sentence, and
-at regular intervals regardless.
+and bookmarks the moments worth returning to: where you paused, where you pasted or attached an
+image, where you finished a sentence, and at regular intervals regardless.
 
 Today this is invisible: it is captured and stored but nothing displays it. It is what makes the
 scrubbable history view (§5.1) possible, and it is why that feature can be built later without

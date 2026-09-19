@@ -38,3 +38,14 @@ export interface Draft {
   // Its own `title`, mirrored once when the session begins
   parent: (AuthoringBuffer & { base_content: string; title: string | null }) | null
 }
+
+/**
+ * A `Draft` without its step/tick chains — what the drafts list actually needs. Opening it is one
+ * query across every unsealed session; reading each one's whole authoring history just to render a
+ * preview line would make that query's cost grow with how long people have been writing, not with
+ * how many drafts exist.
+ */
+export interface DraftSummary extends Omit<Draft, 'child' | 'parent'> {
+  child: Pick<AuthoringBuffer, 'content'>
+  parent: (Pick<AuthoringBuffer, 'content'> & { base_content: string; title: string | null }) | null
+}

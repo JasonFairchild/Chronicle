@@ -3,8 +3,10 @@ import { ref, shallowRef } from 'vue'
 import { anchorsPlacedSince } from '@/domain/anchors'
 import { AuthoringSession } from '@/domain/authoringSession'
 import { isEmptyEntry } from '@/domain/entryDocument'
+import type { ChangeSignals } from '@/domain/tickPolicy'
 import { draftRepository } from '@/repositories'
-import type { Draft, DraftTarget } from '@/types/draft'
+import type { PersistedSteps } from '@/repositories/draftRepository'
+import type { Draft, DraftSummary, DraftTarget } from '@/types/draft'
 import {
   emptyEntryDates,
   newEntryId,
@@ -25,8 +27,11 @@ import { useEntriesStore } from './entriesStore'
  */
 export const DRAFT_FLUSH_MS = 300
 
-/** What one editor change tells the buffer. */
-export interface DraftChange {
+/**
+ * What one editor change tells the buffer. `ChangeSignals` are optional — a caller focused on the
+ * body alone, most tests among them, has nothing to say about them.
+ */
+export interface DraftChange extends Partial<ChangeSignals> {
   /** The document as it now stands. */
   content: string
   /**
@@ -37,11 +42,8 @@ export interface DraftChange {
   title?: string | null
   /** Serialized ProseMirror steps for this change. The session never interprets them. */
   steps?: unknown[]
-  /** Text the change added, used only to spot a finished sentence. */
-  insertedText?: string
-  isFormatting?: boolean
-  /** A structural anchor op — see `TickEvent.isAnchorOp` (`domain/tickPolicy.ts`). */
-  isAnchorOp?: boolean
+  /** Characters this change removed, for the `deletion` run the session tracks across changes. */
+  removedChars?: number
 }
 
 interface ActiveSession {
@@ -55,6 +57,12 @@ interface ActiveSession {
   /** Whether a row for this session exists on disk, so an emptied draft knows to remove it. */
   persisted: boolean
   /**
+   * How much of each step chain the store already holds, so the next flush's `save` appends only
+   * the tail. Advanced only after a successful write — see `flush` — and reset to zero the moment
+   * a write deletes the row instead, or the counts and what's actually stored would drift apart.
+   */
+  persistedSteps: PersistedSteps
+  /**
    * The repository write `flush` is currently awaiting, if any. Cancelling the timer stops a
    * flush that hasn't started; it does nothing for one already mid-write. Sealing or discarding
    * must wait on this too, or a write that resolves after `delete()` has already run would
@@ -64,7 +72,7 @@ interface ActiveSession {
 }
 
 export const useDraftsStore = defineStore('drafts', () => {
-  const drafts = shallowRef<Draft[]>([])
+  const drafts = shallowRef<DraftSummary[]>([])
   const error = ref<string | null>(null)
 
   // Not reactive: this holds timers and an authoring session, none of which a template reads, and
@@ -115,6 +123,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       timer: null,
       dirty: false,
       persisted: false,
+      persistedSteps: { child: 0, parent: 0 },
       flushing: null,
     })
 
@@ -124,7 +133,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   /** Reopens a draft left behind by a reload, with its step chain and bookmarks intact. */
   async function resumeDraft(sessionId: string): Promise<Draft | null> {
     const existing = active.get(sessionId)
-    if (existing) return structuredClone(existing.draft)
+    if (existing) return structuredClone(materialize(existing))
 
     const draft = await draftRepository.getById(sessionId)
     if (!draft) return null
@@ -151,6 +160,8 @@ export const useDraftsStore = defineStore('drafts', () => {
       // emptying it later has something to delete.
       dirty: false,
       persisted: true,
+      // What was loaded is, by definition, already stored.
+      persistedSteps: { child: draft.child.steps.length, parent: draft.parent?.steps.length ?? 0 },
       flushing: null,
     })
 
@@ -172,12 +183,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   function recordInto(session: AuthoringSession, change: DraftChange): void {
     if ((change.steps ?? []).length === 0) return
 
-    session.record({
-      steps: change.steps ?? [],
-      insertedText: change.insertedText,
-      isFormatting: change.isFormatting,
-      isAnchorOp: change.isAnchorOp,
-    })
+    session.record({ ...change, steps: change.steps ?? [] })
   }
 
   /**
@@ -193,11 +199,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       ...entry.draft,
       updated_at: newEntryTimestamp(),
       title: change.title ?? null,
-      child: {
-        content: change.content,
-        steps: entry.session.steps,
-        ticks: entry.session.ticks,
-      },
+      child: { ...entry.draft.child, content: change.content },
     }
     entry.dirty = true
 
@@ -222,15 +224,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     entry.draft = {
       ...entry.draft,
       updated_at: newEntryTimestamp(),
-      parent: {
-        content: change.content,
-        // Never re-read from `change`: anchor mode offers no way to retitle the parent, so this
-        // stays whatever it was seeded with.
-        title: parent.title,
-        base_content: parent.base_content,
-        steps: entry.parentSession.steps,
-        ticks: entry.parentSession.ticks,
-      },
+      parent: { ...parent, content: change.content },
     }
     entry.dirty = true
 
@@ -255,9 +249,35 @@ export const useDraftsStore = defineStore('drafts', () => {
   function markTick(sessionId: string, reason: TickReason = 'manual'): void {
     const entry = requireActive(sessionId)
 
-    entry.session.mark(reason)
-    entry.draft = { ...entry.draft, child: { ...entry.draft.child, ticks: entry.session.ticks } }
+    entry.session.mark([reason])
+    entry.dirty = true
     scheduleFlush(sessionId)
+  }
+
+  /**
+   * Builds the draft's on-disk shape from the session's live step/tick chains. `recordChange` and
+   * `recordParentChange` no longer touch those chains on every keystroke (`entry.session.steps` is
+   * a defensive copy, so reading it there was a full-chain clone per keystroke); this is the one
+   * place they get read, right before something needs the whole draft. Always fresh objects — never
+   * `entry.draft.child`/`.parent` by reference — so a snapshot already handed to an in-flight
+   * `save()` can't be mutated out from under it.
+   */
+  function materialize(entry: ActiveSession): Draft {
+    return {
+      ...entry.draft,
+      child: {
+        content: entry.draft.child.content,
+        steps: entry.session.steps,
+        ticks: entry.session.ticks,
+      },
+      parent: entry.draft.parent
+        ? {
+            ...entry.draft.parent,
+            steps: entry.parentSession.steps,
+            ticks: entry.parentSession.ticks,
+          }
+        : null,
+    }
   }
 
   /**
@@ -278,25 +298,30 @@ export const useDraftsStore = defineStore('drafts', () => {
     entry.dirty = false
 
     const write = (async () => {
+      const draft = materialize(entry)
+
       // A blank child note is not yet a draft worth keeping, unless anchors have already been
       // placed on the parent — that is real, crash-worthy work even before a word of prose exists.
       const placedAnchors = anchorsPlacedSince(
-        entry.draft.parent?.base_content ?? null,
-        entry.draft.parent?.content ?? null,
+        draft.parent?.base_content ?? null,
+        draft.parent?.content ?? null,
       )
-      if (
-        isEmptyEntry(entry.draft.child.content, entry.draft.title) &&
-        placedAnchors.length === 0
-      ) {
+      if (isEmptyEntry(draft.child.content, draft.title) && placedAnchors.length === 0) {
         if (entry.persisted) {
           await draftRepository.delete(sessionId)
           entry.persisted = false
+          // The row and its steps are both gone; the next save must start the chain over.
+          entry.persistedSteps = { child: 0, parent: 0 }
         }
         return
       }
 
-      await draftRepository.save(entry.draft)
+      await draftRepository.save(draft, entry.persistedSteps)
       entry.persisted = true
+      entry.persistedSteps = {
+        child: draft.child.steps.length,
+        parent: draft.parent?.steps.length ?? 0,
+      }
     })()
 
     entry.flushing = write
@@ -408,7 +433,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   /** The in-progress snapshot, without waiting for it to reach disk. */
   function currentDraft(sessionId: string): Draft | null {
     const entry = active.get(sessionId)
-    return entry ? structuredClone(entry.draft) : null
+    return entry ? structuredClone(materialize(entry)) : null
   }
 
   function scheduleFlush(sessionId: string): void {

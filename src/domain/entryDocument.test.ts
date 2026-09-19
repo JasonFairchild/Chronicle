@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ANCHOR_INSERT_NODE,
   collectMediaRefs,
+  contentDelta,
   docToPlainText,
   isEmptyDocument,
   isEmptyEntry,
@@ -210,5 +212,57 @@ describe('sameContent', () => {
 
   it('compares a serialized document and a live one identically', () => {
     expect(sameContent(serializeDocument(paragraph), paragraph)).toBe(true)
+  })
+})
+
+describe('contentDelta', () => {
+  const paragraph: EntryDocument = {
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'We drove up on Friday.' }] }],
+  }
+
+  it('reports a document whose only change was a mark as the same text and the same media', () => {
+    const bolded: EntryDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'We drove up on Friday.', marks: [{ type: 'bold' }] }],
+        },
+      ],
+    }
+
+    const delta = contentDelta(paragraph, bolded)
+    expect(delta.sameText).toBe(true)
+    expect(delta.sameMedia).toBe(true)
+  })
+
+  it('reports an attached image as the same text but different media', () => {
+    const withImage: EntryDocument = {
+      type: 'doc',
+      content: [...paragraph.content, { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } }],
+    }
+
+    const delta = contentDelta(paragraph, withImage)
+    expect(delta.sameText).toBe(true)
+    expect(delta.sameMedia).toBe(false)
+  })
+
+  it('reports a retyped wording box as the same anchors, since only its text moved', () => {
+    const withWording = (text: string): EntryDocument => ({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Worth revisiting' },
+            { type: ANCHOR_INSERT_NODE, attrs: { anchorId: 'anchor-1', text } },
+          ],
+        },
+      ],
+    })
+
+    const delta = contentDelta(withWording('first draft'), withWording('final wording'))
+    expect(delta.sameAnchors).toBe(true)
   })
 })

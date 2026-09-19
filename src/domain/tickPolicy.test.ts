@@ -1,51 +1,103 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_TICK_POLICY, evaluateTick } from '@/domain/tickPolicy'
+import {
+  DEFAULT_TICK_POLICY,
+  evaluateTick,
+  type TickEvent,
+  type TickState,
+} from '@/domain/tickPolicy'
+
+/** A neutral event: every signal off, so a test sets only the ones it cares about. */
+function event(overrides: Partial<TickEvent> & Pick<TickEvent, 'at' | 'insertedText'>): TickEvent {
+  return {
+    isFormatting: false,
+    isAnchorOp: false,
+    isPaste: false,
+    mediaChanged: false,
+    ...overrides,
+  }
+}
+
+/** A neutral state: no history. */
+function state(overrides: Partial<TickState> = {}): TickState {
+  return { lastEventAt: null, lastTickAt: null, ...overrides }
+}
 
 describe('evaluateTick', () => {
-  it('bookmarks a return from silence, and prefers that over the sentence that broke it', () => {
+  it('records a finished sentence after a silence as both, rather than only the silence that outranked it', () => {
     const at = DEFAULT_TICK_POLICY.pauseMs + 5_000
 
-    const reason = evaluateTick(
-      { at, insertedText: '.', isFormatting: false, isAnchorOp: false },
-      { lastEventAt: 5_000, lastTickAt: 5_000 },
+    const reasons = evaluateTick(
+      event({ at, insertedText: '.' }),
+      state({ lastEventAt: 5_000, lastTickAt: 5_000 }),
     )
 
-    expect(reason).toBe('pause')
+    expect(reasons).toEqual(['pause', 'punctuation'])
+  })
+
+  it('orders the reasons it found by priority, so the first is the one worth showing', () => {
+    const reasons = evaluateTick(
+      event({ at: 1_100, insertedText: '', isFormatting: true, isAnchorOp: true }),
+      state({ lastEventAt: 1_000, lastTickAt: 1_000 }),
+    )
+
+    expect(reasons).toEqual(['anchor', 'format'])
   })
 
   it('bookmarks a finished sentence but not a word still being typed', () => {
-    const state = { lastEventAt: 1_000, lastTickAt: 1_000 }
+    const s = state({ lastEventAt: 1_000, lastTickAt: 1_000 })
 
-    expect(
-      evaluateTick(
-        { at: 1_100, insertedText: 'end.', isFormatting: false, isAnchorOp: false },
-        state,
-      ),
-    ).toBe('punctuation')
-    expect(
-      evaluateTick(
-        { at: 1_100, insertedText: 'endi', isFormatting: false, isAnchorOp: false },
-        state,
-      ),
-    ).toBeNull()
+    expect(evaluateTick(event({ at: 1_100, insertedText: 'end.' }), s)).toEqual(['punctuation'])
   })
 
-  it('bookmarks a structural anchor op, and prefers that over ordinary formatting', () => {
-    const reason = evaluateTick(
-      { at: 1_100, insertedText: '', isFormatting: true, isAnchorOp: true },
-      { lastEventAt: 1_000, lastTickAt: 1_000 },
-    )
+  it('finds nothing to bookmark for a word still being typed', () => {
+    const s = state({ lastEventAt: 1_000, lastTickAt: 1_000 })
 
-    expect(reason).toBe('anchor')
+    expect(evaluateTick(event({ at: 1_100, insertedText: 'endi' }), s)).toEqual([])
   })
 
   it('bookmarks a formatting change, which inserts no text of its own', () => {
-    const reason = evaluateTick(
-      { at: 1_100, insertedText: '', isFormatting: true, isAnchorOp: false },
-      { lastEventAt: 1_000, lastTickAt: 1_000 },
+    const reasons = evaluateTick(
+      event({ at: 1_100, insertedText: '', isFormatting: true }),
+      state({ lastEventAt: 1_000, lastTickAt: 1_000 }),
     )
 
-    expect(reason).toBe('format')
+    expect(reasons).toEqual(['format'])
+  })
+
+  it('bookmarks a paste', () => {
+    const reasons = evaluateTick(
+      event({ at: 1_100, insertedText: 'quoted text', isPaste: true }),
+      state({ lastEventAt: 1_000, lastTickAt: 1_000 }),
+    )
+
+    expect(reasons).toEqual(['paste'])
+  })
+
+  it('bookmarks an attached or removed image', () => {
+    const reasons = evaluateTick(
+      event({ at: 1_100, insertedText: '', mediaChanged: true }),
+      state({ lastEventAt: 1_000, lastTickAt: 1_000 }),
+    )
+
+    expect(reasons).toEqual(['media'])
+  })
+
+  it('ranks an attached image and a paste above ordinary formatting', () => {
+    const reasons = evaluateTick(
+      event({ at: 1_100, insertedText: '', isPaste: true, mediaChanged: true, isFormatting: true }),
+      state({ lastEventAt: 1_000, lastTickAt: 1_000 }),
+    )
+
+    expect(reasons).toEqual(['media', 'paste', 'format'])
+  })
+
+  it('ranks a deliberate action above the pause that preceded it', () => {
+    const reasons = evaluateTick(
+      event({ at: DEFAULT_TICK_POLICY.pauseMs + 1_000, insertedText: 'quoted', isPaste: true }),
+      state({ lastEventAt: 500, lastTickAt: 500 }),
+    )
+
+    expect(reasons).toEqual(['paste', 'pause'])
   })
 
   it('bookmarks on the interval so steady typing is never left unmarked', () => {
@@ -53,10 +105,10 @@ describe('evaluateTick', () => {
 
     expect(
       evaluateTick(
-        { at, insertedText: 'a', isFormatting: false, isAnchorOp: false },
-        { lastEventAt: at - 100, lastTickAt: 1_000 },
+        event({ at, insertedText: 'a' }),
+        state({ lastEventAt: at - 100, lastTickAt: 1_000 }),
       ),
-    ).toBe('interval')
+    ).toEqual(['interval'])
   })
 
   it('honours a tuned policy rather than the defaults', () => {
@@ -64,10 +116,16 @@ describe('evaluateTick', () => {
 
     expect(
       evaluateTick(
-        { at: 10_000, insertedText: 'x', isFormatting: false, isAnchorOp: false },
-        { lastEventAt: 5_000, lastTickAt: 5_000 },
+        event({ at: 10_000, insertedText: 'x' }),
+        state({ lastEventAt: 5_000, lastTickAt: 5_000 }),
         impatient,
       ),
-    ).toBe('pause')
+    ).toEqual(['pause'])
+  })
+
+  it('leaves a deletion to the session, which alone knows when its run has ended', () => {
+    const s = state({ lastEventAt: 1_000, lastTickAt: 1_000 })
+
+    expect(evaluateTick(event({ at: 1_100, insertedText: '' }), s)).toEqual([])
   })
 })

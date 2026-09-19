@@ -8,7 +8,7 @@ import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { isEmptyEntry, previewText } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import type { Draft, DraftTarget } from '@/types/draft'
+import type { DraftSummary, DraftTarget } from '@/types/draft'
 import { entryLabel, formatDate, toErrorMessage } from '@/utils/format'
 
 /** A draft's own text is shown at full width here, so it gets more room than a picker label would. */
@@ -81,7 +81,7 @@ function parentIdOf(target: DraftTarget): string | null {
 }
 
 /** A drafts list exists so nothing is stranded, which means saying what each one would become. */
-function describe(draft: Draft): string {
+function describe(draft: DraftSummary): string {
   const { target } = draft
   if (target.kind === 'new_root') return 'New entry'
 
@@ -94,7 +94,7 @@ function describe(draft: Draft): string {
   return `Related entry on “${parent}”`
 }
 
-async function resume(draft: Draft): Promise<void> {
+async function resume(draft: DraftSummary): Promise<void> {
   error.value = null
 
   // Reopening rebuilds the authoring session from what was flushed, so the step chain continues

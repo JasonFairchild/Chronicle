@@ -123,6 +123,20 @@ describe('DocumentEditor (browser)', () => {
     expect(docToPlainText(latest.content).trim()).toBe('Worth remembering')
   })
 
+  it('reports no deletion for wrapping a paragraph in a list', async () => {
+    const screen = mountEditor()
+
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('Worth remembering')
+    await userEvent.keyboard('{Control>}a{/Control}')
+    await screen.getByRole('button', { name: 'List' }).click()
+
+    // Wrapping arrives as a `replaceAround` spanning the whole paragraph, with its content
+    // reinserted through the gap — naive arithmetic would report the paragraph as deleted.
+    const latest = changes[changes.length - 1]!
+    expect(docToPlainText(latest.content).trim()).toBe('Worth remembering')
+    expect(latest.removedChars).toBe(0)
+  })
+
   it('leaves the caret in the document after a toolbar click, so typing carries on', async () => {
     const screen = mountEditor()
 
@@ -220,11 +234,32 @@ describe('DocumentEditor (browser)', () => {
     expect(mediaRef).toBeTruthy()
     // An attachment adds no words, but it is content all the same.
     expect(latest.isFormatting).toBe(false)
+    expect(latest.mediaChanged).toBe(true)
     expect(await mediaRepository.get(mediaRef!)).not.toBeNull()
     // The bytes never enter the document: an object URL is minted per page load and would be a
     // broken reference the moment this entry was read again.
     expect(latest.content).not.toContain('blob:')
     expect(latest.content).not.toContain('data:')
+  })
+
+  it('bookmarks a paste, distinct from ordinary typing', async () => {
+    const screen = mountEditor()
+    const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+    await expect.element(editorLocator).toBeVisible()
+    editorLocator.element().focus()
+
+    // Neither runner has a first-class paste: ProseMirror's own view reads `event.clipboardData`
+    // straight off whatever `paste` event its DOM node receives, trusted or not, so a hand-built
+    // `ClipboardEvent` carrying a `DataTransfer` is dispatched directly at the contenteditable.
+    const dataTransfer = new DataTransfer()
+    dataTransfer.setData('text/plain', 'Copied from elsewhere')
+    editorLocator
+      .element()
+      .dispatchEvent(new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true }))
+
+    const latest = changes[changes.length - 1]!
+    expect(docToPlainText(latest.content)).toContain('Copied from elsewhere')
+    expect(latest.isPaste).toBe(true)
   })
 
   describe('anchor mode', () => {
@@ -345,7 +380,11 @@ describe('DocumentEditor (browser)', () => {
       await userEvent.keyboard('perhaps')
       await screen.getByRole('button', { name: 'Remove anchor' }).click()
 
-      expect(changes[changes.length - 1]!.anchorIds).toEqual([])
+      const latest = changes[changes.length - 1]!
+      expect(latest.anchorIds).toEqual([])
+      // The node shrinks the document, but its wording was never the parent's text to begin with
+      // (`nodeText` skips `anchorInsert`) — `textBetween` over its range reads as empty, not removed.
+      expect(latest.removedChars).toBe(0)
     })
 
     it('trims whitespace off a selection’s edges before anchoring it', async () => {
@@ -433,7 +472,13 @@ describe('DocumentEditor (browser)', () => {
       editorLocator.element().focus()
       await userEvent.keyboard('{Control>}z{/Control}')
 
-      expect(changes[changes.length - 1]!.anchorIds).toEqual([])
+      const change = changes[changes.length - 1]!
+      expect(change.anchorIds).toEqual([])
+      // Judged by outcome, not by transaction provenance (`contentDelta`): undoing a placement
+      // removes the anchor from the document's anchor set the same as `removeAnchor` would, so this
+      // reads as an anchor change rather than formatting, with no undo-specific case needed.
+      expect(change.isAnchorOp).toBe(true)
+      expect(change.isFormatting).toBe(false)
     })
 
     describe('editing an anchor already placed this session', () => {
@@ -464,8 +509,8 @@ describe('DocumentEditor (browser)', () => {
         const [anchor] = collectAnchors(latest.content)
         expect(anchor).toMatchObject({ insertion: 'Donner Lake Tahoe' })
         // Typing wording is typing — it isn't a structural anchor op the way placing, converting,
-        // or removing one is (see `anchorCommands.ts`'s `ANCHOR_TICK_META`); it earns a bookmark
-        // the same way prose does, which the next test covers.
+        // or removing one is (see `contentDelta`'s `sameAnchors`); it earns a bookmark the same way
+        // prose does, which the next test covers.
         expect(latest.isAnchorOp).toBe(false)
         expect(latest.isFormatting).toBe(false)
       })

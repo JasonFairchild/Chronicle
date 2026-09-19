@@ -1,4 +1,13 @@
-import type { Draft } from '@/types/draft'
+import type { Draft, DraftSummary } from '@/types/draft'
+
+/**
+ * How much of a session's step chain the store already holds, so a save appends only the tail.
+ * `parent` is meaningless (and ignored) when the draft has no `parent` document.
+ */
+export interface PersistedSteps {
+  child: number
+  parent: number
+}
 
 /**
  * The draft buffer. Unlike `EntryRepository` this one really does overwrite rows, because a live
@@ -9,11 +18,18 @@ import type { Draft } from '@/types/draft'
  * mutable, and are deleted on sealing. Nothing they need overlaps with what an entry query does.
  */
 export interface DraftRepository {
-  /** Upsert. Called on every debounced flush, so it must be cheap and idempotent. */
-  save(draft: Draft): Promise<Draft>
+  /**
+   * Upsert the snapshot and append whatever steps `persisted` says aren't stored yet. Called on
+   * every debounced flush, so it must be cheap and idempotent — the step chain is the one
+   * unbounded part of a draft, which is why it is appended rather than rewritten wholesale.
+   */
+  save(draft: Draft, persisted: PersistedSteps): Promise<void>
   getById(sessionId: string): Promise<Draft | null>
-  /** Most recently touched first: the drafts list exists so none are stranded invisibly. */
-  list(): Promise<Draft[]>
+  /**
+   * Most recently touched first: the drafts list exists so none are stranded invisibly. Summaries,
+   * not whole drafts — the list renders a preview line per session, not its authoring history.
+   */
+  list(): Promise<DraftSummary[]>
   /** Called after sealing, once the draft's contents already live in a committed entry. */
   delete(sessionId: string): Promise<void>
 }

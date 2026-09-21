@@ -20,6 +20,7 @@ export type TickReason =
   | 'media'
   | 'deletion'
   | 'punctuation'
+  | 'pattern'
   | 'interval'
   | 'format'
   | 'anchor'

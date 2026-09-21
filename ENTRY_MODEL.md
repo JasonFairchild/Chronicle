@@ -246,7 +246,8 @@ persisted; only some moments are bookmarked.
 
 So ticks are not entries and are not saves. They are timestamped bookmarks into the step chain,
 `{ at, step_index, reasons }` with each reason among `pause | paste | media | deletion | punctuation
-| interval | format | anchor | manual`, all tunable. A tick fires the moment at least one of those
+| pattern | interval | format | anchor | manual`, all tunable — `punctuation` is a configurable set of
+sentence-ending characters, `pattern` a user-supplied match, empty by default. A tick fires the moment at least one of those
 applies, and `reasons` can hold several at once — a sentence finished right after a long pause is both — ordered by
 priority so `reasons[0]` is the one worth showing; that ordering is over the result, not a choice
 between candidates the way a first-match-wins check would be. A pause or a sentence-ending period

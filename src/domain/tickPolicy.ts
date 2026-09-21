@@ -12,7 +12,8 @@ import type { TickReason } from '@/types/entry'
 export interface TickPolicy {
   pauseMs: number // A gap this long before a change means the writer stopped and came back.
   intervalMs: number // No matter how steadily someone types, bookmark at least this often.
-  triggerPatterns: RegExp[] // Inserted text matching any of these ends a bookmarkable unit.
+  punctuation: string // Inserted text ending in any of these characters ends a bookmarkable unit.
+  triggerPatterns: RegExp[] // Inserted text matching any of these is worth a bookmark of its own.
   /**
    * A tick landing this close to the previous one merges into it instead of adding a second —
    * bolding eight words one at a time would otherwise be eight `format` stops on the scrub bar.
@@ -24,7 +25,8 @@ export interface TickPolicy {
 export const DEFAULT_TICK_POLICY: TickPolicy = {
   pauseMs: 30_000,
   intervalMs: 60_000,
-  triggerPatterns: [/[.!?]$/],
+  punctuation: '.!?',
+  triggerPatterns: [],
   minTickGapMs: 2_000,
 }
 
@@ -33,11 +35,13 @@ export const DEFAULT_TICK_POLICY: TickPolicy = {
  * the app's distinctive actions) outranks ordinary editing, which outranks the ambient signals of
  * timing and sentence endings — `pause` describes when, not what, and co-occurs with nearly
  * anything after a break, so it must not mask a paste or a deletion as the displayed label.
+ * `pattern` is a match the writer configured, so it counts as a what and sits above `pause`.
  */
 export const TICK_REASON_PRIORITY: readonly TickReason[] = [
   'manual',
   'anchor',
   'media',
+  'pattern',
   'paste',
   'deletion',
   'format',
@@ -106,8 +110,14 @@ export function evaluateTick(
     reasons.push('media')
   }
 
-  if (policy.triggerPatterns.some((pattern) => pattern.test(event.insertedText))) {
+  // The emptiness guard matters: `includes('')` is true for any string.
+  const lastChar = event.insertedText.slice(-1)
+  if (lastChar !== '' && policy.punctuation.includes(lastChar)) {
     reasons.push('punctuation')
+  }
+
+  if (policy.triggerPatterns.some((pattern) => pattern.test(event.insertedText))) {
+    reasons.push('pattern')
   }
 
   if (event.isAnchorOp) {

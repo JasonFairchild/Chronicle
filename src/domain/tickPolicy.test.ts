@@ -49,6 +49,37 @@ describe('evaluateTick', () => {
     expect(evaluateTick(event({ at: 1_100, insertedText: 'end.' }), s)).toEqual(['punctuation'])
   })
 
+  it('honours a tuned punctuation set, so a semicolon ends a unit only when asked to', () => {
+    const s = state({ lastEventAt: 1_000, lastTickAt: 1_000 })
+    const semicolons = { ...DEFAULT_TICK_POLICY, punctuation: ';' }
+
+    expect(evaluateTick(event({ at: 1_100, insertedText: 'a;' }), s)).toEqual([])
+    expect(evaluateTick(event({ at: 1_100, insertedText: 'a;' }), s, semicolons)).toEqual([
+      'punctuation',
+    ])
+    expect(evaluateTick(event({ at: 1_100, insertedText: 'a.' }), s, semicolons)).toEqual([])
+  })
+
+  it('bookmarks text matching a configured pattern as its own reason, not as punctuation', () => {
+    const s = state({ lastEventAt: 1_000, lastTickAt: 1_000 })
+    const todo = { ...DEFAULT_TICK_POLICY, triggerPatterns: [/TODO/] }
+
+    expect(evaluateTick(event({ at: 1_100, insertedText: 'TODO' }), s)).toEqual([])
+    expect(evaluateTick(event({ at: 1_100, insertedText: 'TODO' }), s, todo)).toEqual(['pattern'])
+  })
+
+  it('ranks a configured pattern above the pause that preceded it', () => {
+    const todo = { ...DEFAULT_TICK_POLICY, triggerPatterns: [/TODO/] }
+
+    const reasons = evaluateTick(
+      event({ at: DEFAULT_TICK_POLICY.pauseMs + 1_000, insertedText: 'TODO' }),
+      state({ lastEventAt: 500, lastTickAt: 500 }),
+      todo,
+    )
+
+    expect(reasons).toEqual(['pattern', 'pause'])
+  })
+
   it('finds nothing to bookmark for a word still being typed', () => {
     const s = state({ lastEventAt: 1_000, lastTickAt: 1_000 })
 

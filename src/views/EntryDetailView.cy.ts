@@ -26,9 +26,14 @@ let repository: DexieEntryRepository
 let media: OpfsMediaRepository
 let drafts: DexieDraftRepository
 
-/** Seeds the active repository and yields the created entry to the chain. */
-function seed(input: Parameters<typeof createEntryInput>[0]): Cypress.Chainable<Entry> {
-  return cy.then(() => repository.create(createEntryInput(input)))
+/**
+ * Creates one entry in the active repository. Plain async rather than a command, so a test that
+ * needs several — a parent, a child anchored to it, a revision over both — seeds them in one
+ * `cy.then(async () => ...)` that yields what the test goes on to use, instead of a `.then()`
+ * pyramid one level deeper per entry.
+ */
+function seed(input: Parameters<typeof createEntryInput>[0]): Promise<Entry> {
+  return repository.create(createEntryInput(input))
 }
 
 describe('EntryDetailView', () => {
@@ -39,7 +44,7 @@ describe('EntryDetailView', () => {
   })
 
   it('renders the entry’s own text', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByText(PARENT_TEXT).should('be.visible')
@@ -47,175 +52,189 @@ describe('EntryDetailView', () => {
   })
 
   it('shows a child entry separately rather than spliced into the parent', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
-      seed({
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      await seed({
         content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
         relation_type: 'update',
-      }).then(() => {
-        mountDetail(parent.id)
-
-        cy.findByText('It was actually Donner Lake').should('be.visible')
-        cy.findByText(PARENT_TEXT).should('be.visible')
       })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByText('It was actually Donner Lake').should('be.visible')
+      cy.findByText(PARENT_TEXT).should('be.visible')
     })
   })
 
   it('describes which passage an anchored child is about', () => {
-    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
-
-    seed({ content: marked }).then((parent) => {
-      seed({
+    cy.then(async () => {
+      const parent = await seed({
+        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike'),
+      })
+      await seed({
         content: textContent('Wrong lake'),
         parent_id: parent.id,
         relation_type: 'update',
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      }).then(() => {
-        mountDetail(parent.id)
-
-        cy.findByText('Strikes “Lake Tahoe”').should('be.visible')
       })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByText('Strikes “Lake Tahoe”').should('be.visible')
     })
   })
 
   it('keeps the original wording visible when a revision orphans an anchor', () => {
-    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
-
-    seed({ content: marked }).then((parent) => {
-      seed({
+    cy.then(async () => {
+      const parent = await seed({
+        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike'),
+      })
+      await seed({
         content: textContent('Wrong lake'),
         parent_id: parent.id,
         relation_type: 'update',
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      }).then(() => {
-        seed({
-          content: textContent('I stayed home that summer'),
-          parent_id: parent.id,
-          relation_type: 'revision',
-          revision_mode: 'direct',
-        }).then(() => {
-          mountDetail(parent.id)
-
-          cy.findByText('Was attached to: “Lake Tahoe”').should('be.visible')
-        })
       })
+      await seed({
+        content: textContent('I stayed home that summer'),
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+      })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByText('Was attached to: “Lake Tahoe”').should('be.visible')
     })
   })
 
   it('reports the version position once an entry has been revised', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
-      seed({
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      await seed({
         content: textContent('I went to Donner Lake with Dad'),
         parent_id: parent.id,
         relation_type: 'revision',
         revision_mode: 'direct',
-      }).then(() => {
-        mountDetail(parent.id)
-
-        cy.findByText(/Version 2 of 2/).should('be.visible')
-        cy.findByText('I went to Donner Lake with Dad').should('be.visible')
       })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByText(/Version 2 of 2/).should('be.visible')
+      cy.findByText('I went to Donner Lake with Dad').should('be.visible')
     })
   })
 
   it('shows an incoming connection on the entry it points at', () => {
-    seed({ content: textContent('Started the degree') }).then((target) => {
-      seed({ content: textContent('Left my job') }).then((source) => {
-        seed({
-          content: textContent('One made the other possible'),
-          title: 'led_to',
-          parent_id: source.id,
-          target_id: target.id,
-          relation_type: 'connection',
-        }).then(() => {
-          mountDetail(target.id)
-
-          cy.findByRole('link', { name: 'led_to' }).should('be.visible')
-        })
+    cy.then(async () => {
+      const target = await seed({ content: textContent('Started the degree') })
+      const source = await seed({ content: textContent('Left my job') })
+      await seed({
+        content: textContent('One made the other possible'),
+        title: 'led_to',
+        parent_id: source.id,
+        target_id: target.id,
+        relation_type: 'connection',
       })
+      return target
+    }).then((target) => {
+      mountDetail(target.id)
+
+      cy.findByRole('link', { name: 'led_to' }).should('be.visible')
     })
   })
 
   it('shows a child card’s created date', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
-      seed({
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      const child = await seed({
         content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
         relation_type: 'update',
-      }).then((child) => {
-        mountDetail(parent.id)
-
-        cy.findByText(formatDate(child.created_at)).should('be.visible')
       })
+      return { parent, child }
+    }).then(({ parent, child }) => {
+      mountDetail(parent.id)
+
+      cy.findByText(formatDate(child.created_at)).should('be.visible')
     })
   })
 
   it('opens the connection’s own page, not the far endpoint, when its card is clicked', () => {
-    seed({ content: textContent('Started the degree') }).then((target) => {
-      seed({ content: textContent('Left my job') }).then((source) => {
-        seed({
-          content: textContent('One made the other possible'),
-          title: 'led_to',
-          parent_id: source.id,
-          target_id: target.id,
-          relation_type: 'connection',
-        }).then((connection) => {
-          mountDetail(target.id)
-
-          cy.findByRole('link', { name: 'led_to' }).should(
-            'have.attr',
-            'href',
-            `/entries/${connection.id}`,
-          )
-        })
+    cy.then(async () => {
+      const target = await seed({ content: textContent('Started the degree') })
+      const source = await seed({ content: textContent('Left my job') })
+      const connection = await seed({
+        content: textContent('One made the other possible'),
+        title: 'led_to',
+        parent_id: source.id,
+        target_id: target.id,
+        relation_type: 'connection',
       })
+      return { target, connection }
+    }).then(({ target, connection }) => {
+      mountDetail(target.id)
+
+      cy.findByRole('link', { name: 'led_to' }).should(
+        'have.attr',
+        'href',
+        `/entries/${connection.id}`,
+      )
     })
   })
 
   it('shows a breadcrumb back to the parent on a child’s own detail page', () => {
-    seed({ content: textContent('Left my job'), title: 'Career change' }).then((parent) => {
-      seed({
+    cy.then(async () => {
+      const parent = await seed({ content: textContent('Left my job'), title: 'Career change' })
+      const child = await seed({
         content: textContent('Started the degree'),
         parent_id: parent.id,
         relation_type: 'update',
-      }).then((child) => {
-        mountDetail(child.id)
-
-        cy.findByText('About').should('be.visible')
-        cy.findByRole('link', { name: 'Career change' }).should(
-          'have.attr',
-          'href',
-          `/entries/${parent.id}`,
-        )
       })
+      return { parent, child }
+    }).then(({ parent, child }) => {
+      mountDetail(child.id)
+
+      cy.findByText('About').should('be.visible')
+      cy.findByRole('link', { name: 'Career change' }).should(
+        'have.attr',
+        'href',
+        `/entries/${parent.id}`,
+      )
     })
   })
 
   it('shows a breadcrumb linking both sides on a connection’s own detail page', () => {
-    seed({ content: textContent('Started the degree') }).then((target) => {
-      seed({ content: textContent('Left my job') }).then((source) => {
-        seed({
-          content: textContent('One made the other possible'),
-          title: 'led_to',
-          parent_id: source.id,
-          target_id: target.id,
-          relation_type: 'connection',
-        }).then((connection) => {
-          mountDetail(connection.id)
-
-          cy.findByText('Connects').should('be.visible')
-          cy.findByRole('link', { name: 'Left my job' }).should(
-            'have.attr',
-            'href',
-            `/entries/${source.id}`,
-          )
-          cy.findByRole('link', { name: 'Started the degree' }).should(
-            'have.attr',
-            'href',
-            `/entries/${target.id}`,
-          )
-        })
+    cy.then(async () => {
+      const target = await seed({ content: textContent('Started the degree') })
+      const source = await seed({ content: textContent('Left my job') })
+      const connection = await seed({
+        content: textContent('One made the other possible'),
+        title: 'led_to',
+        parent_id: source.id,
+        target_id: target.id,
+        relation_type: 'connection',
       })
+      return { source, target, connection }
+    }).then(({ source, target, connection }) => {
+      mountDetail(connection.id)
+
+      cy.findByText('Connects').should('be.visible')
+      cy.findByRole('link', { name: 'Left my job' }).should(
+        'have.attr',
+        'href',
+        `/entries/${source.id}`,
+      )
+      cy.findByRole('link', { name: 'Started the degree' }).should(
+        'have.attr',
+        'href',
+        `/entries/${target.id}`,
+      )
     })
   })
 
@@ -226,15 +245,17 @@ describe('EntryDetailView', () => {
   })
 
   it('shows the dates the writer gave, alongside when the entry was created', () => {
-    seed({
-      content: PARENT_CONTENT,
-      dates: {
-        ...emptyEntryDates(),
-        occurred_at: '1994-06-11',
-        occurred_time_note: 'late morning',
-        recorded_at: '1994-06-12',
-      },
-    }).then((parent) => {
+    cy.then(() =>
+      seed({
+        content: PARENT_CONTENT,
+        dates: {
+          ...emptyEntryDates(),
+          occurred_at: '1994-06-11',
+          occurred_time_note: 'late morning',
+          recorded_at: '1994-06-12',
+        },
+      }),
+    ).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByText(/Happened .*1994 · late morning/).should('be.visible')
@@ -243,7 +264,7 @@ describe('EntryDetailView', () => {
   })
 
   it('adds a note about the entry as a whole when the session marks nothing', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -261,7 +282,7 @@ describe('EntryDetailView', () => {
   })
 
   it('will not save a related entry that says nothing', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -279,27 +300,29 @@ describe('EntryDetailView', () => {
   })
 
   it('keeps a related entry in progress when the reader moves to another entry', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
-      seed({ content: textContent('A different day entirely') }).then((other) => {
-        mountDetail(parent.id).then(({ wrapper }) => {
-          cy.findByRole('button', { name: 'Create related entry' }).click()
-          cy.findByRole('textbox', { name: 'Your note' }).type('Half a thought about this')
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      const other = await seed({ content: textContent('A different day entirely') })
+      return { parent, other }
+    }).then(({ parent, other }) => {
+      mountDetail(parent.id).then(({ wrapper }) => {
+        cy.findByRole('button', { name: 'Create related entry' }).click()
+        cy.findByRole('textbox', { name: 'Your note' }).type('Half a thought about this')
 
-          // The session has to close — saving after this would seal against the wrong entry — but
-          // closing it is not the same as throwing it away.
-          cy.then(() => wrapper.setProps({ id: other.id }))
-        })
+        // The session has to close — saving after this would seal against the wrong entry — but
+        // closing it is not the same as throwing it away.
+        cy.then(() => wrapper.setProps({ id: other.id }))
+      })
 
-        cy.then(() => drafts.list()).then((saved) => {
-          expect(saved[0]?.target).to.deep.equal({ kind: 'new_child', parent_id: parent.id })
-          expect(docToPlainText(saved[0]!.child.content)).to.equal('Half a thought about this')
-        })
+      cy.then(() => drafts.list()).then((saved) => {
+        expect(saved[0]?.target).to.deep.equal({ kind: 'new_child', parent_id: parent.id })
+        expect(docToPlainText(saved[0]!.child.content)).to.equal('Half a thought about this')
       })
     })
   })
 
   it('shows the parent’s own title in the anchor-mode composer, not just its body', () => {
-    seed({ content: PARENT_CONTENT, title: 'The Tahoe trip' }).then((parent) => {
+    cy.then(() => seed({ content: PARENT_CONTENT, title: 'The Tahoe trip' })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -314,7 +337,7 @@ describe('EntryDetailView', () => {
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -345,7 +368,7 @@ describe('EntryDetailView', () => {
   })
 
   it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -371,55 +394,59 @@ describe('EntryDetailView', () => {
   })
 
   it('warns before saving a revision that changes the text under an anchor', () => {
-    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-
-    seed({ content: marked }).then((parent) => {
-      seed({
+    cy.then(async () => {
+      const parent = await seed({
+        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
+      })
+      await seed({
         content: textContent('Wonderful trip'),
         parent_id: parent.id,
         relation_type: 'annotation',
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      }).then(() => {
-        mountDetail(parent.id)
-
-        cy.findByRole('button', { name: 'Revise entry' }).click()
-        cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
-          const el = $editor[0]!
-          el.focus()
-          selectTextRange(el, 10, 20)
-        })
-        cy.focused().type('{backspace}')
-
-        cy.findByText(/This changes the passage/).should('be.visible')
-        cy.findByText('Wonderful trip').should('be.visible')
-        cy.findByRole('button', { name: 'Discard revision' }).click()
       })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
+        const el = $editor[0]!
+        el.focus()
+        selectTextRange(el, 10, 20)
+      })
+      cy.focused().type('{backspace}')
+
+      cy.findByText(/This changes the passage/).should('be.visible')
+      cy.findByText('Wonderful trip').should('be.visible')
+      cy.findByRole('button', { name: 'Discard revision' }).click()
     })
   })
 
   it('stays quiet when a revision only moves an anchor, not the text it covers', () => {
-    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-
-    seed({ content: marked }).then((parent) => {
-      seed({
+    cy.then(async () => {
+      const parent = await seed({
+        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
+      })
+      await seed({
         content: textContent('Wonderful trip'),
         parent_id: parent.id,
         relation_type: 'annotation',
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      }).then(() => {
-        mountDetail(parent.id)
-
-        cy.findByRole('button', { name: 'Revise entry' }).click()
-        cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}!')
-
-        cy.findByText(/This changes the passage/).should('not.exist')
-        cy.findByRole('button', { name: 'Discard revision' }).click()
       })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}!')
+
+      cy.findByText(/This changes the passage/).should('not.exist')
+      cy.findByRole('button', { name: 'Discard revision' }).click()
     })
   })
 
   it('revises an entry by appending a version, leaving the original row untouched', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -443,7 +470,7 @@ describe('EntryDetailView', () => {
   })
 
   it('abandons a revision without touching the entry', () => {
-    seed({ content: PARENT_CONTENT }).then((parent) => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -463,19 +490,20 @@ describe('EntryDetailView', () => {
   // directly in a Vitest spec. Creating a connection itself is covered by NewConnectionView.cy.ts.
 
   it('renders an entry’s attachments from the media store', () => {
-    cy.then(() =>
-      media.put(new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' })),
-    ).then((mediaRef) => {
-      seed({ content: PARENT_CONTENT, media_refs: [mediaRef] }).then((parent) => {
-        mountDetail(parent.id)
+    cy.then(async () => {
+      const mediaRef = await media.put(
+        new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }),
+      )
+      return seed({ content: PARENT_CONTENT, media_refs: [mediaRef] })
+    }).then((parent) => {
+      mountDetail(parent.id)
 
-        // A blob URL, minted from the media store for this page load. Regex because the id in it
-        // is generated by the browser and cannot be written down here.
-        cy.findByRole('img', { name: 'Attached image' })
-          .should('be.visible')
-          .and('have.attr', 'src')
-          .and('match', /^blob:/)
-      })
+      // A blob URL, minted from the media store for this page load. Regex because the id in it
+      // is generated by the browser and cannot be written down here.
+      cy.findByRole('img', { name: 'Attached image' })
+        .should('be.visible')
+        .and('have.attr', 'src')
+        .and('match', /^blob:/)
     })
   })
 })

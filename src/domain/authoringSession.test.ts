@@ -232,6 +232,58 @@ describe('AuthoringSession', () => {
     expect(session.ticks[0]?.reasons).toContain('pause')
   })
 
+  describe('a clock that moves backwards', () => {
+    it('keeps step offsets climbing when the clock is stepped back mid-session', () => {
+      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+      const session = new AuthoringSession({ sessionId: 'session-clock-back', now: clock.now })
+
+      session.record({ steps: [{ stepType: 'replace' }] })
+      clock.advance(3_000)
+      session.record({ steps: [{ stepType: 'replace' }] })
+      clock.advance(-2_000) // An NTP correction, a resume from sleep, a hand-set clock.
+      session.record({ steps: [{ stepType: 'replace' }] })
+      clock.advance(5_000)
+      session.record({ steps: [{ stepType: 'replace' }] })
+
+      // The third step reads as having happened at the same instant as the second rather than
+      // 1s before it, and the fourth goes back to the corrected clock once that passes the floor.
+      expect(session.steps.map((step) => step.at)).toEqual([0, 3_000, 3_000, 6_000])
+    })
+
+    it('never stamps a step before the session began', () => {
+      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+      const session = new AuthoringSession({
+        sessionId: 'session-clock-before-start',
+        startedAt: '2026-09-05T10:00:00.000Z',
+        now: clock.now,
+      })
+
+      clock.advance(-10_000)
+      session.record({ steps: [{ stepType: 'replace' }] })
+
+      expect(session.steps[0]?.at).toBe(0)
+      expect(session.seal()?.ended_at).toBe('2026-09-05T10:00:00.000Z')
+    })
+
+    it('does not stamp a resumed session behind what the run before the reload recorded', () => {
+      // The reload cost a second, but the clock came back 4 seconds behind where it left off.
+      const clock = fakeClock(Date.parse('2026-09-05T09:00:00.500Z'))
+      const session = AuthoringSession.resume({
+        sessionId: 'session-clock-resume',
+        startedAt: '2026-09-05T09:00:00.000Z',
+        now: clock.now,
+        steps: [{ at: 4_500, step: { stepType: 'replace' } }],
+        ticks: [{ at: 5_000, step_index: 1, reasons: ['manual'] }],
+      })
+
+      clock.advance(1_000)
+      session.record({ steps: [{ stepType: 'replace' }] })
+
+      // Floored at the last tick, the latest thing the previous run stamped — not at the last step.
+      expect(session.steps.map((step) => step.at)).toEqual([4_500, 5_000])
+    })
+  })
+
   it('does not bookmark a draft picked straight back up', () => {
     const clock = fakeClock(Date.parse('2026-09-05T09:00:01.000Z'))
     const session = AuthoringSession.resume({

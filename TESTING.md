@@ -193,10 +193,7 @@ Cypress isn't wired into coverage yet; only Vitest is.
 
 ## Known gaps
 
-- **`EntryDetailView.cy.ts` nests its seeding** in `.then()` pyramids up to three deep, which works
-  against reading a test without leaving the file. Flattening it into a single
-  `cy.then(async () => { ... })` that seeds everything and yields what the test needs would read far
-  better; it wants a Cypress run alongside the change to confirm.
+- Nothing outstanding.
 
 deleting database note:
 const req = indexedDB.open('chronicle')

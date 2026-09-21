@@ -394,4 +394,80 @@ describe('useEntriesStore', () => {
 
     expect(store.rootCount).toBe(1)
   })
+
+  describe('refusing a write it cannot make', () => {
+    /** A sealed draft standing in for whichever session the test is about to refuse. */
+    function draftFor(target: Draft['target'], body: string, title: string | null = null): Draft {
+      return {
+        session_id: 'session-refused',
+        target,
+        started_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+        dates: emptyEntryDates(),
+        title,
+        child: { content: serializeDocument(plainTextDocument(body)), steps: [], ticks: [] },
+        parent: null,
+      }
+    }
+
+    it('will not revise an entry that is not there', async () => {
+      const store = useEntriesStore()
+
+      await expect(
+        store.reviseEntry({ entryId: 'never-created', content: 'Some new wording' }),
+      ).rejects.toThrow('Cannot revise an entry that does not exist')
+      await expect(
+        store.createFromDraft(
+          draftFor({ kind: 'revision', parent_id: 'never-created' }, 'Words'),
+          null,
+        ),
+      ).rejects.toThrow('Cannot revise an entry that does not exist')
+    })
+
+    it('will not annotate an entry that is not there', async () => {
+      const store = useEntriesStore()
+      const draft = draftFor({ kind: 'new_child', parent_id: 'never-created' }, 'A note')
+      const parentText = 'I went to Lake Tahoe'
+
+      // An anchor placed since the session began is what sends this down the sealing path at all;
+      // without one it would be an ordinary unanchored note and never look the parent up.
+      draft.parent = {
+        base_content: textContent(parentText),
+        content: withAnchorMark(parentText, 'anchor-1', 10, 20),
+        title: null,
+        steps: [],
+        ticks: [],
+      }
+
+      await expect(store.createFromDraft(draft, null)).rejects.toThrow(
+        'Cannot annotate an entry that does not exist',
+      )
+    })
+
+    it('will not seal a revision draft that neither retitled nor reworded the entry', async () => {
+      const store = useEntriesStore()
+      const created = await store.createTextEntry('Nothing to see here')
+      const target = { kind: 'revision', parent_id: created.id } as const
+
+      await expect(
+        store.createFromDraft(draftFor(target, 'Nothing to see here'), null),
+      ).rejects.toThrow('No changes to save')
+      // The same words under a new name is a real revision, though — the title rides the chain.
+      await expect(
+        store.createFromDraft(draftFor(target, 'Nothing to see here', 'Tahoe'), null),
+      ).resolves.toBeDefined()
+    })
+
+    it('surfaces why the timeline could not be loaded, rather than failing blank', async () => {
+      const repository = new InMemoryEntryRepository()
+      repository.listRootEntries = () => Promise.reject(new Error('Storage is unavailable'))
+      setEntryRepository(repository)
+      const store = useEntriesStore()
+
+      await expect(store.loadRootEntries()).rejects.toThrow('Storage is unavailable')
+
+      expect(store.error).toBe('Storage is unavailable')
+      expect(store.loading).toBe(false)
+    })
+  })
 })

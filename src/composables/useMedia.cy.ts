@@ -1,15 +1,15 @@
 import { effectScope } from 'vue'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useMedia } from '@/composables/useMedia'
 import { freshMediaRepository } from '@/testing/realRepositories'
 
 /**
- * Mirrored by `useMedia.cy.ts`, the ordinary duplicated pair. Nothing is mounted in either: this is
- * not a component, and `useMedia`'s only tie to one is `onScopeDispose`, which an effect scope
- * satisfies directly. It does need a real browser — object URLs and OPFS have nothing to fall back
- * to in node.
+ * The Cypress half of the duplicated pair, mirroring `useMedia.browser.test.ts`. Nothing is mounted:
+ * `useMedia`'s only tie to a component is `onScopeDispose`, which an `effectScope` satisfies
+ * directly, so a host component would add a wrapper to test through rather than reach anything a
+ * scope can't. What it does need is the real browser both runners give it — object URLs and OPFS
+ * have nothing to fall back to in node.
  */
-describe('useMedia (browser)', () => {
+describe('useMedia', () => {
   let scope: ReturnType<typeof effectScope>
   let media: ReturnType<typeof useMedia>
 
@@ -31,13 +31,13 @@ describe('useMedia (browser)', () => {
     const url = await media.urlFor(mediaRef)
     const bytes = new Uint8Array(await (await fetch(url!)).arrayBuffer())
 
-    expect(bytes).toEqual(Uint8Array.from([1, 2, 3]))
+    expect([...bytes]).to.deep.equal([1, 2, 3])
     // Asking twice reuses the URL rather than leaking a second one for the same blob.
-    expect(await media.urlFor(mediaRef)).toBe(url)
+    expect(await media.urlFor(mediaRef)).to.equal(url)
   })
 
   it('reports an id whose blob is gone rather than inventing a URL for it', async () => {
-    expect(await media.urlFor('never-stored')).toBeNull()
+    expect(await media.urlFor('never-stored')).to.equal(null)
   })
 
   it('resolves every unfilled image under a root, and says so where the blob has gone', async () => {
@@ -51,9 +51,9 @@ describe('useMedia (browser)', () => {
 
     await media.applyTo(root)
 
-    expect(stored.src.startsWith('blob:')).toBe(true)
-    expect(missing.hasAttribute('src')).toBe(false)
-    expect(missing.alt).toBe('Attachment is no longer available')
+    expect(stored.src.startsWith('blob:')).to.equal(true)
+    expect(missing.hasAttribute('src')).to.equal(false)
+    expect(missing.alt).to.equal('Attachment is no longer available')
   })
 
   it('leaves an src that is already there alone, so a resolved image is never refetched', async () => {
@@ -67,7 +67,7 @@ describe('useMedia (browser)', () => {
     const first = image.src
     await media.applyTo(root)
 
-    expect(image.src).toBe(first)
+    expect(image.src).to.equal(first)
   })
 
   it('revokes every URL it minted once the scope using it goes away', async () => {
@@ -76,6 +76,11 @@ describe('useMedia (browser)', () => {
 
     scope.stop()
 
-    await expect(fetch(url)).rejects.toThrow()
+    // Chai has no rejection assertion wired up here, so the rejection is caught by hand.
+    let revoked = false
+    await fetch(url).catch(() => {
+      revoked = true
+    })
+    expect(revoked).to.equal(true)
   })
 })

@@ -52,6 +52,7 @@ export class AuthoringSession {
 
   private readonly policy: TickPolicy
   private readonly now: () => number
+  private lastReadAt: number // The floor `readClock` enforces: the latest instant already used.
   private readonly recordedSteps: AuthoringStep[] = []
   private readonly recordedTicks: AuthoringTick[] = []
   private state: TickState
@@ -66,9 +67,29 @@ export class AuthoringSession {
       throw new Error(`AuthoringSession: "${this.startedAt}" is not a parseable timestamp`)
     }
     this.policy = options.policy ?? DEFAULT_TICK_POLICY
+    this.lastReadAt = this.startedAtMs
     // Seeded from the start so the interval rule has a baseline to measure from; without it a
     // session that never pauses or punctuates would never be bookmarked at all.
-    this.state = { lastEventAt: null, lastTickAt: this.now() }
+    this.state = { lastEventAt: null, lastTickAt: this.readClock() }
+  }
+
+  /**
+   * The clock, floored at the latest instant this session has already used. `now` is `Date.now` by
+   * default, which NTP corrections and sleep/resume reconciliation can step backwards; a step
+   * stamped from a read that came back low would sit before its predecessor, inverting `at` against
+   * `step_index` — the very thing ENTRY_MODEL.md tells a scrub UI not to trust `at` for. Flooring
+   * makes that impossible by construction.
+   *
+   * The cost is that one event's gap reads as ~0 when the clock genuinely moves back, which can
+   * make a `pause` tick under-fire right at that seam. Its true value is unknowable — the clock
+   * lied — so ~0 is the honest answer, and it is local to the one event.
+   *
+   * An `at` the session computes for itself, such as the deletion run's deliberate backdating in
+   * `closeDeletionRun`, is passed explicitly and so is never clamped: only reads are suspect.
+   */
+  private readClock(): number {
+    this.lastReadAt = Math.max(this.now(), this.lastReadAt)
+    return this.lastReadAt
   }
 
   get steps(): AuthoringStep[] {
@@ -93,7 +114,7 @@ export class AuthoringSession {
    * the last event, not since this one).
    */
   record(change: AuthoringChange): void {
-    const at = this.now()
+    const at = this.readClock()
     const removesText = (change.removedChars ?? 0) > 0
     const pausedSinceLastEvent =
       this.state.lastEventAt !== null && at - this.state.lastEventAt >= this.policy.pauseMs
@@ -137,7 +158,7 @@ export class AuthoringSession {
    * sits at the end of the cluster it now represents; reasons union and re-sort, since the merge can
    * bring in a reason the earlier tick didn't have.
    */
-  mark(reasons: [TickReason, ...TickReason[]] = ['manual'], at: number = this.now()): void {
+  mark(reasons: [TickReason, ...TickReason[]] = ['manual'], at: number = this.readClock()): void {
     const last = this.recordedTicks[this.recordedTicks.length - 1]
     const gapSinceLastTick = this.state.lastTickAt === null ? Infinity : at - this.state.lastTickAt
 
@@ -162,7 +183,7 @@ export class AuthoringSession {
   /** Bookmarks the end of the open deletion run, at the last deleting step. */
   private closeDeletionRun(): void {
     this.inDeletionRun = false
-    this.mark(['deletion'], this.state.lastEventAt ?? this.now())
+    this.mark(['deletion'], this.state.lastEventAt ?? this.readClock())
   }
 
   /**
@@ -174,6 +195,10 @@ export class AuthoringSession {
    * `parentSession` on a non-anchor draft), same as a fresh session. `lastTickAt` is deliberately
    * left alone: the constructor already seeds it from `now()`, and seeding it from the last tick
    * instead would make that same keystroke fire `interval` too.
+   *
+   * Restored offsets also raise `readClock`'s floor, so the clock having moved backwards across the
+   * reload cannot stamp a new step before one the previous run already recorded. Ticks count toward
+   * that floor as well as steps: a manual bookmark can be the latest thing the old run stamped.
    */
   static resume(
     options: AuthoringSessionOptions & { steps: AuthoringStep[]; ticks: AuthoringTick[] },
@@ -186,6 +211,10 @@ export class AuthoringSession {
     if (lastStep) {
       session.state = { ...session.state, lastEventAt: session.startedAtMs + lastStep.at }
     }
+
+    const lastTick = options.ticks[options.ticks.length - 1]
+    const restoredEnd = Math.max(lastStep?.at ?? 0, lastTick?.at ?? 0)
+    session.lastReadAt = Math.max(session.lastReadAt, session.startedAtMs + restoredEnd)
 
     return session
   }
@@ -202,7 +231,7 @@ export class AuthoringSession {
     return {
       session_id: this.sessionId,
       started_at: this.startedAt,
-      ended_at: new Date(this.now()).toISOString(),
+      ended_at: new Date(this.readClock()).toISOString(),
       steps: this.steps,
       ticks: this.ticks,
     }

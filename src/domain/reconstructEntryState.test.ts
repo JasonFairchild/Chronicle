@@ -207,6 +207,92 @@ describe('reconstructEntryState', () => {
     expect(result?.version.total).toBe(2)
   })
 
+  it('reports an entry that did not exist yet as nothing to show', () => {
+    const root = makeEntry({ id: 'root-1', content: 'Original text' })
+
+    const result = reconstructEntryState('root-1', [root], {
+      asOf: new Date('2025-12-31T00:00:00.000Z'),
+    })
+
+    expect(result).toBeNull()
+  })
+
+  it('leaves out a note that had not been written yet at asOf', () => {
+    const root = makeEntry({ id: 'root-1', content: 'Original text' })
+    const earlier = makeEntry({
+      id: 'annotation-1',
+      parent_id: 'root-1',
+      relation_type: 'annotation',
+      content: 'Written the next day',
+      created_at: '2026-01-02T00:00:00.000Z',
+    })
+    const later = makeEntry({
+      id: 'annotation-2',
+      parent_id: 'root-1',
+      relation_type: 'annotation',
+      content: 'Written the week after',
+      created_at: '2026-01-08T00:00:00.000Z',
+    })
+
+    const result = reconstructEntryState('root-1', [root, earlier, later], {
+      asOf: new Date('2026-01-03T00:00:00.000Z'),
+    })
+
+    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
+      'Written the next day',
+    ])
+  })
+
+  it('leaves out a connection that had not been made yet at asOf', () => {
+    const from = makeEntry({ id: 'entry-a', content: 'A' })
+    const to = makeEntry({ id: 'entry-b', content: 'B' })
+    const connection = makeEntry({
+      id: 'connection-1',
+      parent_id: 'entry-a',
+      target_id: 'entry-b',
+      relation_type: 'connection',
+      content: 'These rhyme',
+      created_at: '2026-01-05T00:00:00.000Z',
+    })
+
+    const entries = [from, to, connection]
+    const asOf = { asOf: new Date('2026-01-03T00:00:00.000Z') }
+
+    // Absent from both endpoints, not merely from the one that declared it.
+    expect(reconstructEntryState('entry-a', entries, asOf)?.connections).toEqual([])
+    expect(reconstructEntryState('entry-b', entries, asOf)?.connections).toEqual([])
+  })
+
+  it('does not promise deeper children that did not exist yet at asOf', () => {
+    const root = makeEntry({ id: 'root-1', content: 'Root' })
+    const child = makeEntry({
+      id: 'child-1',
+      parent_id: 'root-1',
+      relation_type: 'annotation',
+      content: 'Child',
+      created_at: '2026-01-02T00:00:00.000Z',
+    })
+    const grandchild = makeEntry({
+      id: 'grandchild-1',
+      parent_id: 'child-1',
+      relation_type: 'annotation',
+      content: 'Grandchild',
+      created_at: '2026-01-04T00:00:00.000Z',
+    })
+
+    const entries = [root, child, grandchild]
+
+    expect(reconstructEntryState('root-1', entries, { depth: 1 })?.children[0]?.has_children).toBe(
+      true,
+    )
+    expect(
+      reconstructEntryState('root-1', entries, {
+        depth: 1,
+        asOf: new Date('2026-01-03T00:00:00.000Z'),
+      })?.children[0]?.has_children,
+    ).toBe(false)
+  })
+
   it('orders entries sharing a created_at deterministically by id', () => {
     const createdAt = '2026-01-02T00:00:00.000Z'
     const root = makeEntry({ id: 'root-1', content: 'Root' })
@@ -390,6 +476,29 @@ describe('reconstructEntryState', () => {
     expect(reconstructEntryState('missing', [])).toBeNull()
   })
 
+  it('stops rather than recursing forever when stored parents form a cycle', () => {
+    // Not reachable through the app — nothing offers to reparent an entry — but a fold that walks
+    // stored data has to terminate on it regardless of how the data got that way.
+    const first = makeEntry({
+      id: 'entry-a',
+      parent_id: 'entry-b',
+      relation_type: 'update',
+      content: 'A',
+    })
+    const second = makeEntry({
+      id: 'entry-b',
+      parent_id: 'entry-a',
+      relation_type: 'update',
+      content: 'B',
+    })
+
+    const result = reconstructEntryState('entry-a', [first, second])
+
+    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual(['B'])
+    // The walk back round to 'entry-a' is dropped rather than expanded a second time.
+    expect(result?.children[0]?.entry.children).toEqual([])
+  })
+
   it('carries the row’s own relation fields through, for a breadcrumb to read', () => {
     const root = makeEntry({ id: 'root-1', content: 'Root' })
     const child = makeEntry({
@@ -465,5 +574,27 @@ describe('buildEntryHistory', () => {
     })
 
     expect(buildEntryHistory('root-1', [root, update])).toHaveLength(1)
+  })
+
+  it('has no chain to return for an entry that is unknown, or not yet written at asOf', () => {
+    const root = makeEntry({ id: 'root-1', content: 'One' })
+
+    expect(buildEntryHistory('missing', [root])).toBeNull()
+    expect(buildEntryHistory('root-1', [root], new Date('2025-12-31T00:00:00.000Z'))).toBeNull()
+  })
+
+  it('stops the chain at asOf, leaving later revisions out of it', () => {
+    const root = makeEntry({ id: 'root-1', content: 'One' })
+    const revision = makeEntry({
+      id: 'revision-1',
+      parent_id: 'root-1',
+      relation_type: 'revision',
+      content: 'Two',
+      created_at: '2026-01-05T00:00:00.000Z',
+    })
+
+    const history = buildEntryHistory('root-1', [root, revision], new Date('2026-01-03T00:00:00Z'))
+
+    expect(history?.map((version) => docToPlainText(version.content))).toEqual(['One'])
   })
 })

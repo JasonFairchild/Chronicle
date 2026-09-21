@@ -12,6 +12,10 @@ export type ParentLookup = (id: string) => Entry | undefined | Promise<Entry | u
  * Dexie — so the lookup is injected and this module stays pure and node-testable.
  *
  * Structure only: nothing here has an opinion about content, which is the editor's business.
+ *
+ * Deliberately unchecked: that `parent_id` names an entry that already exists. A child arriving
+ * before its parent is a real state in a local-first app — an out-of-order import, a sync that
+ * lands children first — and rejecting it would fail a write the model itself is fine with.
  */
 export async function assertValidRelation(
   input: CreateEntryInput,
@@ -33,9 +37,6 @@ export async function assertValidRelation(
     throw new Error('Only connection entries may set a target_id')
   }
 
-  // Deliberately unchecked: that `parent_id` names an entry that already exists. A child arriving
-  // before its parent is a real state in a local-first app — an out-of-order import, a sync that
-  // lands children first — and rejecting it here would fail a write the model itself is fine with.
   if (input.relation_type === 'revision' && input.parent_id) {
     const parent = await loadParent(input.parent_id)
     // Revisions of revisions are meaningless: a version chain is linear and belongs to the entry

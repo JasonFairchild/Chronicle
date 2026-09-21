@@ -45,8 +45,8 @@ describe('EntryCard', () => {
     mountCard(makeAggregated({ content: textContent(LONG_TEXT) }))
 
     cy.findByText(LONG_TEXT).should('be.visible')
-    // A shorter, truncated cut of the same text used to appear alongside the full one; confirming
-    // it doesn't is what proves there's no second, separate excerpt any more.
+    // An untitled card names itself by its own opening words rather than by a second, separately
+    // truncated copy of them, so asserting the short cut's absence is the real claim here.
     cy.findByText(previewText(textContent(LONG_TEXT), 50)).should('not.exist')
   })
 

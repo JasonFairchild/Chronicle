@@ -71,12 +71,11 @@ export function readAnchorAnnouncement(transaction: Transaction): AnchorAnnounce
 
 /**
  * UI state for one `anchorInsert` node view: which anchor's wording input is open, if any, and what
- * it held the moment it opened. Kept off the node's own attributes — see `extensions.ts`, "Wording:
- * one mechanism, a node view" — so this never becomes part of the stored document. A `Ref` rather
- * than a plain field because a node view mounted by `VueNodeViewRenderer` needs Vue's own
- * reactivity to notice a change here: ProseMirror's view only re-renders a node whose document
- * representation changed, and opening or closing a wording session deliberately produces no such
- * change.
+ * it held the moment it opened. Kept off the node's own attributes so it never becomes part of the
+ * stored document. A `Ref` rather than a plain field because a node view mounted by
+ * `VueNodeViewRenderer` needs Vue's own reactivity to notice a change here: ProseMirror's view only
+ * re-renders a node whose document representation changed, and opening or closing a wording session
+ * deliberately produces no such change.
  */
 export interface AnchorInsertStorage {
   openAnchorId: Ref<string | null>
@@ -374,14 +373,13 @@ export function removeAnchor(editor: Editor, anchorId: string): void {
  * Opens an anchor's wording box for editing — the one mechanism behind both entry points into a
  * wording session: clicking a placed anchor to reopen it (`appendText` omitted, existing wording
  * kept as-is) and typing at the caret right after a mark this session placed (`appendText` is the
- * character just typed, from `DocumentEditor`'s `handleTextInput`). Routing both through a single
- * function is what stops a highlight that already has committed wording from ever growing a
- * *second* `anchorInsert` node sharing its id — typing right after such a highlight used to create
- * exactly that duplicate, since the caret's neighboring mark alone couldn't tell "this anchor
- * already has a node" from "it doesn't yet".
+ * character just typed, from `DocumentEditor`'s `handleTextInput`).
  *
- * Appends to the existing node when the anchor already has one; otherwise inserts a fresh node
- * right after the mark's own extent, matching where `addAnchorMark` places its own.
+ * Routing both through one function is what stops a highlight that already has committed wording
+ * from growing a *second* `anchorInsert` node sharing its id: the caret's neighboring mark alone
+ * cannot tell "this anchor already has a node" from "it doesn't yet", so only a lookup can. Appends
+ * to the existing node when there is one; otherwise inserts a fresh node right after the mark's own
+ * extent, matching where `addAnchorMark` places its own.
  */
 export function openAnchorWording(
   editor: Editor,

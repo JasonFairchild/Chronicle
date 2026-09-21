@@ -2,10 +2,8 @@
  * The document layer: one canonical way to turn an entry's stored `content` into plain text.
  *
  * `Entry.content` is a serialized ProseMirror document. Search, timeline previews, and diffs all
- * need the same flat string, and they must agree to the character. So there is exactly one function
- * that does it, `docToPlainText`, and everything calls it. Anchors no longer measure against this
- * ruler — they are marks and nodes in the document itself — but they do depend on it ignoring what
- * they add, which is what `ANCHOR_INSERT_NODE` below is about.
+ * need the same flat string and must agree to the character, so exactly one function produces it —
+ * `docToPlainText` — and everything calls it (CLAUDE.md, Landmarks).
  *
  * Nothing here imports TipTap. The flattening is a walk over plain JSON, which keeps it pure,
  * runnable in node, and independent of whichever editor sits on top.
@@ -36,19 +34,15 @@ export interface EntryDocument extends DocNode {
 /** An image whose bytes live in the media store; the node carries only the blob's id. */
 export const MEDIA_NODE = 'mediaImage'
 
-/**
- * A span anchor: a mark on the parent's own text carrying `{ anchorId, kind }`. Marks are metadata
- * riding on text that is already there, so the flattening below never has to know about this one.
- */
+/** A span anchor: a mark on the parent's own text. Metadata riding on text already there. */
 export const ANCHOR_MARK = 'anchor'
 
 /**
- * A collapsed anchor: wording a child entry proposes, carrying `{ anchorId, text }`. A mark cannot
- * represent a zero-width position with content of its own, so this is a node — and being a node,
- * it holds real text that the flattening **must** skip. That skip is the mechanism that makes "no
- * child entry is destructive" checkable rather than merely intended: with it, an anchor-mode
- * session leaves `docToPlainText` untouched, so `sameContent(before, after)` holds by construction
- * and previews and search never fill up with words the parent's author didn't write.
+ * A collapsed anchor: wording a child entry proposes, as a node rather than a mark.
+ *
+ * Being a node it holds real text that the flattening **must** skip, which is what makes "no child
+ * entry is destructive" checkable rather than merely intended: an anchor-mode session leaves
+ * `docToPlainText` untouched, so `sameContent(before, after)` holds by construction.
  */
 export const ANCHOR_INSERT_NODE = 'anchorInsert'
 
@@ -92,21 +86,17 @@ export function plainTextDocument(text: string): EntryDocument {
 }
 
 /**
- * Plain text as stored content — the real document `Entry.content` always holds. The one
- * deliberate, named way to turn plain text into a document, used by the store's simple non-session
- * creation methods and by tests that don't care about rich formatting. A title is never part of
- * this: it is a sibling field on the entry, not something the document carries (ENTRY_MODEL.md,
- * "Title").
+ * Plain text as stored content — the one named way to build a document from a bare string, for the
+ * store's simple non-session creation methods and for tests that don't care about rich formatting.
+ * A title is never part of it: a title is a sibling field on the entry (ENTRY_MODEL.md, "Fields").
  */
 export function textContent(body: string): string {
   return serializeDocument(plainTextDocument(body))
 }
 
 /**
- * The canonical flattening: the document's body as plain text, one line per block.
- *
- * Anchor-carried wording is excluded — see `nodeText` — but nothing else is: a title lives outside
- * the document entirely now, so there is no second node type for this to know to skip.
+ * The canonical flattening: the document's body as plain text, one line per block. Anchor-carried
+ * wording is excluded — see `nodeText` — and nothing else is.
  */
 export function docToPlainText(content: string | EntryDocument): string {
   const doc = parseDocument(content)
@@ -117,11 +107,9 @@ export function docToPlainText(content: string | EntryDocument): string {
 /**
  * A document's body as one line, trimmed to `limit`, for a card, a list row, or a picker label.
  *
- * Built on `docToPlainText` like everything else, so a preview and a search hit measure the same
- * text — which also means anchor-carried wording never leaks into a summary of the parent. `limit`
- * is all call sites disagree on: a timeline card has a paragraph's worth of room, a picker option
- * has part of a line. An empty document previews as the empty string rather than inventing a name
- * for itself, leaving the caller to supply wording that fits where it is being shown.
+ * `limit` is all call sites disagree on: a timeline card has a paragraph's worth of room, a picker
+ * option has part of a line. An empty document previews as the empty string rather than inventing a
+ * name for itself, leaving the caller to supply wording that fits where it is being shown.
  */
 export function previewText(content: string | EntryDocument, limit = 160): string {
   const singleLine = docToPlainText(content).replace(/\s+/g, ' ').trim()
@@ -200,10 +188,8 @@ export function contentDelta(a: string | EntryDocument, b: string | EntryDocumen
 
 /**
  * True when two documents say the same thing: the same body text and the same attachments. Only
- * their presentation differs.
- *
- * The title is not part of it — it lives beside the document now, not in it — so a caller comparing
- * a full entry's before and after must check it separately.
+ * their presentation differs. The title lives beside the document rather than in it, so a caller
+ * comparing a full entry's before and after must check it separately.
  */
 export function sameContent(a: string | EntryDocument, b: string | EntryDocument): boolean {
   const delta = contentDelta(a, b)

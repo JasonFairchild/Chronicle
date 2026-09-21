@@ -46,14 +46,13 @@ const breadcrumbKind = computed<'about' | 'connects' | null>(() => {
 
 /** The open revision session, if the entry's own text is being edited. `isOpen` false means it is being read. */
 const revisionSession = useDraftSession()
-/** Anchors this revision session has disturbed so far (PRODUCT.md §5.3). Sticky across the session. */
+/** Anchors this revision session has disturbed so far (PRODUCT.md §4.5). Sticky across the session. */
 const revisionAffectedAnchorIds = ref<string[]>([])
 
 /**
  * The open anchor-mode session, if a child entry is being composed against a passage. Mutually
- * exclusive with `revisionSession`: ENTRY_MODEL.md is explicit that the two creation experiences
- * are never offered in the same sitting, and hiding each control while the other is open is what
- * enforces that in the UI rather than merely documenting it.
+ * exclusive with `revisionSession` (ENTRY_MODEL.md, "Two creation experiences, kept separate"):
+ * hiding each control while the other is open is what enforces that in the UI.
  */
 const childSession = useDraftSession()
 
@@ -98,9 +97,9 @@ const versionLabel = computed(() => {
 })
 
 /**
- * The note each disturbed anchor belongs to, named rather than just counted (PRODUCT.md §5.3: "say
- * so before saving, and name the note"). Anchors, not children, are what a revision can disturb, so
- * this reads them off every child's resolved anchor list rather than the children themselves.
+ * The note each disturbed anchor belongs to, named rather than merely counted (PRODUCT.md §4.5).
+ * Anchors, not children, are what a revision can disturb, so this reads them off every child's
+ * resolved anchor list rather than off the children themselves.
  */
 const revisionWarnings = computed<string[]>(() => {
   if (revisionAffectedAnchorIds.value.length === 0) return []
@@ -149,8 +148,8 @@ async function loadBreadcrumb(entry: AggregatedEntry): Promise<{ id: string; lab
   if (ids.length === 0) return []
 
   // The aggregated form, not the raw row: title folds through the version chain like the rest of
-  // the author-supplied fields (ENTRY_MODEL.md), so reading the row directly here would show a
-  // stale or blank name for an entry that has since been renamed by a revision.
+  // the author-supplied fields (ENTRY_MODEL.md, "Version chains"), so reading the row directly
+  // would show a stale or blank name for an entry a revision has since renamed.
   const found = await Promise.all(ids.map((id) => store.getAggregatedEntry(id)))
   return ids.flatMap((id, index) => {
     const other = found[index]

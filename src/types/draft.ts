@@ -29,13 +29,13 @@ export interface AuthoringBuffer {
 export interface Draft {
   session_id: string
   target: DraftTarget
-  // started_at serves both the child and parent AuthoringTrace when sealing
-  started_at: string
+  started_at: string // Shared by both documents' traces when sealing.
   updated_at: string
   dates: EntryDates
   title: string | null
   child: AuthoringBuffer
-  // Its own `title`, mirrored once when the session begins
+  // Carries the parent's own title, mirrored once when the session begins so a resumed session can
+  // display it without a second fetch. Never writer-set: anchor mode offers no way to retitle.
   parent: (AuthoringBuffer & { base_content: string; title: string | null }) | null
 }
 

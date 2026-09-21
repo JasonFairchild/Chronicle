@@ -112,7 +112,7 @@ export interface Entry extends VersionedFields {
   authoring_trace: AuthoringTrace | null
 }
 
-/** From here down: shapes derived from or about Entry, not one of its own field types. */
+// From here down: shapes derived from or about Entry, not one of its own field types.
 
 export type AnchorKind = 'comment' | 'strike'
 
@@ -209,8 +209,7 @@ export function advanceIdClock(previous: IdClock, now: number): IdClock {
   return { ms: previous.ms, counter: previous.counter + 1 }
 }
 
-// Reassigned on every call; -1 sorts before any real timestamp so the first id starts fresh.
-let idClock: IdClock = { ms: -1, counter: 0 }
+let idClock: IdClock = { ms: -1, counter: 0 } // -1 sorts before any real timestamp.
 
 /** UUIDv7, not v4 — sortable as plain text since the millisecond timestamp leads. */
 export function newEntryId(): string {

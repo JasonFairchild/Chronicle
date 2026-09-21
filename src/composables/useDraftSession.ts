@@ -6,15 +6,14 @@ import type { Draft, DraftTarget } from '@/types/draft'
 import { emptyEntryDates, type Entry, type EntryDates } from '@/types/entry'
 
 /**
- * One single-document draft session — begin or resume it, mirror an editor's changes into it, seal
- * or discard it — factored out because `EntryDetailView` (its revision session, and the prose half
- * of its anchor-mode session) and `DraftsView` (resuming any draft from the list) were each
- * hand-rolling the same shape: mirror a session's content into a local ref, track a saving flag,
- * forward `DocumentEditor`'s `@change`, wrap save/discard in the same try/catch.
+ * One single-document draft session: begin or resume it, mirror an editor's changes into it, seal
+ * or discard it. Every composer needs the same shape — content mirrored into a local ref, a saving
+ * flag, `DocumentEditor`'s `@change` forwarded, save and discard wrapped the same way — and holding
+ * it once is what keeps a resumed session identical to a fresh one.
  *
- * Deliberately does not manage an error ref of its own: `save()` and `discard()` propagate a real
- * failure to the caller, which already has somewhere to put a message (`actionError`, a page-level
- * `error`), and folding a second error slot in here would just be another thing for two to drift.
+ * Deliberately manages no error ref of its own: `save()` and `discard()` propagate a real failure
+ * to the caller, which already has somewhere to put a message (`actionError`, a page-level
+ * `error`), and a second error slot here would just be another thing for the two to drift apart on.
  */
 export function useDraftSession() {
   const drafts = useDraftsStore()

@@ -1,14 +1,13 @@
 <script setup lang="ts">
 /**
- * Anchor mode's whole action set as a floating menu over the current selection, replacing the fixed
- * toolbar this mode used to show. Built on TipTap's `BubbleMenu` so positioning and show/hide timing
- * come from the library rather than being reinvented here.
+ * Anchor mode's whole action set, as a floating menu over the current selection. Built on TipTap's
+ * `BubbleMenu` so positioning and show/hide timing come from the library rather than being
+ * reinvented here.
  *
- * Actions come from the **selection** on every render, not from anything remembered between clicks —
- * see `DocumentEditor`'s deleted `pendingStrikeId`. A range of ordinary text offers the two mark
- * actions; a selected media node offers none yet (PRODUCT.md §6, image anchoring); an empty
- * selection shows nothing at all — placing a mark opens its own wording box immediately
- * (`markAnchor`), so there is no in-between state this menu needs to cover.
+ * Actions are derived from the **selection** on every render, never remembered between clicks: a
+ * range of ordinary text offers the two mark actions; a selected media node offers none yet
+ * (PRODUCT.md §6, image anchoring); an empty selection shows nothing at all, since placing a mark
+ * opens its own wording box immediately (`markAnchor`) and leaves no in-between state to cover.
  *
  * Anchors are exclusive (PRODUCT.md §4.4): either button opens that anchor's wording box instead of
  * marking a new one whenever the selection touches an anchor already there, this session's own or an

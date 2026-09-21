@@ -255,12 +255,13 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * Builds the draft's on-disk shape from the session's live step/tick chains. `recordChange` and
-   * `recordParentChange` no longer touch those chains on every keystroke (`entry.session.steps` is
-   * a defensive copy, so reading it there was a full-chain clone per keystroke); this is the one
-   * place they get read, right before something needs the whole draft. Always fresh objects — never
-   * `entry.draft.child`/`.parent` by reference — so a snapshot already handed to an in-flight
-   * `save()` can't be mutated out from under it.
+   * Builds the draft's on-disk shape from the session's live step/tick chains — the one place those
+   * chains are read, right before something needs the whole draft. Keeping it out of the per-change
+   * paths matters because `AuthoringSession.steps` hands back a defensive copy, so reading it on
+   * every keystroke would clone the entire chain each time.
+   *
+   * Always fresh objects, never `entry.draft.child`/`.parent` by reference, so a snapshot already
+   * handed to an in-flight `save()` can't be mutated out from under it.
    */
   function materialize(entry: ActiveSession): Draft {
     return {

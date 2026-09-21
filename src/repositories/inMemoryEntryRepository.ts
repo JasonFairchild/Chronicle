@@ -8,6 +8,11 @@ import {
 import { assertValidRelation } from '@/domain/entryValidation'
 import type { EntryRepository } from './entryRepository'
 
+/**
+ * The node-friendly adapter, for unit tests and anywhere IndexedDB doesn't exist. Proven against
+ * the same `entryRepository.contract.ts` suite as the Dexie one, so a test written here describes
+ * behavior the persistent adapter actually has.
+ */
 export class InMemoryEntryRepository implements EntryRepository {
   private entries = new Map<string, Entry>()
 

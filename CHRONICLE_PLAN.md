@@ -16,10 +16,11 @@ This model supports:
 
 ## Key Product Rules
 
-- Entries are treated as immutable at the core. Changes are modeled by inserting related Entries (or, later, snapshot mechanisms)—not by mutating existing rows.
-- Fully local data; works offline; no backend or account required.
-- Start with text + images.
-- Light/dark theme support should not be blocked by early architectural choices (use CSS variables / Tailwind dark mode from the start), but it is low priority for the first milestones.
+The promises themselves are [PRODUCT.md](./PRODUCT.md) §2. What they mean for _planning_:
+
+- Immutability and offline-first are architectural constraints from day one, not later retrofits — every phase below has to hold them.
+- Start with text + images; other media is a later phase, not an early abstraction to design around.
+- Dark mode must stay reachable (CSS variables / Tailwind dark mode from the start), but finishing it is low priority for the first milestones.
 
 ## Tech Stack
 
@@ -30,17 +31,12 @@ This model supports:
 - Local DB: SQLite via `@sqlite.org/sqlite-wasm` + OPFS (preferred) or Dexie.js as fallback
 - Rich text: TipTap (Phase 1; plain text is fine in Phase 0)
 - PWA: vite-plugin-pwa
-- Testing (required in every phase):
-  - Vitest (unit + Browser Mode)
-  - Cypress Component Testing
-  - Note: using both Vitest Browser Mode and Cypress CT together is an intentional
-    tool-comparison experiment. The author is experienced with Cypress and wants to
-    learn Vitest's browser/component story in depth. Duplicated component tests across
-    the two runners are expected and fine for the foreseeable future; revisit only once
-    the comparison has served its purpose. Split convention:
-    - `*.test.ts` — pure logic, `node` environment, no DOM
-    - `*.browser.test.ts` — Vitest Browser Mode (real Chromium via Playwright)
-    - `*.cy.ts` — Cypress Component Testing
+- Testing (required in every phase): Vitest (unit + Browser Mode) and Cypress Component Testing.
+  Running both is an intentional tool-comparison experiment — the author is experienced with Cypress
+  and wants Vitest's browser/component story in depth — so duplicated component specs are expected
+  and fine; revisit only once the comparison has served its purpose. See
+  [TESTING.md](./TESTING.md) for the file-suffix convention and everything about how tests are
+  written.
 - Later candidates: Vue Flow (graph), virtualization helpers
 
 ## Data Model (Unified & Extensible)
@@ -52,17 +48,15 @@ What follows is an orientation, not a specification.
 
 - `id` (UUIDv7) — time-ordered, so it breaks `created_at` ties and gives history a total order
 - `created_at` (immutable) — when the entry was added to Chronicle; system-set
-- `recorded_at` (nullable) — when the record was originally recorded elsewhere; null if authored directly in-app
-- `occurred_at` (nullable) — when the event being recorded actually happened, if known
 - `parent_id` (nullable) — the entry this one is attached to; containment follows this and only this
 - `relation_type` (nullable) — `annotation` | `update` | `connection` | `revision` (roots are null)
 - `target_id` (nullable) — the far endpoint of a `connection`
-- `title` (nullable) — cache of the document's title node
-- `content` — serialized document
 - `anchors` — the places in the parent this entry operates on; empty means "the parent at large"
+- `revision_mode` (nullable) — which creation experience wrote a revision; null on everything else
 - `authoring_trace` (nullable) — how this snapshot was typed
-- `media_refs`
-- `metadata` (JSON)
+- plus the fields a revision replaces wholesale, grouped as `VersionedFields`: the two user-supplied
+  dates and their free-text notes, `location`, `original_medium` and its note, `title`, `content`,
+  `media_refs`, and `metadata`
 
 The three dates are deliberately separate: `created_at` anchors the immutable ledger, while `recorded_at` / `occurred_at` are user-supplied and let the timeline be ordered by when things _happened_ rather than when they were entered. A bulk import shares one `created_at` by design; `occurred_at` is what such entries get sorted by.
 
@@ -76,10 +70,6 @@ Only two of these change how the domain layer behaves. The other two are a label
 - **`annotation`** — a note on an entry or on a passage within it. Does not claim anything changed.
 
 The update/annotation split is a label for UI and filtering. Structurally both are children carrying anchored operations, and what the user actually did — striking a phrase, inserting wording, or just commenting — is what distinguishes them.
-
-**Write rule:** Prefer insert over update. New related Entries are created instead of mutating existing ones. No child entry is ever destructive: a parent's stored text is never altered by its children.
-
-Reconstructing aggregated current state or historical state at time T must stay straightforward via the repository layer (and pure helpers such as `reconstructEntryState`).
 
 ## First Tasks (Phase 0 — status)
 
@@ -113,29 +103,16 @@ Connection/graph visualization, search/filtering, export/backup, PWA install exp
 
 ## Future Considerations (explicitly out of MVP)
 
-The “smarter edit” experience is no longer an open question — it is designed in
-[ENTRY_MODEL.md](./ENTRY_MODEL.md) as the `revision` relation plus authoring capture, and it is
-Phase 2 work rather than a someday item. An entry becomes a living chain: opening it for editing
-reopens that chain and appends to it, the latest state is what most views surface, and nothing
-important is lost. Ticks bookmark meaningful moments in a session without becoming entries.
+Product-level ideas are parked in [PRODUCT.md](./PRODUCT.md) §6, which is the parking lot for
+anything describable from the outside. What follows is the engineering half: work deferred for
+reasons that only make sense against the code.
 
-The capture layer now exists: sessions accumulate ProseMirror steps into a durable draft buffer,
-ticks bookmark the moments worth returning to, and sealing writes one immutable entry carrying the
-completed trace. Diff rendering and the scrubbable history UI are unblocked by it and are Phase 3.
+The “smarter edit” experience is not among them — it is designed in
+[ENTRY_MODEL.md](./ENTRY_MODEL.md) as the `revision` relation plus authoring capture, and the
+capture layer it needs is built. Diff rendering and the scrubbable history UI are unblocked by it
+and are Phase 3.
 
-Still genuinely out of scope:
-
-- Diff rendering and the scrubbable per-entry history UI, now unblocked but not yet built.
-- Light/dark theme polish and preference persistence.
-- Video/audio support, optional Tauri desktop shell, encryption, multi-device sync.
-
-Not carried over from the anchor model redesign (see ENTRY_MODEL.md, "Child entries and anchors"):
-widening or shrinking the span of an anchor already placed earlier in the current draft session.
-Reopening one to edit its wording, switch it between highlight and strike, or remove it outright is
-built (PRODUCT.md §4.4); a real resize gesture is not — remove-and-recreate covers it for now. Worth
-another pass once it turns out to actually get reached for in anger, not a blocker.
-
-A stale anchor draft against a revised parent is a related, deliberately unhandled gap: sealing an
+A stale anchor draft against a revised parent is a deliberately unhandled gap: sealing an
 anchor-mode session writes `Draft.parent.content` as a full-state revision
 (`entriesStore.sealAnchorChild`), so if the parent was text-revised — or another child's anchor-mode
 session sealed on it — after this session began, sealing silently reverts the parent to the stale
@@ -210,13 +187,8 @@ Genuinely deferred rather than rejected — worth another look later, but not no
   realistic entry sizes before building a caching layer for it speculatively — revisit once that UI
   exists and can be profiled.
 
-## Implementation Rules for the AI
+## Implementation Rules
 
-- Testing is non-negotiable in every phase — write tests alongside features.
-- Prefer Composition API + `<script setup>`.
-- Keep all data access behind a clean repository/service layer.
-- Core domain logic: `reconstructEntryState` (pure function) rebuilds aggregated or historical entry state from related entries.
-- Design so historical reconstruction and aggregated views remain easy.
-- Prefer appending new Entries over mutating existing ones.
-- Do not hard-code colors or styles in a way that makes dark mode painful later.
-- Small, focused commits.
+See [CLAUDE.md](./CLAUDE.md), "Rules that always apply" — the write rule, ordering, the repository
+boundary, tests alongside every feature, Composition API, dark-mode-safe colors, and commit style
+all live there rather than being restated per document.

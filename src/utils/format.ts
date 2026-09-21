@@ -1,9 +1,8 @@
 /**
- * Turning values into text for a person to read: a stored timestamp, and whatever a `catch` caught.
+ * Turning values into text for a person to read: a stored timestamp, an entry's name, and whatever
+ * a `catch` caught. Held in one place so views can't drift on how a date or an error reads.
  *
- * Both were hand-rolled once per view and had already drifted — three `formatDate`s disagreeing on
- * their style, a dozen copies of the same `err instanceof Error` ternary. Neither belongs in the
- * domain layer: nothing here is about what an entry *is*, only about how one is shown.
+ * Deliberately not the domain layer: nothing here is about what an entry *is*, only how one shows.
  */
 
 import { previewText } from '@/domain/entryDocument'

@@ -86,8 +86,8 @@ describe('EntryForm (browser)', () => {
     const screen = mountForm({ disabled: true })
 
     // What the timeline finishing its load looks like from here. An editor becoming editable is
-    // not an edit, and treating it as one used to start a writing session nobody began — one
-    // empty draft per visit to the page.
+    // not an edit: treating it as one would start a writing session nobody began, leaving an empty
+    // draft behind per visit to the page.
     await screen.rerender({ disabled: false })
     screen.unmount()
 

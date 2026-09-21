@@ -56,8 +56,8 @@ describe('EntryCard (browser)', () => {
     const screen = await mountCard(makeAggregated({ content: textContent(LONG_TEXT) }))
 
     await expect.element(screen.getByText(LONG_TEXT)).toBeVisible()
-    // A shorter, truncated cut of the same text used to appear alongside the full one; confirming
-    // it doesn't is what proves there's no second, separate excerpt any more.
+    // An untitled card names itself by its own opening words rather than by a second, separately
+    // truncated copy of them, so asserting the short cut's absence is the real claim here.
     expect(screen.getByText(previewText(textContent(LONG_TEXT), 50)).query()).toBeNull()
   })
 

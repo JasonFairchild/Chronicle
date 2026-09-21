@@ -327,9 +327,9 @@ describe('EntryDetailView', () => {
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
 
-      // The page heading reads the parent's title too, so this checks specifically inside the
-      // anchor-mode composer's own "Entry being annotated" half, which used to open blank —
-      // nothing ever seeded `parentTitle` for it — rather than reading the entry's actual name.
+      // The page heading carries the parent's title too, so this looks specifically inside the
+      // composer's own "Entry being annotated" half — the half that only shows a title because the
+      // session seeds `parentTitle` — rather than passing on the heading above it.
       cy.findByRole('textbox', { name: 'Entry being annotated' })
         .closest('.rounded-lg')
         .should('contain.text', 'The Tahoe trip')

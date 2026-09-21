@@ -13,9 +13,10 @@ export interface StoredEntry extends Entry {
 }
 
 /**
- * One step of a draft's step chain, on its own row rather than inside the draft's own row — see
- * `ChronicleDatabase`'s docblock. `document` distinguishes a `new_child` session's two chains
- * (child and parent), which otherwise share nothing but `session_id`.
+ * One step of a draft's step chain, on its own row rather than inside the draft's snapshot row: the
+ * chain is the one unbounded part of a draft, so it is appended to rather than rewritten on every
+ * flush. `document` distinguishes a `new_child` session's two chains (child and parent), which
+ * otherwise share nothing but `session_id`.
  */
 export interface StoredDraftStep extends AuthoringStep {
   session_id: string
@@ -52,9 +53,9 @@ export class ChronicleDatabase extends Dexie {
       drafts: 'session_id, updated_at',
     })
 
-    // `drafts` rows carry no steps once this ships — the row's `child.steps`/`parent.steps` are
-    // always stored empty and reassembled from here on read. `session_id` alone is indexed
-    // alongside the compound key so a delete or a full-chain read doesn't need `document` too.
+    // A `drafts` row's `child.steps`/`parent.steps` are always stored empty and reassembled from
+    // here on read. `session_id` alone is indexed alongside the compound key so a delete or a
+    // full-chain read doesn't need `document` too.
     this.version(3).stores({
       draftSteps: '[session_id+document+index], session_id',
     })

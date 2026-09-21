@@ -1,3 +1,14 @@
+/**
+ * The editor schema: node and mark types, and the extensions list assembled from them.
+ *
+ * The entry **body** only. A title is an ordinary `<input>` beside the editing surface and a plain
+ * field on the entry, so no title node exists here or in the stored document (ENTRY_MODEL.md,
+ * "Fields"). `entryDocument.ts` reads what this produces as plain JSON, which is what keeps the
+ * flattening pure and node-testable. `anchorCommands.ts` is this module's companion, kept separate
+ * so each file answers one question: what an anchor *is* (here) versus what a session *does* with
+ * one (there).
+ */
+
 import { Extension, mergeAttributes, Mark, Node, type Extensions } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
@@ -17,16 +28,6 @@ import {
   markAnchor,
   type AnchorModeStorage,
 } from './anchorCommands'
-
-/**
- * The editor schema: node and mark types, and the extensions list assembled from them. This is the
- * entry **body** only — a title is a separate input that `entryDocument.ts` joins in — so there's no
- * title node here.
- * `entryDocument.ts` reads what this produces as plain JSON, which is what keeps the flattening
- * pure and node-testable. `anchorCommands.ts` is this module's companion — the imperative commands
- * and queries that operate on an editor already built from this schema, kept separate so each file
- * answers one question: what an anchor *is* (here) versus what a session *does* with one (there).
- */
 
 // An image whose bytes live in the media store, referenced by blob id only — no data/object URL or
 // path — so `media_refs` can be derived from the document and a reload never finds a dead URL.
@@ -65,14 +66,12 @@ const MediaImage = Node.create({
  *
  * `inclusive: false` so typing at an edge isn't silently absorbed into the anchor. `excludes: ''`
  * overrides a mark type's default of excluding itself — without it, adding this mark somewhere would
- * silently strip any *other* anchor's mark already sitting in that span, since ProseMirror's default
- * `addMark` behavior treats two marks of the same type as mutually exclusive regardless of their
- * attrs. Anchors are kept from actually overlapping at the command level instead (`markAnchor`,
- * `editor/anchorCommands.ts`; PRODUCT.md §4.4): a fresh selection touching an existing anchor's
- * marked passage, sealed or this session's own, never places a new one over it. The unique `anchorId`
- * is what stops ProseMirror from merging adjacent anchors into one.
+ * silently strip any *other* anchor's mark already sitting in that span, since ProseMirror treats
+ * two marks of the same type as mutually exclusive regardless of their attrs. Anchors are kept from
+ * actually overlapping at the command level instead (`markAnchor`, `anchorCommands.ts`). The unique
+ * `anchorId` is what stops ProseMirror from merging adjacent anchors into one.
  *
- * No color attribute: color is computed at render time from the scheme in force (ENTRY_MODEL.md, "Color").
+ * No color attribute: color is computed at render time (ENTRY_MODEL.md, "Color").
  */
 const Anchor = Mark.create({
   name: ANCHOR_MARK,
@@ -153,11 +152,11 @@ const AnchorInsert = Node.create({
   },
 
   // Which anchor's wording is open for editing — UI state, never a node attribute, so it can't
-  // reach the stored document. See `AnchorInsertStorage` (`anchorCommands.ts`) for why it needs a `Ref`.
+  // reach the stored document. See `AnchorInsertStorage` (`anchorCommands.ts`) for why it's a `Ref`.
   addStorage: createAnchorInsertStorage,
 
-  // The Vue node view (`AnchorInsertView.vue`) renders this node as plain text or a live input
-  // depending on this storage — one mechanism replacing the old toolbar-and-field split.
+  // The Vue node view (`AnchorInsertView.vue`) renders this node as plain text or a live input,
+  // depending on that storage.
   addNodeView() {
     return VueNodeViewRenderer(AnchorInsertView)
   },

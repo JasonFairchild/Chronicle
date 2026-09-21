@@ -333,9 +333,9 @@ describe('EntryDetailView (browser)', () => {
     const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
     await expect.element(parentEditor).toBeVisible()
 
-    // The page heading reads the parent's title too, so this checks specifically inside the
-    // anchor-mode composer's own "Entry being annotated" half, which used to open blank — nothing
-    // ever seeded `parentTitle` for it — rather than reading the entry's actual name.
+    // The page heading carries the parent's title too, so this looks specifically inside the
+    // composer's own "Entry being annotated" half — the half that only shows a title because the
+    // session seeds `parentTitle` — rather than passing on the heading above it.
     const editorRoot = parentEditor.element().closest('.rounded-lg')
     expect(editorRoot?.textContent).toContain('The Tahoe trip')
   })
@@ -398,9 +398,9 @@ describe('EntryDetailView (browser)', () => {
     await userEvent.keyboard('Actually')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
-    // A highlight is a mark on existing text, same as a strike — wording rides along with it the
-    // same way, which is what `relationTypeForAnchors` already reads as an `update` and what
-    // `describeAnchor` needs its own branch for (its `comment` case used to ignore an insertion).
+    // A highlight is a mark on existing text, same as a strike, and wording rides along with it the
+    // same way — so `relationTypeForAnchors` reads it as an `update`, and `describeAnchor`'s
+    // `comment` case has to report the insertion rather than only the passage.
     await expect.element(screen.getByText('On “Lake Tahoe”, adds “Donner Lake”')).toBeVisible()
 
     const children = await repository.listChildren(parent.id)
@@ -429,7 +429,7 @@ describe('EntryDetailView (browser)', () => {
     selectTextRange(editorEl, 10, 20)
     await userEvent.keyboard('{Backspace}')
 
-    // The full sentence, not just that some warning fired: PRODUCT.md §5.3 requires naming the
+    // The full sentence, not just that some warning fired: PRODUCT.md §4.5 requires naming the
     // note, not merely counting how many were affected.
     await expect
       .element(screen.getByText('This changes the passage Wonderful trip is about.'))

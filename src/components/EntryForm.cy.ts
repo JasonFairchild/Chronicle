@@ -73,8 +73,8 @@ describe('EntryForm', () => {
 
   it('leaves no draft behind for a composer that was only opened', () => {
     // What the timeline finishing its load looks like from here. An editor becoming editable is
-    // not an edit, and treating it as one used to start a writing session nobody began — one
-    // empty draft per visit to the page.
+    // not an edit: treating it as one would start a writing session nobody began, leaving an empty
+    // draft behind per visit to the page.
     cy.mount(EntryForm, { props: { disabled: true } }).then(({ wrapper }) =>
       wrapper.setProps({ disabled: false }),
     )

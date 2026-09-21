@@ -4,12 +4,12 @@
  * An anchor's position is a fact about the **parent's** document, so that is where it is stored: a
  * span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is an
  * `anchorInsert` node carrying `{ anchorId, text }`. A child entry keeps only ids and the wording
- * each one covered when it was sealed.
+ * each one covered when it was sealed (ENTRY_MODEL.md, "Child entries and anchors").
  *
- * That is what deletes the old resolution ladder. There is no "where did this offset end up"
- * question left to answer — the editor maintains anchor positions the same way it maintains
- * everything else — so this module only reads structure back out. Nothing here imports TipTap; it
- * walks the same plain JSON `entryDocument.ts` does.
+ * So there is no stored offset to reinterpret and nothing to resolve positionally: the editor
+ * maintains anchor positions the way it maintains everything else, and this module only reads the
+ * structure back out. Nothing here imports TipTap; it walks the same plain JSON `entryDocument.ts`
+ * does.
  */
 
 import type { AnchorKind, AnchorRef, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
@@ -138,8 +138,7 @@ export function sessionAnchorIds(
 
 /**
  * The anchors placed in `current` since `base` — the same question `sessionAnchorIds` answers, asked
- * of two documents rather than a precomputed set, for callers that hold the session's base document
- * instead (`draftsStore`, `entriesStore` at seal time).
+ * of two documents rather than a precomputed set, for callers holding the session's base document.
  *
  * A session's base is persisted (`Draft.parent.base_content`) rather than inferred from whatever the
  * editor happened to mount with, which is what makes this survive a resume: a reload reseeds the

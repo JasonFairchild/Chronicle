@@ -14,9 +14,9 @@
  * text-editing to guard against and no IME trouble.
  *
  * Closed, an anchor this session may still edit (`isEditableAnchor`) is itself clickable, reopening
- * this same box with its current wording already in the input — see PRODUCT.md §4.4, "Interacting
- * with an anchor already placed". A sealed anchor from an earlier, already-sealed child renders the
- * same markup but is not clickable: only the anchor that placed it may change it.
+ * this same box with its current wording already in the input (PRODUCT.md §4.4). An anchor an
+ * earlier child already sealed renders the same markup but is not clickable: only the child that
+ * placed one may change it.
  *
  * `contenteditable="false"` on the wrapper is load-bearing, not decorative: a native `<input>`
  * nested inside an ancestor `contenteditable` region is a known rough edge across browsers — the

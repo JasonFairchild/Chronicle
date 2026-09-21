@@ -47,22 +47,24 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ## Scripts
 
-| Command                | Description                                 |
-| ---------------------- | ------------------------------------------- |
-| `npm run dev`          | Start Vite dev server                       |
-| `npm run build`        | Type-check and production build             |
-| `npm run preview`      | Preview production build                    |
-| `npm run test`         | Vitest unit project                         |
-| `npm run test:browser` | Vitest browser project                      |
-| `npm run test:watch`   | Vitest unit project in watch mode           |
-| `npm run cy`           | Cypress component test runner (interactive) |
-| `npm run cy:run`       | Cypress component tests (headless)          |
-| `npm run typecheck`    | Type-check all project references (vue-tsc) |
-| `npm run lint`         | ESLint                                      |
-| `npm run lint:fix`     | ESLint with autofix                         |
-| `npm run format`       | Prettier write                              |
-| `npm run format:check` | Prettier check (no writes)                  |
-| `npm run verify`       | typecheck + lint + format:check             |
+| Command                     | Description                                 |
+| --------------------------- | ------------------------------------------- |
+| `npm run dev`               | Start Vite dev server                       |
+| `npm run build`             | Type-check and production build             |
+| `npm run preview`           | Preview production build                    |
+| `npm run test`              | Vitest unit project                         |
+| `npm run test:browser`      | Vitest browser project                      |
+| `npm run test:browser:open` | Vitest browser project, headed              |
+| `npm run test:watch`        | Vitest unit project in watch mode           |
+| `npm run test:coverage`     | Both Vitest projects with coverage          |
+| `npm run cy`                | Cypress component test runner (interactive) |
+| `npm run cy:run`            | Cypress component tests (headless)          |
+| `npm run typecheck`         | Type-check all project references (vue-tsc) |
+| `npm run lint`              | ESLint                                      |
+| `npm run lint:fix`          | ESLint with autofix                         |
+| `npm run format`            | Prettier write                              |
+| `npm run format:check`      | Prettier check (no writes)                  |
+| `npm run verify`            | typecheck + lint + format:check             |
 
 ## Git hooks
 

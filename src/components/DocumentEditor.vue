@@ -27,7 +27,7 @@ export interface EditorChange extends ChangeSignals {
   /**
    * Pre-existing anchors whose covered text this session has disturbed so far, outside anchor
    * mode. Cumulative across the whole session: once an edit changes what an anchor covers, that
-   * anchor stays flagged even if a later edit moves the surrounding text back (PRODUCT.md §5.3).
+   * anchor stays flagged even if a later edit moves the surrounding text back (PRODUCT.md §4.5).
    */
   affectedAnchorIds?: string[]
 }
@@ -183,9 +183,8 @@ function anchorMarkupAttr(document: EntryDocument): Record<string, string> {
 }
 
 /**
- * What the polite live region below announces. The only feedback an anchor placement used to give
- * was a color change inside a contenteditable, invisible to assistive tech; this is read out for
- * every placement instead.
+ * What the polite live region below announces. An anchor command's only visible feedback is a color
+ * change inside a contenteditable, which assistive tech cannot see, so each one is spoken instead.
  */
 const liveRegionMessage = ref('')
 
@@ -246,8 +245,8 @@ const editor = useEditor({
       const pairWith = pairableAnchorAt(marksBefore, sealedAnchorIdsOf(instance))
 
       // Pairing appends to the anchor's existing node (or creates its first one) rather than
-      // inserting a fresh node under the same id — see `openAnchorWording`'s own note on why a
-      // second call site inserting blindly used to be able to produce two nodes sharing one id.
+      // inserting a fresh one under the same id — see `openAnchorWording` for why inserting
+      // blindly here would be able to produce two nodes sharing an id.
       return pairWith
         ? openAnchorWording(instance, pairWith, text) !== null
         : openAnchorInsert(instance, from, text) !== null
@@ -465,17 +464,13 @@ interface ToolbarAction {
 }
 
 /**
- * The toolbar, as data, grouped the way the buttons are laid out.
+ * The toolbar, as data, grouped the way the buttons are laid out. Every action here is a StarterKit
+ * command that already works from the keyboard, so this exposes what the editor can do rather than
+ * adding to it — and heading levels belong to the text-style select, not this row.
  *
- * Every one of these is already installed — StarterKit ships them and they have always worked from
- * the keyboard. Buttons are the only part that was missing, so this exposes what the editor can do
- * rather than adding to it. Heading levels live in the text-style select below, not here: a select
- * is a more natural fit for "pick one of several block types," and it is where a future block type
- * (a code block, say) would be added rather than growing this button row.
- *
- * Strikethrough is included: it is ordinary formatting here, distinct from an anchor-op strike
- * (a child entry retracting part of its parent) by its own presentation, not by being withheld
- * from the toolbar. See PRODUCT.md, "Making anchor ops unmistakable".
+ * Strikethrough is included: it is ordinary formatting here, distinct from an anchor-op strike (a
+ * child entry retracting part of its parent) by its own presentation, not by being withheld from
+ * the toolbar. See PRODUCT.md, "Making anchor ops unmistakable".
  */
 interface ToolbarGroups {
   history: ToolbarAction[]
@@ -584,12 +579,6 @@ function setTextStyle(event: Event): void {
   }
 }
 
-/**
- * Rarely-reached actions live behind one "More" toggle rather than in the button row, which is
- * where a future addition (dates, mentions, whatever comes next) should go too — see PRODUCT.md.
- * A disclosure, not a `menu`/`menuitem` widget: those roles promise arrow-key navigation this
- * doesn't implement, so plain buttons in a revealed panel are the honest a11y choice.
- */
 const moreOpen = ref(false)
 const moreToggle = ref<HTMLButtonElement | null>(null)
 const morePanel = ref<HTMLElement | null>(null)
@@ -720,12 +709,8 @@ defineExpose({
 
     <AnchorMenu v-if="editor && anchorMode" :editor="editor" @mark="handleAnchorMark" />
 
-    <!--
-      A polite live region: the only feedback an anchor placement used to give was a color change
-      inside a contenteditable, which assistive tech cannot see at all. Always in the DOM, even
-      outside anchor mode, since a live region has to exist before its first update to be announced
-      reliably — an empty one the rest of the time costs nothing.
-    -->
+    <!-- Mounted with the mode rather than with its first message: a live region has to be in the
+         DOM before it updates to be announced reliably. -->
     <p v-if="anchorMode" class="sr-only" role="status" aria-live="polite">
       {{ liveRegionMessage }}
     </p>
@@ -740,16 +725,12 @@ defineExpose({
         `mousedown.prevent` keeps the caret in the document. Without it the button takes focus on
         mousedown, and in a real browser the keystrokes after a click land on the button rather than
         in the text: Enter re-presses it and the words go nowhere. Restoring focus inside the click
-        handler is too late to prevent that.
+        handler is too late to prevent that. Neither test runner reproduces it — both synthesize the
+        click in a way that leaves focus where the handler puts it — so it is only ever caught by
+        using the editor in a real browser.
 
-        Neither test runner reproduces it — both synthesize the click in a way that leaves focus
-        where the handler puts it — so this one is held by the driven-browser check in
-        `DocumentEditor` rather than by a spec.
-
-        Every button below is icon-only: the visible label is gone, but `aria-label` keeps the
-        accessible name exactly what it was, so `getByRole('button', { name: 'Bold' })` and friends
-        still find these the same way. `title` is only for the mouse tooltip; it never wins over
-        `aria-label` when a screen reader computes the name.
+        Every button here is icon-only, so `aria-label` carries the accessible name on its own.
+        `title` is the mouse tooltip and never wins over `aria-label` when a name is computed.
       -->
       <button
         v-for="action in toolbarGroups.history"
@@ -767,10 +748,8 @@ defineExpose({
 
       <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
 
-      <!--
-        A select, not two more toggle buttons: only one block type ever applies at once, and this is
-        where a future one (a code block, say) gets added without the button row growing again.
-      -->
+      <!-- A select, not two more toggle buttons: only one block type applies at a time, and a
+           future one (a code block, say) is added here rather than growing the button row. -->
       <label :for="`${label}-text-style`" class="sr-only">Text style</label>
       <select
         :id="`${label}-text-style`"
@@ -811,8 +790,8 @@ defineExpose({
       <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
 
       <!--
-        The overflow menu: rarely-reached actions today, and the place a future addition to this
-        toolbar belongs instead of a new button crowding the row above. A disclosure, not a
+        The overflow menu: rarely-reached actions, and where a future addition to this toolbar
+        belongs instead of another button crowding the row above. A disclosure, not a
         `menu`/`menuitem` widget — those roles promise arrow-key navigation this doesn't implement,
         so plain, independently-tabbable buttons in a revealed panel are the honest a11y choice.
       -->
@@ -1120,10 +1099,9 @@ defineExpose({
 }
 
 /*
-  A placed anchor this session may still edit is itself clickable — see PRODUCT.md §4.4,
-  "Interacting with an anchor already placed" — so its wording reads as something to act on rather
-  than plain text, without disturbing the italic/color styling above that marks it as proposed
-  wording in the first place.
+  A placed anchor this session may still edit is itself clickable (PRODUCT.md §4.4), so its wording
+  reads as something to act on rather than plain text — without disturbing the italic/color styling
+  above that marks it as proposed wording in the first place.
 */
 :deep(.chronicle-anchor-wording--editable) {
   cursor: pointer;

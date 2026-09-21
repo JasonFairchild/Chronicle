@@ -21,8 +21,10 @@ import { docToPlainText, type EntryDocument } from './entryDocument'
 
 export type DiffKind = 'unchanged' | 'added' | 'removed'
 
-/** One run of text that survived, arrived, or left. Concatenating every non-`removed` segment's
- * text reproduces the later version exactly; every non-`added` one reproduces the earlier. */
+/**
+ * One run of text that survived, arrived, or left. Concatenating every non-`removed` segment's text
+ * reproduces the later version exactly; every non-`added` one reproduces the earlier.
+ */
 export interface DiffSegment {
   kind: DiffKind
   text: string
@@ -48,7 +50,7 @@ export function diffDocuments(
 
 /**
  * The diff between two plain strings, word by word. Public because the entry's title is plain text
- * living beside the document rather than inside it (ENTRY_MODEL.md, "Title"), so renaming shows up
+ * living beside the document rather than inside it (ENTRY_MODEL.md, "Fields"), so renaming shows up
  * here and not in `diffDocuments`.
  *
  * Words rather than characters: a reader comparing two versions of a sentence wants to see which

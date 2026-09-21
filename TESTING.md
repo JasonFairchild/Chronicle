@@ -136,17 +136,15 @@ merely shortens an assertion does not.
   freshMediaRepository()
   ```
 
-  Call only the ones a given spec actually needs — `ConnectionForm` (superseded by
-  `NewConnectionView`) called none of them, since it never touched storage directly. Entries and
-  drafts share one uniquely-named database per
-  test, exactly as `src/repositories/index.ts` shares one in production — a transaction cannot span
-  two connections, so a spec covering the anchor-mode atomic seal has to be given the shape it will
-  actually run against. Media gets its own OPFS directory. Everything created registers itself for
-  cleanup; `cypress/support/component.ts` and `src/testing/browserSetup.ts`
-  each dispose everything created in one global `afterEach`, so a spec that creates nothing pays
-  nothing. Plain-Node `*.test.ts` unit tests are the exception: IndexedDB/OPFS don't exist in Node,
-  so those still swap in `InMemoryEntryRepository` / `InMemoryDraftRepository` /
-  `InMemoryMediaRepository` directly, same as always.
+  Call only the ones a given spec actually needs; a component that never touches storage directly
+  needs none of them. Entries and drafts share one uniquely-named database per test, exactly as
+  `src/repositories/index.ts` shares one in production — a transaction cannot span two connections,
+  so a spec covering the anchor-mode atomic seal has to be given the shape it will actually run
+  against. Media gets its own OPFS directory. Everything created registers itself for cleanup;
+  `cypress/support/component.ts` and `src/testing/browserSetup.ts` each dispose everything created
+  in one global `afterEach`, so a spec that creates nothing pays nothing. Plain-Node `*.test.ts`
+  unit tests are the exception: IndexedDB/OPFS don't exist in Node, so those swap in
+  `InMemoryEntryRepository` / `InMemoryDraftRepository` / `InMemoryMediaRepository` directly.
 
 - **Fresh instance per test**, not a shared singleton that gets cleared. Isolation by construction.
 
@@ -191,12 +189,21 @@ wiring Cypress into the same coverage run later — a natural next comparison, a
 Browser Mode vs. Cypress as runners — is a small addition rather than a second provider to reconcile.
 Cypress isn't wired into coverage yet; only Vitest is.
 
+## Clearing local data by hand
+
+When entries or drafts from manual testing have problems, clear them rather than writing code
+to tolerate them (see CLAUDE.md, "No backward compatibility"). From the browser console:
+
+```js
+const req = indexedDB.open('chronicle')
+req.onsuccess = () => {
+  req.result.transaction('drafts', 'readwrite').objectStore('drafts').clear()
+}
+```
+
+Swap `'drafts'` for `'entries'` to clear those instead, or delete the whole database from DevTools →
+Application → IndexedDB. Browser specs gets a uniquely-named DB, disposed in the global `afterEach`.
+
 ## Known gaps
 
 - Nothing outstanding.
-
-deleting database note:
-const req = indexedDB.open('chronicle')
-req.onsuccess = () => {
-req.result.transaction('drafts', 'readwrite').objectStore('drafts').clear()
-}

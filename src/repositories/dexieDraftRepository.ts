@@ -63,8 +63,8 @@ export class DexieDraftRepository implements DraftRepository {
         b.updated_at.localeCompare(a.updated_at) || b.session_id.localeCompare(a.session_id),
     )
 
-    // No `draftSteps` query here — that's the whole point. The snapshot row already carries no
-    // steps (chunk 2), so a summary needs nothing this query didn't already fetch.
+    // No `draftSteps` query here — that's the whole point. The snapshot row carries no steps, so a
+    // summary needs nothing this query didn't already fetch.
     return sorted.map(toSummary)
   }
 

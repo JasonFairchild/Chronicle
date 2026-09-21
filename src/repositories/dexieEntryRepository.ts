@@ -10,9 +10,9 @@ import { resolveDatabase, type ChronicleDatabase, type StoredEntry } from './chr
 import type { EntryRepository } from './entryRepository'
 
 /**
- * SQLite WASM + OPFS is the preferred long-term adapter (see ENTRY_MODEL.md); Dexie ships first
+ * SQLite WASM + OPFS is the preferred long-term adapter (CHRONICLE_PLAN.md); Dexie ships first
  * because it needs no cross-origin isolation headers and proves the same interface can be backed
- * by more than one storage engine. `EntryRepository.contract.ts` is what makes that provable: both
+ * by more than one storage engine. `entryRepository.contract.ts` is what makes that provable: both
  * adapters run the identical behavioral suite.
  */
 export class DexieEntryRepository implements EntryRepository {

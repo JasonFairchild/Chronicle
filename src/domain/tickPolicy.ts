@@ -1,7 +1,7 @@
 import type { TickReason } from '@/types/entry'
 
 /**
- * When a moment in a writing session is worth bookmarking. See PRODUCT.md §4.9 for reasoning.
+ * When a moment in a writing session is worth bookmarking (ENTRY_MODEL.md, "Authoring capture").
  *
  * Ticks are not saves — every step is persisted regardless, via the draft buffer. Confusing the
  * two would either lose work or fill the chain with bookmarks nobody wants.
@@ -60,7 +60,7 @@ export interface ChangeSignals {
   insertedText: string // Text this change added. Empty for a deletion or a pure formatting change.
   isFormatting: boolean // True when the change applied a mark or changed a node type rather than text.
   // True for a structural anchor op (placing, switching, or removing one) — not for typing inside
-  // an anchor's wording box. See PRODUCT.md §4.4 and `contentDelta` in `domain/entryDocument.ts`.
+  // an anchor's wording box. Judged by outcome; see `contentDelta` in `domain/entryDocument.ts`.
   isAnchorOp: boolean
   isPaste: boolean // True when the change arrived via paste — the transaction's own `uiEvent` meta.
   mediaChanged: boolean // True when the change attached or removed media. See `contentDelta`.

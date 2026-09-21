@@ -315,10 +315,8 @@ export const useEntriesStore = defineStore('entries', () => {
     const roots = await entryRepository.listRootEntries()
 
     // A card needs each root folded over its own revisions and nothing else, so it asks for
-    // exactly that. The persistent adapter should collapse this into one query rather than
-    // reaching for listAll, which would load the whole database to render a list. The revision
-    // fetches are independent of each other, so they run concurrently rather than one root's
-    // round trip waiting on the last.
+    // exactly that rather than loading the whole table to render a list. The revision fetches are
+    // independent, so they run concurrently rather than one root's round trip waiting on the last.
     const states = await Promise.all(
       roots.map(async (root) => {
         const revisions = await entryRepository.listRevisions(root.id)

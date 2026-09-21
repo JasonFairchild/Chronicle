@@ -210,8 +210,9 @@ describe('useDraftsStore', () => {
     expect(child?.relation_type).toBe('annotation')
     expect(child?.anchors).toEqual([{ anchor_id: 'anchor-1', quote: 'meeting' }])
 
-    // The parent gained a revision carrying the anchor, rather than the anchor sitting only on
-    // the child — an anchor's position is a fact about the parent's document (ENTRY_MODEL.md).
+    // The parent gained a revision carrying the anchor, rather than the anchor sitting only on the
+    // child: an anchor's position is a fact about the parent's document (ENTRY_MODEL.md, "Child
+    // entries and anchors").
     const revisions = await entryRepository.listRevisions(parent.id)
     expect(revisions).toHaveLength(1)
     expect(revisions[0]?.revision_mode).toBe('anchor')
@@ -219,10 +220,10 @@ describe('useDraftsStore', () => {
   })
 
   it('records an anchor op into the parent stream as a tick, the same way the child stream would', async () => {
-    // One authoring pipeline, not two (CLAUDE.md, "anchor mode limits what the editor allows, not
-    // what the authoring session records"): `recordParentChange` and `recordChange` both have to
-    // reach the same `AuthoringSession.record`, so a structural anchor op bookmarks the parent's
-    // own chain exactly the way it would the child's.
+    // One authoring pipeline, not two (ENTRY_MODEL.md, "Authoring capture"): anchor mode limits
+    // what the editor can produce, not how a session records it, so `recordParentChange` and
+    // `recordChange` both reach the same `AuthoringSession.record` and a structural anchor op
+    // bookmarks the parent's own chain exactly the way it would the child's.
     const store = useDraftsStore()
     const parentContent = 'The meeting went badly'
     const parent = await entryRepository.create(

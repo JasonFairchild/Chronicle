@@ -46,6 +46,14 @@ export function buildEntryHistory(
   return historyFor(entryId, index, asOf?.toISOString())
 }
 
+/**
+ * One entry's own state folded out of its version chain, plus its relations as collections.
+ *
+ * The pure core of the model: given the rows, it answers both "what does this entry say now" and
+ * "what did it say at time T" with the same walk, which is what keeps historical reconstruction
+ * from needing machinery of its own. Children are exposed as collections, never concatenated into
+ * the parent's text — concatenating would make anchoring impossible and `content` untrue.
+ */
 export function reconstructEntryState(
   entryId: string,
   entries: Entry[],

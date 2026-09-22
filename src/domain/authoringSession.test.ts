@@ -99,6 +99,97 @@ describe('AuthoringSession', () => {
     expect(session.ticks[0]?.reasons).toEqual(['format', 'punctuation'])
   })
 
+  it('keeps a tick exactly the density window after the previous one as its own', () => {
+    const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+    const session = new AuthoringSession(
+      'session-density-boundary',
+      '2026-09-05T10:00:00.000Z',
+      clock.now,
+    )
+
+    session.record({ steps: [{ stepType: 'addMark' }], isFormatting: true })
+    clock.advance(DEFAULT_TICK_POLICY.minTickGapMs)
+    session.record({ steps: [{ stepType: 'addMark' }], isFormatting: true })
+
+    expect(session.ticks.map((tick) => tick.step_index)).toEqual([1, 2])
+  })
+
+  it('measures the density window from the merged tick, so a steady cluster stays one tick', () => {
+    const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+    const session = new AuthoringSession(
+      'session-density-chain',
+      '2026-09-05T10:00:00.000Z',
+      clock.now,
+    )
+
+    session.record({ steps: [{ stepType: 'addMark' }], isFormatting: true })
+    clock.advance(1_500)
+    session.record({ steps: [{ stepType: 'addMark' }], isFormatting: true })
+    clock.advance(1_500)
+    session.record({ steps: [{ stepType: 'addMark' }], isFormatting: true })
+
+    expect(session.ticks).toEqual([{ at: 3_000, step_index: 3, reasons: ['format'] }])
+  })
+
+  describe('a manual bookmark', () => {
+    it('stays apart from a tick the policy placed a moment before', () => {
+      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+      const session = new AuthoringSession(
+        'session-manual-after',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
+
+      session.record({ steps: [{ stepType: 'replace' }], insertedText: 'Done.' })
+      clock.advance(500)
+      session.manualMark()
+
+      expect(session.ticks).toEqual([
+        { at: 0, step_index: 1, reasons: ['punctuation'] },
+        { at: 500, step_index: 1, reasons: ['manual'] },
+      ])
+    })
+
+    it('stays where it was when the policy places a tick a moment after', () => {
+      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+      const session = new AuthoringSession(
+        'session-manual-before',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
+
+      session.record({ steps: [{ stepType: 'replace' }], insertedText: 'Done' })
+      clock.advance(100)
+      session.manualMark()
+      clock.advance(400)
+      session.record({ steps: [{ stepType: 'replace' }], insertedText: '.' })
+
+      expect(session.ticks).toEqual([
+        { at: 100, step_index: 1, reasons: ['manual'] },
+        { at: 500, step_index: 2, reasons: ['punctuation'] },
+      ])
+    })
+
+    it('stays apart from another manual bookmark, however close', () => {
+      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+      const session = new AuthoringSession(
+        'session-manual-twice',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
+
+      session.record({ steps: [{ stepType: 'replace' }], insertedText: 'draft' })
+      session.manualMark()
+      clock.advance(100)
+      session.manualMark()
+
+      expect(session.ticks).toEqual([
+        { at: 0, step_index: 1, reasons: ['manual'] },
+        { at: 100, step_index: 1, reasons: ['manual'] },
+      ])
+    })
+  })
+
   describe('deletion', () => {
     it('bookmarks a deletion of any size at its last step once something else happens', () => {
       const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
@@ -170,6 +261,63 @@ describe('AuthoringSession', () => {
       expect(session.ticks.map((tick) => tick.reasons)).toEqual([['interval'], ['deletion']])
     })
 
+    it('merges the end of a run into a tick placed on its own last step', () => {
+      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+      const session = new AuthoringSession(
+        'session-deletion-same-step',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
+
+      session.record({ steps: [{ stepType: 'replace' }], insertedText: 'a' })
+      clock.advance(DEFAULT_TICK_POLICY.pauseMs + 1_000)
+      session.record({ steps: [{ stepType: 'replace' }], removedChars: 1 })
+      clock.advance(100)
+      session.record({ steps: [{ stepType: 'replace' }], insertedText: 'b' })
+
+      expect(session.ticks).toEqual([
+        { at: DEFAULT_TICK_POLICY.pauseMs + 1_000, step_index: 2, reasons: ['deletion', 'pause'] },
+      ])
+    })
+
+    it('ends an open run when the writer bookmarks, so its tick never lands behind theirs', () => {
+      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+      const session = new AuthoringSession(
+        'session-deletion-manual',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
+
+      session.record({ steps: [{ stepType: 'replace' }], removedChars: 1 })
+      clock.advance(20_000)
+      session.manualMark()
+      clock.advance(1_000)
+      session.record({ steps: [{ stepType: 'replace' }], insertedText: 'a' })
+
+      expect(session.ticks).toEqual([
+        { at: 0, step_index: 1, reasons: ['deletion'] },
+        { at: 20_000, step_index: 1, reasons: ['manual'] },
+      ])
+    })
+
+    it('keeps a run ended by a bookmark a moment later apart from that bookmark', () => {
+      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
+      const session = new AuthoringSession(
+        'session-deletion-manual-merge',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
+
+      session.record({ steps: [{ stepType: 'replace' }], removedChars: 1 })
+      clock.advance(1_000)
+      session.manualMark()
+
+      expect(session.ticks).toEqual([
+        { at: 0, step_index: 1, reasons: ['deletion'] },
+        { at: 1_000, step_index: 1, reasons: ['manual'] },
+      ])
+    })
+
     it('closes a run still open when the trace is sealed', () => {
       const session = new AuthoringSession('session-deletion-seal', new Date().toISOString())
 
@@ -193,7 +341,7 @@ describe('AuthoringSession', () => {
     const session = new AuthoringSession('session-2', new Date().toISOString())
 
     session.record({ steps: [{ stepType: 'replace' }], insertedText: 'draft' })
-    session.mark()
+    session.manualMark()
 
     expect(session.ticks).toEqual([expect.objectContaining({ step_index: 1, reasons: ['manual'] })])
   })
@@ -217,9 +365,8 @@ describe('AuthoringSession', () => {
       clock.now,
     )
 
-    // Past `minTickGapMs`, so the new tick this produces doesn't merge into the seeded one — a
-    // resumed session's own construction seeds `lastTickAt` at essentially this same instant, and
-    // this test means to show two ticks preserved intact, not exercise the merge behavior.
+    // Past `minTickGapMs` from the restored tick, so this shows two ticks kept intact rather than
+    // exercising the merge.
     clock.advance(DEFAULT_TICK_POLICY.minTickGapMs + 1_000)
     session.record({ steps: [{ stepType: 'replace' }], insertedText: 'after the reload.' })
     const trace = session.seal()
@@ -244,6 +391,27 @@ describe('AuthoringSession', () => {
 
     expect(session.ticks).toHaveLength(1)
     expect(session.ticks[0]?.reasons).toContain('pause')
+  })
+
+  it('leaves a bookmark from before the reload where it was, rather than merging into it', () => {
+    const clock = fakeClock(Date.parse('2026-09-05T09:01:00.000Z'))
+    const session = AuthoringSession.resume(
+      'session-resume-merge',
+      '2026-09-05T09:00:00.000Z',
+      {
+        steps: [{ at: 1_000, step: { stepType: 'replace' } }],
+        ticks: [{ at: 1_000, step_index: 1, reasons: ['punctuation'] }],
+      },
+      clock.now,
+    )
+
+    clock.advance(500)
+    session.record({ steps: [{ stepType: 'replace' }], insertedText: 'Back.' })
+
+    expect(session.ticks).toEqual([
+      { at: 1_000, step_index: 1, reasons: ['punctuation'] },
+      { at: 60_500, step_index: 2, reasons: ['pause', 'punctuation'] },
+    ])
   })
 
   describe('a clock that moves backwards', () => {
@@ -281,6 +449,22 @@ describe('AuthoringSession', () => {
 
       expect(session.steps[0]?.at).toBe(0)
       expect(session.seal()?.ended_at).toBe('2026-09-05T10:00:00.000Z')
+    })
+
+    it('does not count a clock that came back behind the previous run as time since a bookmark', () => {
+      // The run before the reload reached 70s in; the clock came back reading only 0.5s in.
+      const clock = fakeClock(Date.parse('2026-09-05T09:00:00.500Z'))
+      const session = AuthoringSession.resume(
+        'session-clock-interval',
+        '2026-09-05T09:00:00.000Z',
+        { steps: [{ at: 70_000, step: { stepType: 'replace' } }], ticks: [] },
+        clock.now,
+      )
+
+      clock.advance(1_000)
+      session.record({ steps: [{ stepType: 'replace' }], insertedText: 'a' })
+
+      expect(session.ticks).toEqual([])
     })
 
     it('does not stamp a resumed session behind what the run before the reload recorded', () => {

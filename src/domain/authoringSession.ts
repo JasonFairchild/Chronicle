@@ -45,7 +45,7 @@ export class AuthoringSession {
   private readonly recordedSteps: AuthoringStep[] = []
   private readonly recordedTicks: AuthoringTick[] = []
   private state: TickState
-  private inDeletionRun = false // Whether the last change removed text and its run is still open.
+  private deletionRunLastAt: number | null = null // The open run's latest deleting instant, if any.
 
   /** `now` is injected so tests can drive time instead of waiting for it. */
   constructor(sessionId: string, startedAt: string, now: () => number = () => Date.now()) {
@@ -108,8 +108,8 @@ export class AuthoringSession {
     const pausedSinceLastEvent =
       this.state.lastEventAt !== null && at - this.state.lastEventAt >= DEFAULT_TICK_POLICY.pauseMs
 
-    if (this.inDeletionRun && (!removesText || pausedSinceLastEvent)) this.closeDeletionRun()
-    this.inDeletionRun = removesText
+    if (!removesText || pausedSinceLastEvent) this.closeDeletionRun()
+    if (removesText) this.deletionRunLastAt = at
 
     for (const step of change.steps) {
       this.recordedSteps.push({ at: at - this.startedAtMs, step })
@@ -129,49 +129,66 @@ export class AuthoringSession {
     )
 
     this.state = { ...this.state, lastEventAt: at }
-    // One tick per change no matter how many rules agree, never one per rule — `mark` requires a
-    // non-empty tuple, which is what forces this destructure-and-check instead of passing the
-    // array straight through. `at` is threaded through rather than read again inside `mark`, so
-    // the step this tick bookmarks and the tick itself share one clock read.
-    if (reason) this.mark([reason, ...rest], at)
+    // One tick per change no matter how many rules agree, never one per rule — `addTick` requires
+    // a non-empty tuple, which is what forces this destructure-and-check instead of passing the
+    // array straight through. `at` is threaded through rather than read again, so the step this
+    // tick bookmarks and the tick itself share one clock read.
+    if (reason) this.addTick([reason, ...rest], at)
   }
 
   /**
-   * Bookmarks the current end of the chain. `manual` is the user asking for one — the only caller
-   * that doesn't already have an `at` from a `record()` in progress, hence the default read here.
-   *
-   * A tick landing within `policy.minTickGapMs` of the previous one merges into it rather than
-   * adding a second right beside it — what keeps bolding eight words one at a time from becoming
-   * eight stops on a scrub bar. The merged tick's `at`/`step_index` move up to this event's, so it
-   * sits at the end of the cluster it now represents; reasons union and re-sort, since the merge can
-   * bring in a reason the earlier tick didn't have.
+   * A bookmark the writer asked for, at the current end of the chain. It ends any open deletion run
+   * first: that run's tick is backdated to its last deleting change, and closing it here is what
+   * keeps it from ever landing behind this one.
    */
-  mark(reasons: [TickReason, ...TickReason[]] = ['manual'], at: number = this.readClock()): void {
-    const last = this.recordedTicks[this.recordedTicks.length - 1]
-    const gapSinceLastTick = this.state.lastTickAt === null ? Infinity : at - this.state.lastTickAt
+  manualMark(): void {
+    this.closeDeletionRun()
+    this.addTick(['manual'], this.readClock())
+  }
 
-    if (last && gapSinceLastTick < DEFAULT_TICK_POLICY.minTickGapMs) {
-      last.at = at - this.startedAtMs
+  /**
+   * Bookmarks the current end of the chain at `at`, which callers guarantee is no earlier than any
+   * tick before it.
+   *
+   * A tick landing within `minTickGapMs` of the last recorded tick merges into it rather than adding
+   * a second right beside it — what keeps bolding eight words one at a time from becoming eight
+   * stops on a scrub bar. The merged tick's `at`/`step_index` move up to this event's, so it sits at
+   * the end of the cluster it now represents; reasons union and re-sort, since the merge can bring
+   * in a reason the earlier tick didn't have. A manual bookmark never merges, in either direction:
+   * the writer placed it deliberately, so nothing moves it or folds it into another tick.
+   *
+   * The window measures from the last tick itself, not `state.lastTickAt`: after `resume` those
+   * differ, and measuring from the seed would fold a bookmark taken before the reload into one
+   * taken after it.
+   */
+  private addTick(reasons: [TickReason, ...TickReason[]], at: number): void {
+    const last = this.recordedTicks[this.recordedTicks.length - 1]
+    const offset = at - this.startedAtMs
+    const merges =
+      last !== undefined &&
+      offset - last.at < DEFAULT_TICK_POLICY.minTickGapMs &&
+      !last.reasons.includes('manual') &&
+      !reasons.includes('manual')
+
+    if (merges) {
+      last.at = offset
       last.step_index = this.recordedSteps.length
       // Non-empty: a union that includes `reasons`, which is.
       last.reasons = sortByPriority([...last.reasons, ...reasons]) as [TickReason, ...TickReason[]]
     } else {
-      this.recordedTicks.push({
-        at: at - this.startedAtMs,
-        step_index: this.recordedSteps.length,
-        reasons,
-      })
+      this.recordedTicks.push({ at: offset, step_index: this.recordedSteps.length, reasons })
     }
 
-    // `max` because a `deletion` tick is stamped back at its run's last step, which a manual
-    // bookmark taken since may already be later than.
-    this.state = { ...this.state, lastTickAt: Math.max(at, this.state.lastTickAt ?? at) }
+    this.state = { ...this.state, lastTickAt: at }
   }
 
-  /** Bookmarks the end of the open deletion run, at the last deleting step. */
+  /** Bookmarks the end of the open deletion run, if there is one, at its last deleting change. */
   private closeDeletionRun(): void {
-    this.inDeletionRun = false
-    this.mark(['deletion'], this.state.lastEventAt ?? this.readClock())
+    if (this.deletionRunLastAt === null) return
+
+    const at = this.deletionRunLastAt
+    this.deletionRunLastAt = null
+    this.addTick(['deletion'], at)
   }
 
   /**
@@ -180,13 +197,15 @@ export class AuthoringSession {
    * an absolute instant via this session's own `startedAtMs` — so the first keystroke after a
    * genuine gap fires `pause` the same way it would have without the reload, and one picked back up
    * within a moment fires nothing. Left `null` when there are no steps (the normal case for
-   * `parentSession` on a non-anchor draft), same as a fresh session. `lastTickAt` is deliberately
-   * left alone: the constructor already seeds it from `now()`, and seeding it from the last tick
-   * instead would make that same keystroke fire `interval` too.
+   * `parentSession` on a non-anchor draft), same as a fresh session.
    *
    * Restored offsets also raise `readClock`'s floor, so the clock having moved backwards across the
    * reload cannot stamp a new step before one the previous run already recorded. Ticks count toward
    * that floor as well as steps: a manual bookmark can be the latest thing the old run stamped.
+   *
+   * `lastTickAt` restarts at that raised floor rather than at the last restored tick, which would
+   * make the first keystroke after a long gap fire `interval` alongside `pause`. It is set after the
+   * floor rises, so a clock that came back behind the previous run can't inflate the first gap.
    */
   static resume(
     sessionId: string,
@@ -199,13 +218,14 @@ export class AuthoringSession {
     session.recordedTicks.push(...history.ticks)
 
     const lastStep = history.steps[history.steps.length - 1]
-    if (lastStep) {
-      session.state = { ...session.state, lastEventAt: session.startedAtMs + lastStep.at }
-    }
-
     const lastTick = history.ticks[history.ticks.length - 1]
     const restoredEnd = Math.max(lastStep?.at ?? 0, lastTick?.at ?? 0)
     session.lastReadAt = Math.max(session.lastReadAt, session.startedAtMs + restoredEnd)
+
+    session.state = {
+      lastEventAt: lastStep ? session.startedAtMs + lastStep.at : null,
+      lastTickAt: session.lastReadAt,
+    }
 
     return session
   }
@@ -217,7 +237,7 @@ export class AuthoringSession {
    */
   seal(): AuthoringTrace | null {
     if (this.recordedSteps.length === 0) return null
-    if (this.inDeletionRun) this.closeDeletionRun()
+    this.closeDeletionRun()
 
     return {
       session_id: this.sessionId,

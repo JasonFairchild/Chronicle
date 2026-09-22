@@ -13,7 +13,6 @@ import {
   newEntryTimestamp,
   type Entry,
   type EntryDates,
-  type TickReason,
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 import { useEntriesStore } from './entriesStore'
@@ -242,10 +241,10 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /** A bookmark the writer asked for, rather than one the policy noticed. */
-  function markTick(sessionId: string, reason: TickReason = 'manual'): void {
+  function markTick(sessionId: string): void {
     const entry = requireActive(sessionId)
 
-    entry.session.mark([reason])
+    entry.session.manualMark()
     entry.dirty = true
     scheduleFlush(sessionId)
   }

@@ -118,8 +118,8 @@ export const useDraftsStore = defineStore('drafts', () => {
               }
             : null,
       },
-      session: new AuthoringSession({ sessionId, startedAt }),
-      parentSession: new AuthoringSession({ sessionId, startedAt }),
+      session: new AuthoringSession(sessionId, startedAt),
+      parentSession: new AuthoringSession(sessionId, startedAt),
       timer: null,
       dirty: false,
       persisted: false,
@@ -140,18 +140,14 @@ export const useDraftsStore = defineStore('drafts', () => {
 
     active.set(sessionId, {
       draft,
-      session: AuthoringSession.resume({
-        sessionId,
-        startedAt: draft.started_at,
+      session: AuthoringSession.resume(sessionId, draft.started_at, {
         steps: draft.child.steps,
         ticks: draft.child.ticks,
       }),
       // Its own step chain, so the parent revision gets an honest authoring trace too — the same
       // `AuthoringSession` class and the same tick policy as `session` above, just a second
       // instance for a second document (see `recordInto`).
-      parentSession: AuthoringSession.resume({
-        sessionId,
-        startedAt: draft.started_at,
+      parentSession: AuthoringSession.resume(sessionId, draft.started_at, {
         steps: draft.parent?.steps ?? [],
         ticks: draft.parent?.ticks ?? [],
       }),

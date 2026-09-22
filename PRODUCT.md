@@ -387,6 +387,13 @@ built:
 - Keyboard-first navigation throughout.
 - Tuning how often writing moments get bookmarked, or turning that capture off — including the open
   question of whether it should be a user-facing switch at all.
+- Re-scoring an already-recorded writing session under a different, or later, set of bookmark
+  rules — viewing an old session's bookmarks as they'd fall today, without re-capturing anything.
+  What's captured today keeps most of what that would need; worth not losing that as capture
+  evolves, even before deciding whether to build this. One bookmark kind — where you pasted — isn't
+  recoverable after the fact as things stand, since it's read in the moment rather than kept.
+  Carrying an old session's paste bookmarks forward as-is is the easy version if this is ever built,
+  but something that doesn't depend on a hand-carried special case is the better bar to hold it to.
 - Richer text: links, quotes, lists, checklists.
 - Smart links: Ones that have a preview for at least common sources (maybe google docs or one drive?) But personally, links to LDS scripture are perhaps the most important. I imagine this would primarily be a hover mode that would shows the full text of the scripture reference. (probably requires internet or we decide to cache things in app. Configurable?)
 

@@ -16,7 +16,7 @@ function fakeClock(start: number) {
 describe('AuthoringSession', () => {
   it('records every step in order and bookmarks the moments worth returning to', () => {
     const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const session = new AuthoringSession({ sessionId: 'session-1', now: clock.now })
+    const session = new AuthoringSession('session-1', '2026-09-05T10:00:00.000Z', clock.now)
 
     session.record({ steps: [{ stepType: 'replace', from: 1, to: 1 }], insertedText: 'It rained' })
     clock.advance(200)
@@ -37,7 +37,7 @@ describe('AuthoringSession', () => {
 
   it('stamps each step by how far into the session it happened', () => {
     const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const session = new AuthoringSession({ sessionId: 'session-offsets', now: clock.now })
+    const session = new AuthoringSession('session-offsets', '2026-09-05T10:00:00.000Z', clock.now)
 
     session.record({ steps: [{ stepType: 'replace' }] })
     clock.advance(2_500)
@@ -48,7 +48,7 @@ describe('AuthoringSession', () => {
 
   it('stamps a tick at the same moment as the step it bookmarks', () => {
     const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const session = new AuthoringSession({ sessionId: 'session-sync', now: clock.now })
+    const session = new AuthoringSession('session-sync', '2026-09-05T10:00:00.000Z', clock.now)
 
     clock.advance(1_500)
     session.record({ steps: [{ stepType: 'replace' }], insertedText: 'Done.' })
@@ -58,7 +58,7 @@ describe('AuthoringSession', () => {
 
   it('bookmarks once for a change several rules agree on, not once per rule', () => {
     const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const session = new AuthoringSession({ sessionId: 'session-multi', now: clock.now })
+    const session = new AuthoringSession('session-multi', '2026-09-05T10:00:00.000Z', clock.now)
 
     session.record({ steps: [{ stepType: 'replace' }], insertedText: 'It rained' })
     clock.advance(35_000)
@@ -70,7 +70,7 @@ describe('AuthoringSession', () => {
 
   it('merges a tick landing within the density window into the previous one, rather than adding a second', () => {
     const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const session = new AuthoringSession({ sessionId: 'session-density', now: clock.now })
+    const session = new AuthoringSession('session-density', '2026-09-05T10:00:00.000Z', clock.now)
 
     session.record({ steps: [{ stepType: 'addMark' }], isFormatting: true })
     clock.advance(500)
@@ -85,7 +85,11 @@ describe('AuthoringSession', () => {
 
   it('brings a new reason into a merged tick, rather than only ever keeping the first', () => {
     const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const session = new AuthoringSession({ sessionId: 'session-density-union', now: clock.now })
+    const session = new AuthoringSession(
+      'session-density-union',
+      '2026-09-05T10:00:00.000Z',
+      clock.now,
+    )
 
     session.record({ steps: [{ stepType: 'addMark' }], isFormatting: true })
     clock.advance(500)
@@ -98,7 +102,11 @@ describe('AuthoringSession', () => {
   describe('deletion', () => {
     it('bookmarks a deletion of any size at its last step once something else happens', () => {
       const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-      const session = new AuthoringSession({ sessionId: 'session-deletion', now: clock.now })
+      const session = new AuthoringSession(
+        'session-deletion',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
 
       session.record({ steps: [{ stepType: 'replace' }], removedChars: 1 })
       clock.advance(100)
@@ -116,7 +124,11 @@ describe('AuthoringSession', () => {
 
     it('ends a run at a pause, bookmarking the burst before it and starting a new one', () => {
       const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-      const session = new AuthoringSession({ sessionId: 'session-deletion-pause', now: clock.now })
+      const session = new AuthoringSession(
+        'session-deletion-pause',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
 
       session.record({ steps: [{ stepType: 'replace' }], removedChars: 5 })
       clock.advance(DEFAULT_TICK_POLICY.pauseMs + 1_000)
@@ -140,10 +152,11 @@ describe('AuthoringSession', () => {
 
     it('lets the interval bookmark a long unbroken run without ending it', () => {
       const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-      const session = new AuthoringSession({
-        sessionId: 'session-deletion-interval',
-        now: clock.now,
-      })
+      const session = new AuthoringSession(
+        'session-deletion-interval',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
 
       // Runs past the interval so its tick lands mid-run, with a gap before the run's own end
       // that clears `minTickGapMs` — otherwise the two would merge into one.
@@ -158,7 +171,7 @@ describe('AuthoringSession', () => {
     })
 
     it('closes a run still open when the trace is sealed', () => {
-      const session = new AuthoringSession({ sessionId: 'session-deletion-seal' })
+      const session = new AuthoringSession('session-deletion-seal', new Date().toISOString())
 
       session.record({ steps: [{ stepType: 'replace' }], removedChars: 3 })
 
@@ -169,7 +182,7 @@ describe('AuthoringSession', () => {
   })
 
   it('bookmarks a structural anchor op the same way any other session does', () => {
-    const session = new AuthoringSession({ sessionId: 'session-anchor' })
+    const session = new AuthoringSession('session-anchor', new Date().toISOString())
 
     session.record({ steps: [{ stepType: 'addMark' }], isAnchorOp: true })
 
@@ -177,7 +190,7 @@ describe('AuthoringSession', () => {
   })
 
   it('takes a manual bookmark wherever the writer asks for one', () => {
-    const session = new AuthoringSession({ sessionId: 'session-2' })
+    const session = new AuthoringSession('session-2', new Date().toISOString())
 
     session.record({ steps: [{ stepType: 'replace' }], insertedText: 'draft' })
     session.mark()
@@ -186,7 +199,7 @@ describe('AuthoringSession', () => {
   })
 
   it('seals to null when nothing was typed, which is not the same as having no content', () => {
-    expect(new AuthoringSession({ sessionId: 'session-3' }).seal()).toBeNull()
+    expect(new AuthoringSession('session-3', new Date().toISOString()).seal()).toBeNull()
   })
 
   it('resumes an interrupted session with its history intact', () => {
@@ -194,13 +207,15 @@ describe('AuthoringSession', () => {
     // the reload — `startedAt` is nearly 2 seconds in the past, so an uninjected clock would put
     // real-world days between them instead of the single second this test means to describe.
     const clock = fakeClock(Date.parse('2026-09-05T09:00:01.500Z'))
-    const session = AuthoringSession.resume({
-      sessionId: 'session-4',
-      startedAt: '2026-09-05T09:00:00.000Z',
-      now: clock.now,
-      steps: [{ at: 1_000, step: { stepType: 'replace' } }],
-      ticks: [{ at: 1_000, step_index: 1, reasons: ['punctuation'] }],
-    })
+    const session = AuthoringSession.resume(
+      'session-4',
+      '2026-09-05T09:00:00.000Z',
+      {
+        steps: [{ at: 1_000, step: { stepType: 'replace' } }],
+        ticks: [{ at: 1_000, step_index: 1, reasons: ['punctuation'] }],
+      },
+      clock.now,
+    )
 
     // Past `minTickGapMs`, so the new tick this produces doesn't merge into the seeded one — a
     // resumed session's own construction seeds `lastTickAt` at essentially this same instant, and
@@ -217,13 +232,12 @@ describe('AuthoringSession', () => {
 
   it('bookmarks the first keystroke after a reload as a return from silence', () => {
     const clock = fakeClock(Date.parse('2026-09-05T09:00:01.000Z'))
-    const session = AuthoringSession.resume({
-      sessionId: 'session-resume-pause',
-      startedAt: '2026-09-05T09:00:00.000Z',
-      now: clock.now,
-      steps: [{ at: 1_000, step: { stepType: 'replace' } }],
-      ticks: [],
-    })
+    const session = AuthoringSession.resume(
+      'session-resume-pause',
+      '2026-09-05T09:00:00.000Z',
+      { steps: [{ at: 1_000, step: { stepType: 'replace' } }], ticks: [] },
+      clock.now,
+    )
 
     clock.advance(DEFAULT_TICK_POLICY.pauseMs + 1_000)
     session.record({ steps: [{ stepType: 'replace' }], insertedText: 'Back again' })
@@ -235,7 +249,11 @@ describe('AuthoringSession', () => {
   describe('a clock that moves backwards', () => {
     it('keeps step offsets climbing when the clock is stepped back mid-session', () => {
       const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-      const session = new AuthoringSession({ sessionId: 'session-clock-back', now: clock.now })
+      const session = new AuthoringSession(
+        'session-clock-back',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
 
       session.record({ steps: [{ stepType: 'replace' }] })
       clock.advance(3_000)
@@ -252,11 +270,11 @@ describe('AuthoringSession', () => {
 
     it('never stamps a step before the session began', () => {
       const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-      const session = new AuthoringSession({
-        sessionId: 'session-clock-before-start',
-        startedAt: '2026-09-05T10:00:00.000Z',
-        now: clock.now,
-      })
+      const session = new AuthoringSession(
+        'session-clock-before-start',
+        '2026-09-05T10:00:00.000Z',
+        clock.now,
+      )
 
       clock.advance(-10_000)
       session.record({ steps: [{ stepType: 'replace' }] })
@@ -268,13 +286,15 @@ describe('AuthoringSession', () => {
     it('does not stamp a resumed session behind what the run before the reload recorded', () => {
       // The reload cost a second, but the clock came back 4 seconds behind where it left off.
       const clock = fakeClock(Date.parse('2026-09-05T09:00:00.500Z'))
-      const session = AuthoringSession.resume({
-        sessionId: 'session-clock-resume',
-        startedAt: '2026-09-05T09:00:00.000Z',
-        now: clock.now,
-        steps: [{ at: 4_500, step: { stepType: 'replace' } }],
-        ticks: [{ at: 5_000, step_index: 1, reasons: ['manual'] }],
-      })
+      const session = AuthoringSession.resume(
+        'session-clock-resume',
+        '2026-09-05T09:00:00.000Z',
+        {
+          steps: [{ at: 4_500, step: { stepType: 'replace' } }],
+          ticks: [{ at: 5_000, step_index: 1, reasons: ['manual'] }],
+        },
+        clock.now,
+      )
 
       clock.advance(1_000)
       session.record({ steps: [{ stepType: 'replace' }] })
@@ -286,13 +306,12 @@ describe('AuthoringSession', () => {
 
   it('does not bookmark a draft picked straight back up', () => {
     const clock = fakeClock(Date.parse('2026-09-05T09:00:01.000Z'))
-    const session = AuthoringSession.resume({
-      sessionId: 'session-resume-fast',
-      startedAt: '2026-09-05T09:00:00.000Z',
-      now: clock.now,
-      steps: [{ at: 1_000, step: { stepType: 'replace' } }],
-      ticks: [],
-    })
+    const session = AuthoringSession.resume(
+      'session-resume-fast',
+      '2026-09-05T09:00:00.000Z',
+      { steps: [{ at: 1_000, step: { stepType: 'replace' } }], ticks: [] },
+      clock.now,
+    )
 
     clock.advance(200)
     session.record({ steps: [{ stepType: 'replace' }], insertedText: 'Still here' })

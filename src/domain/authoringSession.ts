@@ -4,17 +4,8 @@ import {
   evaluateTick,
   sortByPriority,
   type ChangeSignals,
-  type TickPolicy,
   type TickState,
 } from './tickPolicy'
-
-export interface AuthoringSessionOptions {
-  sessionId: string
-  startedAt?: string
-  policy?: TickPolicy
-  /** Injected so tests can drive time instead of waiting for it. */
-  now?: () => number
-}
 
 /**
  * One editor change, as the session needs to see it. `ChangeSignals` are optional here — a caller
@@ -49,8 +40,6 @@ export class AuthoringSession {
   readonly startedAt: string
   /** `startedAt` parsed once, so every step/tick offset measures from the same instant. */
   private readonly startedAtMs: number
-
-  private readonly policy: TickPolicy
   private readonly now: () => number
   private lastReadAt: number // The floor `readClock` enforces: the latest instant already used.
   private readonly recordedSteps: AuthoringStep[] = []
@@ -58,15 +47,15 @@ export class AuthoringSession {
   private state: TickState
   private inDeletionRun = false // Whether the last change removed text and its run is still open.
 
-  constructor(options: AuthoringSessionOptions) {
-    this.sessionId = options.sessionId
-    this.now = options.now ?? (() => Date.now())
-    this.startedAt = options.startedAt ?? new Date(this.now()).toISOString()
+  /** `now` is injected so tests can drive time instead of waiting for it. */
+  constructor(sessionId: string, startedAt: string, now: () => number = () => Date.now()) {
+    this.sessionId = sessionId
+    this.now = now
+    this.startedAt = startedAt
     this.startedAtMs = Date.parse(this.startedAt)
     if (Number.isNaN(this.startedAtMs)) {
       throw new Error(`AuthoringSession: "${this.startedAt}" is not a parseable timestamp`)
     }
-    this.policy = options.policy ?? DEFAULT_TICK_POLICY
     this.lastReadAt = this.startedAtMs
     // Seeded from the start so the interval rule has a baseline to measure from; without it a
     // session that never pauses or punctuates would never be bookmarked at all.
@@ -117,7 +106,7 @@ export class AuthoringSession {
     const at = this.readClock()
     const removesText = (change.removedChars ?? 0) > 0
     const pausedSinceLastEvent =
-      this.state.lastEventAt !== null && at - this.state.lastEventAt >= this.policy.pauseMs
+      this.state.lastEventAt !== null && at - this.state.lastEventAt >= DEFAULT_TICK_POLICY.pauseMs
 
     if (this.inDeletionRun && (!removesText || pausedSinceLastEvent)) this.closeDeletionRun()
     this.inDeletionRun = removesText
@@ -137,7 +126,6 @@ export class AuthoringSession {
         ...change,
       },
       this.state,
-      this.policy,
     )
 
     this.state = { ...this.state, lastEventAt: at }
@@ -162,7 +150,7 @@ export class AuthoringSession {
     const last = this.recordedTicks[this.recordedTicks.length - 1]
     const gapSinceLastTick = this.state.lastTickAt === null ? Infinity : at - this.state.lastTickAt
 
-    if (last && gapSinceLastTick < this.policy.minTickGapMs) {
+    if (last && gapSinceLastTick < DEFAULT_TICK_POLICY.minTickGapMs) {
       last.at = at - this.startedAtMs
       last.step_index = this.recordedSteps.length
       // Non-empty: a union that includes `reasons`, which is.
@@ -201,18 +189,21 @@ export class AuthoringSession {
    * that floor as well as steps: a manual bookmark can be the latest thing the old run stamped.
    */
   static resume(
-    options: AuthoringSessionOptions & { steps: AuthoringStep[]; ticks: AuthoringTick[] },
+    sessionId: string,
+    startedAt: string,
+    history: { steps: AuthoringStep[]; ticks: AuthoringTick[] },
+    now?: () => number,
   ): AuthoringSession {
-    const session = new AuthoringSession(options)
-    session.recordedSteps.push(...options.steps)
-    session.recordedTicks.push(...options.ticks)
+    const session = new AuthoringSession(sessionId, startedAt, now)
+    session.recordedSteps.push(...history.steps)
+    session.recordedTicks.push(...history.ticks)
 
-    const lastStep = options.steps[options.steps.length - 1]
+    const lastStep = history.steps[history.steps.length - 1]
     if (lastStep) {
       session.state = { ...session.state, lastEventAt: session.startedAtMs + lastStep.at }
     }
 
-    const lastTick = options.ticks[options.ticks.length - 1]
+    const lastTick = history.ticks[history.ticks.length - 1]
     const restoredEnd = Math.max(lastStep?.at ?? 0, lastTick?.at ?? 0)
     session.lastReadAt = Math.max(session.lastReadAt, session.startedAtMs + restoredEnd)
 

@@ -296,7 +296,7 @@ export function markAnchor(
 
 /**
  * Switches an editable anchor's mark kind in place — Highlight ↔ Strike — touching neither its span
- * nor its wording. A no-op, with no transaction and no tick, when `kind` already matches, so
+ * nor its wording. A no-op, with no transaction and no event, when `kind` already matches, so
  * clicking the already-active kind in a reopened wording box changes nothing.
  *
  * Acts on every per-text-node piece of the mark (`anchorMarkRanges`), not the outer extent
@@ -436,10 +436,8 @@ export function openAnchorInsert(editor: Editor, pos: number, text: string): str
 }
 
 /**
- * Carries the current full text of an open wording box on a `updateAnchorInsertText` transaction,
- * for the tick policy's punctuation check — see that function's own note on why. Named for its
- * payload, not "tick": this keystroke is never itself the structural `'anchor'` reason, only ever a
- * candidate for the ordinary `pause` / `punctuation` / `interval` ones.
+ * Carries the current full text of an open wording box on an `updateAnchorInsertText` transaction,
+ * so `DocumentEditor` can report it as the change's `inserted_text` — see that function's note.
  */
 const ANCHOR_WORDING_TEXT_META = 'chronicleAnchorWordingText'
 
@@ -453,12 +451,9 @@ export function readAnchorWordingText(transaction: Transaction): string | null {
  * Still meta-stamped so the anchor-mode guard lets it through, but otherwise an ordinary attribute
  * change — the node stays an atom the surrounding document can never be typed into directly.
  *
- * Not itself the structural `'anchor'` tick: per CLAUDE.md and ENTRY_MODEL.md, "Authoring capture",
- * one tick policy judges every stream the same way, and typing wording is typing — it earns a
- * bookmark the same way prose does, from a pause, a finished sentence, or the interval, never from
- * "this keystroke happened to be the last one before Enter". `ANCHOR_WORDING_TEXT_META` is what lets
- * `DocumentEditor` read a punctuation check off it despite this not being an ordinary text-insertion
- * step with a slice `insertedTextOf` can read.
+ * Not a structural anchor op: typing wording is typing, and is marked the way prose is
+ * (ENTRY_MODEL.md, "Authoring capture"). `ANCHOR_WORDING_TEXT_META` is what lets `DocumentEditor`
+ * report its text, since an attribute step has no slice for `insertedTextOf` to read.
  */
 export function updateAnchorInsertText(editor: Editor, pos: number, text: string): void {
   const transaction = editor.state.tr.setNodeAttribute(pos, 'text', text)
@@ -476,7 +471,7 @@ export function updateAnchorInsertText(editor: Editor, pos: number, text: string
  * all. When it *is* changed, this dispatch is ordinarily a content no-op in its own right: every
  * keystroke already wrote the same final value via `updateAnchorInsertText`, so TipTap's own
  * `prevState.doc.eq(state.doc)` check silently drops the `update` event for it — there is nothing
- * here left for a tick to attach to, which is the other half of why settling wording isn't the
+ * here left for a mark to attach to, which is the other half of why settling wording isn't the
  * `'anchor'` moment. Dropping the node *is* a real structural change (and always reaches `update`,
  * since the doc shrinks): the anchor's id drops out of the document's anchor set entirely, which is
  * what `DocumentEditor`'s outcome-based comparison (`contentDelta`) reads as an anchor change, the

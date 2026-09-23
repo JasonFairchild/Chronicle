@@ -34,9 +34,9 @@ describe('DexieDraftRepository persistence', () => {
         dates: emptyEntryDates(),
         title: null,
         child: {
+          base_content: '',
           content: 'Never got round to finishing this',
-          steps: [{ at: 1_000, step: { stepType: 'replace' } }],
-          ticks: [],
+          events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
         },
         parent: null,
       },
@@ -50,7 +50,7 @@ describe('DexieDraftRepository persistence', () => {
     const recovered = await afterReload.getById('session-1')
 
     expect(recovered?.child.content).toBe('Never got round to finishing this')
-    expect(recovered?.child.steps).toHaveLength(1)
+    expect(recovered?.child.events).toHaveLength(1)
 
     await afterReload.dispose()
   })

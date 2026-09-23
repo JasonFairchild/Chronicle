@@ -3,14 +3,14 @@ import { ref, shallowRef } from 'vue'
 import { anchorsPlacedSince } from '@/domain/anchors'
 import { AuthoringSession } from '@/domain/authoringSession'
 import { isEmptyEntry } from '@/domain/entryDocument'
-import type { ChangeSignals } from '@/domain/tickPolicy'
 import { draftRepository } from '@/repositories'
-import type { PersistedSteps } from '@/repositories/draftRepository'
+import type { PersistedEvents } from '@/repositories/draftRepository'
 import type { Draft, DraftSummary, DraftTarget } from '@/types/draft'
 import {
   emptyEntryDates,
   newEntryId,
   newEntryTimestamp,
+  type ChangeSignals,
   type Entry,
   type EntryDates,
 } from '@/types/entry'
@@ -19,10 +19,8 @@ import { useEntriesStore } from './entriesStore'
 
 /**
  * How long typing may go unpersisted. Short enough that a crash costs a fraction of a sentence,
- * long enough that a fast typist is not writing to disk on every keystroke.
- *
- * This is autosave and it is unrelated to tick marking: flushing is about never losing work, and
- * marks nothing; a tick is a bookmark and writes nothing.
+ * long enough that a fast typist is not writing to disk on every keystroke. Autosave, unrelated to
+ * marks: flushing is about never losing work.
  */
 export const DRAFT_FLUSH_MS = 300
 
@@ -41,14 +39,12 @@ export interface DraftChange extends Partial<ChangeSignals> {
   title?: string | null
   /** Serialized ProseMirror steps for this change. The session never interprets them. */
   steps?: unknown[]
-  /** Characters this change removed, for the `deletion` run the session tracks across changes. */
-  removedChars?: number
 }
 
 interface ActiveSession {
   draft: Draft
   session: AuthoringSession
-  /** The parent's own step chain for an anchor-mode session. Unused by every other target. */
+  /** The parent's own event log for an anchor-mode session. Unused by every other target. */
   parentSession: AuthoringSession
   timer: ReturnType<typeof setTimeout> | null
   /** True once anything has actually been typed, so an opened-and-abandoned composer saves nothing. */
@@ -56,11 +52,11 @@ interface ActiveSession {
   /** Whether a row for this session exists on disk, so an emptied draft knows to remove it. */
   persisted: boolean
   /**
-   * How much of each step chain the store already holds, so the next flush's `save` appends only
+   * How much of each event log the store already holds, so the next flush's `save` appends only
    * the tail. Advanced only after a successful write — see `flush` — and reset to zero the moment
    * a write deletes the row instead, or the counts and what's actually stored would drift apart.
    */
-  persistedSteps: PersistedSteps
+  persistedEvents: PersistedEvents
   /**
    * The repository write `flush` is currently awaiting, if any. Cancelling the timer stops a
    * flush that hasn't started; it does nothing for one already mid-write. Sealing or discarding
@@ -93,6 +89,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   ) {
     const sessionId = newEntryId()
     const startedAt = newEntryTimestamp()
+    const content = seed.content ?? ''
 
     active.set(sessionId, {
       draft: {
@@ -102,34 +99,33 @@ export const useDraftsStore = defineStore('drafts', () => {
         updated_at: startedAt,
         dates: emptyEntryDates(),
         title: seed.title ?? null,
-        child: { content: seed.content ?? '', steps: [], ticks: [] },
-        // `base_content` starts equal to `content`: nothing has been marked yet, so this is also
-        // what "which anchors are this session's" (`anchorsPlacedSince`) diffs against. The
-        // parent's title is captured the same way, once, since anchor mode never offers it again.
+        // `base_content` starts equal to `content` and never moves: it is what each trace replays
+        // from, and for the parent also what `anchorsPlacedSince` diffs against. The parent's title
+        // is captured once too, since anchor mode never offers it again.
+        child: { base_content: content, content, events: [] },
         parent:
           seed.parentContent !== undefined
             ? {
+                base_content: seed.parentContent,
                 content: seed.parentContent,
                 title: seed.parentTitle ?? null,
-                base_content: seed.parentContent,
-                steps: [],
-                ticks: [],
+                events: [],
               }
             : null,
       },
-      session: new AuthoringSession(sessionId, startedAt),
-      parentSession: new AuthoringSession(sessionId, startedAt),
+      session: new AuthoringSession(sessionId, startedAt, content),
+      parentSession: new AuthoringSession(sessionId, startedAt, seed.parentContent ?? ''),
       timer: null,
       dirty: false,
       persisted: false,
-      persistedSteps: { child: 0, parent: 0 },
+      persistedEvents: { child: 0, parent: 0 },
       flushing: null,
     })
 
     return sessionId
   }
 
-  /** Reopens a draft left behind by a reload, with its step chain and bookmarks intact. */
+  /** Reopens a draft left behind by a reload, with its event logs intact. */
   async function resumeDraft(sessionId: string): Promise<Draft | null> {
     const existing = active.get(sessionId)
     if (existing) return structuredClone(materialize(existing))
@@ -137,26 +133,28 @@ export const useDraftsStore = defineStore('drafts', () => {
     const draft = await draftRepository.getById(sessionId)
     if (!draft) return null
 
+    const { child, parent } = draft
     active.set(sessionId, {
       draft,
-      session: AuthoringSession.resume(sessionId, draft.started_at, {
-        steps: draft.child.steps,
-        ticks: draft.child.ticks,
-      }),
-      // Its own step chain, so the parent revision gets an honest authoring trace too — the same
-      // `AuthoringSession` class and the same tick policy as `session` above, just a second
-      // instance for a second document (see `recordInto`).
-      parentSession: AuthoringSession.resume(sessionId, draft.started_at, {
-        steps: draft.parent?.steps ?? [],
-        ticks: draft.parent?.ticks ?? [],
-      }),
+      session: AuthoringSession.resume(
+        sessionId,
+        draft.started_at,
+        child.base_content,
+        child.events,
+      ),
+      parentSession: AuthoringSession.resume(
+        sessionId,
+        draft.started_at,
+        parent?.base_content ?? '',
+        parent?.events ?? [],
+      ),
       timer: null,
       // Nothing new to write until this session is typed in, but the row is already on disk, so
       // emptying it later has something to delete.
       dirty: false,
       persisted: true,
       // What was loaded is, by definition, already stored.
-      persistedSteps: { child: draft.child.steps.length, parent: draft.parent?.steps.length ?? 0 },
+      persistedEvents: { child: child.events.length, parent: parent?.events.length ?? 0 },
       flushing: null,
     })
 
@@ -172,8 +170,8 @@ export const useDraftsStore = defineStore('drafts', () => {
    *
    * A change with no steps did not touch the traced document — a retitling is the one that does
    * this for `recordChange`, since the title is a plain field beside the editor rather than part of
-   * it. There is nothing for the trace to append and no typing for the tick policy to judge, so it
-   * is skipped entirely; counting it would bookmark a stream for something that never entered it.
+   * it. It is skipped entirely: an event for it would let a policy mark a stream for something that
+   * never entered it.
    */
   function recordInto(session: AuthoringSession, change: DraftChange): void {
     if ((change.steps ?? []).length === 0) return
@@ -182,8 +180,8 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * Records a change and schedules a flush. The buffer is append-only while the session runs: steps
-   * accumulate and nothing already recorded is rewritten, so no authoring history is lost by
+   * Records a change and schedules a flush. The buffer is append-only while the session runs:
+   * events accumulate and nothing already recorded is rewritten, so no authoring history is lost by
    * design. Only the snapshot moves.
    */
   function recordChange(sessionId: string, change: DraftChange): void {
@@ -240,39 +238,31 @@ export const useDraftsStore = defineStore('drafts', () => {
     scheduleFlush(sessionId)
   }
 
-  /** A bookmark the writer asked for, rather than one the policy noticed. */
-  function markTick(sessionId: string): void {
+  /** A mark the writer asked for, rather than one a policy finds. */
+  function addMark(sessionId: string): void {
     const entry = requireActive(sessionId)
 
-    entry.session.manualMark()
+    entry.session.mark()
     entry.dirty = true
     scheduleFlush(sessionId)
   }
 
   /**
-   * Builds the draft's on-disk shape from the session's live step/tick chains — the one place those
-   * chains are read, right before something needs the whole draft. Keeping it out of the per-change
-   * paths matters because `AuthoringSession.steps` hands back a defensive copy, so reading it on
-   * every keystroke would clone the entire chain each time.
+   * Builds the draft's on-disk shape from the sessions' live event logs — the one place those logs
+   * are read, right before something needs the whole draft. Keeping it out of the per-change paths
+   * matters because `AuthoringSession.events` hands back a defensive copy, so reading it on every
+   * keystroke would clone the entire log each time.
    *
    * Always fresh objects, never `entry.draft.child`/`.parent` by reference, so a snapshot already
    * handed to an in-flight `save()` can't be mutated out from under it.
    */
   function materialize(entry: ActiveSession): Draft {
+    const { child, parent } = entry.draft
+
     return {
       ...entry.draft,
-      child: {
-        content: entry.draft.child.content,
-        steps: entry.session.steps,
-        ticks: entry.session.ticks,
-      },
-      parent: entry.draft.parent
-        ? {
-            ...entry.draft.parent,
-            steps: entry.parentSession.steps,
-            ticks: entry.parentSession.ticks,
-          }
-        : null,
+      child: { ...child, events: entry.session.events },
+      parent: parent ? { ...parent, events: entry.parentSession.events } : null,
     }
   }
 
@@ -306,17 +296,17 @@ export const useDraftsStore = defineStore('drafts', () => {
         if (entry.persisted) {
           await draftRepository.delete(sessionId)
           entry.persisted = false
-          // The row and its steps are both gone; the next save must start the chain over.
-          entry.persistedSteps = { child: 0, parent: 0 }
+          // The row and its events are both gone; the next save must start the log over.
+          entry.persistedEvents = { child: 0, parent: 0 }
         }
         return
       }
 
-      await draftRepository.save(draft, entry.persistedSteps)
+      await draftRepository.save(draft, entry.persistedEvents)
       entry.persisted = true
-      entry.persistedSteps = {
-        child: draft.child.steps.length,
-        parent: draft.parent?.steps.length ?? 0,
+      entry.persistedEvents = {
+        child: draft.child.events.length,
+        parent: draft.parent?.events.length ?? 0,
       }
     })()
 
@@ -466,7 +456,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     recordChange,
     recordParentChange,
     recordDates,
-    markTick,
+    addMark,
     flush,
     abandonDraft,
     sealDraft,

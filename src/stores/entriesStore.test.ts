@@ -52,8 +52,8 @@ describe('useEntriesStore', () => {
       title: '   ',
       child: {
         content: serializeDocument(plainTextDocument('We drove up on Friday.')),
-        steps: [],
-        ticks: [],
+        base_content: '',
+        events: [],
       },
       parent: null,
     }
@@ -78,8 +78,8 @@ describe('useEntriesStore', () => {
       title: 'A later thought',
       child: {
         content: serializeDocument(plainTextDocument('Still think about this trip')),
-        steps: [],
-        ticks: [],
+        base_content: '',
+        events: [],
       },
       parent: null,
     }
@@ -126,16 +126,15 @@ describe('useEntriesStore', () => {
       title: null,
       child: {
         content: textContent('It was actually Donner Lake'),
-        steps: [],
-        ticks: [],
+        base_content: '',
+        events: [],
       },
       // "anchor-1 is this session's" is the difference between these two documents, not a list.
       parent: {
         content: marked,
         title: null,
         base_content: textContent('I went to Lake Tahoe with Dad'),
-        steps: [],
-        ticks: [],
+        events: [],
       },
     }
 
@@ -173,15 +172,14 @@ describe('useEntriesStore', () => {
       title: null,
       child: {
         content: textContent('It was actually Donner Lake'),
-        steps: [],
-        ticks: [],
+        base_content: '',
+        events: [],
       },
       parent: {
         content: struck,
         title: null,
         base_content: textContent('I went to Lake Tahoe with Dad'),
-        steps: [],
-        ticks: [],
+        events: [],
       },
     }
 
@@ -208,8 +206,8 @@ describe('useEntriesStore', () => {
       title: null,
       child: {
         content: textContent('Transcribed out of the green notebook'),
-        steps: [],
-        ticks: [],
+        base_content: '',
+        events: [],
       },
       parent: null,
     }
@@ -279,8 +277,8 @@ describe('useEntriesStore', () => {
             { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } },
           ],
         }),
-        steps: [],
-        ticks: [],
+        base_content: '',
+        events: [],
       },
       parent: null,
     }
@@ -330,8 +328,8 @@ describe('useEntriesStore', () => {
       title: null,
       child: {
         content: serializeDocument(plainTextDocument('From the notebook')),
-        steps: [],
-        ticks: [],
+        base_content: '',
+        events: [],
       },
       parent: null,
     }
@@ -405,7 +403,11 @@ describe('useEntriesStore', () => {
         updated_at: '2026-01-01T00:00:00.000Z',
         dates: emptyEntryDates(),
         title,
-        child: { content: serializeDocument(plainTextDocument(body)), steps: [], ticks: [] },
+        child: {
+          base_content: '',
+          content: serializeDocument(plainTextDocument(body)),
+          events: [],
+        },
         parent: null,
       }
     }
@@ -435,8 +437,7 @@ describe('useEntriesStore', () => {
         base_content: textContent(parentText),
         content: withAnchorMark(parentText, 'anchor-1', 10, 20),
         title: null,
-        steps: [],
-        ticks: [],
+        events: [],
       }
 
       await expect(store.createFromDraft(draft, null)).rejects.toThrow(

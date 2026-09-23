@@ -1,12 +1,11 @@
 <script lang="ts">
-import type { ChangeSignals } from '@/domain/tickPolicy'
+import type { ChangeSignals } from '@/types/entry'
 
 /**
- * One editor change, reduced to what the draft buffer and the tick policy need. `ChangeSignals`
- * (`insertedText`, `isFormatting`, `isAnchorOp`) are required here, not optional as they are on
- * `AuthoringChange`/`DraftChange`: this is the one emit site actually producing them, so the
- * compiler should catch a call that forgets one when a signal is added, such as `handleTitleInput`
- * below.
+ * One editor change, as the draft buffer records it. `ChangeSignals` are required here, not
+ * optional as they are on `AuthoringChange`/`DraftChange`: this is the one emit site actually
+ * producing them, so the compiler should catch a call that forgets one when a signal is added, such
+ * as `handleTitleInput` below.
  */
 export interface EditorChange extends ChangeSignals {
   /** The document's body as it now stands, serialized the way an entry stores it. */
@@ -15,8 +14,6 @@ export interface EditorChange extends ChangeSignals {
   title: string | null
   /** Serialized ProseMirror steps for this change, in order. */
   steps: unknown[]
-  /** Characters this change removed, for the `deletion` run the session tracks across changes. */
-  removedChars: number
   /**
    * Anchors this session has placed, in `anchor-mode` only. Derived by reading which of the
    * document's current ids aren't sealed (`sessionAnchorIds`, `domain/anchors.ts`) rather than
@@ -285,9 +282,9 @@ const editor = useEditor({
 
     // Judged by what the document says before and after, not by which steps produced it — no step
     // type reliably tells an anchor command, a heading, a list, or an alignment change apart from a
-    // real edit (see `contentDelta`). `isAnchorOp` is an outcome, not a transaction's provenance: it
-    // survives undo/redo for free, since a history transaction carries no meta of its own for this
-    // to read.
+    // real edit (see `contentDelta`). `is_anchor_op` is an outcome, not a transaction's provenance:
+    // it survives undo/redo for free, since a history transaction carries no meta of its own for
+    // this to read.
     const delta = contentDelta(transaction.before.toJSON() as EntryDocument, document)
     // A wording-box keystroke has the identical fingerprint to real formatting — same text, same
     // media, same anchor set, since wording is excluded from all three — so outcome alone cannot
@@ -300,17 +297,17 @@ const editor = useEditor({
       content: JSON.stringify(document),
       title: emittedTitle(),
       steps,
-      insertedText: wordingText ?? insertedTextOf(transaction),
-      removedChars: removedTextOf(transaction),
-      isFormatting: delta.sameText && delta.sameMedia && delta.sameAnchors && wordingText === null,
-      isAnchorOp: !delta.sameAnchors,
+      inserted_text: wordingText ?? insertedTextOf(transaction),
+      removed_chars: removedTextOf(transaction),
+      is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors && wordingText === null,
+      is_anchor_op: !delta.sameAnchors,
       // ProseMirror's own clipboard handling stamps this, so a real paste is told apart from a
       // drop (`uiEvent: 'drop'`, deliberately not counted — PRODUCT.md §4.9) or from content
       // inserted programmatically (`insertContent`, the image-attach path below), which carries no
       // `uiEvent` at all. A paste into an open wording box is not counted either: it goes through
       // `AnchorInsertView`'s own `<input>`, never through this editor's clipboard handling.
-      isPaste: transaction.getMeta('uiEvent') === 'paste',
-      mediaChanged: !delta.sameMedia,
+      is_paste: transaction.getMeta('uiEvent') === 'paste',
+      media_changed: !delta.sameMedia,
       anchorIds: props.anchorMode
         ? sessionAnchorIdsIn(sealedAnchorIdsOf(instance), document)
         : undefined,
@@ -336,7 +333,7 @@ onBeforeUnmount(() => editor.value?.destroy())
 
 /**
  * A title change is content, but it is not an edit to the traced document: it produces no
- * ProseMirror steps, so the authoring trace and the tick policy see nothing of it (see
+ * ProseMirror steps, so the authoring trace records nothing of it (see
  * `draftsStore.recordChange`). That is the deal the title is held to — a coarser record than the
  * body's, its history being the value at each save point rather than a keystroke-level chain.
  *
@@ -354,12 +351,12 @@ function handleTitleInput(event: Event): void {
     content: JSON.stringify(instance.getJSON() as EntryDocument),
     title: emittedTitle(),
     steps: [],
-    insertedText: '',
-    removedChars: 0,
-    isFormatting: false,
-    isAnchorOp: false,
-    isPaste: false,
-    mediaChanged: false,
+    inserted_text: '',
+    removed_chars: 0,
+    is_formatting: false,
+    is_anchor_op: false,
+    is_paste: false,
+    media_changed: false,
     affectedAnchorIds: [...affectedAnchorIds],
   })
 }
@@ -380,13 +377,13 @@ function focusBody(): void {
 }
 
 /**
- * The text a change added, for the tick policy alone: it only ever asks whether a sentence just
- * finished. The steps remain the authoritative record of what happened.
+ * The text a change added, for the mark policy's punctuation and pattern checks. The steps remain
+ * the authoritative record of what happened.
  *
  * An anchor-mode wording keystroke (`updateAnchorInsertText`) carries its current text as meta
  * instead of a step slice — it's an attribute change on an atom, not a text-insertion step this
- * loop can read — so that's checked first. `evaluateTick`'s punctuation check only ever looks at the
- * trailing character, so the box's current full text works exactly the same as a true delta would.
+ * loop can read — so that's checked first. The punctuation check reads only the trailing
+ * character, so the box's full current text serves as well as a true delta would.
  */
 function insertedTextOf(transaction: Transaction): string {
   const wordingText = readAnchorWordingText(transaction)
@@ -412,8 +409,7 @@ function insertedTextOf(transaction: Transaction): string {
 }
 
 /**
- * Characters this change removed, for the deletion run `AuthoringSession` tracks across
- * changes. Measured against the document each step saw *before* it applied (`transaction.docs[i]`),
+ * Characters this change removed, for the deletion runs `deriveMarks` finds. Measured against the document each step saw *before* it applied (`transaction.docs[i]`),
  * not the flattened text before and after: a selection replaced by something longer would net
  * positive there, missing the destructive edit it actually was, and an anchor op would misregister
  * as one too, which the non-destructive invariant forbids.

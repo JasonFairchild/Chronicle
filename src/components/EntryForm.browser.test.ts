@@ -37,7 +37,7 @@ describe('EntryForm (browser)', () => {
     const [saved] = await entries.listRootEntries()
     expect(saved?.title).toBe('Lake Tahoe')
     expect(docToPlainText(saved!.content)).toBe('We drove up on Friday.')
-    expect(saved?.authoring_trace?.steps.length).toBeGreaterThan(0)
+    expect(saved?.authoring_trace?.events.length).toBeGreaterThan(0)
     // The buffer is working space, so sealing discards it rather than leaving a duplicate behind.
     expect(await draftRepository.list()).toEqual([])
   })

@@ -1,4 +1,4 @@
-import DocumentEditor from '@/components/DocumentEditor.vue'
+import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
 import {
   ANCHOR_INSERT_NODE,
@@ -12,22 +12,9 @@ import { freshMediaRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 
-interface ObservedChange {
-  content: string
-  title: string | null
-  steps: unknown[]
-  insertedText: string
-  removedChars: number
-  isFormatting: boolean
-  isAnchorOp: boolean
-  isPaste: boolean
-  mediaChanged: boolean
-  anchorIds?: string[]
-}
-
 /** The change this component last reported, which is its whole contract with a parent. */
-function lastChange(stub: unknown): ObservedChange {
-  const calls = (stub as { args: [ObservedChange][] }).args
+function lastChange(stub: unknown): EditorChange {
+  const calls = (stub as { args: [EditorChange][] }).args
   return calls[calls.length - 1]![0]
 }
 
@@ -46,7 +33,7 @@ describe('DocumentEditor', () => {
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
       expect(docToPlainText(change.content)).to.equal('It rained all day.')
-      expect(change.isFormatting).to.equal(false)
+      expect(change.is_formatting).to.equal(false)
     })
   })
 
@@ -142,7 +129,7 @@ describe('DocumentEditor', () => {
     cy.findByRole('button', { name: 'Bold' }).click()
 
     cy.get('@change').then((stub) => {
-      expect(lastChange(stub).isFormatting).to.equal(true)
+      expect(lastChange(stub).is_formatting).to.equal(true)
     })
   })
 
@@ -157,7 +144,7 @@ describe('DocumentEditor', () => {
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
       // A heading arrives as a replaceAround step, which no step type tells apart from an edit.
-      expect(change.isFormatting).to.equal(true)
+      expect(change.is_formatting).to.equal(true)
       // Trimmed because the editor adds an empty block after a trailing heading, which is its
       // scaffolding rather than anything the author wrote.
       expect(docToPlainText(change.content).trim()).to.equal('Worth remembering')
@@ -177,7 +164,7 @@ describe('DocumentEditor', () => {
       // Wrapping arrives as a `replaceAround` spanning the whole paragraph, with its content
       // reinserted through the gap — naive arithmetic would report the paragraph as deleted.
       expect(docToPlainText(change.content).trim()).to.equal('Worth remembering')
-      expect(change.removedChars).to.equal(0)
+      expect(change.removed_chars).to.equal(0)
     })
   })
 
@@ -253,7 +240,7 @@ describe('DocumentEditor', () => {
       .and('have.attr', 'href', 'https://example.com/trail')
 
     cy.get('@change').then((stub) => {
-      expect(lastChange(stub).isFormatting).to.equal(true)
+      expect(lastChange(stub).is_formatting).to.equal(true)
     })
   })
 
@@ -305,8 +292,8 @@ describe('DocumentEditor', () => {
       const change = lastChange(stub)
       expect(collectMediaRefs(change.content)).to.have.length(1)
       // An attachment adds no words, but it is content all the same.
-      expect(change.isFormatting).to.equal(false)
-      expect(change.mediaChanged).to.equal(true)
+      expect(change.is_formatting).to.equal(false)
+      expect(change.media_changed).to.equal(true)
       // The bytes never enter the document: an object URL is minted per page load and would be a
       // broken reference the moment this entry was read again.
       expect(change.content).to.not.contain('blob:')
@@ -334,13 +321,13 @@ describe('DocumentEditor', () => {
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
       expect(docToPlainText(change.content)).to.contain('Copied from elsewhere')
-      expect(change.isPaste).to.equal(true)
+      expect(change.is_paste).to.equal(true)
     })
   })
 
   describe('anchor mode', () => {
     function mountAnchorEditor(
-      onChange: (change: ObservedChange) => void,
+      onChange: (change: EditorChange) => void,
       content?: string,
       props: Record<string, unknown> = {},
     ) {
@@ -471,7 +458,7 @@ describe('DocumentEditor', () => {
         // The node shrinks the document, but its wording was never the parent's text to begin with
         // (`nodeText` skips `anchorInsert`) — `textBetween` over its range reads as empty, not
         // removed.
-        expect(change.removedChars).to.equal(0)
+        expect(change.removed_chars).to.equal(0)
       })
     })
 
@@ -569,8 +556,8 @@ describe('DocumentEditor', () => {
         // Judged by outcome, not by transaction provenance (`contentDelta`): undoing a placement
         // removes the anchor from the document's anchor set the same as `removeAnchor` would, so
         // this reads as an anchor change rather than formatting, with no undo-specific case needed.
-        expect(change.isAnchorOp).to.equal(true)
-        expect(change.isFormatting).to.equal(false)
+        expect(change.is_anchor_op).to.equal(true)
+        expect(change.is_formatting).to.equal(false)
       })
     })
 
@@ -599,12 +586,12 @@ describe('DocumentEditor', () => {
           expect(anchor).to.include({ insertion: 'Donner Lake Tahoe' })
           // Typing wording is typing, not a structural anchor op — see `contentDelta`'s
           // `sameAnchors`; it earns a bookmark the same way prose does.
-          expect(change.isAnchorOp).to.equal(false)
-          expect(change.isFormatting).to.equal(false)
+          expect(change.is_anchor_op).to.equal(false)
+          expect(change.is_formatting).to.equal(false)
         })
       })
 
-      it('reports a keystroke in a reopened wording box as ordinary, tickable text entry', () => {
+      it('reports a keystroke in a reopened wording box as ordinary text entry', () => {
         const onChange = cy.stub().as('change')
         mountAnchorEditor(onChange)
         placeHighlightWithWording()
@@ -614,9 +601,9 @@ describe('DocumentEditor', () => {
 
         cy.get('@change').then((stub) => {
           const change = lastChange(stub)
-          expect(change.insertedText.endsWith('.')).to.equal(true)
-          expect(change.isAnchorOp).to.equal(false)
-          expect(change.isFormatting).to.equal(false)
+          expect(change.inserted_text.endsWith('.')).to.equal(true)
+          expect(change.is_anchor_op).to.equal(false)
+          expect(change.is_formatting).to.equal(false)
         })
       })
 
@@ -632,7 +619,7 @@ describe('DocumentEditor', () => {
           const change = lastChange(stub)
           const [anchor] = collectAnchors(change.content)
           expect(anchor).to.include({ kind: 'strike', insertion: 'Donner Lake' })
-          expect(change.isAnchorOp).to.equal(true)
+          expect(change.is_anchor_op).to.equal(true)
         })
       })
 
@@ -649,7 +636,7 @@ describe('DocumentEditor', () => {
           const change = lastChange(stub)
           expect(collectAnchors(change.content)).to.deep.equal([])
           expect(change.anchorIds).to.deep.equal([])
-          expect(change.isAnchorOp).to.equal(true)
+          expect(change.is_anchor_op).to.equal(true)
           expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad')
         })
       })

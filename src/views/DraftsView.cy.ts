@@ -23,9 +23,9 @@ function makeDraft(
     dates: emptyEntryDates(),
     title: null,
     child: {
+      base_content: '',
       content: content ?? '',
-      steps: [{ at: 1_000, step: { stepType: 'replace' } }],
-      ticks: [],
+      events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
     },
     parent:
       parentContent !== undefined
@@ -33,8 +33,7 @@ function makeDraft(
             content: parentContent,
             title: null,
             base_content: parentBaseContent ?? parentContent,
-            steps: [],
-            ticks: [],
+            events: [],
           }
         : null,
     ...rest,

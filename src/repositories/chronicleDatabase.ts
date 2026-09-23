@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { Draft } from '@/types/draft'
-import type { AuthoringStep, Entry } from '@/types/entry'
+import type { AuthoringEvent, Entry } from '@/types/entry'
 
 /**
  * The row Dexie actually stores. `is_root` is a storage-only indexing helper and never appears
@@ -13,15 +13,16 @@ export interface StoredEntry extends Entry {
 }
 
 /**
- * One step of a draft's step chain, on its own row rather than inside the draft's snapshot row: the
- * chain is the one unbounded part of a draft, so it is appended to rather than rewritten on every
- * flush. `document` distinguishes a `new_child` session's two chains (child and parent), which
- * otherwise share nothing but `session_id`.
+ * One event of a draft's log, on its own row rather than inside the draft's snapshot row: the log
+ * is the one unbounded part of a draft, so it is appended to rather than rewritten on every flush.
+ * `document` distinguishes a `new_child` session's two logs (child and parent), which otherwise
+ * share nothing but `session_id`.
  */
-export interface StoredDraftStep extends AuthoringStep {
+export interface StoredDraftEvent {
   session_id: string
   document: 'child' | 'parent'
   index: number
+  event: AuthoringEvent
 }
 
 /**
@@ -36,7 +37,7 @@ export interface StoredDraftStep extends AuthoringStep {
 export class ChronicleDatabase extends Dexie {
   entries!: Table<StoredEntry, string>
   drafts!: Table<Draft, string>
-  draftSteps!: Table<StoredDraftStep, [string, 'child' | 'parent', number]>
+  draftEvents!: Table<StoredDraftEvent, [string, 'child' | 'parent', number]>
 
   constructor(name = 'chronicle') {
     super(name)
@@ -53,11 +54,19 @@ export class ChronicleDatabase extends Dexie {
       drafts: 'session_id, updated_at',
     })
 
-    // A `drafts` row's `child.steps`/`parent.steps` are always stored empty and reassembled from
-    // here on read. `session_id` alone is indexed alongside the compound key so a delete or a
-    // full-chain read doesn't need `document` too.
     this.version(3).stores({
       draftSteps: '[session_id+document+index], session_id',
+    })
+
+    // The step chain became an event log. `draftSteps` is dropped, not migrated: local drafts are
+    // test data until real data has to survive a shape change (CLAUDE.md).
+    //
+    // A `drafts` row's `child.events`/`parent.events` are always stored empty and reassembled from
+    // here on read. `session_id` alone is indexed alongside the compound key so a delete or a
+    // full-log read doesn't need `document` too.
+    this.version(4).stores({
+      draftSteps: null,
+      draftEvents: '[session_id+document+index], session_id',
     })
   }
 }

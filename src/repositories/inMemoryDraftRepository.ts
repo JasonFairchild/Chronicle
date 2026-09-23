@@ -1,29 +1,29 @@
-import type { AuthoringStep } from '@/types/entry'
+import type { AuthoringEvent } from '@/types/entry'
 import type { Draft, DraftSummary } from '@/types/draft'
-import type { DraftRepository, PersistedSteps } from './draftRepository'
+import type { DraftRepository, PersistedEvents } from './draftRepository'
 
 /**
- * Steps in their own map, appended rather than replaced wholesale, so the contract's append-only
+ * Events in their own map, appended rather than replaced wholesale, so the contract's append-only
  * assertions actually exercise something — a repository that just stored `Draft` objects whole
  * could not fail them.
  */
 export class InMemoryDraftRepository implements DraftRepository {
   private snapshots = new Map<string, Draft>()
-  private childSteps = new Map<string, AuthoringStep[]>()
-  private parentSteps = new Map<string, AuthoringStep[]>()
+  private childEvents = new Map<string, AuthoringEvent[]>()
+  private parentEvents = new Map<string, AuthoringEvent[]>()
 
-  async save(draft: Draft, persisted: PersistedSteps): Promise<void> {
-    append(this.childSteps, draft.session_id, draft.child.steps, persisted.child)
+  async save(draft: Draft, persisted: PersistedEvents): Promise<void> {
+    append(this.childEvents, draft.session_id, draft.child.events, persisted.child)
     if (draft.parent) {
-      append(this.parentSteps, draft.session_id, draft.parent.steps, persisted.parent)
+      append(this.parentEvents, draft.session_id, draft.parent.events, persisted.parent)
     }
 
     this.snapshots.set(
       draft.session_id,
       structuredClone({
         ...draft,
-        child: { ...draft.child, steps: [] },
-        parent: draft.parent ? { ...draft.parent, steps: [] } : null,
+        child: { ...draft.child, events: [] },
+        parent: draft.parent ? { ...draft.parent, events: [] } : null,
       }),
     )
   }
@@ -34,7 +34,7 @@ export class InMemoryDraftRepository implements DraftRepository {
   }
 
   async list(): Promise<DraftSummary[]> {
-    // No step maps touched here — `this.snapshots` already carries no steps, so a summary needs
+    // No event maps touched here — `this.snapshots` already carries no events, so a summary needs
     // nothing `reassemble` would add.
     return [...this.snapshots.values()]
       .sort(
@@ -46,22 +46,22 @@ export class InMemoryDraftRepository implements DraftRepository {
 
   async delete(sessionId: string): Promise<void> {
     this.snapshots.delete(sessionId)
-    this.childSteps.delete(sessionId)
-    this.parentSteps.delete(sessionId)
+    this.childEvents.delete(sessionId)
+    this.parentEvents.delete(sessionId)
   }
 
   clear(): void {
     this.snapshots.clear()
-    this.childSteps.clear()
-    this.parentSteps.clear()
+    this.childEvents.clear()
+    this.parentEvents.clear()
   }
 
   private reassemble(snapshot: Draft): Draft {
     return {
       ...snapshot,
-      child: { ...snapshot.child, steps: this.childSteps.get(snapshot.session_id) ?? [] },
+      child: { ...snapshot.child, events: this.childEvents.get(snapshot.session_id) ?? [] },
       parent: snapshot.parent
-        ? { ...snapshot.parent, steps: this.parentSteps.get(snapshot.session_id) ?? [] }
+        ? { ...snapshot.parent, events: this.parentEvents.get(snapshot.session_id) ?? [] }
         : null,
     }
   }
@@ -82,12 +82,12 @@ function toSummary(draft: Draft): DraftSummary {
 }
 
 function append(
-  store: Map<string, AuthoringStep[]>,
+  store: Map<string, AuthoringEvent[]>,
   sessionId: string,
-  steps: AuthoringStep[],
+  events: AuthoringEvent[],
   persistedCount: number,
 ): void {
   const existing = store.get(sessionId) ?? []
-  const tail = structuredClone(steps.slice(persistedCount))
+  const tail = structuredClone(events.slice(persistedCount))
   store.set(sessionId, [...existing, ...tail])
 }

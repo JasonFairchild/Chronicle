@@ -486,7 +486,7 @@ describe('EntryDetailView (browser)', () => {
     const revisions = await repository.listRevisions(parent.id)
     expect(docToPlainText(revisions[0]!.content)).toBe(`${PARENT_TEXT}, or so I remembered it.`)
     expect(revisions[0]?.revision_mode).toBe('direct')
-    expect(revisions[0]?.authoring_trace?.steps.length).toBeGreaterThan(0)
+    expect(revisions[0]?.authoring_trace?.events.length).toBeGreaterThan(0)
     // The entry itself is never rewritten; the version chain is what carries the change.
     expect(docToPlainText((await repository.getById(parent.id))!.content)).toBe(PARENT_TEXT)
   })

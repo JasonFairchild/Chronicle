@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Draft } from '@/types/draft'
 import { emptyEntryDates } from '@/types/entry'
-import type { DraftRepository, PersistedSteps } from './draftRepository'
+import type { DraftRepository, PersistedEvents } from './draftRepository'
 
-const NOTHING_PERSISTED: PersistedSteps = { child: 0, parent: 0 }
+const NOTHING_PERSISTED: PersistedEvents = { child: 0, parent: 0 }
 
 function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft {
   return {
@@ -12,7 +12,7 @@ function makeDraft(overrides: Partial<Draft> & Pick<Draft, 'session_id'>): Draft
     updated_at: '2026-09-05T10:00:00.000Z',
     dates: emptyEntryDates(),
     title: null,
-    child: { content: '', steps: [], ticks: [] },
+    child: { base_content: '', content: '', events: [] },
     parent: null,
     ...overrides,
   }
@@ -47,16 +47,18 @@ export function runDraftRepositoryContract(
           },
           title: 'Lake Tahoe',
           child: {
+            base_content: '',
             content: 'Half a thought',
-            steps: [{ at: 1_000, step: { stepType: 'replace' } }],
-            ticks: [{ at: 1_000, step_index: 1, reasons: ['punctuation'] }],
+            events: [
+              { kind: 'edit', at: 1_000, steps: [{ n: 1 }], inserted_text: 'Half a thought' },
+              { kind: 'manual', at: 1_500 },
+            ],
           },
           parent: {
+            base_content: 'The full parent document, as this session found it',
             content: 'The full parent document, with a provisional anchor mark',
             title: null,
-            base_content: 'The full parent document, as this session found it',
-            steps: [{ at: 1_000, step: { stepType: 'addMark' } }],
-            ticks: [{ at: 1_000, step_index: 1, reasons: ['anchor'] }],
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 'p1' }], is_anchor_op: true }],
           },
         }),
         NOTHING_PERSISTED,
@@ -79,24 +81,27 @@ export function runDraftRepositoryContract(
       expect(fetched?.parent?.content).toBe(
         'The full parent document, with a provisional anchor mark',
       )
-      expect(fetched?.child.steps).toHaveLength(1)
-      expect(fetched?.parent?.steps).toHaveLength(1)
-      expect(fetched?.child.ticks[0]?.reasons).toEqual(['punctuation'])
-      expect(fetched?.parent?.ticks[0]?.reasons).toEqual(['anchor'])
+      expect(fetched?.child.events).toEqual([
+        { kind: 'edit', at: 1_000, steps: [{ n: 1 }], inserted_text: 'Half a thought' },
+        { kind: 'manual', at: 1_500 },
+      ])
+      expect(fetched?.parent?.events).toEqual([
+        { kind: 'edit', at: 1_000, steps: [{ n: 'p1' }], is_anchor_op: true },
+      ])
     })
 
     it('overwrites in place, because a live session is working space rather than history', async () => {
       await repository.save(
         makeDraft({
           session_id: 'session-1',
-          child: { content: 'It rai', steps: [], ticks: [] },
+          child: { base_content: '', content: 'It rai', events: [] },
         }),
         NOTHING_PERSISTED,
       )
       await repository.save(
         makeDraft({
           session_id: 'session-1',
-          child: { content: 'It rained all day.', steps: [], ticks: [] },
+          child: { base_content: '', content: 'It rained all day.', events: [] },
           updated_at: '2026-09-05T10:00:05.000Z',
         }),
         NOTHING_PERSISTED,
@@ -119,14 +124,14 @@ export function runDraftRepositoryContract(
       expect((await repository.list()).map((draft) => draft.session_id)).toEqual(['newer', 'older'])
     })
 
-    it('lists a summary carrying the content but not the step or tick chains', async () => {
+    it('lists a summary carrying the content but not the event log', async () => {
       await repository.save(
         makeDraft({
           session_id: 'session-1',
           child: {
+            base_content: '',
             content: 'It rai',
-            steps: [{ at: 1_000, step: { n: 1 } }],
-            ticks: [{ at: 1_000, step_index: 1, reasons: ['punctuation'] }],
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
           },
         }),
         NOTHING_PERSISTED,
@@ -134,8 +139,7 @@ export function runDraftRepositoryContract(
 
       const [summary] = await repository.list()
       expect(summary?.child.content).toBe('It rai')
-      expect(summary?.child).not.toHaveProperty('steps')
-      expect(summary?.child).not.toHaveProperty('ticks')
+      expect(summary?.child).not.toHaveProperty('events')
     })
 
     it('deletes a draft, which is what sealing does once the entry is committed', async () => {
@@ -153,7 +157,7 @@ export function runDraftRepositoryContract(
     it("does not keep the caller's object, so a session that keeps typing cannot rewrite what it stored", async () => {
       const draft = makeDraft({
         session_id: 'session-1',
-        child: { content: 'It rai', steps: [], ticks: [] },
+        child: { base_content: '', content: 'It rai', events: [] },
       })
 
       await repository.save(draft, NOTHING_PERSISTED)
@@ -162,14 +166,14 @@ export function runDraftRepositoryContract(
       expect((await repository.getById('session-1'))?.child.content).toBe('It rai')
     })
 
-    it('appends only the steps it has not already stored, and reads the whole chain back', async () => {
+    it('appends only the events it has not already stored, and reads the whole log back', async () => {
       await repository.save(
         makeDraft({
           session_id: 'session-1',
           child: {
+            base_content: '',
             content: 'It rai',
-            steps: [{ at: 1_000, step: { n: 1 } }],
-            ticks: [],
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
           },
         }),
         NOTHING_PERSISTED,
@@ -178,29 +182,29 @@ export function runDraftRepositoryContract(
         makeDraft({
           session_id: 'session-1',
           child: {
+            base_content: '',
             content: 'It rained',
-            steps: [
-              { at: 1_000, step: { n: 1 } },
-              { at: 2_000, step: { n: 2 } },
+            events: [
+              { kind: 'edit', at: 1_000, steps: [{ n: 1 }] },
+              { kind: 'edit', at: 2_000, steps: [{ n: 2 }] },
             ],
-            ticks: [],
           },
         }),
         { child: 1, parent: 0 },
       )
 
       const fetched = await repository.getById('session-1')
-      expect(fetched?.child.steps.map((step) => step.step)).toEqual([{ n: 1 }, { n: 2 }])
+      expect(fetched?.child.events.map((event) => event.at)).toEqual([1_000, 2_000])
     })
 
-    it("forgets a session's steps when its draft is deleted", async () => {
+    it("forgets a session's events when its draft is deleted", async () => {
       await repository.save(
         makeDraft({
           session_id: 'session-1',
           child: {
+            base_content: '',
             content: 'It rai',
-            steps: [{ at: 1_000, step: { n: 1 } }],
-            ticks: [],
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
           },
         }),
         NOTHING_PERSISTED,
@@ -208,33 +212,32 @@ export function runDraftRepositoryContract(
       await repository.delete('session-1')
 
       // Reused session id, as a fresh `beginDraft` would never produce, but the row's absence is
-      // what a stale, un-cleaned-up step row would betray.
+      // what a stale, un-cleaned-up event row would betray.
       await repository.save(
         makeDraft({
           session_id: 'session-1',
-          child: { content: 'Fresh start', steps: [], ticks: [] },
+          child: { base_content: '', content: 'Fresh start', events: [] },
         }),
         NOTHING_PERSISTED,
       )
 
-      expect((await repository.getById('session-1'))?.child.steps).toEqual([])
+      expect((await repository.getById('session-1'))?.child.events).toEqual([])
     })
 
-    it("reassembles a resumed session's chain in the order it was written", async () => {
+    it("reassembles a resumed session's logs in the order they were written", async () => {
       await repository.save(
         makeDraft({
           session_id: 'session-1',
           child: {
+            base_content: '',
             content: 'One',
-            steps: [{ at: 1_000, step: { n: 1 } }],
-            ticks: [],
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
           },
           parent: {
+            base_content: 'Parent base',
             content: 'Parent one',
             title: null,
-            base_content: 'Parent base',
-            steps: [{ at: 1_000, step: { n: 'p1' } }],
-            ticks: [],
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 'p1' }] }],
           },
         }),
         NOTHING_PERSISTED,
@@ -243,30 +246,29 @@ export function runDraftRepositoryContract(
         makeDraft({
           session_id: 'session-1',
           child: {
+            base_content: '',
             content: 'One two',
-            steps: [
-              { at: 1_000, step: { n: 1 } },
-              { at: 2_000, step: { n: 2 } },
+            events: [
+              { kind: 'edit', at: 1_000, steps: [{ n: 1 }] },
+              { kind: 'manual', at: 2_000 },
             ],
-            ticks: [],
           },
           parent: {
+            base_content: 'Parent base',
             content: 'Parent one two',
             title: null,
-            base_content: 'Parent base',
-            steps: [
-              { at: 1_000, step: { n: 'p1' } },
-              { at: 2_000, step: { n: 'p2' } },
+            events: [
+              { kind: 'edit', at: 1_000, steps: [{ n: 'p1' }] },
+              { kind: 'edit', at: 2_000, steps: [{ n: 'p2' }] },
             ],
-            ticks: [],
           },
         }),
         { child: 1, parent: 1 },
       )
 
       const fetched = await repository.getById('session-1')
-      expect(fetched?.child.steps.map((step) => step.step)).toEqual([{ n: 1 }, { n: 2 }])
-      expect(fetched?.parent?.steps.map((step) => step.step)).toEqual([{ n: 'p1' }, { n: 'p2' }])
+      expect(fetched?.child.events.map((event) => event.kind)).toEqual(['edit', 'manual'])
+      expect(fetched?.parent?.events.map((event) => event.at)).toEqual([1_000, 2_000])
     })
   })
 }

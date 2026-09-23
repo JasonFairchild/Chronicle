@@ -1,10 +1,10 @@
 import type { Draft, DraftSummary } from '@/types/draft'
 
 /**
- * How much of a session's step chain the store already holds, so a save appends only the tail.
+ * How much of a session's event logs the store already holds, so a save appends only the tail.
  * `parent` is meaningless (and ignored) when the draft has no `parent` document.
  */
-export interface PersistedSteps {
+export interface PersistedEvents {
   child: number
   parent: number
 }
@@ -19,11 +19,11 @@ export interface PersistedSteps {
  */
 export interface DraftRepository {
   /**
-   * Upsert the snapshot and append whatever steps `persisted` says aren't stored yet. Called on
-   * every debounced flush, so it must be cheap and idempotent — the step chain is the one
-   * unbounded part of a draft, which is why it is appended rather than rewritten wholesale.
+   * Upsert the snapshot and append whatever events `persisted` says aren't stored yet. Called on
+   * every debounced flush, so it must be cheap and idempotent — the event log is the one unbounded
+   * part of a draft, which is why it is appended rather than rewritten wholesale.
    */
-  save(draft: Draft, persisted: PersistedSteps): Promise<void>
+  save(draft: Draft, persisted: PersistedEvents): Promise<void>
   getById(sessionId: string): Promise<Draft | null>
   /**
    * Most recently touched first: the drafts list exists so none are stranded invisibly. Summaries,

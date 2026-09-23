@@ -47,7 +47,7 @@ describe('DocumentEditor (browser)', () => {
     const latest = changes[changes.length - 1]!
     expect(docToPlainText(latest.content)).toBe('It rained all day.')
     expect(latest.steps.length).toBeGreaterThan(0)
-    expect(latest.isFormatting).toBe(false)
+    expect(latest.is_formatting).toBe(false)
   })
 
   it('reports the title beside the body it types into, as a separate field', async () => {
@@ -104,8 +104,8 @@ describe('DocumentEditor (browser)', () => {
     await screen.getByRole('button', { name: 'Bold' }).click()
 
     const latest = changes[changes.length - 1]!
-    expect(latest.isFormatting).toBe(true)
-    expect(latest.insertedText).toBe('')
+    expect(latest.is_formatting).toBe(true)
+    expect(latest.inserted_text).toBe('')
   })
 
   it('reports a change of block type as formatting, since it moves no words', async () => {
@@ -117,7 +117,7 @@ describe('DocumentEditor (browser)', () => {
 
     // A heading arrives as a replaceAround step, which no step type tells apart from an edit.
     const latest = changes[changes.length - 1]!
-    expect(latest.isFormatting).toBe(true)
+    expect(latest.is_formatting).toBe(true)
     // Trimmed because the editor adds an empty block after a trailing heading, which is its
     // scaffolding rather than anything the author wrote.
     expect(docToPlainText(latest.content).trim()).toBe('Worth remembering')
@@ -134,7 +134,7 @@ describe('DocumentEditor (browser)', () => {
     // reinserted through the gap — naive arithmetic would report the paragraph as deleted.
     const latest = changes[changes.length - 1]!
     expect(docToPlainText(latest.content).trim()).toBe('Worth remembering')
-    expect(latest.removedChars).toBe(0)
+    expect(latest.removed_chars).toBe(0)
   })
 
   it('leaves the caret in the document after a toolbar click, so typing carries on', async () => {
@@ -172,7 +172,7 @@ describe('DocumentEditor (browser)', () => {
     await expect
       .element(screen.getByRole('link', { name: 'The trail report' }))
       .toHaveAttribute('href', 'https://example.com/trail')
-    expect(changes[changes.length - 1]!.isFormatting).toBe(true)
+    expect(changes[changes.length - 1]!.is_formatting).toBe(true)
   })
 
   it('reports nothing when only its editability changes', async () => {
@@ -233,8 +233,8 @@ describe('DocumentEditor (browser)', () => {
     const [mediaRef] = collectMediaRefs(latest.content)
     expect(mediaRef).toBeTruthy()
     // An attachment adds no words, but it is content all the same.
-    expect(latest.isFormatting).toBe(false)
-    expect(latest.mediaChanged).toBe(true)
+    expect(latest.is_formatting).toBe(false)
+    expect(latest.media_changed).toBe(true)
     expect(await mediaRepository.get(mediaRef!)).not.toBeNull()
     // The bytes never enter the document: an object URL is minted per page load and would be a
     // broken reference the moment this entry was read again.
@@ -259,7 +259,7 @@ describe('DocumentEditor (browser)', () => {
 
     const latest = changes[changes.length - 1]!
     expect(docToPlainText(latest.content)).toContain('Copied from elsewhere')
-    expect(latest.isPaste).toBe(true)
+    expect(latest.is_paste).toBe(true)
   })
 
   describe('anchor mode', () => {
@@ -384,7 +384,7 @@ describe('DocumentEditor (browser)', () => {
       expect(latest.anchorIds).toEqual([])
       // The node shrinks the document, but its wording was never the parent's text to begin with
       // (`nodeText` skips `anchorInsert`) — `textBetween` over its range reads as empty, not removed.
-      expect(latest.removedChars).toBe(0)
+      expect(latest.removed_chars).toBe(0)
     })
 
     it('trims whitespace off a selection’s edges before anchoring it', async () => {
@@ -477,8 +477,8 @@ describe('DocumentEditor (browser)', () => {
       // Judged by outcome, not by transaction provenance (`contentDelta`): undoing a placement
       // removes the anchor from the document's anchor set the same as `removeAnchor` would, so this
       // reads as an anchor change rather than formatting, with no undo-specific case needed.
-      expect(change.isAnchorOp).toBe(true)
-      expect(change.isFormatting).toBe(false)
+      expect(change.is_anchor_op).toBe(true)
+      expect(change.is_formatting).toBe(false)
     })
 
     describe('editing an anchor already placed this session', () => {
@@ -511,11 +511,11 @@ describe('DocumentEditor (browser)', () => {
         // Typing wording is typing — it isn't a structural anchor op the way placing, converting,
         // or removing one is (see `contentDelta`'s `sameAnchors`); it earns a bookmark the same way
         // prose does, which the next test covers.
-        expect(latest.isAnchorOp).toBe(false)
-        expect(latest.isFormatting).toBe(false)
+        expect(latest.is_anchor_op).toBe(false)
+        expect(latest.is_formatting).toBe(false)
       })
 
-      it('reports a keystroke in a reopened wording box as ordinary, tickable text entry', async () => {
+      it('reports a keystroke in a reopened wording box as ordinary text entry', async () => {
         const screen = mountAnchorEditor()
         await placeHighlightWithWording(screen)
 
@@ -523,11 +523,10 @@ describe('DocumentEditor (browser)', () => {
         await userEvent.keyboard('{End}.')
 
         const latest = changes[changes.length - 1]!
-        // What the tick policy's punctuation check reads — see `insertedTextOf`
-        // (`DocumentEditor.vue`) and `evaluateTick` (`domain/tickPolicy.ts`).
-        expect(latest.insertedText.endsWith('.')).toBe(true)
-        expect(latest.isAnchorOp).toBe(false)
-        expect(latest.isFormatting).toBe(false)
+        // What the mark policy's punctuation check reads — see `insertedTextOf`.
+        expect(latest.inserted_text.endsWith('.')).toBe(true)
+        expect(latest.is_anchor_op).toBe(false)
+        expect(latest.is_formatting).toBe(false)
       })
 
       it('switches a placed anchor’s kind from its reopened wording box', async () => {
@@ -540,7 +539,7 @@ describe('DocumentEditor (browser)', () => {
         const latest = changes[changes.length - 1]!
         const [anchor] = collectAnchors(latest.content)
         expect(anchor).toMatchObject({ kind: 'strike', insertion: 'Donner Lake' })
-        expect(latest.isAnchorOp).toBe(true)
+        expect(latest.is_anchor_op).toBe(true)
         // The relation this note reads as follows the final kind at seal time — switching to a
         // strike here is exactly what makes the note read as a correction rather than a comment.
       })
@@ -556,7 +555,7 @@ describe('DocumentEditor (browser)', () => {
         const latest = changes[changes.length - 1]!
         expect(collectAnchors(latest.content)).toEqual([])
         expect(latest.anchorIds).toEqual([])
-        expect(latest.isAnchorOp).toBe(true)
+        expect(latest.is_anchor_op).toBe(true)
         // The marked text itself is never touched — only the mark on it.
         expect(docToPlainText(latest.content)).toBe('I went to Lake Tahoe with Dad')
       })

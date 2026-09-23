@@ -1,4 +1,4 @@
-import type { AuthoringStep, AuthoringTick, EntryDates } from './entry'
+import type { AuthoringEvent, EntryDates } from './entry'
 
 /**
  * What an unsealed draft is going to become. `new_child` is for anchor-mode (ENTRY_MODEL.md,
@@ -16,9 +16,9 @@ export type DraftTarget =
  * `ended_at`, because the session it belongs to hasn't yet sealed.
  */
 export interface AuthoringBuffer {
+  base_content: string // The document as this session found it, never rewritten.
   content: string
-  steps: AuthoringStep[]
-  ticks: AuthoringTick[]
+  events: AuthoringEvent[]
 }
 
 /**
@@ -36,16 +36,16 @@ export interface Draft {
   child: AuthoringBuffer
   // Carries the parent's own title, mirrored once when the session begins so a resumed session can
   // display it without a second fetch. Never writer-set: anchor mode offers no way to retitle.
-  parent: (AuthoringBuffer & { base_content: string; title: string | null }) | null
+  parent: (AuthoringBuffer & { title: string | null }) | null
 }
 
 /**
- * A `Draft` without its step/tick chains — what the drafts list actually needs. Opening it is one
- * query across every unsealed session; reading each one's whole authoring history just to render a
+ * A `Draft` without its event logs — what the drafts list actually needs. Opening it is one query
+ * across every unsealed session; reading each one's whole authoring history just to render a
  * preview line would make that query's cost grow with how long people have been writing, not with
  * how many drafts exist.
  */
 export interface DraftSummary extends Omit<Draft, 'child' | 'parent'> {
   child: Pick<AuthoringBuffer, 'content'>
-  parent: (Pick<AuthoringBuffer, 'content'> & { base_content: string; title: string | null }) | null
+  parent: (Pick<AuthoringBuffer, 'content' | 'base_content'> & { title: string | null }) | null
 }

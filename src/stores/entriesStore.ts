@@ -158,7 +158,7 @@ export const useEntriesStore = defineStore('entries', () => {
    * Sealing is where the authoring trace lands, and it lands on whatever was typed: a first draft
    * as much as a later revision, because both are links in the same chain.
    *
-   * `parentTrace` is the parent document's own step chain, present only for an anchor-mode `new_child`
+   * `parentTrace` is the parent document's own trace, present only for an anchor-mode `new_child`
    * draft — see ENTRY_MODEL.md, "Drafts". It is a second, independent trace because the parent and
    * the child are two different documents with two different authoring histories, sealed together.
    */

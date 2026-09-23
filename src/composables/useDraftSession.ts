@@ -66,7 +66,7 @@ export function useDraftSession() {
     sessionId.value = drafts.beginDraft(target, seed)
   }
 
-  /** Reopens a draft left behind by a reload, with its step chain intact. Null if it no longer exists. */
+  /** Reopens a draft left behind by a reload, with its event log intact. Null if it no longer exists. */
   async function resume(existingSessionId: string): Promise<Draft | null> {
     const resumed = await drafts.resumeDraft(existingSessionId)
     if (!resumed) return null

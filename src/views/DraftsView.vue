@@ -97,7 +97,7 @@ function describe(draft: DraftSummary): string {
 async function resume(draft: DraftSummary): Promise<void> {
   error.value = null
 
-  // Reopening rebuilds the authoring session from what was flushed, so the step chain continues
+  // Reopening rebuilds the authoring session from what was flushed, so the event log continues
   // rather than restarting at the reload. This has to finish before the editor mounts — otherwise
   // typing right after clicking "Resume" could record into a session that isn't open yet.
   await session.resume(draft.session_id)

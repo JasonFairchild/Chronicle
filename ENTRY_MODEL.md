@@ -13,7 +13,7 @@ Strikes and insertions are presentational. Content changes only through the vers
 
 **Timeline membership is a view filter, not a model fact.** Any entry may appear in a timeline
 subject to user preference. Revisions in a filtered timeline, showing how often something was
-reworked, is a legitimate view. Ticks are not entries and so never appear.
+reworked, is a legitimate view. Marks are not entries and so never appear.
 
 ## Child entries and anchors
 
@@ -108,8 +108,8 @@ an unsealed draft has not settled the question, which is also why the drafts lis
 "related entry" rather than naming a kind it would sometimes get wrong.
 
 **Drafts.** An anchor-mode session edits two documents — the parent (gaining provisional anchors,
-tracked in `Draft.parent`, an `AuthoringBuffer` plus the `base_content` described below) and the
-child's own prose (`Draft.child`, an `AuthoringBuffer` on its own) — sealing atomically into two entries
+tracked in `Draft.parent`) and the child's own prose (`Draft.child`), each an `AuthoringBuffer` —
+sealing atomically into two entries
 via `EntryRepository.createMany`: a parent revision (`revision_mode: 'anchor'`) and the child
 (`anchors` pointing at what just landed). A draft also holds the dates typed beside the words
 (`Draft.dates`), so a reload loses neither. `createMany` writes all-or-nothing, so a half-sealed
@@ -129,7 +129,8 @@ place.
 Anchors may be freely added, changed, or undone before that seal. **Which ids this session may still
 change** is never stored as a list at all — it is the _difference_ between two documents:
 `Draft.parent.base_content`, the parent exactly as this session found it, set once and never
-rewritten, and `parent.content`, the parent as it stands right now. `anchorsPlacedSince(base,
+rewritten (and what the parent's trace replays from), and `parent.content`, the parent as it stands
+right now. `anchorsPlacedSince(base,
 current)` (`domain/anchors.ts`) reads that difference on demand, which is what lets a
 placed-then-undone anchor leave no trace to subtract without a second record to keep in step with
 the document. Persisting the _base_ rather than a running list of ids is also what survives a
@@ -234,54 +235,71 @@ The session's end state is stored as a full snapshot and is authoritative. If a 
 change ever makes old steps unreplayable, the loss is fine-grained scrubbing for that session, never
 content.
 
-Each step's and tick's `at` is milliseconds since the trace's `started_at`, not a timestamp of its
-own. A scrub UI must order by `step_index`, never by `at`: `started_at` survives a reload but the
-clock computing later offsets does not as reliably, so a clock adjustment between sessions could
-make a later step's `at` come out smaller than an earlier one's.
+**The trace is an event log.** `AuthoringTrace` holds `base_content`, the document the first event
+applies to, and `events` in the order they happened: an `edit` carries one transaction's steps plus
+the signals read off it (`ChangeSignals`), and a `manual` event is a bookmark the writer asked for.
+`base_content` makes a trace replayable on its own; without it, a revision's starting document
+would have to be recovered from the version chain, and a revision that went stale mid-session would
+make that ambiguous. Each event's `at` is milliseconds since `started_at`. The recorder floors its
+clock at the last `at` it used, across reloads too, so `at` never decreases, but it can tie: the
+log's own order is the total order.
 
-**Durability and tick marking are separate jobs and should not be confused.** Persisting steps is
-about never losing work, happens constantly and invisibly, and marks nothing. Tick marking is about
-identifying moments worth stopping at when reviewing how something was written. Every step is
-persisted; only some moments are bookmarked.
+**Signals are stored, not re-derived from the steps.** Most can't be derived without a replay:
+`removed_chars` is measured against the document as it stood before each step; `is_formatting`,
+`is_anchor_op` and `media_changed` compare the document before and after the change; and `is_paste`
+isn't in the steps at all. `inserted_text` _is_ readable from step JSON, but storing it too means
+marks survive steps a future schema change makes unreadable: the loss is scrubbing, never marks
+either. Signals are stored sparse, only the ones that are set, since a keystroke's step is about 85
+bytes and all six signals written out would add about 120 more. A missing signal reads as false,
+`0` or `''`.
 
-So ticks are not entries and are not saves. They are timestamped bookmarks into the step chain,
-`{ at, step_index, reasons }` with each reason among `pause | paste | media | deletion | punctuation
-| pattern | interval | format | anchor | manual`, all tunable — `punctuation` is a configurable set of
-sentence-ending characters, `pattern` a user-supplied match, empty by default. A tick fires the moment at least one of those
-applies, and `reasons` can hold several at once — a sentence finished right after a long pause is both — ordered by
-priority so `reasons[0]` is the one worth showing; that ordering is over the result, not a choice
-between candidates the way a first-match-wins check would be. A pause or a sentence-ending period
-appends a bookmark; it does not trigger a write, because the writing already happened. A trace
-belongs on any entry that was typed, not only revisions, so a first draft is captured the same way
-as a later edit.
+**Durability and marks are separate jobs and should not be confused.** Persisting events is about
+never losing work, happens constantly and invisibly, and marks nothing. Marks identify moments worth
+stopping at when reviewing how something was written. Every event is persisted; only some moments
+are marked.
 
-`deletion` is the one reason judged in retrospect: a run of deletions of any size is bookmarked when
-it ends — at the next change that removes nothing, or the next deletion after a pause — and the tick
-sits at the run's last deleting step, so it covers everything removed in one go.
+**Marks are derived from the log, never stored with it.** `deriveMarks(events, policy)`
+(`domain/marks.ts`) reads them off in one pass, so a recorded session can be read under any policy,
+including one written after it. A mark is `{ at, index, reasons }`, where `index` counts the events
+before it: the marked document is `events.slice(0, index)` applied to `base_content`. Each reason is
+among `pause | paste | media | deletion | punctuation | pattern | interval | format | anchor |
+manual`, all tunable — `punctuation` is a configurable set of sentence-ending characters, `pattern`
+a user-supplied match, empty by default. A mark fires the moment at least one of those applies, and
+`reasons` can hold several at once — a sentence finished right after a long pause is both — ordered
+by priority so `reasons[0]` is the one worth showing. Marks closer together than `minMarkGapMs`
+merge into one at the end of the cluster, so bolding eight words one at a time is one stop, not
+eight; a `manual` mark never merges. A trace belongs on any entry that was typed, not only
+revisions, so a first draft is captured the same way as a later edit.
 
-One policy judges every stream the same way: the parent's provisional document in an anchor-mode
-session and the child's own prose are two `AuthoringSession` instances, not two mechanisms — anchor
-mode limits what the _editor_ can produce (see "Two creation experiences, kept separate" below), not
-how the session records what it does produce. `anchor` is a one-shot structural op — placing an
-anchor, switching it between highlight and strike, or removing it — judged by outcome, not by which
-command ran: `contentDelta` (`domain/entryDocument.ts`) compares the document's anchor ids and kinds
-before and after a transaction, ignoring wording text, and a transaction counts as an anchor op iff
-that set changed. Undo and redo fall out of this for free, without reading any transaction meta,
-since they change the same set back. Typing inside an open wording box never counts, since it moves
-no anchor and covers no different text: typing wording is typing, and it earns a bookmark the way
-prose does — from `pause`, `punctuation`, or `interval`, possibly more than one at once — never from
-being the last keystroke before Enter. That last part isn't a policy choice so much as a fact about
-the editor: every keystroke there already writes straight through to the document
-(`updateAnchorInsertText`), so by the time a box is committed the value is already in place and the
-commit's own transaction is a content no-op TipTap won't even emit an update for — there is no
-separate "settling" moment to tick.
+`deletion` is the one reason judged in retrospect: a run of deletions of any size is marked when it
+ends — at the next edit that removes nothing, the next deletion after a pause, a manual mark, or the
+end of the log — and the mark sits at the run's last deleting edit, so it covers everything removed
+in one go.
 
-`paste` and `media` are read off the transaction and off `contentDelta` respectively, both outcomes
-rather than provenance the same way `anchor` is: `paste` from ProseMirror's own `uiEvent` meta, so a
-drop (`uiEvent: 'drop'`) and content inserted programmatically (the image-attach path, which produces
-`media` on its own) don't count; `media` from `!sameMedia`, so attaching and removing an image both
-count. Neither fires for a paste into an open wording box, which goes through its own plain `<input>`
-and never reaches the document's clipboard handling at all.
+One recorder captures every stream the same way: the parent's provisional document in an
+anchor-mode session and the child's own prose are two `AuthoringSession` instances, not two
+mechanisms — anchor mode limits what the _editor_ can produce (see "Two creation experiences, kept
+separate" below), not how the session records what it does produce. `is_anchor_op` flags a one-shot
+structural op — placing an anchor, switching it between highlight and strike, or removing it —
+judged by outcome, not by which command ran: `contentDelta` (`domain/entryDocument.ts`) compares the
+document's anchor ids and kinds before and after a transaction, ignoring wording text, and a
+transaction counts as an anchor op iff that set changed. Undo and redo fall out of this for free,
+without reading any transaction meta, since they change the same set back. Typing inside an open
+wording box never counts, since it moves no anchor and covers no different text: typing wording is
+typing, and it is marked the way prose is — from `pause`, `punctuation`, or `interval`, possibly
+more than one at once — never from being the last keystroke before Enter. That last part isn't a
+policy choice so much as a fact about the editor: every keystroke there already writes straight
+through to the document (`updateAnchorInsertText`), so by the time a box is committed the value is
+already in place and the commit's own transaction is a content no-op TipTap won't even emit an
+update for — there is no separate "settling" moment to mark.
+
+`is_paste` and `media_changed` are read off the transaction and off `contentDelta` respectively,
+both outcomes rather than provenance the same way `is_anchor_op` is: `is_paste` from ProseMirror's
+own `uiEvent` meta, so a drop (`uiEvent: 'drop'`) and content inserted programmatically (the
+image-attach path, which sets `media_changed` on its own) don't count; `media_changed` from
+`!sameMedia`, so attaching and removing an image both count. Neither is set by a paste into an open
+wording box, which goes through its own plain `<input>` and never reaches the document's clipboard
+handling at all.
 
 ## Two stores, one of them history
 
@@ -290,14 +308,14 @@ session in progress cannot write there, since that would mean rewriting one row 
 user types, breaking the append-only rule, or creating thousands of rows nobody wants. So a live
 session accumulates into a separate draft buffer keyed by session.
 
-The buffer is **also append-only while the session runs**. Steps are appended as they happen and
+The buffer is **also append-only while the session runs**. Events are appended as they happen and
 nothing already written is rewritten, so no authoring history is lost by design. The only thing that
 disappears is the buffer as a whole, deleted after sealing, once its contents already live in the
 committed entry. It is durable rather than in-memory so a crash or a closed laptop costs nothing; on
 next load the session resumes or seals as it stands.
 
-Steps flush on a short debounce of a few hundred milliseconds, putting worst-case crash loss well
-under a second of typing. This is autosave and it is unrelated to tick marking.
+Events flush on a short debounce of a few hundred milliseconds, putting worst-case crash loss well
+under a second of typing. This is autosave and it is unrelated to marks.
 
 **Sealing is an explicit user action**, a save or import click, never an idle timeout. Until the user
 seals, the work is a draft: durable, recoverable across reloads, and absent from timelines. Opening
@@ -315,9 +333,9 @@ the entries use, in its own `drafts` store.
 
 ```ts
 interface AuthoringBuffer {
+  base_content: string // the document as this session found it; never rewritten
   content: string
-  steps: AuthoringStep[]
-  ticks: AuthoringTick[]
+  events: AuthoringEvent[]
 }
 
 interface Draft {
@@ -332,16 +350,15 @@ interface Draft {
   dates: EntryDates
   title: string | null
   child: AuthoringBuffer // the entry this draft is chiefly for
-  parent: (AuthoringBuffer & { base_content: string; title: string | null }) | null
+  parent: (AuthoringBuffer & { title: string | null }) | null
 }
 ```
 
 Sealing turns one draft into one or two entries, per "Two creation experiences" above: `new_root`
-and `revision` each become one entry, carrying `child.content`/`.steps`/`.ticks` into it as
-`authoring_trace`; `new_child` becomes the child alone when nothing was placed since
+and `revision` each become one entry holding `child.content`, with `child.base_content`/`.events` as
+its `authoring_trace`; `new_child` becomes the child alone when nothing was placed since
 `parent.base_content` (`anchorsPlacedSince`), or the atomic parent-revision-plus-child pair when
-something was, with `parent.content`/`.steps`/`.ticks` sealing into the revision's own
-`authoring_trace`. Either way the draft row is deleted once its contents live in a committed entry. A
+something was, with the parent buffer sealing into the revision the same way. Either way the draft row is deleted once its contents live in a committed entry. A
 draft is therefore very nearly the entry (or entries) it will become, which is exactly why it must
 not live in the entries table. Entries are immutable and a draft rewrites itself
 every few hundred milliseconds. Keeping them apart means no entry query ever has to filter drafts
@@ -474,7 +491,7 @@ is immune to a toolbar button, a `## ` shortcut, or a paste by construction.
 
 Pulling the title out of the stored document as well cost nothing a revision's document-snapshot
 model was already relying on: a title produces no ProseMirror steps regardless of where it's stored,
-so it was always absent from the authoring trace and invisible to the tick policy
+so it was always absent from the authoring trace and invisible to marks
 (`draftsStore.recordChange` skips a change with no steps) — its history was always the coarser one,
 the value at each save point, which `EntryVersion.title` gives for free now that it's an ordinary
 folded field. What it did buy: `docToPlainText` no longer has a title node to skip, `entryDocument.ts`
@@ -617,6 +634,10 @@ and only signals that deeper ones exist.
 - **ProseMirror block ids as anchors.** Node attributes are copied on paragraph split and lost on
   merge, so ids duplicate and orphan. Repairing that needs a custom extension that cannot be tested
   outside a browser, and it gives paragraph granularity where users want a sentence.
+- **Deciding marks while the writer types.** Each change was judged as it arrived and the resulting
+  bookmarks were stored. That froze the policy at capture time, needed state seeded across reloads
+  and backdated deletion marks to stay consistent, and left `paste` unrecoverable for any later
+  policy, since nothing kept it. Storing the signals and deriving marks removed all three.
 - **Anchors as offsets stored on the child**, resolved by a fallback ladder (exact position, mapped
   through recorded steps, quote search disambiguated by prefix/suffix, then orphaned). Worth
   building first: it needed no editor schema change and proved the shape of the problem. But every

@@ -14,50 +14,46 @@ export interface AnchorRef {
 
 export type RevisionMode = 'direct' | 'anchor'
 
-export type TickReason =
-  | 'pause'
-  | 'paste'
-  | 'media'
-  | 'deletion'
-  | 'punctuation'
-  | 'pattern'
-  | 'interval'
-  | 'format'
-  | 'anchor'
-  | 'manual'
-
 /**
- * A bookmark into the step chain, marking a moment worth stopping at when reviewing. A tick fires
- * when at least one reason applies, and it can be several at once — a sentence finished right after
- * a long pause is both — so `reasons` is ordered by priority rather than picking just one; a scrub
- * UI showing one label reads `reasons[0]`.
+ * The facts about one editor change that marks are derived from (ENTRY_MODEL.md, "Authoring
+ * capture"). Stored rather than re-derived, since most need the document as it stood around the
+ * change.
  */
-export interface AuthoringTick {
-  /** Milliseconds since the trace's `started_at` — see `AuthoringStep.at`. */
-  at: number
-  step_index: number
-  reasons: [TickReason, ...TickReason[]]
+export interface ChangeSignals {
+  inserted_text: string // Empty for a deletion or a pure formatting change.
+  removed_chars: number // Measured against the document each step saw before it applied.
+  is_formatting: boolean // A mark or node-type change rather than text.
+  is_anchor_op: boolean // Placing, switching or removing an anchor; not typing its wording.
+  is_paste: boolean // The transaction's own `uiEvent` meta, so a drop doesn't count.
+  media_changed: boolean // An image attached or removed.
 }
 
 /**
- * One serialized ProseMirror step with the moment it happened.
- *
- * `at` is milliseconds since the trace's `started_at`, not a timestamp of its own — `started_at`
- * survives a reload while a clock does not reliably, so ordering by `step_index` is the total
- * order; a clock adjustment between sessions could otherwise put two `at` values out of sequence.
+ * One editor change. Signals are stored sparse: only the ones that are set, so a plain keystroke
+ * adds just `inserted_text`, and a missing field reads as false, `0` or `''`.
  */
-export interface AuthoringStep {
-  at: number
-  step: unknown
+export interface EditEvent extends Partial<ChangeSignals> {
+  kind: 'edit'
+  at: number // Milliseconds since the trace's `started_at`.
+  steps: unknown[] // Serialized ProseMirror steps, in order.
 }
+
+/** A bookmark the writer asked for. */
+export interface ManualEvent {
+  kind: 'manual'
+  at: number
+}
+
+/** The log's order is the total order: `at` can tie. */
+export type AuthoringEvent = EditEvent | ManualEvent
 
 /** How one writing session produced its snapshot. */
 export interface AuthoringTrace {
   session_id: string
   started_at: string
   ended_at: string
-  steps: AuthoringStep[]
-  ticks: AuthoringTick[]
+  base_content: string // The document the first event applies to.
+  events: AuthoringEvent[]
 }
 
 export interface EntryDates {

@@ -225,9 +225,11 @@ either — they are names for what a note turned out to be, not a choice to make
 
 ### 4.9 How writing is remembered — Built, invisible for now
 
-While you write, Chronicle quietly records how the text came to be — not only the finished result —
-and bookmarks the moments worth returning to: where you paused, where you pasted or attached an
-image, where you finished a sentence, and at regular intervals regardless.
+While you write, Chronicle quietly records how the text came to be — not only the finished result.
+Each change carries signals like whether you paused, pasted, attached an image, or finished a
+sentence. Which of those add up to a bookmark worth returning to is decided later, not while you
+write, so bookmarking can be introduced or retuned at any point and reach back over everything
+already written.
 
 Today this is invisible: it is captured and stored but nothing displays it. It is what makes the
 scrubbable history view (§5.1) possible, and it is why that feature can be built later without
@@ -307,7 +309,7 @@ Not commitments. A parking lot, so ideas stop being remembered by hand.
 - One entry's whole subtree as an activity stream: everything that ever happened to it, in order.
 - Expanding past the default two levels of depth on demand.
 - Diff like presentation between 2 revisions or perhaps multiple selected revisions on both sides? Can anchor ops be included in such a view?
-- Comprehensive rendering of authorship sessions with detailed time info surfaced. Perhaps a scrubbable widget that will demonstate the evolution of an authorship session from start to finish. (I have a thought about scrubbing through the saved bookmarks and the affects of those ticks appearing/disappearing in a document view of the revision depending on user input/position in the timeline)
+- Comprehensive rendering of authorship sessions with detailed time info surfaced. Perhaps a scrubbable widget that will demonstate the evolution of an authorship session from start to finish. (I have a thought about scrubbing through the saved bookmarks and the affects of those marks appearing/disappearing in a document view of the revision depending on user input/position in the timeline)
 
 ### Making anchor ops unmistakable
 
@@ -389,11 +391,7 @@ built:
   question of whether it should be a user-facing switch at all.
 - Re-scoring an already-recorded writing session under a different, or later, set of bookmark
   rules — viewing an old session's bookmarks as they'd fall today, without re-capturing anything.
-  What's captured today keeps most of what that would need; worth not losing that as capture
-  evolves, even before deciding whether to build this. One bookmark kind — where you pasted — isn't
-  recoverable after the fact as things stand, since it's read in the moment rather than kept.
-  Carrying an old session's paste bookmarks forward as-is is the easy version if this is ever built,
-  but something that doesn't depend on a hand-carried special case is the better bar to hold it to.
+  Capture already supports this, pasting included; what's missing is a way to choose the rules.
 - Richer text: links, quotes, lists, checklists.
 - Smart links: Ones that have a preview for at least common sources (maybe google docs or one drive?) But personally, links to LDS scripture are perhaps the most important. I imagine this would primarily be a hover mode that would shows the full text of the scripture reference. (probably requires internet or we decide to cache things in app. Configurable?)
 

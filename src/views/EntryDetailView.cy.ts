@@ -460,7 +460,7 @@ describe('EntryDetailView', () => {
           `${PARENT_TEXT}, or so I remembered it.`,
         )
         expect(revisions[0]?.revision_mode).to.equal('direct')
-        expect(revisions[0]?.authoring_trace?.steps.length).to.be.greaterThan(0)
+        expect(revisions[0]?.authoring_trace?.events.length).to.be.greaterThan(0)
       })
       // The entry itself is never rewritten; the version chain is what carries the change.
       cy.then(() => repository.getById(parent.id)).then((stored) => {

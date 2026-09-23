@@ -158,7 +158,7 @@ export interface ContentDelta {
 }
 
 /**
- * Compares two documents along the three axes a tick or a revision cares about, in one pass so
+ * Compares two documents along the three axes a change's signals are read from, in one pass so
  * `DocumentEditor` never has to re-walk the document per signal.
  *
  * Deliberately a comparison of outcomes rather than a list of editor operations. Marks arrive as

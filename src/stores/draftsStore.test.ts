@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
+import { deriveMarks } from '@/domain/marks'
 import {
   draftRepository,
   entryRepository,
@@ -61,7 +62,7 @@ describe('useDraftsStore', () => {
 
     const flushed = await draftRepository.getById(sessionId)
     expect(docToPlainText(flushed!.child.content)).toBe('It rained all day.')
-    expect(flushed?.child.steps).toHaveLength(3)
+    expect(flushed?.child.events).toHaveLength(3)
   })
 
   it('moves the snapshot but not the trace for a change that produced no steps', async () => {
@@ -86,7 +87,7 @@ describe('useDraftsStore', () => {
     const flushed = await draftRepository.getById(sessionId)
     expect(flushed?.child.content).toBe(textContent('We drove up on Friday'))
     expect(flushed?.title).toBe('Lake Tahoe')
-    expect(flushed?.child.steps).toHaveLength(1)
+    expect(flushed?.child.events).toHaveLength(1)
   })
 
   it('leaves a snapshot pending when its write fails, rather than retiring it unwritten', async () => {
@@ -130,11 +131,11 @@ describe('useDraftsStore', () => {
     expect(await draftRepository.getById(sessionId)).not.toBeNull()
 
     // Nothing else pending — a manual bookmark alone has to be enough to schedule a write.
-    store.markTick(sessionId)
+    store.addMark(sessionId)
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(flushed?.child.ticks.flatMap((tick) => tick.reasons)).toContain('manual')
+    expect(flushed?.child.events.map((event) => event.kind)).toEqual(['edit', 'manual'])
   })
 
   it('keeps the dates alongside the words, so a reload loses neither', async () => {
@@ -171,14 +172,15 @@ describe('useDraftsStore', () => {
       content,
       title: 'Lake Tahoe',
       steps: [{ stepType: 'replace' }],
-      insertedText: 'We drove up on Friday.',
+      inserted_text: 'We drove up on Friday.',
     })
     const sealed = await store.sealDraft(sessionId)
 
     const stored = await entries.getEntry(sealed.id)
+    const trace = stored!.authoring_trace!
     expect(stored?.title).toBe('Lake Tahoe')
-    expect(stored?.authoring_trace?.session_id).toBe(sessionId)
-    expect(stored?.authoring_trace?.ticks.map((tick) => tick.reasons)).toEqual([['punctuation']])
+    expect(trace.session_id).toBe(sessionId)
+    expect(deriveMarks(trace.events).map((mark) => mark.reasons)).toEqual([['punctuation']])
     expect(await draftRepository.getById(sessionId)).toBeNull()
     expect(store.drafts).toEqual([])
   })
@@ -219,11 +221,11 @@ describe('useDraftsStore', () => {
     expect(revisions[0]?.content).toBe(markedParentContent)
   })
 
-  it('records an anchor op into the parent stream as a tick, the same way the child stream would', async () => {
+  it('records an anchor op into the parent stream, the same way the child stream would', async () => {
     // One authoring pipeline, not two (ENTRY_MODEL.md, "Authoring capture"): anchor mode limits
     // what the editor can produce, not how a session records it, so `recordParentChange` and
-    // `recordChange` both reach the same `AuthoringSession.record` and a structural anchor op
-    // bookmarks the parent's own chain exactly the way it would the child's.
+    // `recordChange` both reach the same `AuthoringSession.record`, and the parent's own trace
+    // starts from the parent as the session found it.
     const store = useDraftsStore()
     const parentContent = 'The meeting went badly'
     const parent = await entryRepository.create(
@@ -237,7 +239,7 @@ describe('useDraftsStore', () => {
     store.recordParentChange(sessionId, {
       content: withAnchorMark(parentContent, 'anchor-1', 4, 11),
       steps: [{ stepType: 'addMark' }],
-      isAnchorOp: true,
+      is_anchor_op: true,
     })
     store.recordChange(sessionId, {
       content: textContent('It was salvaged later.'),
@@ -246,11 +248,13 @@ describe('useDraftsStore', () => {
     const sealed = await store.sealDraft(sessionId)
 
     const [parentRevision] = await entryRepository.listRevisions(parent.id)
-    expect(parentRevision?.authoring_trace?.ticks.map((tick) => tick.reasons)).toEqual([['anchor']])
+    const parentTrace = parentRevision!.authoring_trace!
+    expect(parentTrace.base_content).toBe(textContent(parentContent))
+    expect(deriveMarks(parentTrace.events).map((mark) => mark.reasons)).toEqual([['anchor']])
     expect((await entryRepository.getById(sealed.id))?.authoring_trace).toBeTruthy()
   })
 
-  it('carries the parent’s own ticks through a resume, not only its steps', async () => {
+  it('carries the parent’s own log through a resume', async () => {
     const store = useDraftsStore()
     const parentContent = 'The meeting went badly'
     const parent = await entryRepository.create(
@@ -266,13 +270,14 @@ describe('useDraftsStore', () => {
         updated_at: '2026-09-05T10:00:02.000Z',
         dates: emptyEntryDates(),
         title: null,
-        child: { content: '', steps: [], ticks: [] },
+        child: { base_content: '', content: '', events: [] },
         parent: {
+          base_content: textContent(parentContent),
           content: markedParentContent,
           title: null,
-          base_content: textContent(parentContent),
-          steps: [{ at: 1_000, step: { stepType: 'addMark' } }],
-          ticks: [{ at: 1_000, step_index: 1, reasons: ['anchor'] }],
+          events: [
+            { kind: 'edit', at: 1_000, steps: [{ stepType: 'addMark' }], is_anchor_op: true },
+          ],
         },
       },
       { child: 0, parent: 0 },
@@ -286,11 +291,13 @@ describe('useDraftsStore', () => {
     await store.sealDraft('interrupted-anchor')
 
     const [parentRevision] = await entryRepository.listRevisions(parent.id)
-    // Resumed intact, not restarted: the tick recorded before the reload is still there, at the
-    // same `step_index` its one prior step earned it.
-    expect(parentRevision?.authoring_trace?.ticks).toEqual([
-      expect.objectContaining({ step_index: 1, reasons: ['anchor'] }),
-    ])
+    // Resumed intact, not restarted: the parent's log and its base survived the reload.
+    expect(parentRevision?.authoring_trace).toEqual(
+      expect.objectContaining({
+        base_content: textContent(parentContent),
+        events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'addMark' }], is_anchor_op: true }],
+      }),
+    )
   })
 
   it('records nothing into the parent stream for a change with no steps', async () => {
@@ -304,8 +311,7 @@ describe('useDraftsStore', () => {
       { kind: 'new_child', parent_id: parent.id },
       { parentContent: textContent(parentContent) },
     )
-    // A stray update with nothing on the transaction — no step for the trace to append and no
-    // moment for the tick policy to judge.
+    // A stray update with nothing on the transaction — no step for the log to append.
     store.recordParentChange(sessionId, { content: textContent(parentContent), steps: [] })
     store.recordChange(sessionId, {
       content: textContent('Nothing marked.'),
@@ -313,8 +319,7 @@ describe('useDraftsStore', () => {
     })
     await store.flush(sessionId)
 
-    expect(store.currentDraft(sessionId)?.parent?.steps).toEqual([])
-    expect(store.currentDraft(sessionId)?.parent?.ticks).toEqual([])
+    expect(store.currentDraft(sessionId)?.parent?.events).toEqual([])
   })
 
   it('seals a revision draft as a new version rather than touching the entry it edits', async () => {
@@ -348,9 +353,12 @@ describe('useDraftsStore', () => {
         dates: emptyEntryDates(),
         title: null,
         child: {
+          base_content: '',
           content: textContent('Half a thought'),
-          steps: [{ at: 1_000, step: { stepType: 'replace' } }],
-          ticks: [{ at: 1_000, step_index: 1, reasons: ['punctuation'] }],
+          events: [
+            { kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] },
+            { kind: 'manual', at: 1_500 },
+          ],
         },
         parent: null,
       },
@@ -367,7 +375,7 @@ describe('useDraftsStore', () => {
     expect(docToPlainText(resumed!.child.content)).toBe('Half a thought')
     const trace = (await useEntriesStore().getEntry(sealed.id))?.authoring_trace
     expect(trace?.started_at).toBe('2026-09-05T10:00:00.000Z')
-    expect(trace?.steps).toHaveLength(2)
+    expect(trace?.events.map((event) => event.kind)).toEqual(['edit', 'manual', 'edit'])
   })
 
   it('lists unsealed drafts most recently touched first', async () => {

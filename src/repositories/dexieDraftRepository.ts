@@ -1,7 +1,7 @@
-import type { AuthoringStep } from '@/types/entry'
+import type { AuthoringEvent } from '@/types/entry'
 import type { Draft, DraftSummary } from '@/types/draft'
-import { resolveDatabase, type ChronicleDatabase, type StoredDraftStep } from './chronicleDatabase'
-import type { DraftRepository, PersistedSteps } from './draftRepository'
+import { resolveDatabase, type ChronicleDatabase, type StoredDraftEvent } from './chronicleDatabase'
+import type { DraftRepository, PersistedEvents } from './draftRepository'
 
 /**
  * Drafts on disk, not in memory. That is the whole reason a crash costs nothing: every debounced
@@ -15,34 +15,34 @@ export class DexieDraftRepository implements DraftRepository {
     this.db = resolveDatabase(database)
   }
 
-  async save(draft: Draft, persisted: PersistedSteps): Promise<void> {
-    const newSteps = [
-      ...stepRows(draft.session_id, 'child', draft.child.steps, persisted.child),
+  async save(draft: Draft, persisted: PersistedEvents): Promise<void> {
+    const newEvents = [
+      ...eventRows(draft.session_id, 'child', draft.child.events, persisted.child),
       ...(draft.parent
-        ? stepRows(draft.session_id, 'parent', draft.parent.steps, persisted.parent)
+        ? eventRows(draft.session_id, 'parent', draft.parent.events, persisted.parent)
         : []),
     ]
 
-    // The snapshot row never carries steps: they live in `draftSteps` from here on, appended
-    // rather than rewritten, and reassembled by `getById`/`list`.
+    // The snapshot row never carries events: they live in `draftEvents` from here on, appended
+    // rather than rewritten, and reassembled by `getById`.
     const snapshot: Draft = {
       ...draft,
-      child: { ...draft.child, steps: [] },
-      parent: draft.parent ? { ...draft.parent, steps: [] } : null,
+      child: { ...draft.child, events: [] },
+      parent: draft.parent ? { ...draft.parent, events: [] } : null,
     }
 
-    // One transaction: a crash between the two writes must not leave steps on disk that the
-    // snapshot's own step count doesn't yet account for, or vice versa.
-    await this.db.transaction('rw', this.db.drafts, this.db.draftSteps, async () => {
+    // One transaction: a crash between the two writes must not leave events on disk that the
+    // snapshot doesn't yet account for, or vice versa.
+    await this.db.transaction('rw', this.db.drafts, this.db.draftEvents, async () => {
       // `put`, not `add`: overwriting is the point of this store, and it is why drafts are kept
       // out of the entries table rather than being a flag on it. The clone guards a narrower race
-      // than crash recovery (that fidelity comes from the durable step chain): Dexie holds this
+      // than crash recovery (that fidelity comes from the durable event log): Dexie holds this
       // object by reference until it reaches the real `IDBObjectStore.put()` a microtask or two
       // later, and cloning keeps a keystroke landing in that window from mutating an in-flight
       // write.
       await this.db.drafts.put(structuredClone(snapshot))
-      if (newSteps.length > 0) {
-        await this.db.draftSteps.bulkPut(structuredClone(newSteps))
+      if (newEvents.length > 0) {
+        await this.db.draftEvents.bulkPut(structuredClone(newEvents))
       }
     })
   }
@@ -51,7 +51,7 @@ export class DexieDraftRepository implements DraftRepository {
     const draft = await this.db.drafts.get(sessionId)
     if (!draft) return null
 
-    return reassemble(draft, await this.stepsFor(sessionId))
+    return reassemble(draft, await this.eventsFor(sessionId))
   }
 
   async list(): Promise<DraftSummary[]> {
@@ -63,20 +63,20 @@ export class DexieDraftRepository implements DraftRepository {
         b.updated_at.localeCompare(a.updated_at) || b.session_id.localeCompare(a.session_id),
     )
 
-    // No `draftSteps` query here — that's the whole point. The snapshot row carries no steps, so a
-    // summary needs nothing this query didn't already fetch.
+    // No `draftEvents` query here — that's the whole point. The snapshot row carries no events, so
+    // a summary needs nothing this query didn't already fetch.
     return sorted.map(toSummary)
   }
 
   async delete(sessionId: string): Promise<void> {
-    await this.db.transaction('rw', this.db.drafts, this.db.draftSteps, async () => {
+    await this.db.transaction('rw', this.db.drafts, this.db.draftEvents, async () => {
       await this.db.drafts.delete(sessionId)
-      await this.db.draftSteps.where('session_id').equals(sessionId).delete()
+      await this.db.draftEvents.where('session_id').equals(sessionId).delete()
     })
   }
 
-  private async stepsFor(sessionId: string): Promise<StoredDraftStep[]> {
-    return this.db.draftSteps.where('session_id').equals(sessionId).toArray()
+  private async eventsFor(sessionId: string): Promise<StoredDraftEvent[]> {
+    return this.db.draftEvents.where('session_id').equals(sessionId).toArray()
   }
 
   /** Closes this instance's connection without deleting the database. */
@@ -90,17 +90,17 @@ export class DexieDraftRepository implements DraftRepository {
   }
 }
 
-function stepRows(
+function eventRows(
   sessionId: string,
   document: 'child' | 'parent',
-  steps: AuthoringStep[],
+  events: AuthoringEvent[],
   persistedCount: number,
-): StoredDraftStep[] {
-  return steps.slice(persistedCount).map((step, i) => ({
-    ...step,
+): StoredDraftEvent[] {
+  return events.slice(persistedCount).map((event, i) => ({
     session_id: sessionId,
     document,
     index: persistedCount + i,
+    event,
   }))
 }
 
@@ -118,16 +118,16 @@ function toSummary(draft: Draft): DraftSummary {
   }
 }
 
-function reassemble(draft: Draft, rows: StoredDraftStep[]): Draft {
+function reassemble(draft: Draft, rows: StoredDraftEvent[]): Draft {
   const byDocument = (document: 'child' | 'parent') =>
     rows
       .filter((row) => row.document === document)
       .sort((a, b) => a.index - b.index)
-      .map((row): AuthoringStep => ({ at: row.at, step: row.step }))
+      .map((row) => row.event)
 
   return {
     ...draft,
-    child: { ...draft.child, steps: byDocument('child') },
-    parent: draft.parent ? { ...draft.parent, steps: byDocument('parent') } : null,
+    child: { ...draft.child, events: byDocument('child') },
+    parent: draft.parent ? { ...draft.parent, events: byDocument('parent') } : null,
   }
 }

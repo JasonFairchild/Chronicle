@@ -53,7 +53,7 @@ export default mergeConfig(
           // Pre-bundled up front. Discovering these mid-run makes Vite reload the page,
           // which Vitest warns can duplicate or flake a test.
           optimizeDeps: {
-            include: ['vue-router', 'pinia', '@tiptap/extensions'],
+            include: ['vue-router', 'pinia', '@tiptap/extensions', '@tiptap/pm/transform'],
           },
         },
       ],

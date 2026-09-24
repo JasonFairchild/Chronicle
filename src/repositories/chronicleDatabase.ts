@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import type { Draft } from '@/types/draft'
 import type { AuthoringEvent, Entry } from '@/types/entry'
+import type { MarkSet } from '@/types/markSet'
 
 /**
  * The row Dexie actually stores. `is_root` is a storage-only indexing helper and never appears
@@ -26,9 +27,10 @@ export interface StoredDraftEvent {
 }
 
 /**
- * One database holding both stores the app persists to. They share a connection because they share
- * a lifecycle — sealing a draft writes an entry and deletes the draft — but they stay separate
- * tables, which is what keeps entries append-only while drafts rewrite themselves constantly.
+ * One database holding every store the app persists to. Entries and drafts share a connection
+ * because they share a lifecycle — sealing a draft writes an entry and deletes the draft — but they
+ * stay separate tables, which is what keeps entries append-only while drafts rewrite themselves
+ * constantly. Mark sets are a third table for the same reason: they may be deleted.
  *
  * Schema versions are additive and never edited in place. Version 1 shipped with entries alone, so
  * a browser that already holds one upgrades to version 2 rather than finding version 1 changed
@@ -38,6 +40,7 @@ export class ChronicleDatabase extends Dexie {
   entries!: Table<StoredEntry, string>
   drafts!: Table<Draft, string>
   draftEvents!: Table<StoredDraftEvent, [string, 'child' | 'parent', number]>
+  markSets!: Table<MarkSet, string>
 
   constructor(name = 'chronicle') {
     super(name)
@@ -67,6 +70,10 @@ export class ChronicleDatabase extends Dexie {
     this.version(4).stores({
       draftSteps: null,
       draftEvents: '[session_id+document+index], session_id',
+    })
+
+    this.version(5).stores({
+      markSets: 'id, entry_id',
     })
   }
 }

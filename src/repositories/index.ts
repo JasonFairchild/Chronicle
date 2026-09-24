@@ -1,8 +1,10 @@
 import { ChronicleDatabase } from './chronicleDatabase'
 import { DexieDraftRepository } from './dexieDraftRepository'
 import { DexieEntryRepository } from './dexieEntryRepository'
+import { DexieMarkSetRepository } from './dexieMarkSetRepository'
 import type { DraftRepository } from './draftRepository'
 import type { EntryRepository } from './entryRepository'
+import type { MarkSetRepository } from './markSetRepository'
 import type { MediaRepository } from './mediaRepository'
 import { OpfsMediaRepository } from './opfsMediaRepository'
 
@@ -19,11 +21,12 @@ import { OpfsMediaRepository } from './opfsMediaRepository'
  * sees the swap.
  */
 
-/** Entries and drafts share one connection because sealing touches both in the same breath. */
+/** One connection, since sealing touches entries and drafts in the same breath. */
 const database = new ChronicleDatabase('chronicle')
 
 export let entryRepository: EntryRepository = new DexieEntryRepository(database)
 export let draftRepository: DraftRepository = new DexieDraftRepository(database)
+export let markSetRepository: MarkSetRepository = new DexieMarkSetRepository(database)
 export let mediaRepository: MediaRepository = new OpfsMediaRepository()
 
 /** Test-only: points the composition root at a different repository instance. */
@@ -33,6 +36,10 @@ export function setEntryRepository(repository: EntryRepository): void {
 
 export function setDraftRepository(repository: DraftRepository): void {
   draftRepository = repository
+}
+
+export function setMarkSetRepository(repository: MarkSetRepository): void {
+  markSetRepository = repository
 }
 
 export function setMediaRepository(repository: MediaRepository): void {

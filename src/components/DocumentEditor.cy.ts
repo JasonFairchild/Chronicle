@@ -1,5 +1,6 @@
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
+import { AuthoringSession } from '@/domain/authoringSession'
 import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
@@ -8,6 +9,7 @@ import {
   plainTextDocument,
   serializeDocument,
 } from '@/domain/entryDocument'
+import { documentsAt } from '@/editor/replay'
 import { freshMediaRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
@@ -16,6 +18,14 @@ import { selectTextRange } from '@/testing/selectTextRange'
 function lastChange(stub: unknown): EditorChange {
   const calls = (stub as { args: [EditorChange][] }).args
   return calls[calls.length - 1]![0]
+}
+
+/** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
+function replayAll(base: string, stub: unknown) {
+  const session = new AuthoringSession('session-1', '2026-09-22T10:00:00.000Z', base)
+  for (const [change] of (stub as { args: [EditorChange][] }).args) session.record(change)
+  const trace = session.seal()!
+  return documentsAt(trace, [trace.events.length])
 }
 
 describe('DocumentEditor', () => {
@@ -257,6 +267,35 @@ describe('DocumentEditor', () => {
     cy.get('@change').should('not.have.been.called')
   })
 
+  it('holds the paragraph it adds after a trailing heading until the writer changes something', () => {
+    const onChange = cy.stub().as('change')
+
+    cy.mount(DocumentEditor, {
+      props: {
+        label: 'New entry',
+        content: serializeDocument({
+          type: 'doc',
+          content: [
+            {
+              type: 'heading',
+              attrs: { level: 2 },
+              content: [{ type: 'text', text: 'Lake Tahoe' }],
+            },
+          ],
+        }),
+      },
+      attrs: { onChange },
+    })
+
+    cy.findByRole('textbox', { name: 'New entry' }).click()
+    cy.get('@change').should('not.have.been.called')
+
+    cy.findByRole('textbox', { name: 'New entry' }).type('!')
+    // The editor's own paragraph, then the keystroke.
+    cy.get('@change').should('have.been.calledOnce')
+    cy.get('@change').then((stub) => expect(lastChange(stub).steps).to.have.length(2))
+  })
+
   it('opens an existing document where its author left it', () => {
     cy.mount(DocumentEditor, {
       props: {
@@ -322,6 +361,42 @@ describe('DocumentEditor', () => {
       const change = lastChange(stub)
       expect(docToPlainText(change.content)).to.contain('Copied from elsewhere')
       expect(change.is_paste).to.equal(true)
+    })
+  })
+
+  it('reports every step it takes, so the sealed log replays to the document exactly', () => {
+    const onChange = cy.stub().as('change')
+    // Ending in a heading makes the editor append an empty paragraph on its own, the first time
+    // anything happens in it.
+    const base = serializeDocument({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Lake Tahoe' }] },
+      ],
+    })
+
+    cy.mount(DocumentEditor, { props: { label: 'New entry', content: base }, attrs: { onChange } })
+
+    // A link typed out in full, then a space, is turned into a link by the editor itself.
+    cy.findByRole('textbox', { name: 'New entry' }).type(
+      '{ctrl+end}See https://example.com today.{selectall}',
+    )
+    cy.findByRole('button', { name: 'Bold' }).click()
+    cy.findByRole('textbox', { name: 'New entry' })
+      .type('{ctrl+end}')
+      .then(($editor) => {
+        const dataTransfer = new DataTransfer()
+        dataTransfer.setData('text/plain', ' Copied from elsewhere')
+        $editor[0]!.dispatchEvent(
+          new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true }),
+        )
+      })
+    cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+z}')
+    // Clearing everything makes the editor reset what's left to a plain paragraph on its own.
+    cy.findByRole('textbox', { name: 'New entry' }).type('{selectall}{backspace}Starting over.')
+
+    cy.get('@change').then((stub) => {
+      expect(replayAll(base, stub)).to.deep.equal([JSON.parse(lastChange(stub).content)])
     })
   })
 
@@ -558,6 +633,30 @@ describe('DocumentEditor', () => {
         // this reads as an anchor change rather than formatting, with no undo-specific case needed.
         expect(change.is_anchor_op).to.equal(true)
         expect(change.is_formatting).to.equal(false)
+      })
+    })
+
+    it('reports every step it takes, so the sealed log replays to the document exactly', () => {
+      const onChange = cy.stub().as('change')
+      const base = serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad'))
+      mountAnchorEditor(onChange, base)
+
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 10, 20),
+      )
+      cy.findByRole('button', { name: 'Highlight' }).click()
+      cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
+      cy.findByRole('button', { name: 'Edit wording' }).click()
+      cy.findByRole('button', { name: 'Strike' }).click()
+      cy.findByRole('textbox', { name: 'Wording' }).type('{esc}')
+      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
+        selectTextRange($editor[0]!, 0, 0),
+      )
+      cy.findByRole('textbox', { name: 'New entry' }).type('perhaps{enter}')
+      cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+z}')
+
+      cy.get('@change').then((stub) => {
+        expect(replayAll(base, stub)).to.deep.equal([JSON.parse(lastChange(stub).content)])
       })
     })
 

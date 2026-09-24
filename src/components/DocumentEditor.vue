@@ -34,6 +34,7 @@ export interface EditorChange extends ChangeSignals {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import type { Transaction } from '@tiptap/pm/state'
+import { Mapping } from '@tiptap/pm/transform'
 import type { EditorView } from '@tiptap/pm/view'
 import {
   Bold,
@@ -158,6 +159,15 @@ let liveAnchorSpans: AnchorSpan[] = []
 /** Anchors this session has disturbed so far. Sticky: once flagged, an anchor stays flagged. */
 const affectedAnchorIds = new Set<string>()
 
+let heldSteps: unknown[] = [] // Scaffolding steps not yet reported; see `onUpdate`.
+
+/** Puts held steps first, so the log still replays to the document this change reports. */
+function withHeldSteps(steps: unknown[]): unknown[] {
+  const all = [...heldSteps, ...steps]
+  heldSteps = []
+  return all
+}
+
 /**
  * Two presentations for anchor wording exist in the CSS below: inline (trailing the marked text, in
  * flow — what ships) and interlinear (raised above the caret, proofreader's-markup style, out of
@@ -249,8 +259,11 @@ const editor = useEditor({
         : openAnchorInsert(instance, from, text) !== null
     },
   },
-  onUpdate: ({ editor: instance, transaction }) => {
-    const steps = transaction.steps.map((step) => step.toJSON())
+  onUpdate: ({ editor: instance, transaction, appendedTransactions }) => {
+    // Plugins append transactions of their own (an autolink, the paragraph after a trailing
+    // heading), and the log must carry their steps too or it won't replay to the document.
+    const applied = [transaction, ...appendedTransactions]
+    const steps = applied.flatMap((tr) => tr.steps.map((step) => step.toJSON()))
     // A document only changes through steps, so no steps means nothing changed and there is
     // nothing to report. Editors emit updates for housekeeping too, and treating one of those as
     // a real edit is what starts a writing session nobody began.
@@ -259,7 +272,8 @@ const editor = useEditor({
     const document = instance.getJSON() as EntryDocument
 
     if (!props.anchorMode) {
-      const mapped = mapAnchorSpans(liveAnchorSpans, transaction.mapping)
+      const mapping = new Mapping(applied.flatMap((tr) => tr.mapping.maps))
+      const mapped = mapAnchorSpans(liveAnchorSpans, mapping)
       for (const affected of anchorsAffectedBy(mapped)) affectedAnchorIds.add(affected.anchor_id)
       liveAnchorSpans = mapped.map(({ anchor_id, quote, from, to }) => ({
         anchor_id,
@@ -273,6 +287,13 @@ const editor = useEditor({
       instance.view.dom.setAttribute('data-anchor-markup', ANCHOR_MARKUP_MODE)
     } else {
       instance.view.dom.removeAttribute('data-anchor-markup')
+    }
+
+    // Only a plugin's steps, appended to a transaction that changed nothing itself: scaffolding
+    // the writer didn't do, so it waits for their next change rather than starting a session.
+    if (transaction.steps.length === 0) {
+      heldSteps.push(...steps)
+      return
     }
 
     if (props.anchorMode) {
@@ -296,7 +317,7 @@ const editor = useEditor({
     emit('change', {
       content: JSON.stringify(document),
       title: emittedTitle(),
-      steps,
+      steps: withHeldSteps(steps),
       inserted_text: wordingText ?? insertedTextOf(transaction),
       removed_chars: removedTextOf(transaction),
       is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors && wordingText === null,
@@ -336,6 +357,7 @@ onBeforeUnmount(() => editor.value?.destroy())
  * ProseMirror steps, so the authoring trace records nothing of it (see
  * `draftsStore.recordChange`). That is the deal the title is held to — a coarser record than the
  * body's, its history being the value at each save point rather than a keystroke-level chain.
+ * Held scaffolding steps still ride along, since the content reported here already includes them.
  *
  * `affectedAnchorIds` is carried through unchanged rather than omitted: it is the session's running
  * total, and a reader that treats a missing list as an empty one would have this change clear
@@ -350,7 +372,7 @@ function handleTitleInput(event: Event): void {
   emit('change', {
     content: JSON.stringify(instance.getJSON() as EntryDocument),
     title: emittedTitle(),
-    steps: [],
+    steps: withHeldSteps([]),
     inserted_text: '',
     removed_chars: 0,
     is_formatting: false,
@@ -409,8 +431,9 @@ function insertedTextOf(transaction: Transaction): string {
 }
 
 /**
- * Characters this change removed, for the deletion runs `deriveMarks` finds. Measured against the document each step saw *before* it applied (`transaction.docs[i]`),
- * not the flattened text before and after: a selection replaced by something longer would net
+ * Characters this change removed, for the deletion runs `deriveMarks` finds. Measured against the
+ * document each step saw *before* it applied (`transaction.docs[i]`), not the flattened text
+ * before and after: a selection replaced by something longer would net
  * positive there, missing the destructive edit it actually was, and an anchor op would misregister
  * as one too, which the non-destructive invariant forbids.
  *

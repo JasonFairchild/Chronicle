@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
+import { AuthoringSession } from '@/domain/authoringSession'
+import { documentsAt } from '@/editor/replay'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import {
   ANCHOR_INSERT_NODE,
@@ -37,6 +39,14 @@ describe('DocumentEditor (browser)', () => {
         },
       },
     })
+  }
+
+  /** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
+  function replayAll(base: string) {
+    const session = new AuthoringSession('session-1', '2026-09-22T10:00:00.000Z', base)
+    for (const change of changes) session.record(change)
+    const trace = session.seal()!
+    return documentsAt(trace, [trace.events.length])
   }
 
   it('reports the document it holds along with the steps that produced it', async () => {
@@ -193,6 +203,26 @@ describe('DocumentEditor (browser)', () => {
     expect(changes).toEqual([])
   })
 
+  it('holds the paragraph it adds after a trailing heading until the writer changes something', async () => {
+    const screen = mountEditor({
+      content: serializeDocument({
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Lake Tahoe' }] },
+        ],
+      }),
+    })
+    const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+
+    await editorLocator.click()
+    expect(changes).toEqual([])
+
+    await userEvent.keyboard('!')
+    // The editor's own paragraph, then the keystroke.
+    expect(changes).toHaveLength(1)
+    expect(changes[0]!.steps).toHaveLength(2)
+  })
+
   it('opens an existing document where its author left it', async () => {
     const screen = mountEditor({
       withTitle: true,
@@ -260,6 +290,37 @@ describe('DocumentEditor (browser)', () => {
     const latest = changes[changes.length - 1]!
     expect(docToPlainText(latest.content)).toContain('Copied from elsewhere')
     expect(latest.is_paste).toBe(true)
+  })
+
+  it('reports every step it takes, so the sealed log replays to the document exactly', async () => {
+    // Ending in a heading makes the editor append an empty paragraph on its own, the first time
+    // anything happens in it.
+    const base = serializeDocument({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Lake Tahoe' }] },
+      ],
+    })
+    const screen = mountEditor({ content: base })
+    const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+    await expect.element(editorLocator).toBeVisible()
+
+    // A link typed out in full, then a space, is turned into a link by the editor itself.
+    await editorLocator.click()
+    await userEvent.keyboard('{Control>}{End}{/Control}See https://example.com today.')
+    await userEvent.keyboard('{Control>}a{/Control}')
+    await screen.getByRole('button', { name: 'Bold' }).click()
+    await userEvent.keyboard('{Control>}{End}{/Control}')
+    const dataTransfer = new DataTransfer()
+    dataTransfer.setData('text/plain', ' Copied from elsewhere')
+    editorLocator
+      .element()
+      .dispatchEvent(new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true }))
+    await userEvent.keyboard('{Control>}z{/Control}')
+    // Clearing everything makes the editor reset what's left to a plain paragraph on its own.
+    await userEvent.keyboard('{Control>}a{/Control}{Backspace}Starting over.')
+
+    expect(replayAll(base)).toEqual([JSON.parse(changes[changes.length - 1]!.content)])
   })
 
   describe('anchor mode', () => {
@@ -479,6 +540,28 @@ describe('DocumentEditor (browser)', () => {
       // reads as an anchor change rather than formatting, with no undo-specific case needed.
       expect(change.is_anchor_op).toBe(true)
       expect(change.is_formatting).toBe(false)
+    })
+
+    it('reports every step it takes, so the sealed log replays to the document exactly', async () => {
+      const base = serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad'))
+      const screen = mountAnchorEditor(base)
+      const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+      await expect.element(editorLocator).toBeVisible()
+      editorLocator.element().focus()
+
+      selectTextRange(editorLocator.element(), 10, 20)
+      await screen.getByRole('button', { name: 'Highlight' }).click()
+      await userEvent.keyboard('Donner Lake{Enter}')
+      await screen.getByRole('button', { name: 'Edit wording' }).click()
+      await screen.getByRole('button', { name: 'Strike', exact: true }).click()
+      await userEvent.keyboard('{Escape}')
+      editorLocator.element().focus()
+      selectTextRange(editorLocator.element(), 0, 0)
+      await userEvent.keyboard('perhaps{Enter}')
+      editorLocator.element().focus()
+      await userEvent.keyboard('{Control>}z{/Control}')
+
+      expect(replayAll(base)).toEqual([JSON.parse(changes[changes.length - 1]!.content)])
     })
 
     describe('editing an anchor already placed this session', () => {

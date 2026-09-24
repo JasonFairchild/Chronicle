@@ -109,8 +109,8 @@ reasons that only make sense against the code.
 
 The “smarter edit” experience is not among them — it is designed in
 [ENTRY_MODEL.md](./ENTRY_MODEL.md) as the `revision` relation plus authoring capture, and the
-capture layer it needs is built. Diff rendering and the scrubbable history UI are unblocked by it
-and are Phase 3.
+capture layer it needs is built, as are replay and the mark sets a history view plays
+(ENTRY_MODEL.md, "Mark sets"). Diff rendering and the scrubbable history UI itself are Phase 3.
 
 A stale anchor draft against a revised parent is a deliberately unhandled gap: sealing an
 anchor-mode session writes `Draft.parent.content` as a full-state revision
@@ -161,12 +161,29 @@ Genuinely deferred rather than rejected — worth another look later, but not no
   out not to force a shape change here after all — the anchor-carried-wording skip landed in the
   shared `nodeText` helper `docToPlainText` already called, so `sameContent` itself never changed —
   but the walk-per-keystroke cost itself is unaddressed and still worth revisiting sometime.
-- **Mark sets, so scrubbing a long history doesn't replay every keystroke.** Replaying a heavily
-  edited entry's raw log on every drag of a scrub UI could get slow. The planned answer is a named
-  set per entry and policy, holding one frame per mark: the net change since the previous mark,
-  with what was added and removed. Sets are built lazily, the first time someone opens an entry's
-  detailed history, and are a regenerable, deletable cache over the immutable event log, which
-  stays the source of truth.
+- **How a revision warns about anchored passages.** Today `DocumentEditor` maps every anchor's span
+  through each transaction to keep a sticky "this changes the passage X is about" line live under
+  the revision composer. That state lives in the editor instance, so a reload clears it and a
+  revision resumed from the drafts list never warns. The existing anchors are highlighted in the
+  editor either way, which may be warning enough while typing. Candidates once the revise and
+  add-anchor experience is rethought:
+  - Judge it once, on save or seal, from the draft's log (replay from `base_content`, mapping the
+    base's anchor spans through every step).
+  - Simpler still, compare each anchor's marked text in `base_content` against the final document.
+    This keeps no live tracking at all, but loses PRODUCT.md §4.5's sticky rule (an edit changed
+    back still counts).
+
+  The intended direction: once an anchor-mode revision lands on an entry, its anchors should be
+  prominent parts of that entry from then on. So editing text under an existing anchor in a later
+  text-mode revision probably ought to count as something, not the plain typing it reads as today.
+  `is_anchor_op` fires only when the set of anchor ids and kinds changes. That could mean a stored
+  signal, a mark reason, the warning above, or all three. A signal needn't wait for new capture: the
+  log replays, so it can be derived for sessions already recorded by mapping the base's anchor spans
+  through the steps.
+
+- **Showing what a revision changed from its frames.** PRODUCT.md §5.2 could reuse the mark-set
+  frame builder, treating a whole session as one frame, so `diffDocuments` (which has no production
+  caller yet) would only be needed for a revision with no trace.
 
 ## Implementation Rules
 

@@ -244,6 +244,8 @@ retroactively wishing we had kept something.
 A view of a single entry that can be dragged backwards through time, showing the entry as it stood
 at each moment. Not only version to version: within a single writing session, the bookmarked moments
 are stops on the same track. It should feel like the global timeline, not like a separate tool.
+What it would play can already be worked out on request: the entry at each bookmark, and what was
+added, removed or reformatted since the one before. The view itself is what's missing.
 
 ### 5.2 Showing what a revision changed — Next
 
@@ -411,6 +413,13 @@ built:
 - Encryption of the local archive.
 - Syncing across devices, which changes several of the promises above and needs its own thinking.
 - A desktop application shell.
+
+### Zooming in on the history scrubber
+
+A finer setting for the history scrubber (§5.1). The normal view stops at bookmarked moments. Zooming
+in on any stretch between two bookmarks replays it one keystroke at a time: every letter typed and
+removed, every paste and reformat, in the order it happened. It's more a curiosity than a reading
+tool, but it's already possible, since a writing session is recorded that finely anyway.
 
 ---
 

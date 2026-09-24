@@ -44,8 +44,8 @@ does not have.
 **What the child stores.** `anchors: AnchorRef[]`, each `{ anchor_id, quote }` — an id referencing a
 mark/node in the parent's current document, plus the wording it covered when the child was sealed.
 An empty list means the child is about the parent at large. `quote` is not a growing history, since
-the parent's own step chain already is that history; replaying it to derive original wording is a
-future upgrade once Phase 3 can replay chains, not a storage commitment now. It is what lets an
+the parent's own step chain already is that history; replaying it (`editor/replay.ts`) to derive
+original wording is a possible upgrade, not a storage commitment now. It is what lets an
 orphaned anchor (its mark removed by a later revision) still render "was attached to: …" once
 nothing in the current document matches its id.
 
@@ -235,6 +235,14 @@ The session's end state is stored as a full snapshot and is authoritative. If a 
 change ever makes old steps unreplayable, the loss is fine-grained scrubbing for that session, never
 content.
 
+**Replaying a sealed trace from its `base_content` reproduces the entry's `content` exactly.** That
+means recording every step the editor applies, including those a plugin appends on its own: an
+autolink, or the empty paragraph kept after a trailing heading. Steps a plugin appends to a
+transaction that changed nothing itself are the editor's scaffolding, so `DocumentEditor` holds them
+for the writer's next change rather than starting a session with them. Replay (`editor/replay.ts`)
+uses the editor's own schema and stops at the first step that won't apply. A browser test in
+`DocumentEditor`'s specs holds the exactness.
+
 **The trace is an event log.** `AuthoringTrace` holds `base_content`, the document the first event
 applies to, and `events` in the order they happened: an `edit` carries one transaction's steps plus
 the signals read off it (`ChangeSignals`), and a `manual` event is a bookmark the writer asked for.
@@ -301,12 +309,51 @@ image-attach path, which sets `media_changed` on its own) don't count; `media_ch
 wording box, which goes through its own plain `<input>` and never reaches the document's clipboard
 handling at all.
 
-## Two stores, one of them history
+## Mark sets
+
+A mark set is one entry's session read under one policy: the policy, a name that is only a label,
+the trace's `base_content`, and one **frame** per mark. They are what a scrubbable history plays.
+
+```ts
+interface MarkFrame extends AuthoringMark {
+  net: { steps: unknown[] } | { document: EntryDocument }
+  changes: FrameChange[] // { kind: 'added' | 'removed' | 'formatted' | 'anchor', from, to, removed? }
+}
+```
+
+**A frame stores only its net change** since the previous mark: one replace step over the range
+where the two documents differ (ProseMirror's `findDiffStart`/`findDiffEnd`). Viewing applies each
+frame's step in turn from `base_content` (`documentsFromFrames`), so a scrub replays a step per mark
+rather than every keystroke, and storage is about the final document plus what was deleted along
+the way, not a document per frame. Each step is checked at build time by applying it; one that
+doesn't reproduce the document is stored as the document itself, so every frame is right by
+construction.
+
+**`changes` come from the steps, not a text diff.** A text diff sees no formatting or anchors, and
+guesses where a repeated word went. Text and node changes come from `ChangeSet`
+(`@tiptap/pm/changeset`), which also cancels out anything typed and deleted again before the mark.
+Mark, attribute and rewrapping steps don't read as a change there, so their ranges come from the
+steps, mapped forward and clipped to where the documents differ. Their positions are ProseMirror
+positions in that frame's own document and never leave it, a deliberately different ruler from the
+`docToPlainText` one anchors, search and diff use. Comparing two versions, where no steps may exist,
+stays `diffDocuments`' job.
+
+**Sets are a cache, so they may be deleted.** A set is regenerable from the entry's immutable trace
+and its stored policy, and it can't be shared across policies, since each policy's frames differ.
+Retuning a policy makes a new set beside the old one rather than rebuilding it. A default set is
+built lazily, the first time an entry's sets are loaded (`markSetsStore.loadMarkSets`), never at
+seal time, so a writer who never opens an entry's history pays nothing. Building takes one replay
+pass over the raw log. A draft has no set: its log is still growing, so it reads `deriveMarks`
+directly.
+
+## Three stores, one of them history
 
 The entries store is permanent and append-only and only ever receives finished, immutable entries. A
 session in progress cannot write there, since that would mean rewriting one row repeatedly as the
 user types, breaking the append-only rule, or creating thousands of rows nobody wants. So a live
-session accumulates into a separate draft buffer keyed by session.
+session accumulates into a separate draft buffer keyed by session. Mark sets are the third store,
+kept out of entries for the matching reason: they are derived and may be deleted and rebuilt, which
+no entry may be.
 
 The buffer is **also append-only while the session runs**. Events are appended as they happen and
 nothing already written is rewritten, so no authoring history is lost by design. The only thing that

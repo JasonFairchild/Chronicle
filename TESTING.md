@@ -23,10 +23,10 @@ obstacle, not merely because the thing under test isn't a `.vue` file — a comp
 driven through a small host component. `DexieEntryRepository` is the genuine case: a plain data-layer
 class with nothing to mount, so it is proven in the Vitest browser project alone.
 
-**Contract suites are for interfaces with more than one implementation.** Each of the three
-repositories exports one: `entryRepository.contract.ts` (in-memory and Dexie),
-`draftRepository.contract.ts` (in-memory and Dexie), and `mediaRepository.contract.ts` (in-memory
-and OPFS). That is what makes "swap the storage backend by changing one line" provable rather than
+**Contract suites are for interfaces with more than one implementation.** Each of the four
+repositories exports one: `entryRepository.contract.ts`, `draftRepository.contract.ts` and
+`markSetRepository.contract.ts` (each in-memory and Dexie), and `mediaRepository.contract.ts`
+(in-memory and OPFS). That is what makes "swap the storage backend by changing one line" provable rather than
 asserted. They are named `.contract.ts` precisely so no runner picks them up directly.
 
 The persistent halves run in the browser project only — Dexie needs real IndexedDB and OPFS needs a

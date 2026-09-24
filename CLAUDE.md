@@ -31,9 +31,10 @@ they are better tools than `cat`, `grep` and `find` for the same job.
 
 ## Rules that always apply
 
-- **Write rule:** prefer INSERT of new related Entries; never mutate rows for "edits". The draft
-  buffer (`src/stores/draftsStore.ts`) really does overwrite rows and is the one sanctioned
-  exception — working space, not history.
+- **Write rule:** prefer INSERT of new related Entries; never mutate rows for "edits". Two sanctioned
+  exceptions, neither of them history: the draft buffer (`src/stores/draftsStore.ts`) really does
+  overwrite rows, as working space, and mark sets (`src/stores/markSetsStore.ts`) may be deleted,
+  as a cache rebuildable from the immutable trace.
 - **No child entry is destructive.** Only a `revision` writes content.
 - **Ordering:** every sort tiebreaks on `id` via `compareEntries`; `created_at` is only
   millisecond-resolution and so is not a total order on its own.
@@ -69,6 +70,8 @@ they are better tools than `cat`, `grep` and `find` for the same job.
 
 - `src/domain/entryDocument.ts` — the **only** flattening. Anchors, previews, search, and diff must
   all measure against `docToPlainText`, or an anchor recorded on one ruler resolves on another.
+  Mark-set frame highlights are deliberately not on it: they never leave their frame's own
+  document (ENTRY_MODEL.md, "Mark sets").
 - `src/editor/` — schema and the guarded, anchor-aware commands that mutate the document live only
   in `extensions.ts` and `anchorCommands.ts`; a second definition or a hand-rolled transaction is how
   "no child entry is destructive" or anchor-mode exclusivity gets silently violated. Components may
@@ -76,5 +79,5 @@ they are better tools than `cat`, `grep` and `find` for the same job.
   `AnchorMenu.vue`) — that's ordinary UI wiring against an editor built elsewhere, not a second
   source of schema or command truth. The domain layer reads documents as plain JSON either way,
   which is what keeps it pure and node-testable.
-- `src/repositories/index.ts` — the composition root. Three interfaces, each with an in-memory
+- `src/repositories/index.ts` — the composition root. Four interfaces, each with an in-memory
   adapter for tests and a persistent one for the app, each proven by a shared `.contract.ts`.

@@ -22,7 +22,7 @@ export interface AuthoringBuffer {
 }
 
 /**
- * A writing session in progress — the one sanctioned mutable store (ENTRY_MODEL.md, "Drafts").
+ * A writing session in progress, which unlike an entry rewrites itself (ENTRY_MODEL.md, "Drafts").
  * `child` becomes the entry this draft is chiefly for. `parent` exists only for `new_child`
  * (anchor-mode): if the parent gains provisional anchors, they seal into its own revision.
  */

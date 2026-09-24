@@ -167,11 +167,13 @@ it. Not decided; noted here only so the render-time-only rule above is understoo
 accommodate it.
 
 **Warning on an affected anchor.** Warn when the _text under_ an anchor changes — insertion inside
-its range, partial or full deletion — not when it merely shifts from an edit elsewhere. Detected by
-mapping each anchor's endpoints (`anchorSpans` / `mapAnchorSpans` in `editor/anchorCommands.ts`) through
-the pending session's `Mapping` and reading ProseMirror's own deletion flags (`deletedAfter` on the
-start, `deletedBefore` on the end), not by comparing text; `anchorsAffectedBy`
-(`domain/anchorWarnings.ts`) is the pure judgment on top. Tracking runs one transaction at a time for
+its range, partial or full deletion or replacement — not when it merely shifts from an edit
+elsewhere, including text typed right against its edge. Detected from ProseMirror's own step maps,
+not by comparing text: `mapAnchorSpans` (`editor/anchorCommands.ts`) walks each step's replaced
+range against the anchor as it stood just before that step, and `changesInside`
+(`domain/anchorWarnings.ts`) is the pure judgment. Endpoint deletion flags and length comparison
+were tried first and missed both an edge insertion (flagged falsely) and a same-length paste (not
+flagged at all). Tracking runs one transaction at a time for
 the length of the session, sticky once an anchor is flagged, and `EntryDetailView.vue` names the note
 each affected anchor belongs to before "Save revision" is offered.
 

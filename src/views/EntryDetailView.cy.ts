@@ -445,6 +445,79 @@ describe('EntryDetailView', () => {
     })
   })
 
+  it('stays quiet when a revision types right up against either edge of an anchor', () => {
+    cy.then(async () => {
+      const parent = await seed({
+        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
+      })
+      await seed({
+        content: textContent('Wonderful trip'),
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+      })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
+        const el = $editor[0]!
+        el.focus()
+        selectTextRange(el, 10, 10)
+      })
+      cy.focused().type('(')
+      cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
+        selectTextRange($editor[0]!, 21, 21)
+      })
+      cy.focused().type(')')
+
+      cy.findByRole('textbox', { name: 'Revised entry' }).should(
+        'contain.text',
+        'I went to (Lake Tahoe) with Dad',
+      )
+      cy.findByText(/This changes the passage/).should('not.exist')
+      cy.findByRole('button', { name: 'Discard revision' }).click()
+    })
+  })
+
+  it('warns when a paste swaps text under an anchor for text of the same length', () => {
+    cy.then(async () => {
+      const parent = await seed({
+        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
+      })
+      await seed({
+        content: textContent('Wonderful trip'),
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+      })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      // A hand-built paste, as in `DocumentEditor.cy.ts`: neither runner has a real one.
+      cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
+        const el = $editor[0]!
+        el.focus()
+        selectTextRange(el, 12, 14)
+        const dataTransfer = new DataTransfer()
+        dataTransfer.setData('text/plain', 'ne')
+        el.dispatchEvent(
+          new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true }),
+        )
+      })
+
+      cy.findByRole('textbox', { name: 'Revised entry' }).should(
+        'contain.text',
+        'I went to Lane Tahoe with Dad',
+      )
+      cy.findByText('This changes the passage Wonderful trip is about.').should('be.visible')
+      cy.findByRole('button', { name: 'Discard revision' }).click()
+    })
+  })
+
   it('revises an entry by appending a version, leaving the original row untouched', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)

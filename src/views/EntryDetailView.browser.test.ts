@@ -471,6 +471,77 @@ describe('EntryDetailView (browser)', () => {
     })
   })
 
+  it('stays quiet when a revision types right up against either edge of an anchor', async () => {
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
+    const parent = await repository.create(createEntryInput({ content: marked }))
+    await repository.create(
+      createEntryInput({
+        content: textContent('Wonderful trip'),
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+      }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+
+    const editorLocator = screen.getByRole('textbox', { name: 'Revised entry' })
+    await expect.element(editorLocator).toBeVisible()
+    const editorEl = editorLocator.element()
+    editorEl.focus()
+    selectTextRange(editorEl, 10, 10)
+    await userEvent.keyboard('(')
+    selectTextRange(editorEl, 21, 21)
+    await userEvent.keyboard(')')
+
+    await expect.element(editorLocator).toHaveTextContent('I went to (Lake Tahoe) with Dad')
+    expect(screen.getByText(/This changes the passage/).query()).toBeNull()
+
+    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await vi.waitFor(async () => {
+      expect(await drafts.list()).toEqual([])
+    })
+  })
+
+  it('warns when a paste swaps text under an anchor for text of the same length', async () => {
+    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
+    const parent = await repository.create(createEntryInput({ content: marked }))
+    await repository.create(
+      createEntryInput({
+        content: textContent('Wonderful trip'),
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+      }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+
+    const editorLocator = screen.getByRole('textbox', { name: 'Revised entry' })
+    await expect.element(editorLocator).toBeVisible()
+    const editorEl = editorLocator.element()
+    editorEl.focus()
+    selectTextRange(editorEl, 12, 14)
+    // A hand-built paste, as in `DocumentEditor.browser.test.ts`: neither runner has a real one.
+    const dataTransfer = new DataTransfer()
+    dataTransfer.setData('text/plain', 'ne')
+    editorEl.dispatchEvent(
+      new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true }),
+    )
+
+    await expect.element(editorLocator).toHaveTextContent('I went to Lane Tahoe with Dad')
+    await expect
+      .element(screen.getByText('This changes the passage Wonderful trip is about.'))
+      .toBeVisible()
+
+    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await vi.waitFor(async () => {
+      expect(await drafts.list()).toEqual([])
+    })
+  })
+
   it('revises an entry by appending a version, leaving the original row untouched', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 

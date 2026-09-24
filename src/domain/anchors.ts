@@ -237,7 +237,7 @@ export function resolveAnchors(
 /**
  * One anchor's mark extent, in whatever positional units the caller measures in — ProseMirror
  * document positions for every caller today (`editor/anchorCommands.ts`'s `anchorMarkRanges` /
- * `editableAnchorRanges`), kept as plain numbers here the same way `AnchorMapping`
+ * `editableAnchorRanges`), kept as plain numbers here the same way `PositionRange`
  * (`anchorWarnings.ts`) is, so the judgment below stays pure and node-testable.
  */
 export interface AnchorRange {

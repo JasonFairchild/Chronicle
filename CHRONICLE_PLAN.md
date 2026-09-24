@@ -181,6 +181,23 @@ Genuinely deferred rather than rejected — worth another look later, but not no
   log replays, so it can be derived for sessions already recorded by mapping the base's anchor spans
   through the steps.
 
+- **Session tracking as a ProseMirror plugin.** `DocumentEditor`'s `onUpdate` merges
+  `[transaction, ...appendedTransactions]` by hand, and holds `liveAnchorSpans`, `affectedAnchorIds`
+  and `heldSteps` as component variables. A plugin with state (`state: { init, apply(tr, value) }`)
+  is ProseMirror's native home for this: `apply` sees every transaction, appended ones included,
+  with `tr.mapping` in hand. It also makes the tracking testable in node against a bare
+  `EditorState`, with no browser needed, and lets it feed decorations if a disturbed anchor should
+  show in the editor itself. Worth doing whenever the warning above is rethought, not on its own.
+- **Validating content against the schema before it's stored.** `parseDocument` checks only
+  `type === 'doc'`, and rows are immutable, so a malformed document would be permanent — `replay.ts`
+  already returns null for one that no longer fits. Content comes only from the editor today, so it's
+  valid by construction; seeding, import, and sync won't be. `schema.nodeFromJSON(json).check()` is
+  the check. The open question is where it lives, since the domain deliberately doesn't import the
+  editor's schema: the store layer, or a validator injected into it.
+- **Painting frames with decorations.** When the Phase 3 history view is built, a read-only editor
+  view with a `DecorationSet` built from each frame's `FrameChange` ranges would highlight a frame
+  without touching its document: no injected marks, no hand-built HTML.
+
 - **Showing what a revision changed from its frames.** PRODUCT.md §5.2 could reuse the mark-set
   frame builder, treating a whole session as one frame, so `diffDocuments` (which has no production
   caller yet) would only be needed for a revision with no trace.

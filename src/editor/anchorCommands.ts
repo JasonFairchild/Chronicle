@@ -1,7 +1,7 @@
 import type { Editor } from '@tiptap/core'
 import type { Mark, Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { TextSelection, type Transaction } from '@tiptap/pm/state'
-import type { Mapping } from '@tiptap/pm/transform'
+import type { StepMap } from '@tiptap/pm/transform'
 import { ref, type Ref } from 'vue'
 import {
   anchorRangeOverlapping,
@@ -9,7 +9,7 @@ import {
   newAnchorId,
   type AnchorRange,
 } from '@/domain/anchors'
-import type { AnchorMapping } from '@/domain/anchorWarnings'
+import { changesInside } from '@/domain/anchorWarnings'
 import { ANCHOR_INSERT_NODE, ANCHOR_MARK, type EntryDocument } from '@/domain/entryDocument'
 import type { AnchorKind } from '@/types/entry'
 
@@ -625,36 +625,33 @@ function findAnchorInsert(
   return found
 }
 
-/** One span moved through an edit: the judgment `anchorsAffectedBy` reads, plus where it landed. */
-export type MappedAnchorSpan = AnchorMapping & Pick<AnchorSpan, 'from' | 'to'>
+/** One span moved through an edit, and whether that edit changed the text it covers. */
+export interface MappedAnchorSpan extends AnchorSpan {
+  changedInside: boolean
+}
 
 /**
- * Moves each span through an edit and reports what that edit did to it, for `anchorsAffectedBy` to
- * judge. Positions come back alongside the judgment, not just the judgment alone, because a
- * revision session runs many edits in sequence and each one has to resume tracking from where the
- * last left off — a caller keeps calling this with the spans it returned, chaining one transaction
- * at a time, rather than trying to compose every step's `Mapping` itself.
+ * Moves each span through an edit's step maps and reports whether any step changed the text under
+ * it. Positions come back alongside the judgment because a revision session runs many edits in
+ * sequence, each resuming from where the last left off — a caller keeps passing back the spans it
+ * was given, one transaction at a time.
  *
- * The endpoints are mapped with opposite biases, matching the mark's `inclusive: false`: text typed
- * at the start stays outside it, text typed at the end likewise, so a pure shift leaves the length
- * alone and only a change *inside* the span moves it.
+ * Walks one map at a time rather than a composed `Mapping`, since each step's replaced range is
+ * only comparable to the span as it stood just before that step. The endpoints are mapped with
+ * opposite biases, matching the mark's `inclusive: false`, so text typed at an edge stays outside.
  */
-export function mapAnchorSpans(spans: AnchorSpan[], mapping: Mapping): MappedAnchorSpan[] {
+export function mapAnchorSpans(spans: AnchorSpan[], maps: readonly StepMap[]): MappedAnchorSpan[] {
   return spans.map((span) => {
-    const start = mapping.mapResult(span.from, 1)
-    const end = mapping.mapResult(span.to, -1)
-    const from = start.pos
-    const to = Math.max(from, end.pos)
-
-    return {
-      anchor_id: span.anchor_id,
-      quote: span.quote,
-      length: span.to - span.from,
-      mappedLength: to - from,
-      deletedInside: start.deletedAfter || end.deletedBefore,
-      from,
-      to,
+    let { from, to } = span
+    let changedInside = false
+    for (const map of maps) {
+      map.forEach((oldStart, oldEnd) => {
+        if (changesInside({ from, to }, { from: oldStart, to: oldEnd })) changedInside = true
+      })
+      from = map.map(from, 1)
+      to = Math.max(from, map.map(to, -1))
     }
+    return { anchor_id: span.anchor_id, quote: span.quote, from, to, changedInside }
   })
 }
 

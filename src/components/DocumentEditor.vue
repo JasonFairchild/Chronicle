@@ -34,7 +34,6 @@ export interface EditorChange extends ChangeSignals {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import type { Transaction } from '@tiptap/pm/state'
-import { Mapping } from '@tiptap/pm/transform'
 import type { EditorView } from '@tiptap/pm/view'
 import {
   Bold,
@@ -58,7 +57,6 @@ import {
   pairableAnchorAt,
   sessionAnchorIds as sessionAnchorIdsIn,
 } from '@/domain/anchors'
-import { anchorsAffectedBy } from '@/domain/anchorWarnings'
 import { useMedia } from '@/composables/useMedia'
 import {
   contentDelta,
@@ -153,7 +151,7 @@ function emittedTitle(): string | null {
 /**
  * The anchors already in the document, moved forward one transaction at a time — text mode only.
  * Reassigned after every edit so the next one resumes tracking from where this one left off,
- * rather than needing to compose every step's `Mapping` since the session began.
+ * rather than re-walking every step since the session began.
  */
 let liveAnchorSpans: AnchorSpan[] = []
 /** Anchors this session has disturbed so far. Sticky: once flagged, an anchor stays flagged. */
@@ -272,15 +270,12 @@ const editor = useEditor({
     const document = instance.getJSON() as EntryDocument
 
     if (!props.anchorMode) {
-      const mapping = new Mapping(applied.flatMap((tr) => tr.mapping.maps))
-      const mapped = mapAnchorSpans(liveAnchorSpans, mapping)
-      for (const affected of anchorsAffectedBy(mapped)) affectedAnchorIds.add(affected.anchor_id)
-      liveAnchorSpans = mapped.map(({ anchor_id, quote, from, to }) => ({
-        anchor_id,
-        quote,
-        from,
-        to,
-      }))
+      const mapped = mapAnchorSpans(
+        liveAnchorSpans,
+        applied.flatMap((tr) => tr.mapping.maps),
+      )
+      for (const span of mapped) if (span.changedInside) affectedAnchorIds.add(span.anchor_id)
+      liveAnchorSpans = mapped
     }
 
     if (collectAnchors(document).length > 0) {

@@ -12,8 +12,12 @@ pre-commit:
     typecheck:
       # vue-tsc uses project references — must run on the whole project, not staged files
       run: npm run typecheck
+    unit:
+      run: npm test
 
 pre-push:
   commands:
-    test:
-      run: npm test
+    browser:
+      run: npm run test:browser
+    cypress:
+      run: npm run cy:run

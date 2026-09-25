@@ -11,7 +11,7 @@ export interface PersistedEvents {
 
 /**
  * The draft buffer. Unlike `EntryRepository` this one really does overwrite rows, because a live
- * session is working space rather than history — a distinction ENTRY_MODEL.md draws deliberately
+ * session is working space rather than history — a distinction AUTHORING.md draws deliberately
  * so the append-only rule over entries stays absolute.
  *
  * Its own interface rather than a corner of the entry repository: drafts are keyed by session, are
@@ -20,7 +20,7 @@ export interface PersistedEvents {
 export interface DraftRepository {
   /**
    * Upsert the snapshot and append whatever events `persisted` says aren't stored yet. Called on
-   * every debounced flush, so it must be cheap and idempotent — the event log is the one unbounded
+   * every scheduled flush, so it must be cheap and idempotent — the event log is the one unbounded
    * part of a draft, which is why it is appended rather than rewritten wholesale.
    */
   save(draft: Draft, persisted: PersistedEvents): Promise<void>

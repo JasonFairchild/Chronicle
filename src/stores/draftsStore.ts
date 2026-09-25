@@ -426,7 +426,8 @@ export const useDraftsStore = defineStore('drafts', () => {
     const entry = requireActive(sessionId)
     if (entry.timer !== null) return
 
-    // Trailing edge only: a burst of keystrokes writes once, at the end of the burst.
+    // A throttle, not a debounce: later keystrokes don't restart the timer, so continuous typing
+    // still writes every DRAFT_FLUSH_MS rather than waiting for a pause that may never come.
     entry.timer = setTimeout(() => {
       entry.timer = null
       void flush(sessionId)

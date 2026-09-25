@@ -1,8 +1,8 @@
 import type { AuthoringEvent, EditEvent } from '@/types/entry'
 
 /**
- * Marks: the moments in a writing session worth stopping at when reviewing it (ENTRY_MODEL.md,
- * "Authoring capture"). Derived from the session's event log rather than decided while the writer
+ * Marks: the moments in a writing session worth stopping at when reviewing it (AUTHORING.md,
+ * "Marks"). Derived from the session's event log rather than decided while the writer
  * types, so a recorded session can be read under any policy, including one written later.
  */
 

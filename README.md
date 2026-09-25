@@ -24,8 +24,7 @@ splicing them into the text. Anchor resolution is a second pure module: it locat
 references as marks and nodes inside the parent's current document, reading it as `present` or
 `orphaned` rather than vanishing when an edit removes one.
 
-See [ENTRY_MODEL.md](./ENTRY_MODEL.md) for the data model and the reasoning behind it, including why
-ids are UUIDv7, why only revisions write content, and why connections are edges rather than children.
+See [ENTRY_MODEL.md](./ENTRY_MODEL.md) for the data model and the reasoning behind it.
 
 ## Tech stack
 
@@ -70,13 +69,14 @@ Open [http://localhost:5173](http://localhost:5173).
 
 [Lefthook](https://lefthook.dev) is installed via the `prepare` script. On **pre-commit** it
 auto-formats staged files with Prettier (and re-stages them), lint-checks and type-checks, and
-aborts the commit on any failure. ESLint runs **check-only** here — fix findings with
-`npm run lint:fix` and review the changes yourself. On **pre-push** it runs the unit tests.
+runs the unit tests, and aborts the commit on any failure. ESLint runs **check-only** here — fix
+findings with `npm run lint:fix` and review the changes yourself. On **pre-push** it runs the Vitest
+browser tests and then Cypress.
 Skip with `LEFTHOOK=0 git commit …` when needed.
 
 ## Roadmap
 
-See [PRODUCT.md](./PRODUCT.md) for how the app behaves from a user's perspective,
-[CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for the product concept and phased plan,
-[ENTRY_MODEL.md](./ENTRY_MODEL.md) for the entry model, and [TESTING.md](./TESTING.md) for how
-tests are written.
+See [PRODUCT.md](./PRODUCT.md) for how the app behaves and what's decided next,
+[CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for priorities, [ENTRY_MODEL.md](./ENTRY_MODEL.md) for the
+entry model, [AUTHORING.md](./AUTHORING.md) for how writing sessions are captured, and
+[TESTING.md](./TESTING.md) for how tests are written.

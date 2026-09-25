@@ -3,7 +3,7 @@ import type { EntryDocument } from '@/domain/entryDocument'
 
 /**
  * Something a frame's view should point at, in ProseMirror positions within that frame's own
- * document — a ruler that never leaves the frame (ENTRY_MODEL.md, "Mark sets").
+ * document — a ruler that never leaves the frame (AUTHORING.md, "Mark sets").
  */
 export interface FrameChange {
   kind: 'added' | 'removed' | 'formatted' | 'anchor'

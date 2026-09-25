@@ -15,7 +15,7 @@ export interface AnchorRef {
 export type RevisionMode = 'direct' | 'anchor'
 
 /**
- * The facts about one editor change that marks are derived from (ENTRY_MODEL.md, "Authoring
+ * The facts about one editor change that marks are derived from (AUTHORING.md, "Authoring
  * capture"). Stored rather than re-derived, since most need the document as it stood around the
  * change.
  */

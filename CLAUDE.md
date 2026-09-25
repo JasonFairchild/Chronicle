@@ -1,83 +1,70 @@
 # Chronicle — Claude Code Instructions
 
-Local-first PWA life-mapping / journaling app; portfolio demo + personal tool. Every record is one
-immutable `Entry` — updates, annotations, connections, and revisions are Entries too. Offline is
-non-negotiable; immutability and reconstructible history are core features, not niceties.
+Local-first PWA life-mapping / journaling app. First a portfolio piece showing web engineering to
+employers, second a personal tool — so a PWA and a TypeScript project before anything else. Each
+addition should show solid engineering without overcomplicating the product or the code.
 
-Stack: Vue 3 + TypeScript + Vite, Tailwind (dark-mode ready), Pinia, Vue Router, TipTap,
-vite-plugin-pwa, Dexie today / SQLite WASM + OPFS later, Vitest (unit + Browser Mode) + Cypress CT.
+Every record is one immutable `Entry`; updates, annotations, connections, and revisions are Entries
+too. Offline is non-negotiable. Immutability and reconstructible history — current state or state
+at time T, via the repository plus the pure `reconstructEntryState` — are core features.
+
+Stack: Vue 3 + TypeScript + Vite, Tailwind, Pinia, Vue Router, TipTap, vite-plugin-pwa, Dexie
+(SQLite WASM + OPFS later), Vitest (unit + Browser Mode), Cypress CT.
 
 ## One command per call. No pipelines.
 
-This is the rule most often broken, so it goes first.
+The rule most often broken. A permission rule matches the **whole** command string, so every `|`,
+`&&` and `;` makes an unlisted compound that prompts: `Bash(npm run:*)` doesn't cover
+`npm run test:browser 2>&1 | tail -20`. Run one command and read all of its output; two things to
+run is two calls. Prefer Read, Grep and Glob to the shell — they never prompt.
 
-A permission rule matches a **whole** command string. `Bash(npm run:*)` does not cover
-`npm run test:browser 2>&1 | tail -20`, and covers `... && npm test` even less — the allowlist sees
-one unlisted compound, and prompts. Every `| tail`, `| grep`, `| head`, `&&`, and `;` is another
-prompt, whatever the pieces are.
+## Other docs — list headings, then read the sections that cover your change
 
-So: **run one command and read its output.** Not `| tail -20` — read the whole thing. Two things to
-run means two calls. Reach for Read, Grep and Glob before the shell at all; they never prompt, and
-they are better tools than `cat`, `grep` and `find` for the same job.
+| Doc               | Authority on                            | Read before changing                                                     |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------------ |
+| ENTRY_MODEL.md    | entries, anchors, versions, connections | `src/types/entry.ts`, `src/domain/`, `src/repositories/`                 |
+| AUTHORING.md      | capture, marks, mark sets, drafts       | `authoringSession`, `marks`, `editor/replay`, `markFrames`, draft stores |
+| TESTING.md        | how tests are written                   | any test                                                                 |
+| PRODUCT.md        | behavior: built, decided, maybe         | anything user-visible                                                    |
+| CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work                                                 |
 
-## The other docs — read the relevant one before changing that area
+## Rules
 
-| Doc               | Authority on                        | Read before                                              |
-| ----------------- | ----------------------------------- | -------------------------------------------------------- |
-| ENTRY_MODEL.md    | the data model and its reasoning    | `src/types/entry.ts`, `src/domain/`, `src/repositories/` |
-| TESTING.md        | how tests are written               | writing or changing any test                             |
-| PRODUCT.md        | behavior, and what is built vs next | changing anything user-visible                           |
-| CHRONICLE_PLAN.md | phases and what is out of scope     | planning or scoping work                                 |
-
-## Rules that always apply
-
-- **Write rule:** prefer INSERT of new related Entries; never mutate rows for "edits". Two sanctioned
-  exceptions, neither of them history: the draft buffer (`src/stores/draftsStore.ts`) really does
-  overwrite rows, as working space, and mark sets (`src/stores/markSetsStore.ts`) may be deleted,
-  as a cache rebuildable from the immutable trace.
+- **Write rule:** INSERT new related Entries; never mutate rows for "edits". Two exceptions, neither
+  of them history: draft rows (`draftsStore.ts`) are overwritten as working space, and mark sets
+  (`markSetsStore.ts`) may be deleted, as a cache rebuildable from the trace.
 - **No child entry is destructive.** Only a `revision` writes content.
-- **Ordering:** every sort tiebreaks on `id` via `compareEntries`; `created_at` is only
-  millisecond-resolution and so is not a total order on its own.
-- Reconstructing aggregated current state or state-at-time-T stays easy via the repository plus the
-  pure `reconstructEntryState`.
-- Tests alongside every feature. `*.test.ts` = pure logic (node), `*.browser.test.ts` = Vitest
-  browser, `*.cy.ts` = Cypress, `*.contract.ts` = shared suite, never run directly.
+- **Sort entries with `compareEntries`, never `created_at` alone** — it ties at millisecond resolution.
+- Tests alongside every feature.
 - Composition API + `<script setup>`; all data access behind the repository layer.
 - No hard-coded colors that block dark mode.
-- Small, focused changes, in code an employer can read and I can explain.
-- **Comments cite nothing that outlives the session.** A plan, a chat, or "Piece N" of a design
-  discussion isn't something future code — or a future session — can look up; cite a checked-in doc
-  (`ENTRY_MODEL.md`, `PRODUCT.md`, ...) or nothing at all. Keep comments proportional to what they sit
-  next to: the non-obvious why, stated once, not a walkthrough.
-- **Comment style marks scope, not length.** `/** */` heads a unit — file, function (including one
-  nested inside another), type, or class — even if the comment is one line. `//` covers a few lines
-  within a unit, even if the comment itself spans several lines. A short description or imperative
-  on a single field or statement goes as a trailing `//` on that same line, not above it as its own
-  comment — move it above only if it doesn't fit on the line. Going forward only; existing comments
-  get fixed opportunistically, not in a sweep.
-- When two options are equally good, take the one that costs less context.
-- Commit messages: a subject line, then only what the diff can't say — why a choice was made, and
-  anything a reviewer couldn't discover from the code. No tour of the changes.
-- **Draft commits, don't run them.** Propose the message; staging and `git commit` are mine to run,
-  every time — don't stage files unless asked directly.
-- **No backward compatibility until we deliberately decide it's needed.** This includes entries
-  already sitting in a browser's local IndexedDB — at this stage that's all test data. Change a
-  shape and update every call site; don't add a fallback to read an old one. If old local data
-  stops working, clear the IndexedDB (or seed fresh data) rather than writing code to migrate or
-  tolerate it. Revisit only when we deliberately decide real data needs to survive a shape change.
+- Small, focused changes I can read and explain.
+- **Comments cite nothing that outlives the session** — no plan, chat, or "Piece N"; cite a
+  checked-in doc or nothing. The non-obvious why, stated once, proportional to the code it sits
+  next to — not a walkthrough.
+- **Comment style marks scope, not length.** `/** */` heads a unit (file, function — nested ones
+  too — type, class), even at one line. `//` covers a few lines within a unit, even at several
+  lines. A short note on one field or statement is a trailing `//` on that line, moved above only
+  if it won't fit. Going forward only; fix old comments opportunistically, not in a sweep.
+- Between equally good options, take the one that costs less context.
+- Commit messages: a subject line, then only what the diff can't say — why, and what a reviewer
+  couldn't discover from the code. No tour of the changes.
+- **Draft commits, don't run them.** Staging and `git commit` are mine, every time; don't stage
+  unless asked directly.
+- **No backward compatibility until we deliberately decide it's needed** — including entries in a
+  browser's IndexedDB, which is all test data for now. Change a shape and update every call site,
+  with no fallback for the old one. If old local data breaks, clear IndexedDB or reseed; don't
+  migrate or tolerate it.
 
 ## Landmarks
 
-- `src/domain/entryDocument.ts` — the **only** flattening. Anchors, previews, search, and diff must
-  all measure against `docToPlainText`, or an anchor recorded on one ruler resolves on another.
-  Mark-set frame highlights are deliberately not on it: they never leave their frame's own
-  document (ENTRY_MODEL.md, "Mark sets").
-- `src/editor/` — schema and the guarded, anchor-aware commands that mutate the document live only
-  in `extensions.ts` and `anchorCommands.ts`; a second definition or a hand-rolled transaction is how
-  "no child entry is destructive" or anchor-mode exclusivity gets silently violated. Components may
-  still hold an `Editor` instance to mount it or drive built-in TipTap UI (`DocumentEditor.vue`,
-  `AnchorMenu.vue`) — that's ordinary UI wiring against an editor built elsewhere, not a second
-  source of schema or command truth. The domain layer reads documents as plain JSON either way,
-  which is what keeps it pure and node-testable.
+- `src/domain/entryDocument.ts` — the **only** flattening. Anchors, previews, search, and diff all
+  measure against `docToPlainText`, or an anchor recorded on one ruler resolves on another.
+  Mark-set frame highlights are deliberately off it (AUTHORING.md, "Mark sets").
+- `src/editor/` — schema and the guarded, anchor-aware document commands live only in
+  `extensions.ts` and `anchorCommands.ts`; a second definition or a hand-rolled transaction silently
+  breaks "no child entry is destructive" or anchor-mode exclusivity. A component holding an `Editor`
+  to mount it or drive TipTap UI (`DocumentEditor.vue`, `AnchorMenu.vue`) is fine. The domain layer
+  reads documents as plain JSON, which keeps it node-testable.
 - `src/repositories/index.ts` — the composition root. Four interfaces, each with an in-memory
-  adapter for tests and a persistent one for the app, each proven by a shared `.contract.ts`.
+  adapter (tests) and a persistent one (app), each proven by a shared `.contract.ts`.

@@ -14,7 +14,7 @@
  * including ones whose steps were never captured or can no longer be replayed.
  *
  * Whether such a view should also show a parent's anchor ops alongside the words is an open product
- * question (PRODUCT.md §6) and deliberately not answered here.
+ * question (PRODUCT.md §5.2) and deliberately not answered here.
  */
 
 import { docToPlainText, type EntryDocument } from './entryDocument'

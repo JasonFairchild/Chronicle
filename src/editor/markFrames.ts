@@ -15,7 +15,7 @@ import type { FrameChange, MarkFrame, MarkSet } from '@/types/markSet'
 import { applySteps, replayDocument, type ReplayLog } from './replay'
 
 /**
- * Frames for a mark set (ENTRY_MODEL.md, "Mark sets"): what changed between one mark's document
+ * Frames for a mark set (AUTHORING.md, "Mark sets"): what changed between one mark's document
  * and the next, built once from the raw log and viewed without it.
  */
 

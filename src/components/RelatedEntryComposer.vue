@@ -5,7 +5,7 @@ import type { DraftSession } from '@/composables/useDraftSession'
 
 /**
  * The anchor-mode composer: the parent gaining provisional anchors on the left, the child entry's
- * own prose on the right, sealing atomically together (ENTRY_MODEL.md, "Drafts").
+ * own prose on the right, sealing atomically together (AUTHORING.md, "Drafts").
  *
  * Shared rather than owned by `EntryDetailView`, because a session left as a draft has to come back
  * exactly as it was — and the only place to resume one from is `DraftsView`. Two copies of this

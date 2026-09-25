@@ -11,7 +11,7 @@ const props = defineProps<{
 
 /**
  * Typing here is a draft session, not an entry. Nothing reaches the entries table until someone
- * presses Save, and nothing is lost in the meantime: the buffer flushes on a short debounce, so a
+ * presses Save, and nothing is lost in the meantime: the buffer flushes on a short timer, so a
  * closed laptop costs a fraction of a sentence rather than the whole thought.
  *
  * Opened immediately rather than on the first keystroke: the session has to exist before the editor

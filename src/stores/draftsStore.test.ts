@@ -118,7 +118,7 @@ describe('useDraftsStore', () => {
     )
   })
 
-  it('writes a bookmark taken between flushes, rather than dropping it with the debounce', async () => {
+  it('writes a bookmark taken between flushes, rather than dropping it with the timer', async () => {
     vi.useFakeTimers()
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
@@ -222,7 +222,7 @@ describe('useDraftsStore', () => {
   })
 
   it('records an anchor op into the parent stream, the same way the child stream would', async () => {
-    // One authoring pipeline, not two (ENTRY_MODEL.md, "Authoring capture"): anchor mode limits
+    // One authoring pipeline, not two (AUTHORING.md, "Authoring capture"): anchor mode limits
     // what the editor can produce, not how a session records it, so `recordParentChange` and
     // `recordChange` both reach the same `AuthoringSession.record`, and the parent's own trace
     // starts from the parent as the session found it.
@@ -428,7 +428,7 @@ describe('useDraftsStore', () => {
       steps: [{ stepType: 'replace' }],
     })
 
-    // Let the debounced flush actually start its write, but hold it open so sealing can race it
+    // Let the scheduled flush actually start its write, but hold it open so sealing can race it
     // — this is exactly the window the fix has to close.
     const originalSave = draftRepository.save.bind(draftRepository)
     let releaseSave: () => void = () => {}

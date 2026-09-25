@@ -159,7 +159,7 @@ export const useEntriesStore = defineStore('entries', () => {
    * as much as a later revision, because both are links in the same chain.
    *
    * `parentTrace` is the parent document's own trace, present only for an anchor-mode `new_child`
-   * draft — see ENTRY_MODEL.md, "Drafts". It is a second, independent trace because the parent and
+   * draft — see AUTHORING.md, "Drafts". It is a second, independent trace because the parent and
    * the child are two different documents with two different authoring histories, sealed together.
    */
   async function createFromDraft(
@@ -244,7 +244,7 @@ export const useEntriesStore = defineStore('entries', () => {
   /**
    * The atomic half of sealing an anchor-mode draft: a parent revision carrying the new anchors,
    * plus the child referencing them, written together via `createMany` so the pair can never land
-   * half-written (ENTRY_MODEL.md, "Drafts").
+   * half-written (AUTHORING.md, "Drafts").
    *
    * Whether the child reads as an annotation or an update is derived from what was anchored rather
    * than asked for up front — see `relationTypeForAnchors`. `anchorIds` is likewise derived, by the

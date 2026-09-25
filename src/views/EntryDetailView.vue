@@ -252,7 +252,7 @@ async function cancelRevision(): Promise<void> {
 
 /**
  * Opens an anchor-mode session: two documents, the parent gaining provisional anchors and the
- * child's own prose, sealing atomically together (ENTRY_MODEL.md, "Drafts").
+ * child's own prose, sealing atomically together (AUTHORING.md, "Drafts").
  *
  * Anchoring is optional within it. Marking nothing and simply writing produces a note about the
  * entry at large, which is why there is one way in here rather than a separate form for that case.

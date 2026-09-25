@@ -105,7 +105,7 @@ const props = withDefaults(
      * draft's `Draft.parent.base_content`. Omitted for a fresh session, where `content` is already
      * that base. Read once, on mount, alongside `content`: it is what tells an anchor this session
      * placed before a reload apart from one an earlier child sealed, since both are simply *there*
-     * in the document a resumed editor mounts with (ENTRY_MODEL.md, "Drafts").
+     * in the document a resumed editor mounts with (AUTHORING.md, "Drafts").
      */
     anchorBaseContent?: string
     /** Id of an element describing how to use this editor, wired to `aria-describedby`. */
@@ -172,8 +172,7 @@ function withHeldSteps(steps: unknown[]): unknown[] {
  * flow). Interlinear turned out to be tricky to get right — it wants to float "mainly placed with
  * the caret" without pushing or overlapping trailing text, which a first attempt didn't land — so
  * it's parked here rather than removed, for whenever there's a real display-setting to choose
- * between them (PRODUCT.md, "Making anchor ops unmistakable": "Inline vs. interlinear wording
- * placement is a second thing that same setting would choose").
+ * between them (PRODUCT.md, "Making anchor ops unmistakable").
  */
 const ANCHOR_MARKUP_MODE: 'inline' | 'interlinear' = 'inline'
 
@@ -998,8 +997,7 @@ defineExpose({
   Interlinear presentation — dormant. `ANCHOR_MARKUP_MODE` above is hardcoded to 'inline', so
   `data-anchor-markup` never actually reaches 'interlinear' and none of the rules below ever match.
   Kept rather than deleted for whenever there's a real display-setting to choose between the two
-  presentations (PRODUCT.md, "Making anchor ops unmistakable": "Inline vs. interlinear wording
-  placement is a second thing that same setting would choose").
+  presentations (PRODUCT.md, "Making anchor ops unmistakable").
 
   The idea: float the wording above a caret glyph left on the baseline, rather than trailing it. The
   caret is a `::before` on the `<ins>` rather than a DOM node, so it never becomes part of the

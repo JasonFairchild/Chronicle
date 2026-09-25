@@ -4,7 +4,7 @@ import { resolveDatabase, type ChronicleDatabase, type StoredDraftEvent } from '
 import type { DraftRepository, PersistedEvents } from './draftRepository'
 
 /**
- * Drafts on disk, not in memory. That is the whole reason a crash costs nothing: every debounced
+ * Drafts on disk, not in memory. That is the whole reason a crash costs nothing: every scheduled
  * flush lands in the same local-first store the entries use, so a closed laptop loses at most the
  * few hundred milliseconds of typing since the last one.
  */

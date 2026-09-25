@@ -435,7 +435,7 @@ describe('EntryDetailView (browser)', () => {
       .element(screen.getByText('This changes the passage Wonderful trip is about.'))
       .toBeVisible()
 
-    // Neither assertion above completes the session, and the draft's debounced flush would
+    // Neither assertion above completes the session, and the draft's scheduled flush would
     // otherwise still be pending when this test ends — closing it here keeps that write from
     // landing in whichever repository the next test's `beforeEach` happens to have installed by
     // the time a stray timer fires.

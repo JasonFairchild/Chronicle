@@ -452,7 +452,7 @@ export function readAnchorWordingText(transaction: Transaction): string | null {
  * change — the node stays an atom the surrounding document can never be typed into directly.
  *
  * Not a structural anchor op: typing wording is typing, and is marked the way prose is
- * (ENTRY_MODEL.md, "Authoring capture"). `ANCHOR_WORDING_TEXT_META` is what lets `DocumentEditor`
+ * (AUTHORING.md, "Authoring capture"). `ANCHOR_WORDING_TEXT_META` is what lets `DocumentEditor`
  * report its text, since an attribute step has no slice for `insertedTextOf` to read.
  */
 export function updateAnchorInsertText(editor: Editor, pos: number, text: string): void {

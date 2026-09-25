@@ -6,7 +6,7 @@ import { entryRepository, markSetRepository } from '@/repositories'
 import type { MarkSet } from '@/types/markSet'
 
 /**
- * Mark sets for sealed entries (ENTRY_MODEL.md, "Mark sets"). A draft has none: its log is still
+ * Mark sets for sealed entries (AUTHORING.md, "Mark sets"). A draft has none: its log is still
  * growing, so it reads `deriveMarks` directly.
  */
 export const useMarkSetsStore = defineStore('markSets', () => {

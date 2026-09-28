@@ -6,6 +6,7 @@ import {
   plainTextDocument,
   serializeDocument,
   textContent,
+  type EntryDocument,
 } from '@/domain/entryDocument'
 import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
@@ -405,6 +406,35 @@ describe('useEntriesStore', () => {
       )
       // The same words under a new name is a real revision, though — the title rides the chain.
       await expect(sealDraft(draftFor(kind, 'Nothing to see here', 'Tahoe'))).resolves.toBeDefined()
+    })
+
+    it('counts formatting as a change, but not the empty block the editor keeps at the end', async () => {
+      const store = useEntriesStore()
+      const created = await store.createTextEntry('Nothing to see here')
+      const words = { type: 'text', text: 'Nothing to see here' }
+      const revisedTo = (content: EntryDocument) =>
+        makeDraft(
+          'session-refused',
+          { content: serializeDocument(content), base_version_id: created.id },
+          { kind: 'revision', parent_id: created.id },
+        )
+
+      await expect(
+        sealDraft(
+          revisedTo({
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [words] }, { type: 'paragraph' }],
+          }),
+        ),
+      ).rejects.toThrow('No changes to save')
+      await expect(
+        sealDraft(
+          revisedTo({
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ ...words, marks: [{ type: 'bold' }] }] }],
+          }),
+        ),
+      ).resolves.toBeDefined()
     })
 
     it('surfaces why the timeline could not be loaded, rather than failing blank', async () => {

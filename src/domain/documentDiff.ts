@@ -4,10 +4,10 @@
  *
  * Measured against `docToPlainText`, like every other reading of a document (CLAUDE.md, Landmarks),
  * so a diff, a preview, and a search hit all agree to the character on what an entry says. Two
- * consequences worth naming, both of them deliberate: anchor-carried wording never appears here,
- * since it belongs to the related entry that proposed it, not to this document's author, and a
- * formatting-only revision produces no diff at all, because bolding a sentence changes how it reads
- * and not what it says.
+ * consequences worth naming: anchor-carried wording never appears here, deliberately, since it
+ * belongs to the related entry that proposed it, not to this document's author; and a
+ * formatting-only revision produces no diff here, since words are all this compares. PRODUCT.md
+ * §5.2 decides that change should still show, as formatting.
  *
  * Nothing here interprets authoring steps. A diff is a comparison of two outcomes — the same
  * reasoning `contentDelta` is built on — which is what lets it work between any two versions,

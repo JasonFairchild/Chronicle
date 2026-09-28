@@ -196,6 +196,26 @@ export function sameContent(a: string | EntryDocument, b: string | EntryDocument
   return delta.sameText && delta.sameMedia
 }
 
+/**
+ * True when two documents are the same document, formatting included: marks and block types count,
+ * where `sameContent` sees only words and attachments. What a revision has to change to be worth
+ * saving. The editor's trailing empty blocks (see `contentDelta`) still don't count.
+ */
+export function sameDocument(a: string | EntryDocument, b: string | EntryDocument): boolean {
+  return authoredJson(parseDocument(a)) === authoredJson(parseDocument(b))
+}
+
+function authoredJson(doc: EntryDocument): string {
+  const content = [...doc.content]
+  let last = content[content.length - 1]
+  while (last?.type === 'paragraph' && !last.content?.length) {
+    content.pop()
+    last = content[content.length - 1]
+  }
+
+  return JSON.stringify({ ...doc, content })
+}
+
 function anchorKey(anchors: DocumentAnchor[]): string {
   return anchors
     .map((anchor) => `${anchor.anchor_id}:${anchor.kind ?? ''}`)

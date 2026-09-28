@@ -10,6 +10,7 @@ import {
   plainTextDocument,
   previewText,
   sameContent,
+  sameDocument,
   serializeDocument,
   type EntryDocument,
 } from '@/domain/entryDocument'
@@ -212,6 +213,51 @@ describe('sameContent', () => {
 
   it('compares a serialized document and a live one identically', () => {
     expect(sameContent(serializeDocument(paragraph), paragraph)).toBe(true)
+  })
+})
+
+describe('sameDocument', () => {
+  const paragraph: EntryDocument = {
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'We drove up on Friday.' }] }],
+  }
+
+  it('sees marks and block types, which sameContent ignores', () => {
+    const bolded: EntryDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'We drove up on Friday.', marks: [{ type: 'bold' }] }],
+        },
+      ],
+    }
+    const asHeading: EntryDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'We drove up on Friday.' }],
+        },
+      ],
+    }
+
+    expect(sameDocument(paragraph, bolded)).toBe(false)
+    expect(sameDocument(paragraph, asHeading)).toBe(false)
+  })
+
+  it('ignores the empty block the editor keeps at the end of a document', () => {
+    const withTrailingBlock: EntryDocument = {
+      type: 'doc',
+      content: [...paragraph.content, { type: 'paragraph' }],
+    }
+
+    expect(sameDocument(paragraph, withTrailingBlock)).toBe(true)
+  })
+
+  it('compares a serialized document and a live one identically', () => {
+    expect(sameDocument(serializeDocument(paragraph), paragraph)).toBe(true)
   })
 })
 

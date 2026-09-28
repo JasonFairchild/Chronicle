@@ -640,6 +640,23 @@ describe('EntryDetailView (browser)', () => {
     expect(docToPlainText((await repository.getById(parent.id))!.content)).toBe(PARENT_TEXT)
   })
 
+  it('saves a revision that only changes formatting', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+
+    await screen.getByRole('textbox', { name: 'Revised entry' }).click()
+    await userEvent.keyboard('{Control>}a{/Control}')
+    await screen.getByRole('button', { name: 'Bold' }).click()
+    await screen.getByRole('button', { name: 'Save revision' }).click()
+
+    await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
+    const [revision] = await repository.listRevisions(parent.id)
+    expect(docToPlainText(revision!.content)).toBe(PARENT_TEXT)
+    expect(revision!.content).toContain('"bold"')
+  })
+
   it('abandons a revision without touching the entry', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 

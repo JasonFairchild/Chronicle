@@ -1,7 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
-import { collectMediaRefs, isEmptyEntry, sameContent, textContent } from '@/domain/entryDocument'
+import {
+  collectMediaRefs,
+  isEmptyEntry,
+  sameContent,
+  sameDocument,
+  textContent,
+} from '@/domain/entryDocument'
 import {
   buildEntryHistory,
   currentVersionId,
@@ -455,14 +461,14 @@ export const useEntriesStore = defineStore('entries', () => {
   }
 
   /**
-   * Whether a new version would change nothing a version holds. Documents compare by `sameContent`,
-   * so presentation alone isn't a change; `media_refs` follows from the document.
+   * Whether a new version would change nothing a version holds. Documents compare by `sameDocument`,
+   * so formatting alone is a change; `media_refs` follows from the document.
    */
   function sameVersion(a: VersionedFields, b: VersionedFields): boolean {
     const dateKeys = Object.keys(a.dates) as (keyof EntryDates)[]
 
     return (
-      sameContent(a.content, b.content) &&
+      sameDocument(a.content, b.content) &&
       a.title === b.title &&
       dateKeys.every((key) => a.dates[key] === b.dates[key]) &&
       a.location === b.location &&

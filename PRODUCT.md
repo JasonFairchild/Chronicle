@@ -133,7 +133,8 @@ either — they name what a related entry turned out to be, not a choice made be
 - **Revise entry** opens the entry's current text and title for editing, as a draft. The entry is
   untouched until the revision is saved, and discarding leaves no trace.
 - Saving appends a new version; the old one stays and the version count goes up. Images are kept.
-- Renaming, or clearing the title, is an ordinary revision; old names stay with their versions.
+- Renaming, or clearing the title, is an ordinary revision; old names stay with their versions. So
+  is a change of formatting alone, such as bolding a passage.
 - Existing anchors show while you edit. If the edit changes the text under one — inserting into it,
   or deleting part or all of it — a warning names the related entry before you save, and stays even
   if you change the text back. Moving an anchor by editing elsewhere, or typing right against its
@@ -204,8 +205,10 @@ all the way to what was saved, the view says where it ends rather than stopping 
 ### 5.2 Showing what a revision changed — Next
 
 When looking at a revision, show what changed since the version before it — additions and removals
-marked the familiar way. A renamed title shows as its own plain-text change. Open: comparing any two versions, or several; and whether anchor ops
-belong in such a view.
+marked the familiar way. A renamed title shows as its own plain-text change. A change of formatting
+alone shows too, as formatting rather than as words, so a bold-only revision never reads as having
+changed nothing. Open: comparing any two versions, or several; and whether anchor ops belong in such
+a view.
 
 ### 5.3 Known gaps
 

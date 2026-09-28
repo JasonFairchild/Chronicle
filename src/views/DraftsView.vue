@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DocumentEditor from '@/components/DocumentEditor.vue'
+import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
@@ -8,7 +9,7 @@ import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { isEmptyEntry, previewText } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import type { DraftSummary, DraftTarget } from '@/types/draft'
+import type { DraftSnapshot } from '@/types/draft'
 import { entryLabel, formatDate, toErrorMessage } from '@/utils/format'
 
 /** A draft's own text is shown at full width here, so it gets more room than a picker label would. */
@@ -25,14 +26,10 @@ const parentLabels = ref<Record<string, string>>({})
 
 /**
  * Whether the open session is an anchor-mode one. Resuming a draft has to reopen the experience it
- * was left in, and a `new_child` session is two documents side by side — reopening only the note
- * would strand the anchors already placed on the parent with no way back to them.
+ * was left in, and a `new_related` session is two documents side by side — reopening only the
+ * related entry would strand the anchors already placed on the parent with no way back to them.
  */
-const anchorModeOpen = computed(
-  () =>
-    drafts.drafts.find((draft) => draft.session_id === session.sessionId)?.target.kind ===
-    'new_child',
-)
+const anchorModeOpen = computed(() => session.kind === 'new_related')
 
 /** Two columns of readable width need more room than the page gives by default. */
 const layoutWidth = useLayoutWidth()
@@ -61,7 +58,7 @@ async function refresh(): Promise<void> {
 }
 
 async function loadParentLabels(): Promise<void> {
-  const parentIds = [...new Set(drafts.drafts.map((draft) => parentIdOf(draft.target)))].filter(
+  const parentIds = [...new Set(drafts.drafts.map(parentIdOf))].filter(
     (id): id is string => id !== null,
   )
 
@@ -76,25 +73,24 @@ async function loadParentLabels(): Promise<void> {
   parentLabels.value = labels
 }
 
-function parentIdOf(target: DraftTarget): string | null {
-  return target.kind === 'new_root' ? null : target.parent_id
+function parentIdOf(draft: DraftSnapshot): string | null {
+  return draft.kind === 'new_root' ? null : draft.parent_id
 }
 
 /** A drafts list exists so nothing is stranded, which means saying what each one would become. */
-function describe(draft: DraftSummary): string {
-  const { target } = draft
-  if (target.kind === 'new_root') return 'New entry'
+function describe(draft: DraftSnapshot): string {
+  if (draft.kind === 'new_root') return 'New entry'
 
-  const parent = parentLabels.value[target.parent_id] ?? 'another entry'
+  const parent = parentLabels.value[draft.parent_id] ?? 'another entry'
 
-  if (target.kind === 'revision') return `Revision of “${parent}”`
-  if (target.kind === 'new_connection') return `Connection from “${parent}”`
+  if (draft.kind === 'revision') return `Revision of “${parent}”`
+  if (draft.kind === 'new_connection') return `Connection from “${parent}”`
   // Not "annotation" or "update": which one it reads as follows from what gets anchored, and an
   // unsealed draft has not settled that yet.
   return `Related entry on “${parent}”`
 }
 
-async function resume(draft: DraftSummary): Promise<void> {
+async function resume(draft: DraftSnapshot): Promise<void> {
   error.value = null
 
   // Reopening rebuilds the authoring session from what was flushed, so the event log continues
@@ -149,6 +145,8 @@ async function discard(sessionId: string): Promise<void> {
 
     <p v-if="error" class="text-sm text-[var(--color-error)]" role="alert">{{ error }}</p>
 
+    <DraftElsewhereNotice :session="session" />
+
     <p
       v-if="drafts.drafts.length === 0"
       class="rounded-xl border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]"
@@ -186,6 +184,7 @@ async function discard(sessionId: string): Promise<void> {
           />
 
           <DocumentEditor
+            :key="session.editorKey"
             label="Draft"
             with-title
             :title="session.title"
@@ -193,6 +192,14 @@ async function discard(sessionId: string): Promise<void> {
             :disabled="session.saving"
             @change="session.handleChange"
           />
+
+          <p
+            v-if="session.staleNotice"
+            class="mt-2 text-sm text-[var(--color-error)]"
+            role="status"
+          >
+            {{ session.staleNotice }}
+          </p>
 
           <div class="mt-3 flex items-center justify-end gap-3">
             <button
@@ -215,7 +222,7 @@ async function discard(sessionId: string): Promise<void> {
 
         <template v-else>
           <p class="whitespace-pre-wrap text-sm leading-relaxed">
-            {{ previewText(draft.child.content, PREVIEW_LIMIT) }}
+            {{ previewText(draft.entry.content, PREVIEW_LIMIT) }}
           </p>
 
           <div class="mt-3 flex justify-end gap-2">

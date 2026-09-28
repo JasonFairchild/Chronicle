@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
+import { createPinia, setActivePinia } from 'pinia'
 import EntryDetailView from '@/views/EntryDetailView.vue'
+import { useDraftsStore } from '@/stores/draftsStore'
+import { useEntriesStore } from '@/stores/entriesStore'
 import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import type { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
@@ -52,7 +55,7 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
   })
 
-  it('shows a child entry separately rather than spliced into the parent', async () => {
+  it('shows a related entry separately rather than spliced into the parent', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
     await repository.create(
       createEntryInput({
@@ -68,7 +71,7 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
   })
 
-  it('describes which passage an anchored child is about', async () => {
+  it('describes which passage an anchored related entry is about', async () => {
     const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
     const parent = await repository.create(createEntryInput({ content: marked }))
     await repository.create(
@@ -102,6 +105,7 @@ describe('EntryDetailView (browser)', () => {
         parent_id: parent.id,
         relation_type: 'revision',
         revision_mode: 'direct',
+        base_version_id: parent.id,
       }),
     )
 
@@ -118,6 +122,7 @@ describe('EntryDetailView (browser)', () => {
         parent_id: parent.id,
         relation_type: 'revision',
         revision_mode: 'direct',
+        base_version_id: parent.id,
       }),
     )
 
@@ -149,9 +154,9 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByRole('link', { name: 'led_to' })).toBeVisible()
   })
 
-  it('shows a child card’s created date', async () => {
+  it('shows a related entry card’s created date', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
-    const child = await repository.create(
+    const related = await repository.create(
       createEntryInput({
         content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
@@ -161,7 +166,7 @@ describe('EntryDetailView (browser)', () => {
 
     const screen = await mountDetail(parent.id)
 
-    await expect.element(screen.getByText(formatDate(child.created_at))).toBeVisible()
+    await expect.element(screen.getByText(formatDate(related.created_at))).toBeVisible()
   })
 
   it('opens the connection’s own page, not the far endpoint, when its card is clicked', async () => {
@@ -188,11 +193,11 @@ describe('EntryDetailView (browser)', () => {
       .toHaveAttribute('href', `/entries/${connection.id}`)
   })
 
-  it('shows a breadcrumb back to the parent on a child’s own detail page', async () => {
+  it('shows a breadcrumb back to the parent on a related entry’s own detail page', async () => {
     const parent = await repository.create(
       createEntryInput({ content: textContent('Left my job'), title: 'Career change' }),
     )
-    const child = await repository.create(
+    const related = await repository.create(
       createEntryInput({
         content: textContent('Started the degree'),
         parent_id: parent.id,
@@ -200,7 +205,7 @@ describe('EntryDetailView (browser)', () => {
       }),
     )
 
-    const screen = await mountDetail(child.id)
+    const screen = await mountDetail(related.id)
 
     await expect.element(screen.getByText('About')).toBeVisible()
     await expect
@@ -261,13 +266,13 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByText(/Originally written .*1994/)).toBeVisible()
   })
 
-  it('adds a note about the entry as a whole when the session marks nothing', async () => {
+  it('adds a related entry about the whole entry when the session marks nothing', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
 
-    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Still think about this trip')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
@@ -287,7 +292,7 @@ describe('EntryDetailView (browser)', () => {
 
     // Typed into and then emptied: the document is no longer the blank one the session opened
     // with, but it still holds nothing worth keeping.
-    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('x{Backspace}')
 
     await expect.element(screen.getByRole('button', { name: 'Add entry' })).toBeDisabled()
@@ -308,7 +313,7 @@ describe('EntryDetailView (browser)', () => {
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
 
-    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Half a thought about this')
 
     // The session has to close — saving after this would seal against the wrong entry — but
@@ -317,9 +322,82 @@ describe('EntryDetailView (browser)', () => {
 
     await vi.waitFor(async () => {
       const [draft] = await drafts.list()
-      expect(draft?.target).toEqual({ kind: 'new_child', parent_id: parent.id })
-      expect(docToPlainText(draft!.child.content)).toBe('Half a thought about this')
+      expect(draft).toMatchObject({ kind: 'new_related', parent_id: parent.id })
+      expect(docToPlainText(draft!.entry.content)).toBe('Half a thought about this')
     })
+  })
+
+  it('offers the draft already in progress on an entry rather than a second one', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const other = await repository.create(
+      createEntryInput({ content: textContent('A different day entirely') }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+    await screen.getByRole('textbox', { name: 'Revised entry' }).click()
+    await userEvent.keyboard('{Control>}{End}{/Control}, and Mom')
+
+    // Left, not discarded: the draft stays outstanding against this entry.
+    await screen.rerender({ id: other.id })
+    await vi.waitFor(async () => {
+      expect(await drafts.list()).toHaveLength(1)
+    })
+    await screen.rerender({ id: parent.id })
+
+    // Two drafts on one version would branch it, so neither way in starts another.
+    await expect.element(screen.getByRole('button', { name: 'Resume draft' })).toBeVisible()
+    await expect
+      .element(screen.getByRole('button', { name: 'Revise entry' }))
+      .not.toBeInTheDocument()
+    await expect
+      .element(screen.getByRole('button', { name: 'Create related entry' }))
+      .not.toBeInTheDocument()
+
+    await screen.getByRole('button', { name: 'Resume draft' }).click()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Revised entry' }))
+      .toHaveTextContent(`${PARENT_TEXT}, and Mom`)
+  })
+
+  it('shows the version another tab saved once this tab is returned to', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const screen = await mountDetail(parent.id)
+    await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
+
+    // Saved in another tab while this one sat in the background.
+    await repository.create(
+      createEntryInput({
+        content: textContent('I went to Donner Lake with Dad'),
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: parent.id,
+      }),
+    )
+    window.dispatchEvent(new Event('focus'))
+
+    await expect.element(screen.getByText('I went to Donner Lake with Dad')).toBeVisible()
+    await expect.element(screen.getByText('Version 2 of 2')).toBeVisible()
+  })
+
+  it('offers the draft another tab has only just opened on an entry, before a word is typed', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+
+    // Another tab: its own stores over the same database, where Revise was clicked and nothing
+    // typed yet.
+    setActivePinia(createPinia())
+    const otherTab = useDraftsStore()
+    const aggregated = await useEntriesStore().getAggregatedEntry(parent.id)
+    const sessionId = otherTab.beginDraft({ kind: 'revision', parent: aggregated! })
+    await otherTab.flush(sessionId)
+
+    const screen = await mountDetail(parent.id)
+
+    await expect.element(screen.getByRole('button', { name: 'Resume draft' })).toBeVisible()
+    await expect
+      .element(screen.getByRole('button', { name: 'Revise entry' }))
+      .not.toBeInTheDocument()
   })
 
   it('shows the parent’s own title in the anchor-mode composer, not just its body', async () => {
@@ -335,7 +413,7 @@ describe('EntryDetailView (browser)', () => {
 
     // The page heading carries the parent's title too, so this looks specifically inside the
     // composer's own "Entry being annotated" half — the half that only shows a title because the
-    // session seeds `parentTitle` — rather than passing on the heading above it.
+    // session reads `parentTitle` off the entry — rather than passing on the heading above it.
     const editorRoot = parentEditor.element().closest('.rounded-lg')
     expect(editorRoot?.textContent).toContain('The Tahoe trip')
   })
@@ -351,7 +429,7 @@ describe('EntryDetailView (browser)', () => {
     parentEditor.element().focus()
     selectTextRange(parentEditor.element(), 10, 20)
 
-    // `exact: true` matters here: this composer's other half (`Your note`) has its own ordinary
+    // `exact: true` matters here: this composer's other half (`Related entry`) has its own ordinary
     // "Strikethrough" toggle, and a substring match would find that button instead — on the wrong
     // editor entirely.
     await screen.getByRole('button', { name: 'Strike', exact: true }).click()
@@ -359,7 +437,7 @@ describe('EntryDetailView (browser)', () => {
     await screen.getByRole('textbox', { name: 'Wording' }).fill('Donner Lake')
     await screen.getByRole('button', { name: 'Accept wording' }).click()
 
-    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Wrong lake')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
@@ -394,7 +472,7 @@ describe('EntryDetailView (browser)', () => {
     await screen.getByRole('textbox', { name: 'Wording' }).fill('Donner Lake')
     await screen.getByRole('button', { name: 'Accept wording' }).click()
 
-    await screen.getByRole('textbox', { name: 'Your note' }).click()
+    await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Actually')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 

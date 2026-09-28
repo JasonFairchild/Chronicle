@@ -5,7 +5,7 @@
  * Measured against `docToPlainText`, like every other reading of a document (CLAUDE.md, Landmarks),
  * so a diff, a preview, and a search hit all agree to the character on what an entry says. Two
  * consequences worth naming, both of them deliberate: anchor-carried wording never appears here,
- * since it belongs to the child entry that proposed it rather than to this document's author, and a
+ * since it belongs to the related entry that proposed it, not to this document's author, and a
  * formatting-only revision produces no diff at all, because bolding a sentence changes how it reads
  * and not what it says.
  *

@@ -1,7 +1,15 @@
-import type { AuthoringEvent } from '@/types/entry'
-import type { Draft, DraftSummary } from '@/types/draft'
+import Dexie from 'dexie'
+import type { AuthoringEvent, CreateEntryInput, Entry } from '@/types/entry'
+import {
+  toSnapshot,
+  withEvents,
+  type Draft,
+  type DraftDocumentRole,
+  type DraftSnapshot,
+} from '@/types/draft'
 import { resolveDatabase, type ChronicleDatabase, type StoredDraftEvent } from './chronicleDatabase'
-import type { DraftRepository, PersistedEvents } from './draftRepository'
+import { DexieEntryRepository } from './dexieEntryRepository'
+import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
 
 /**
  * Drafts on disk, not in memory. That is the whole reason a crash costs nothing: every scheduled
@@ -10,26 +18,25 @@ import type { DraftRepository, PersistedEvents } from './draftRepository'
  */
 export class DexieDraftRepository implements DraftRepository {
   private db: ChronicleDatabase
+  /** Writes a seal's entries on this same connection, so one transaction can span both. */
+  private entries: DexieEntryRepository
 
   constructor(database: ChronicleDatabase | string = 'chronicle') {
     this.db = resolveDatabase(database)
+    this.entries = new DexieEntryRepository(this.db)
   }
 
   async save(draft: Draft, persisted: PersistedEvents): Promise<void> {
     const newEvents = [
-      ...eventRows(draft.session_id, 'child', draft.child.events, persisted.child),
-      ...(draft.parent
+      ...eventRows(draft.session_id, 'entry', draft.entry.events, persisted.entry),
+      ...(draft.kind === 'new_related'
         ? eventRows(draft.session_id, 'parent', draft.parent.events, persisted.parent)
         : []),
     ]
 
     // The snapshot row never carries events: they live in `draftEvents` from here on, appended
     // rather than rewritten, and reassembled by `getById`.
-    const snapshot: Draft = {
-      ...draft,
-      child: { ...draft.child, events: [] },
-      parent: draft.parent ? { ...draft.parent, events: [] } : null,
-    }
+    const snapshot = toSnapshot(draft)
 
     // One transaction: a crash between the two writes must not leave events on disk that the
     // snapshot doesn't yet account for, or vice versa.
@@ -41,31 +48,46 @@ export class DexieDraftRepository implements DraftRepository {
       // later, and cloning keeps a keystroke landing in that window from mutating an in-flight
       // write.
       await this.db.drafts.put(structuredClone(snapshot))
-      if (newEvents.length > 0) {
-        await this.db.draftEvents.bulkPut(structuredClone(newEvents))
+      if (newEvents.length === 0) return
+
+      // `add`, not `put`: an event is appended once, and an index already taken means another tab
+      // wrote this log since this one last did. Throwing aborts the snapshot write above too.
+      try {
+        await this.db.draftEvents.bulkAdd(structuredClone(newEvents))
+      } catch (err) {
+        throw err instanceof Dexie.BulkError ? new DraftConflictError() : err
       }
     })
   }
 
   async getById(sessionId: string): Promise<Draft | null> {
-    const draft = await this.db.drafts.get(sessionId)
-    if (!draft) return null
+    const snapshot = await this.db.drafts.get(sessionId)
+    if (!snapshot) return null
 
-    return reassemble(draft, await this.eventsFor(sessionId))
+    return reassemble(snapshot, await this.eventsFor(sessionId))
   }
 
-  async list(): Promise<DraftSummary[]> {
+  async list(): Promise<DraftSnapshot[]> {
     const drafts = await this.db.drafts.orderBy('updated_at').reverse().toArray()
     // `updated_at` is millisecond-resolution, so two drafts flushed in the same tick would
     // otherwise come back in whatever order the index happened to hold them.
-    const sorted = drafts.sort(
+    //
+    // No `draftEvents` query here — that's the whole point. The rows are snapshots already.
+    return drafts.sort(
       (a, b) =>
         b.updated_at.localeCompare(a.updated_at) || b.session_id.localeCompare(a.session_id),
     )
+  }
 
-    // No `draftEvents` query here — that's the whole point. The snapshot row carries no events, so
-    // a summary needs nothing this query didn't already fetch.
-    return sorted.map(toSummary)
+  async seal(sessionId: string, inputs: CreateEntryInput[]): Promise<Entry[]> {
+    const { drafts, draftEvents, entries } = this.db
+
+    // `createMany` opens its own transaction on `entries`, which joins this one. The draft goes
+    // first, so an entry the write refuses rolls its deletion back too.
+    return this.db.transaction('rw', [drafts, draftEvents, entries], async () => {
+      await this.delete(sessionId)
+      return this.entries.createMany(inputs)
+    })
   }
 
   async delete(sessionId: string): Promise<void> {
@@ -92,7 +114,7 @@ export class DexieDraftRepository implements DraftRepository {
 
 function eventRows(
   sessionId: string,
-  document: 'child' | 'parent',
+  document: DraftDocumentRole,
   events: AuthoringEvent[],
   persistedCount: number,
 ): StoredDraftEvent[] {
@@ -104,30 +126,12 @@ function eventRows(
   }))
 }
 
-function toSummary(draft: Draft): DraftSummary {
-  return {
-    ...draft,
-    child: { content: draft.child.content },
-    parent: draft.parent
-      ? {
-          content: draft.parent.content,
-          title: draft.parent.title,
-          base_content: draft.parent.base_content,
-        }
-      : null,
-  }
-}
-
-function reassemble(draft: Draft, rows: StoredDraftEvent[]): Draft {
-  const byDocument = (document: 'child' | 'parent') =>
+function reassemble(snapshot: DraftSnapshot, rows: StoredDraftEvent[]): Draft {
+  const byDocument = (document: DraftDocumentRole) =>
     rows
       .filter((row) => row.document === document)
       .sort((a, b) => a.index - b.index)
       .map((row) => row.event)
 
-  return {
-    ...draft,
-    child: { ...draft.child, events: byDocument('child') },
-    parent: draft.parent ? { ...draft.parent, events: byDocument('parent') } : null,
-  }
+  return withEvents(snapshot, { entry: byDocument('entry'), parent: byDocument('parent') })
 }

@@ -11,8 +11,8 @@
  *
  * Anchors are exclusive (PRODUCT.md §4.4): either button opens that anchor's wording box instead of
  * marking a new one whenever the selection touches an anchor already there, this session's own or an
- * earlier child's sealed one — `markAnchor` (`editor/anchorCommands.ts`) decides which, so this menu
- * stays two plain buttons with no state of its own to track.
+ * earlier related entry's sealed one — `markAnchor` (`editor/anchorCommands.ts`) decides which, so
+ * this menu stays two plain buttons with no state of its own to track.
  */
 import { ref } from 'vue'
 import { BubbleMenu } from '@tiptap/vue-3/menus'

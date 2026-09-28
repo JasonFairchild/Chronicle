@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
 import { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
-import { runDraftRepositoryContract } from '@/repositories/draftRepository.contract'
-import { emptyEntryDates } from '@/types/entry'
+import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
+import {
+  runDraftRepositoryContract,
+  type DraftStorage,
+} from '@/repositories/draftRepository.contract'
+import { makeDraft } from '@/testing/draftFixtures'
 
 // Real IndexedDB, via Playwright Chromium, for the same reason the entry adapter is proven here:
 // Dexie has nothing to fall back to in node. Each test gets its own database name, and every one
@@ -9,38 +14,30 @@ import { emptyEntryDates } from '@/types/entry'
 let dbCounter = 0
 const opened: DexieDraftRepository[] = []
 
-function freshRepository(): DexieDraftRepository {
-  const repository = new DexieDraftRepository(`chronicle-drafts-${Date.now()}-${dbCounter++}`)
-  opened.push(repository)
-  return repository
+/** Drafts and entries on one database, as the composition root has them, so a seal is one write. */
+function freshStorage(): DraftStorage {
+  const database = new ChronicleDatabase(`chronicle-drafts-${Date.now()}-${dbCounter++}`)
+  const drafts = new DexieDraftRepository(database)
+  opened.push(drafts)
+  return { drafts, entries: new DexieEntryRepository(database) }
 }
 
 afterEach(async () => {
   await Promise.all(opened.splice(0).map((repository) => repository.dispose()))
 })
 
-runDraftRepositoryContract('Dexie', () => freshRepository())
+runDraftRepositoryContract('Dexie', () => freshStorage())
 
 describe('DexieDraftRepository persistence', () => {
   it('still holds an unsealed draft after the tab is closed and reopened', async () => {
     const databaseName = `chronicle-drafts-persistence-${Date.now()}`
     const beforeReload = new DexieDraftRepository(databaseName)
     await beforeReload.save(
-      {
-        session_id: 'session-1',
-        target: { kind: 'new_root' },
-        started_at: '2026-09-05T10:00:00.000Z',
-        updated_at: '2026-09-05T10:00:02.000Z',
-        dates: emptyEntryDates(),
-        title: null,
-        child: {
-          base_content: '',
-          content: 'Never got round to finishing this',
-          events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
-        },
-        parent: null,
-      },
-      { child: 0, parent: 0 },
+      makeDraft('session-1', {
+        content: 'Never got round to finishing this',
+        events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
+      }),
+      { entry: 0, parent: 0 },
     )
 
     // A fresh connection sharing no in-memory state with the first — the closest an automated
@@ -49,8 +46,8 @@ describe('DexieDraftRepository persistence', () => {
     const afterReload = new DexieDraftRepository(databaseName)
     const recovered = await afterReload.getById('session-1')
 
-    expect(recovered?.child.content).toBe('Never got round to finishing this')
-    expect(recovered?.child.events).toHaveLength(1)
+    expect(recovered?.entry.content).toBe('Never got round to finishing this')
+    expect(recovered?.entry.events).toHaveLength(1)
 
     await afterReload.dispose()
   })

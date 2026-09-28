@@ -126,7 +126,7 @@ describe('sessionAnchorIds', () => {
     expect(sessionAnchorIds(new Set(['a1']), doc('The meeting went badly'))).toEqual([])
   })
 
-  it('leaves out an anchor an earlier child sealed into the same document', () => {
+  it('leaves out an anchor an earlier related entry sealed into the same document', () => {
     expect(sessionAnchorIds(new Set(['a1']), marked)).toEqual([])
   })
 })
@@ -145,7 +145,7 @@ describe('anchorsPlacedSince', () => {
   })
 
   it('reports nothing for an anchor the base already carried', () => {
-    // An earlier child's, sealed before this session opened.
+    // An earlier related entry's, sealed before this session opened.
     expect(anchorsPlacedSince(marked, marked)).toEqual([])
   })
 
@@ -153,11 +153,6 @@ describe('anchorsPlacedSince', () => {
     // A resumed draft mounts from `Draft.parent.content` — which already carries the anchor placed
     // before the reload — but is measured against the base it started from, where it is absent.
     expect(anchorsPlacedSince(base, marked)).toEqual(['a1'])
-  })
-
-  it('treats a target with no parent document at all as having placed nothing', () => {
-    expect(anchorsPlacedSince(null, null)).toEqual([])
-    expect(anchorsPlacedSince(null, marked)).toEqual(['a1'])
   })
 })
 
@@ -213,7 +208,7 @@ describe('pairableAnchorAt', () => {
     expect(pairableAnchorAt(mark('a1'), new Set())).toBe('a1')
   })
 
-  it('refuses to pair with a sealed anchor from an earlier child', () => {
+  it('refuses to pair with a sealed anchor from an earlier related entry', () => {
     expect(pairableAnchorAt(mark('a1'), new Set(['a1']))).toBeNull()
   })
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import DocumentEditor from '@/components/DocumentEditor.vue'
+import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { toErrorMessage } from '@/utils/format'
@@ -64,10 +65,14 @@ onBeforeUnmount(() => {
       @update:model-value="session.handleDatesChange"
     />
 
+    <DraftElsewhereNotice :session="session" />
+
     <DocumentEditor
-      :key="session.sessionId ?? ''"
+      :key="session.editorKey"
       label="New entry"
       with-title
+      :title="session.title"
+      :content="session.content"
       :disabled="disabled || session.saving"
       @change="session.handleChange"
     />

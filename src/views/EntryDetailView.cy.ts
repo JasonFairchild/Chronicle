@@ -28,7 +28,7 @@ let drafts: DexieDraftRepository
 
 /**
  * Creates one entry in the active repository. Plain async rather than a command, so a test that
- * needs several — a parent, a child anchored to it, a revision over both — seeds them in one
+ * needs several — a parent, a related entry anchored to it, a revision over both — seeds them in one
  * `cy.then(async () => ...)` that yields what the test goes on to use, instead of a `.then()`
  * pyramid one level deeper per entry.
  */
@@ -51,7 +51,7 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('shows a child entry separately rather than spliced into the parent', () => {
+  it('shows a related entry separately rather than spliced into the parent', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })
       await seed({
@@ -68,7 +68,7 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('describes which passage an anchored child is about', () => {
+  it('describes which passage an anchored related entry is about', () => {
     cy.then(async () => {
       const parent = await seed({
         content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike'),
@@ -103,6 +103,7 @@ describe('EntryDetailView', () => {
         parent_id: parent.id,
         relation_type: 'revision',
         revision_mode: 'direct',
+        base_version_id: parent.id,
       })
       return parent
     }).then((parent) => {
@@ -120,6 +121,7 @@ describe('EntryDetailView', () => {
         parent_id: parent.id,
         relation_type: 'revision',
         revision_mode: 'direct',
+        base_version_id: parent.id,
       })
       return parent
     }).then((parent) => {
@@ -149,19 +151,19 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('shows a child card’s created date', () => {
+  it('shows a related entry card’s created date', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })
-      const child = await seed({
+      const related = await seed({
         content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
         relation_type: 'update',
       })
-      return { parent, child }
-    }).then(({ parent, child }) => {
+      return { parent, related }
+    }).then(({ parent, related }) => {
       mountDetail(parent.id)
 
-      cy.findByText(formatDate(child.created_at)).should('be.visible')
+      cy.findByText(formatDate(related.created_at)).should('be.visible')
     })
   })
 
@@ -188,17 +190,17 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('shows a breadcrumb back to the parent on a child’s own detail page', () => {
+  it('shows a breadcrumb back to the parent on a related entry’s own detail page', () => {
     cy.then(async () => {
       const parent = await seed({ content: textContent('Left my job'), title: 'Career change' })
-      const child = await seed({
+      const related = await seed({
         content: textContent('Started the degree'),
         parent_id: parent.id,
         relation_type: 'update',
       })
-      return { parent, child }
-    }).then(({ parent, child }) => {
-      mountDetail(child.id)
+      return { parent, related }
+    }).then(({ parent, related }) => {
+      mountDetail(related.id)
 
       cy.findByText('About').should('be.visible')
       cy.findByRole('link', { name: 'Career change' }).should(
@@ -263,13 +265,13 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('adds a note about the entry as a whole when the session marks nothing', () => {
+  it('adds a related entry about the whole entry when the session marks nothing', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
 
-      cy.findByRole('textbox', { name: 'Your note' }).type('Still think about this trip')
+      cy.findByRole('textbox', { name: 'Related entry' }).type('Still think about this trip')
       cy.findByRole('button', { name: 'Add entry' }).click()
 
       cy.findByText('Still think about this trip').should('be.visible')
@@ -289,7 +291,7 @@ describe('EntryDetailView', () => {
 
       // Typed into and then emptied: the document is no longer the blank one the session opened
       // with, but it still holds nothing worth keeping.
-      cy.findByRole('textbox', { name: 'Your note' }).type('x{backspace}')
+      cy.findByRole('textbox', { name: 'Related entry' }).type('x{backspace}')
 
       cy.findByRole('button', { name: 'Add entry' }).should('be.disabled')
       cy.then(() => repository.listChildren(parent.id)).then((children) => {
@@ -307,7 +309,7 @@ describe('EntryDetailView', () => {
     }).then(({ parent, other }) => {
       mountDetail(parent.id).then(({ wrapper }) => {
         cy.findByRole('button', { name: 'Create related entry' }).click()
-        cy.findByRole('textbox', { name: 'Your note' }).type('Half a thought about this')
+        cy.findByRole('textbox', { name: 'Related entry' }).type('Half a thought about this')
 
         // The session has to close — saving after this would seal against the wrong entry — but
         // closing it is not the same as throwing it away.
@@ -315,8 +317,8 @@ describe('EntryDetailView', () => {
       })
 
       cy.then(() => drafts.list()).then((saved) => {
-        expect(saved[0]?.target).to.deep.equal({ kind: 'new_child', parent_id: parent.id })
-        expect(docToPlainText(saved[0]!.child.content)).to.equal('Half a thought about this')
+        expect(saved[0]).to.deep.include({ kind: 'new_related', parent_id: parent.id })
+        expect(docToPlainText(saved[0]!.entry.content)).to.equal('Half a thought about this')
       })
     })
   })
@@ -329,7 +331,7 @@ describe('EntryDetailView', () => {
 
       // The page heading carries the parent's title too, so this looks specifically inside the
       // composer's own "Entry being annotated" half — the half that only shows a title because the
-      // session seeds `parentTitle` — rather than passing on the heading above it.
+      // session reads `parentTitle` off the entry — rather than passing on the heading above it.
       cy.findByRole('textbox', { name: 'Entry being annotated' })
         .closest('.rounded-lg')
         .should('contain.text', 'The Tahoe trip')
@@ -349,7 +351,7 @@ describe('EntryDetailView', () => {
       cy.findByRole('button', { name: 'Strike' }).click()
       cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
 
-      cy.findByRole('textbox', { name: 'Your note' }).type('Wrong lake')
+      cy.findByRole('textbox', { name: 'Related entry' }).type('Wrong lake')
       cy.findByRole('button', { name: 'Add entry' }).click()
 
       cy.findByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”').should('be.visible')
@@ -380,7 +382,7 @@ describe('EntryDetailView', () => {
       cy.findByRole('button', { name: 'Highlight' }).click()
       cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
 
-      cy.findByRole('textbox', { name: 'Your note' }).type('Actually')
+      cy.findByRole('textbox', { name: 'Related entry' }).type('Actually')
       cy.findByRole('button', { name: 'Add entry' }).click()
 
       // A highlight is a mark on existing text, same as a strike — wording rides along with it the

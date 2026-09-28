@@ -106,6 +106,7 @@ export interface Entry extends VersionedFields {
   target_id: string | null // Connections only.
   anchors: AnchorRef[] // Empty means the entry is about its parent at large.
   revision_mode: RevisionMode | null // Revisions only.
+  base_version_id: string | null // Revisions only: the version this one replaced.
   authoring_trace: AuthoringTrace | null
 }
 
@@ -135,10 +136,10 @@ export interface EntryVersion extends VersionedFields {
   at: string
 }
 
-export interface ResolvedChild {
+export interface ResolvedRelatedEntry {
   entry: AggregatedEntry
   relation_type: RelationType
-  anchors: ResolvedAnchor[] // This child's anchors, read out of the parent's current document.
+  anchors: ResolvedAnchor[] // Its anchors, read out of the parent's current document.
   has_children: boolean // Grandchildren are indicated, not expanded.
 }
 
@@ -159,7 +160,7 @@ export interface AggregatedEntry extends VersionedFields {
   relation_type: RelationType | null
   target_id: string | null // Connections only.
   version: { index: number; total: number; at: string; revision_id: string | null }
-  children: ResolvedChild[]
+  related_entries: ResolvedRelatedEntry[]
   connections: ResolvedConnection[]
 }
 
@@ -179,6 +180,7 @@ export function createEntryInput(
     title: null,
     anchors: [],
     revision_mode: null,
+    base_version_id: null,
     authoring_trace: null,
     media_refs: [],
     metadata: {},

@@ -105,7 +105,7 @@ function openWordingBox(editor: Editor, anchorId: string, openedText: string): v
 
 /**
  * Which anchors in the document an anchor-mode session may still edit — every id not sealed in from
- * an earlier, already-sealed child (`sealedAnchorIds`, `domain/anchors.ts`). Storage rather than a
+ * an earlier related entry (`sealedAnchorIds`, `domain/anchors.ts`). Storage rather than a
  * plain field because the commands and node views that read it only ever have the `Editor` instance
  * to work from — `extensions.ts`'s `AnchorMode` extension seeds it once, at creation.
  */
@@ -125,8 +125,8 @@ function anchorModeStorage(editor: Editor): AnchorModeStorage | undefined {
 
 /**
  * Whether this session placed `anchorId` and may still change or remove it — false for a sealed
- * anchor from an earlier child, and false for every anchor when the editor isn't in anchor mode at
- * all (its own read-only rendering of anchors has nothing to make editable).
+ * anchor from an earlier related entry, and false for every anchor when the editor isn't in anchor
+ * mode at all (its own read-only rendering of anchors has nothing to make editable).
  */
 export function isEditableAnchor(editor: Editor, anchorId: string): boolean {
   const sealed = anchorModeStorage(editor)?.sealedAnchorIds
@@ -181,7 +181,7 @@ interface AnchorMarkExtent extends AnchorRange {
 
 /**
  * The mark-only extent of every anchor in the document that has a mark at all, this session's own or
- * an earlier child's sealed one alike — what `markAnchor` checks a fresh selection against to keep
+ * an earlier related entry's alike — what `markAnchor` checks a fresh selection against to keep
  * anchors exclusive (PRODUCT.md §4.4): touching any existing anchor's marked passage at all blocks
  * placing a new one over it, whoever placed the one already there.
  *
@@ -272,8 +272,8 @@ export function addAnchorMark(
  * A selection touching an existing anchor's marked passage at all — the whole thing, part of it, or
  * a range that swallows it — never creates a new anchor there. If it's this session's own, its
  * wording box opens instead, so overlapping it is how you get back to an anchor you've already
- * placed. If it's sealed, nothing happens: only the child that placed it may still change it, and
- * there is no "layer a second opinion over it" gesture — write a new child entry instead. A
+ * placed. If it's sealed, nothing happens: only the entry that placed it may still change it, and
+ * there is no "layer a second opinion over it" gesture — write a new related entry instead. A
  * selection touching no anchor at all marks a fresh one, same as always.
  */
 export function markAnchor(

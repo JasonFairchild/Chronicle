@@ -61,8 +61,8 @@ const MediaImage = Node.create({
 })
 
 /**
- * A span anchor: one child entry's comment or strike, living in the **parent's** document as a mark
- * on the text it is about.
+ * A span anchor: one related entry's comment or strike, living in the **parent's** document as a
+ * mark on the text it is about.
  *
  * `inclusive: false` so typing at an edge isn't silently absorbed into the anchor. `excludes: ''`
  * overrides a mark type's default of excluding itself — without it, adding this mark somewhere would
@@ -104,12 +104,13 @@ const Anchor = Mark.create({
 })
 
 /**
- * A collapsed anchor: wording a child entry proposes, at a position in the parent's document. A
+ * A collapsed anchor: wording a related entry proposes, at a position in the parent's document. A
  * node rather than a mark, since a mark can't exist at a zero-width position or carry content; an
  * atom so the wording is placed and removed whole, not typed character by character — the typing
  * happens in `AnchorInsertView.vue`'s own `<input>`, in the session that placed it. That's also what
  * seals it for a *different* editor reading it later (a text-mode revision, another session on the
- * same parent): it belongs to the child that proposed it, not to that editor's contenteditable.
+ * same parent): it belongs to the related entry that proposed it, not to that editor's
+ * contenteditable.
  * `docToPlainText` skips it either way, keeping the anchor non-destructive despite holding text.
  */
 const AnchorInsert = Node.create({
@@ -168,8 +169,9 @@ export interface EntryExtensionOptions {
   /**
    * The document as it stood when this **session** began — a resumed draft's
    * `Draft.parent.base_content`. Omitted for a fresh session, where the document the editor opens
-   * with is already that base. Every anchor it carries belongs to an earlier, already-sealed child;
-   * everything that appears afterward is this session's own. See AUTHORING.md, "Drafts".
+   * with is already that base. Every anchor it carries belongs to an earlier, already-sealed
+   * related entry; everything that appears afterward is this session's own. See AUTHORING.md,
+   * "Drafts".
    */
   baseContent?: string
 }

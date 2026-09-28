@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
-import { AuthoringSession } from '@/domain/authoringSession'
+import { TraceRecorder } from '@/domain/traceRecorder'
 import { documentsAt } from '@/editor/replay'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import {
@@ -43,9 +43,9 @@ describe('DocumentEditor (browser)', () => {
 
   /** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
   function replayAll(base: string) {
-    const session = new AuthoringSession('session-1', '2026-09-22T10:00:00.000Z', base)
-    for (const change of changes) session.record(change)
-    const trace = session.seal()!
+    const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z', base)
+    for (const change of changes) recorder.record(change)
+    const trace = recorder.seal()!
     return documentsAt(trace, [trace.events.length])
   }
 
@@ -495,7 +495,7 @@ describe('DocumentEditor (browser)', () => {
     })
 
     it('does not let wording typed after a sealed anchor absorb it', async () => {
-      // "sealed-1" stands for an anchor an earlier child already placed and sealed — present in
+      // "sealed-1" stands for an anchor an earlier related entry already placed and sealed — present in
       // the document this editor opened with, not something this session placed.
       const screen = mountAnchorEditor(
         withAnchorMark('I went to Lake Tahoe with Dad', 'sealed-1', 10, 20),
@@ -663,8 +663,8 @@ describe('DocumentEditor (browser)', () => {
         expect(anchor).toMatchObject({ insertion: 'Donner Lake' })
       })
 
-      it('does not let a click reopen a sealed anchor from an earlier child', async () => {
-        // "sealed-1" stands for an anchor an earlier child already placed and sealed.
+      it('does not let a click reopen a sealed anchor from an earlier related entry', async () => {
+        // "sealed-1" stands for an anchor an earlier related entry already placed and sealed.
         const screen = mountAnchorEditor(
           withAnchorMark('I went to Lake Tahoe with Dad', 'sealed-1', 10, 20),
         )
@@ -712,7 +712,7 @@ describe('DocumentEditor (browser)', () => {
         // Stands for a draft resumed after a reload: "resumed-1" was placed and persisted before
         // the reload, so it's already in the document this editor mounts with. The base — the
         // parent as the session first found it, `Draft.parent.base_content` — is what still tells
-        // it apart from an anchor an earlier child sealed.
+        // it apart from an anchor an earlier related entry sealed.
         const base = serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad'))
         const seeded = withAnchorMarkAndWording(
           'I went to Lake Tahoe with Dad',

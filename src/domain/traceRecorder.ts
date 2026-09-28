@@ -6,15 +6,15 @@ export interface AuthoringChange extends Partial<ChangeSignals> {
 }
 
 /**
- * Records one writing session as an append-only event log: every edit with its signals, and every
- * mark the writer asks for. Which moments are worth stopping at is not decided here; `deriveMarks`
- * reads that off the log under whichever policy is asked for.
+ * Records one document of a writing session as an append-only event log: every edit with its
+ * signals, and every mark the writer asks for. Which moments are worth stopping at is not decided
+ * here; `deriveMarks` reads that off the log under whichever policy is asked for.
  *
  * Holds the document it started from but never the live one: the snapshot is the draft's job, and
  * keeping the two apart is what lets the snapshot stay authoritative if a schema change ever makes
  * old steps unreplayable. The loss then is scrubbing, never words.
  */
-export class AuthoringSession {
+export class TraceRecorder {
   readonly sessionId: string
   readonly startedAt: string
   readonly baseContent: string
@@ -36,13 +36,13 @@ export class AuthoringSession {
     this.now = now
     this.startedAtMs = Date.parse(startedAt)
     if (Number.isNaN(this.startedAtMs)) {
-      throw new Error(`AuthoringSession: "${startedAt}" is not a parseable timestamp`)
+      throw new Error(`TraceRecorder: "${startedAt}" is not a parseable timestamp`)
     }
     this.lastReadAt = this.startedAtMs
   }
 
   /**
-   * The clock, floored at the latest instant this session has already used. `Date.now` can step
+   * The clock, floored at the latest instant this recorder has already used. `Date.now` can step
    * backwards (an NTP correction, a resume from sleep); flooring keeps each event's `at` from
    * landing before its predecessor's. The cost is that one gap reads as ~0 when the clock really
    * does move back, which is the honest answer to a clock that lied.
@@ -79,9 +79,9 @@ export class AuthoringSession {
   }
 
   /**
-   * Restores a session interrupted by a reload: the log carries on where it stopped, and the clock
-   * floor rises to its last event, so a clock that came back behind the previous run can't stamp
-   * an event before one already recorded.
+   * Carries on a log a reload interrupted: it continues where it stopped, and the clock floor rises
+   * to its last event, so a clock that came back behind the previous run can't stamp an event
+   * before one already recorded.
    */
   static resume(
     sessionId: string,
@@ -89,11 +89,11 @@ export class AuthoringSession {
     baseContent: string,
     events: AuthoringEvent[],
     now?: () => number,
-  ): AuthoringSession {
-    const session = new AuthoringSession(sessionId, startedAt, baseContent, now)
-    session.recorded.push(...events)
-    session.lastReadAt += events[events.length - 1]?.at ?? 0
-    return session
+  ): TraceRecorder {
+    const recorder = new TraceRecorder(sessionId, startedAt, baseContent, now)
+    recorder.recorded.push(...events)
+    recorder.lastReadAt += events[events.length - 1]?.at ?? 0
+    return recorder
   }
 
   /**

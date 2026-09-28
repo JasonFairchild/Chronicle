@@ -20,24 +20,26 @@ run is two calls. Prefer Read, Grep and Glob to the shell — they never prompt.
 
 ## Other docs — list headings, then read the sections that cover your change
 
-| Doc               | Authority on                            | Read before changing                                                     |
-| ----------------- | --------------------------------------- | ------------------------------------------------------------------------ |
-| ENTRY_MODEL.md    | entries, anchors, versions, connections | `src/types/entry.ts`, `src/domain/`, `src/repositories/`                 |
-| AUTHORING.md      | capture, marks, mark sets, drafts       | `authoringSession`, `marks`, `editor/replay`, `markFrames`, draft stores |
-| TESTING.md        | how tests are written                   | any test                                                                 |
-| PRODUCT.md        | behavior: built, decided, maybe         | anything user-visible                                                    |
-| CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work                                                 |
+| Doc               | Authority on                            | Read before changing                                                  |
+| ----------------- | --------------------------------------- | --------------------------------------------------------------------- |
+| ENTRY_MODEL.md    | entries, anchors, versions, connections | `src/types/entry.ts`, `src/domain/`, `src/repositories/`              |
+| AUTHORING.md      | capture, marks, mark sets, drafts       | `traceRecorder`, `marks`, `editor/replay`, `markFrames`, draft stores |
+| TESTING.md        | how tests are written                   | any test                                                              |
+| PRODUCT.md        | behavior: built, decided, maybe         | anything user-visible                                                 |
+| CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work                                              |
 
 ## Rules
 
 - **Write rule:** INSERT new related Entries; never mutate rows for "edits". Two exceptions, neither
   of them history: draft rows (`draftsStore.ts`) are overwritten as working space, and mark sets
   (`markSetsStore.ts`) may be deleted, as a cache rebuildable from the trace.
-- **No child entry is destructive.** Only a `revision` writes content.
+- **No related entry or connection is destructive.** Only a `revision` writes content.
 - **Sort entries with `compareEntries`, never `created_at` alone** — it ties at millisecond resolution.
 - Tests alongside every feature.
 - Composition API + `<script setup>`; all data access behind the repository layer.
 - No hard-coded colors that block dark mode.
+- **Semantics first.** Native elements before ARIA; reach for a role or `aria-*` only where no
+  element does the job (the editor's `contenteditable` body is the standing example).
 - Small, focused changes I can read and explain.
 - **Comments cite nothing that outlives the session** — no plan, chat, or "Piece N"; cite a
   checked-in doc or nothing. The non-obvious why, stated once, proportional to the code it sits
@@ -63,7 +65,7 @@ run is two calls. Prefer Read, Grep and Glob to the shell — they never prompt.
   Mark-set frame highlights are deliberately off it (AUTHORING.md, "Mark sets").
 - `src/editor/` — schema and the guarded, anchor-aware document commands live only in
   `extensions.ts` and `anchorCommands.ts`; a second definition or a hand-rolled transaction silently
-  breaks "no child entry is destructive" or anchor-mode exclusivity. A component holding an `Editor`
+  breaks "no related entry is destructive" or anchor-mode exclusivity. A component holding an `Editor`
   to mount it or drive TipTap UI (`DocumentEditor.vue`, `AnchorMenu.vue`) is fine. The domain layer
   reads documents as plain JSON, which keeps it node-testable.
 - `src/repositories/index.ts` — the composition root. Four interfaces, each with an in-memory

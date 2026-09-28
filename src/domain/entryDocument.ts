@@ -38,11 +38,11 @@ export const MEDIA_NODE = 'mediaImage'
 export const ANCHOR_MARK = 'anchor'
 
 /**
- * A collapsed anchor: wording a child entry proposes, as a node rather than a mark.
+ * A collapsed anchor: wording a related entry proposes, as a node rather than a mark.
  *
- * Being a node it holds real text that the flattening **must** skip, which is what makes "no child
- * entry is destructive" checkable rather than merely intended: an anchor-mode session leaves
- * `docToPlainText` untouched, so `sameContent(before, after)` holds by construction.
+ * Being a node it holds real text that the flattening **must** skip, which is what makes "no
+ * related entry is destructive" checkable rather than merely intended: an anchor-mode session
+ * leaves `docToPlainText` untouched, so `sameContent(before, after)` holds by construction.
  */
 export const ANCHOR_INSERT_NODE = 'anchorInsert'
 
@@ -206,7 +206,7 @@ function anchorKey(anchors: DocumentAnchor[]): string {
 function nodeText(node: DocNode): string {
   if (node.type === 'text') return node.text ?? ''
   if (node.type === 'hardBreak') return '\n'
-  // Anchor-carried wording belongs to the child entry that proposed it, not to this document's
+  // Anchor-carried wording belongs to the related entry that proposed it, not to this document's
   // author. See ANCHOR_INSERT_NODE above: this line is why an anchor is non-destructive.
   if (node.type === ANCHOR_INSERT_NODE) return ''
 

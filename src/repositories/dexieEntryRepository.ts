@@ -5,7 +5,7 @@ import {
   type CreateEntryInput,
   type Entry,
 } from '@/types/entry'
-import { assertValidRelation } from '@/domain/entryValidation'
+import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
 import { resolveDatabase, type ChronicleDatabase, type StoredEntry } from './chronicleDatabase'
 import type { EntryRepository } from './entryRepository'
 
@@ -29,15 +29,25 @@ export class DexieEntryRepository implements EntryRepository {
 
   async createMany(inputs: CreateEntryInput[]): Promise<Entry[]> {
     // One IndexedDB transaction: either every row commits or the whole write rolls back, which is
-    // what an anchor-mode seal needs (see the interface doc) — a parent revision and the child
-    // referencing its anchors must never land as a partial pair.
+    // what an anchor-mode seal needs (see the interface doc) — a parent revision and the related
+    // entry referencing its anchors must never land as a partial pair.
     return this.db.transaction('rw', this.db.entries, async () => {
       const staged: StoredEntry[] = []
       const loadParent = async (id: string) =>
         staged.find((entry) => entry.id === id) ?? (await this.db.entries.get(id))
+      const latestVersionId = async (entryId: string) =>
+        latestVersionOf(entryId, [
+          ...(await this.db.entries
+            .where('[parent_id+relation_type]')
+            .equals([entryId, 'revision'])
+            .toArray()),
+          ...staged.filter(
+            (entry) => entry.parent_id === entryId && entry.relation_type === 'revision',
+          ),
+        ])
 
       for (const input of inputs) {
-        await assertValidRelation(input, loadParent)
+        await assertValidRelation(input, { loadParent, latestVersionId })
 
         staged.push({
           id: newEntryId(),

@@ -31,7 +31,7 @@ export interface EditorChange extends ChangeSignals {
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import type { Transaction } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
@@ -104,8 +104,8 @@ const props = withDefaults(
      * The document as it stood when this **session** began, in `anchor-mode` only — a resumed
      * draft's `Draft.parent.base_content`. Omitted for a fresh session, where `content` is already
      * that base. Read once, on mount, alongside `content`: it is what tells an anchor this session
-     * placed before a reload apart from one an earlier child sealed, since both are simply *there*
-     * in the document a resumed editor mounts with (AUTHORING.md, "Drafts").
+     * placed before a reload apart from one an earlier related entry sealed, since both are simply
+     * *there* in the document a resumed editor mounts with (AUTHORING.md, "Drafts").
      */
     anchorBaseContent?: string
     /** Id of an element describing how to use this editor, wired to `aria-describedby`. */
@@ -126,6 +126,7 @@ const emit = defineEmits<{
   change: [change: EditorChange]
 }>()
 
+const id = useId()
 const media = useMedia()
 const fileInput = ref<HTMLInputElement | null>(null)
 const attachError = ref<string | null>(null)
@@ -151,9 +152,11 @@ function emittedTitle(): string | null {
 /**
  * The anchors already in the document, moved forward one transaction at a time — text mode only.
  * Reassigned after every edit so the next one resumes tracking from where this one left off,
- * rather than re-walking every step since the session began.
+ * rather than re-walking every step since the session began. Null until the first edit, which
+ * reads them off the document it started from: TipTap's `onCreate` fires a task after mount, and
+ * an edit can land first.
  */
-let liveAnchorSpans: AnchorSpan[] = []
+let liveAnchorSpans: AnchorSpan[] | null = null
 /** Anchors this session has disturbed so far. Sticky: once flagged, an anchor stays flagged. */
 const affectedAnchorIds = new Set<string>()
 
@@ -194,7 +197,7 @@ const liveRegionMessage = ref('')
 
 const editor = useEditor({
   // In anchor mode, `entryExtensions` installs the guard that lets through only the anchor
-  // commands below and undo/redo of them — see `isAnchorEdit`. That is what makes "no child entry
+  // commands below and undo/redo of them — see `isAnchorEdit`. That is what makes "no related entry
   // is destructive" a property of the editor rather than a rule the UI is trusted to follow.
   extensions: entryExtensions({
     anchorMode: props.anchorMode,
@@ -222,7 +225,7 @@ const editor = useEditor({
       // Reopening an anchor this session placed, by clicking its highlighted or struck text — the
       // wording node's own span handles clicks on itself (`AnchorInsertView.vue`); this is only for
       // the marked text beside it, which has no node view of its own to hook a click into. A click
-      // on a sealed anchor from an earlier child falls through to ordinary caret placement instead.
+      // on a sealed anchor from an earlier related entry falls through to ordinary caret placement.
       if (!props.anchorMode) return false
 
       const instance = editor.value
@@ -270,7 +273,7 @@ const editor = useEditor({
 
     if (!props.anchorMode) {
       const mapped = mapAnchorSpans(
-        liveAnchorSpans,
+        liveAnchorSpans ?? anchorSpans(transaction.before),
         applied.flatMap((tr) => tr.mapping.maps),
       )
       for (const span of mapped) if (span.changedInside) affectedAnchorIds.add(span.anchor_id)
@@ -317,7 +320,7 @@ const editor = useEditor({
       is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors && wordingText === null,
       is_anchor_op: !delta.sameAnchors,
       // ProseMirror's own clipboard handling stamps this, so a real paste is told apart from a
-      // drop (`uiEvent: 'drop'`, deliberately not counted — PRODUCT.md §4.9) or from content
+      // drop (`uiEvent: 'drop'`, deliberately not counted — PRODUCT.md §4.10) or from content
       // inserted programmatically (`insertContent`, the image-attach path below), which carries no
       // `uiEvent` at all. A paste into an open wording box is not counted either: it goes through
       // `AnchorInsertView`'s own `<input>`, never through this editor's clipboard handling.
@@ -332,7 +335,6 @@ const editor = useEditor({
     void nextTick(() => media.applyTo(instance.view.dom))
   },
   onCreate: ({ editor: instance }) => {
-    if (!props.anchorMode) liveAnchorSpans = anchorSpans(instance.state.doc)
     void media.applyTo(instance.view.dom)
   },
 })
@@ -482,7 +484,7 @@ interface ToolbarAction {
  * adding to it — and heading levels belong to the text-style select, not this row.
  *
  * Strikethrough is included: it is ordinary formatting here, distinct from an anchor-op strike (a
- * child entry retracting part of its parent) by its own presentation, not by being withheld from
+ * related entry retracting part of its parent) by its own presentation, not by being withheld from
  * the toolbar. See PRODUCT.md, "Making anchor ops unmistakable".
  */
 interface ToolbarGroups {
@@ -701,9 +703,9 @@ defineExpose({
       v-if="withTitle && !disabled && !anchorMode"
       class="border-b border-[var(--color-border)] px-3 py-2"
     >
-      <label :for="`${label}-title`" class="sr-only">Title</label>
+      <label :for="`${id}-title`" class="sr-only">Title</label>
       <input
-        :id="`${label}-title`"
+        :id="`${id}-title`"
         type="text"
         class="w-full rounded bg-transparent text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
         placeholder="Title"
@@ -763,9 +765,9 @@ defineExpose({
 
       <!-- A select, not two more toggle buttons: only one block type applies at a time, and a
            future one (a code block, say) is added here rather than growing the button row. -->
-      <label :for="`${label}-text-style`" class="sr-only">Text style</label>
+      <label :for="`${id}-text-style`" class="sr-only">Text style</label>
       <select
-        :id="`${label}-text-style`"
+        :id="`${id}-text-style`"
         class="rounded border border-transparent bg-transparent px-1.5 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
         :value="textStyleValue"
         :disabled="disabled"
@@ -815,7 +817,7 @@ defineExpose({
           class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
           :class="{ 'bg-[var(--color-surface)] text-[var(--color-accent)]': moreOpen }"
           :aria-expanded="moreOpen"
-          :aria-controls="`${label}-more-menu`"
+          :aria-controls="`${id}-more-menu`"
           aria-label="More formatting actions"
           title="More"
           :disabled="disabled"
@@ -827,7 +829,7 @@ defineExpose({
         </button>
         <div
           v-if="moreOpen"
-          :id="`${label}-more-menu`"
+          :id="`${id}-more-menu`"
           ref="morePanel"
           class="absolute left-0 top-full z-10 mt-1 min-w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md"
           @keydown.escape="closeMore(true)"

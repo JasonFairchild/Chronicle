@@ -3,10 +3,10 @@ import { inject, provide, ref, type InjectionKey, type Ref } from 'vue'
 /**
  * How wide the page's content column may be.
  *
- * Exactly one thing needs this today: an anchor-mode session puts the parent's text and the child's
- * prose side by side, and two columns of a readable width do not fit where every other page wants a
- * single one. The layout owns the value and a view raises it for as long as it needs it, which keeps
- * the decision out of the router and out of a global.
+ * Exactly one thing needs this today: an anchor-mode session puts the parent's text and the related
+ * entry's prose side by side, and two columns of a readable width do not fit where every other page
+ * wants a single one. The layout owns the value and a view raises it for as long as it needs it,
+ * which keeps the decision out of the router and out of a global.
  */
 export type LayoutWidth = 'normal' | 'wide'
 

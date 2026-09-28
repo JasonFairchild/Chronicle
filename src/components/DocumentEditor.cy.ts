@@ -1,6 +1,6 @@
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
-import { AuthoringSession } from '@/domain/authoringSession'
+import { TraceRecorder } from '@/domain/traceRecorder'
 import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
@@ -22,9 +22,9 @@ function lastChange(stub: unknown): EditorChange {
 
 /** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
 function replayAll(base: string, stub: unknown) {
-  const session = new AuthoringSession('session-1', '2026-09-22T10:00:00.000Z', base)
-  for (const [change] of (stub as { args: [EditorChange][] }).args) session.record(change)
-  const trace = session.seal()!
+  const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z', base)
+  for (const [change] of (stub as { args: [EditorChange][] }).args) recorder.record(change)
+  const trace = recorder.seal()!
   return documentsAt(trace, [trace.events.length])
 }
 
@@ -588,7 +588,7 @@ describe('DocumentEditor', () => {
 
     it('does not let wording typed after a sealed anchor absorb it', () => {
       const onChange = cy.stub().as('change')
-      // "sealed-1" stands for an anchor an earlier child already placed and sealed — present in
+      // "sealed-1" stands for an anchor an earlier related entry already placed and sealed — present in
       // the document this editor opened with, not something this session placed.
       mountAnchorEditor(
         onChange,
@@ -761,9 +761,9 @@ describe('DocumentEditor', () => {
         })
       })
 
-      it('does not let a click reopen a sealed anchor from an earlier child', () => {
+      it('does not let a click reopen a sealed anchor from an earlier related entry', () => {
         const onChange = cy.stub().as('change')
-        // "sealed-1" stands for an anchor an earlier child already placed and sealed.
+        // "sealed-1" stands for an anchor an earlier related entry already placed and sealed.
         mountAnchorEditor(
           onChange,
           withAnchorMark('I went to Lake Tahoe with Dad', 'sealed-1', 10, 20),
@@ -830,7 +830,7 @@ describe('DocumentEditor', () => {
           'Donner Lake',
         )
         // The base — the parent as the session first found it, `Draft.parent.base_content` — is
-        // what still tells it apart from an anchor an earlier child sealed.
+        // what still tells it apart from an anchor an earlier related entry sealed.
         expect(anchorsPlacedSince(base, seeded)).to.deep.equal(['resumed-1'])
 
         const onChange = cy.stub().as('change')

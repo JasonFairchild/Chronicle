@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Draft } from '@/types/draft'
+import type { DraftDocumentRole, DraftSnapshot } from '@/types/draft'
 import type { AuthoringEvent, Entry } from '@/types/entry'
 import type { MarkSet } from '@/types/markSet'
 
@@ -16,12 +16,12 @@ export interface StoredEntry extends Entry {
 /**
  * One event of a draft's log, on its own row rather than inside the draft's snapshot row: the log
  * is the one unbounded part of a draft, so it is appended to rather than rewritten on every flush.
- * `document` distinguishes a `new_child` session's two logs (child and parent), which otherwise
- * share nothing but `session_id`.
+ * `document` distinguishes a `new_related` session's two logs, which otherwise share nothing but
+ * `session_id`.
  */
 export interface StoredDraftEvent {
   session_id: string
-  document: 'child' | 'parent'
+  document: DraftDocumentRole
   index: number
   event: AuthoringEvent
 }
@@ -38,8 +38,8 @@ export interface StoredDraftEvent {
  */
 export class ChronicleDatabase extends Dexie {
   entries!: Table<StoredEntry, string>
-  drafts!: Table<Draft, string>
-  draftEvents!: Table<StoredDraftEvent, [string, 'child' | 'parent', number]>
+  drafts!: Table<DraftSnapshot, string>
+  draftEvents!: Table<StoredDraftEvent, [string, DraftDocumentRole, number]>
   markSets!: Table<MarkSet, string>
 
   constructor(name = 'chronicle') {
@@ -64,8 +64,8 @@ export class ChronicleDatabase extends Dexie {
     // The step chain became an event log. `draftSteps` is dropped, not migrated: local drafts are
     // test data until real data has to survive a shape change (CLAUDE.md).
     //
-    // A `drafts` row's `child.events`/`parent.events` are always stored empty and reassembled from
-    // here on read. `session_id` alone is indexed alongside the compound key so a delete or a
+    // A `drafts` row is a snapshot, holding no events; they're reassembled from here on read.
+    // `session_id` alone is indexed alongside the compound key so a delete or a
     // full-log read doesn't need `document` too.
     this.version(4).stores({
       draftSteps: null,

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import DocumentEditor from '@/components/DocumentEditor.vue'
+import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useEntriesStore } from '@/stores/entriesStore'
@@ -59,7 +60,7 @@ onMounted(async () => {
 function pickTarget(): void {
   if (!targetId.value || session.isOpen) return
 
-  session.begin({ kind: 'new_connection', parent_id: props.id, target_id: targetId.value }, {})
+  session.begin({ kind: 'new_connection', parent_id: props.id, target_id: targetId.value })
 }
 
 async function save(): Promise<void> {
@@ -103,6 +104,8 @@ onBeforeUnmount(() => {
         {{ actionError }}
       </p>
 
+      <DraftElsewhereNotice :session="session" />
+
       <p
         v-if="candidates.length === 0"
         class="rounded-xl border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]"
@@ -133,9 +136,11 @@ onBeforeUnmount(() => {
           />
 
           <DocumentEditor
+            :key="session.editorKey"
             label="New connection"
             with-title
             :title="session.title"
+            :content="session.content"
             :disabled="session.saving"
             @change="session.handleChange"
           />

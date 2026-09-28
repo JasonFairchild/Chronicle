@@ -121,7 +121,7 @@ describe('NewConnectionView (browser)', () => {
 
     await vi.waitFor(async () => {
       const [draft] = await drafts.list()
-      expect(draft?.target).toEqual({
+      expect(draft).toMatchObject({
         kind: 'new_connection',
         parent_id: source.id,
         target_id: destination.id,

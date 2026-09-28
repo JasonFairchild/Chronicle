@@ -19,9 +19,9 @@ a one-line change. Both adapters run the same behavioral suite from `entryReposi
 which is what makes that swap trustworthy rather than merely claimed.
 
 Core domain logic lives in `reconstructEntryState`, which folds an entry's version chain to get its
-state at any moment and returns its children and connections as separate collections rather than
-splicing them into the text. Anchor resolution is a second pure module: it locates a child entry's
-references as marks and nodes inside the parent's current document, reading it as `present` or
+state at any moment and returns its related entries and connections as separate collections rather
+than splicing them into the text. Anchor resolution is a second pure module: it locates a related
+entry's references as marks and nodes inside the parent's current document, reading it as `present` or
 `orphaned` rather than vanishing when an edit removes one.
 
 See [ENTRY_MODEL.md](./ENTRY_MODEL.md) for the data model and the reasoning behind it.

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * The wording a child entry proposes at a point in the parent's document, in its own Vue node view
- * so there is one mechanism for typing wording whether it pairs with a highlight, a strike, or
+ * The wording a related entry proposes at a point in the parent's document, in its own Vue node
+ * view so there is one mechanism for typing wording whether it pairs with a highlight, a strike, or
  * stands alone.
  *
  * Committed, it renders the same markup `AnchorInsert.renderHTML` (`extensions.ts`) produces, so the
@@ -15,8 +15,8 @@
  *
  * Closed, an anchor this session may still edit (`isEditableAnchor`) is itself clickable, reopening
  * this same box with its current wording already in the input (PRODUCT.md §4.4). An anchor an
- * earlier child already sealed renders the same markup but is not clickable: only the child that
- * placed one may change it.
+ * earlier related entry already sealed renders the same markup but is not clickable: only the entry
+ * that placed one may change it.
  *
  * `contenteditable="false"` on the wrapper is load-bearing, not decorative: a native `<input>`
  * nested inside an ancestor `contenteditable` region is a known rough edge across browsers — the

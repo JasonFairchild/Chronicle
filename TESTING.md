@@ -70,7 +70,7 @@ Be hardline on these, particularly for new tests.
 Accessibility first, in this order:
 
 1. `getByRole('button', { name: 'Add entry' })`
-2. `getByLabelText('Your note')`
+2. `getByLabelText('Related entry')`
 3. `getByText('Was attached to: “Lake Tahoe”')`
 4. A test id, only when none of the above can express it
 
@@ -122,8 +122,8 @@ merely shortens an assertion does not.
   both runners:
 
   ```ts
-  cy.mount(ChildEntryForm, { props: { quote }, attrs: { onSubmit } })
-  render(ChildEntryForm, { props: { quote }, attrs: { onSubmit } })
+  cy.mount(RelatedEntryForm, { props: { quote }, attrs: { onSubmit } })
+  render(RelatedEntryForm, { props: { quote }, attrs: { onSubmit } })
   ```
 
 - **Swap the repository, don't mock it.** In a `*.cy.ts` or `*.browser.test.ts` spec, point the

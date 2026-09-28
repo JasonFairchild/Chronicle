@@ -2,12 +2,15 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
 import { collectMediaRefs, isEmptyEntry, sameContent, textContent } from '@/domain/entryDocument'
-import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
+import {
+  buildEntryHistory,
+  currentVersionId,
+  reconstructEntryState,
+} from '@/domain/reconstructEntryState'
 import { entryRepository } from '@/repositories'
-import type { Draft } from '@/types/draft'
+import type { DraftSnapshot } from '@/types/draft'
 import {
   createEntryInput,
-  emptyEntryDates,
   versionedFieldsOf,
   type AggregatedEntry,
   type AuthoringTrace,
@@ -17,10 +20,11 @@ import {
   type EntryVersion,
   type NarrativeRelation,
   type RevisionMode,
+  type VersionedFields,
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 
-export interface CreateChildOptions {
+export interface CreateRelatedEntryOptions {
   parentId: string
   relationType: NarrativeRelation
   content: string
@@ -68,12 +72,12 @@ export const useEntriesStore = defineStore('entries', () => {
 
   /**
    * A simple, non-session way to create a root entry from plain text — no draft, no title, no
-   * dates. The real UI always writes through a draft session (`createFromDraft`); this exists for
+   * dates. The real UI always writes through a draft session (`inputsForDraft`); this exists for
    * callers, chiefly tests, that just want an entry to exist.
    */
   async function createTextEntry(content: string): Promise<Entry> {
     const entry = await entryRepository.create(
-      rootInput(requireContent(textContent(content)), null, null, emptyEntryDates()),
+      rootInput(plainFields(requireContent(textContent(content))), null),
     )
 
     await addRoot(entry.id)
@@ -82,18 +86,16 @@ export const useEntriesStore = defineStore('entries', () => {
 
   /**
    * An annotation or an update about the parent at large, with no anchors, from plain text — the
-   * simple counterpart to `createTextEntry` for children. A child that points at a specific passage
-   * goes through an anchor-mode draft instead (`createFromDraft`), since placing an anchor means
-   * revising the parent's own document.
+   * simple counterpart to `createTextEntry` for related entries. One that points at a specific
+   * passage goes through an anchor-mode draft instead (`inputsForDraft`), since placing an anchor
+   * means revising the parent's own document.
    */
-  async function createChildEntry(options: CreateChildOptions): Promise<Entry> {
+  async function createRelatedEntry(options: CreateRelatedEntryOptions): Promise<Entry> {
     return entryRepository.create(
-      childInput(
-        requireContent(textContent(options.content)),
-        null,
+      relatedInput(
+        plainFields(requireContent(textContent(options.content))),
         options.parentId,
         options.relationType,
-        emptyEntryDates(),
         { anchors: [] },
       ),
     )
@@ -101,7 +103,7 @@ export const useEntriesStore = defineStore('entries', () => {
 
   /**
    * A directional edge from plain text — the simple counterpart to `createTextEntry` for
-   * connections. The real UI always writes through `createFromDraft`'s `new_connection` branch,
+   * connections. The real UI always writes through `inputsForDraft`'s `new_connection` branch,
    * which gets the full entry model (title, dates, rich content); this is for tests that just want
    * a connection to exist.
    */
@@ -136,12 +138,15 @@ export const useEntriesStore = defineStore('entries', () => {
 
     const entry = await entryRepository.create(
       revisionInput(
-        current,
-        content,
-        current.title,
+        current.id,
+        {
+          ...versionedFieldsOf(current),
+          content,
+          media_refs: options.mediaRefs ?? collectMediaRefs(content),
+          metadata: options.metadata ?? current.metadata,
+        },
         'direct',
-        options.mediaRefs ?? collectMediaRefs(content),
-        options.metadata ?? current.metadata,
+        currentVersionId(current),
         null,
       ),
     )
@@ -151,147 +156,147 @@ export const useEntriesStore = defineStore('entries', () => {
   }
 
   /**
-   * Turns one sealed draft into one immutable entry. The draft's `target` is the only thing that
-   * decides what kind of entry that is, which is why the drafts list can describe an unsealed
-   * session without opening it.
+   * The entries sealing a draft writes, in order, the one the draft was for last. The draft's
+   * `kind` is the only thing that decides what they are, which is why the drafts list can describe
+   * an unsealed session without opening it. Writing them is the draft repository's `seal`, so the
+   * draft goes in the same transaction.
    *
    * Sealing is where the authoring trace lands, and it lands on whatever was typed: a first draft
    * as much as a later revision, because both are links in the same chain.
    *
-   * `parentTrace` is the parent document's own trace, present only for an anchor-mode `new_child`
-   * draft — see AUTHORING.md, "Drafts". It is a second, independent trace because the parent and
-   * the child are two different documents with two different authoring histories, sealed together.
+   * `parentTrace` is the parent document's own trace, present only for an anchor-mode
+   * `new_related` draft — see AUTHORING.md, "Drafts". It is a second, independent trace because the
+   * two are different documents with different authoring histories, sealed together.
    */
-  async function createFromDraft(
-    draft: Draft,
+  async function inputsForDraft(
+    draft: DraftSnapshot,
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null = null,
-  ): Promise<Entry> {
-    const content = requireContent(draft.child.content, draft.title)
-    const { target } = draft
+  ): Promise<CreateEntryInput[]> {
+    const fields = fieldsFromDraft(draft.entry)
 
-    if (target.kind === 'new_child') {
-      // Read off the two documents rather than a list kept alongside them, so an anchor placed and
-      // then removed before sealing leaves nothing behind to subtract — see `anchorsPlacedSince`.
-      const anchorIds = anchorsPlacedSince(
-        draft.parent?.base_content ?? null,
-        draft.parent?.content ?? null,
-      )
+    switch (draft.kind) {
+      case 'new_related': {
+        // Read off the two documents rather than a list kept alongside them, so an anchor placed
+        // and then removed before sealing leaves nothing behind to subtract — see
+        // `anchorsPlacedSince`.
+        const anchorIds = anchorsPlacedSince(draft.parent.base_content, draft.parent.content)
+        if (anchorIds.length > 0) {
+          return anchoredInputs(draft, fields, anchorIds, trace, parentTrace)
+        }
 
-      if (anchorIds.length === 0) {
-        // Nothing was placed on the parent, so this is a note about the entry at large: one entry,
-        // no revision, exactly like `createChildEntry`. With nothing anchored there is nothing for
+        // Nothing was placed on the parent, so this is about the parent at large: one entry, no
+        // revision, exactly like `createRelatedEntry`. With nothing anchored there is nothing for
         // `relationTypeForAnchors` to read, and its answer for that case is annotation.
-        return entryRepository.create(
-          childInput(content, draft.title, target.parent_id, 'annotation', draft.dates, {
+        return [
+          relatedInput(fields, draft.parent_id, 'annotation', {
             anchors: [],
             authoring_trace: trace,
           }),
-        )
+        ]
       }
 
-      return sealAnchorChild(draft, target.parent_id, content, anchorIds, trace, parentTrace)
-    }
+      case 'revision': {
+        const current = await getAggregatedEntry(draft.parent_id)
+        if (!current) {
+          throw new Error('Cannot revise an entry that does not exist')
+        }
+        if (sameVersion(current, fields)) {
+          throw new Error('No changes to save')
+        }
 
-    if (target.kind === 'revision') {
-      const current = await getAggregatedEntry(target.parent_id)
-      if (!current) {
-        throw new Error('Cannot revise an entry that does not exist')
+        return [
+          revisionInput(draft.parent_id, fields, 'direct', draft.entry.base_version_id, trace),
+        ]
       }
-      if (sameContent(current.content, content) && current.title === draft.title) {
-        throw new Error('No changes to save')
-      }
 
-      const entry = await entryRepository.create(
-        revisionInput(
-          current,
-          content,
-          draft.title,
-          'direct',
-          collectMediaRefs(content),
-          current.metadata,
-          trace,
-        ),
-      )
+      case 'new_connection':
+        return [
+          createEntryInput({
+            ...fields,
+            parent_id: draft.parent_id,
+            target_id: draft.target_id,
+            relation_type: 'connection',
+            authoring_trace: trace,
+          }),
+        ]
 
-      await refreshRoot(target.parent_id)
-      return entry
+      case 'new_root':
+        return [rootInput(fields, trace)]
     }
-
-    if (target.kind === 'new_connection') {
-      // Never a timeline root — a connection is reached through the entries it links, not the
-      // timeline, so there is no `addRoot` here the way there is for `new_root`.
-      return entryRepository.create(
-        createEntryInput({
-          content,
-          title: normalizeTitle(draft.title),
-          parent_id: target.parent_id,
-          target_id: target.target_id,
-          relation_type: 'connection',
-          media_refs: collectMediaRefs(content),
-          authoring_trace: trace,
-          dates: draft.dates,
-        }),
-      )
-    }
-
-    const entry = await entryRepository.create(rootInput(content, draft.title, trace, draft.dates))
-
-    await addRoot(entry.id)
-    return entry
   }
 
   /**
-   * The atomic half of sealing an anchor-mode draft: a parent revision carrying the new anchors,
-   * plus the child referencing them, written together via `createMany` so the pair can never land
-   * half-written (AUTHORING.md, "Drafts").
+   * Whether a draft holds anything worth keeping: words, anchors placed on its parent, or for a
+   * revision, some difference from the version it would follow. A draft let go without being saved
+   * is kept only if it does.
+   */
+  async function draftHoldsWork(draft: DraftSnapshot): Promise<boolean> {
+    const anchored =
+      draft.kind === 'new_related' &&
+      anchorsPlacedSince(draft.parent.base_content, draft.parent.content).length > 0
+    if (isEmptyEntry(draft.entry.content, draft.entry.title)) return anchored
+    if (draft.kind !== 'revision') return true
+
+    const current = await getAggregatedEntry(draft.parent_id)
+    return !current || !sameVersion(current, fieldsFromDraft(draft.entry))
+  }
+
+  /**
+   * An anchor-mode seal: a parent revision carrying the new anchors, plus the related entry
+   * referencing them. Written in one `createMany`, the pair can never land half-written
+   * (AUTHORING.md, "Drafts").
    *
-   * Whether the child reads as an annotation or an update is derived from what was anchored rather
-   * than asked for up front — see `relationTypeForAnchors`. `anchorIds` is likewise derived, by the
+   * Whether it reads as an annotation or an update is derived from what was anchored rather than
+   * asked for up front — see `relationTypeForAnchors`. `anchorIds` is likewise derived, by the
    * caller, from the difference between the draft's base and current parent documents.
    */
-  async function sealAnchorChild(
-    draft: Draft,
-    parentId: string,
-    content: string,
+  async function anchoredInputs(
+    draft: Extract<DraftSnapshot, { kind: 'new_related' }>,
+    fields: VersionedFields,
     anchorIds: string[],
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null,
-  ): Promise<Entry> {
-    const parentContent = draft.parent?.content
-    if (parentContent === undefined) {
-      throw new Error('An anchor-mode draft is missing its parent document')
-    }
+  ): Promise<CreateEntryInput[]> {
+    const parentContent = draft.parent.content
 
-    const current = await getAggregatedEntry(parentId)
+    const current = await getAggregatedEntry(draft.parent_id)
     if (!current) {
       throw new Error('Cannot annotate an entry that does not exist')
     }
 
-    const [, child] = await entryRepository.createMany([
-      // The parent's own title cannot change from here — anchor mode never offers that field — so
-      // it is forwarded unchanged rather than read from the draft.
+    return [
+      // Anchor mode changes nothing about the parent but its document, so every other field is the
+      // current version's. The write refuses it if that isn't the version the draft started from.
       revisionInput(
-        current,
-        parentContent,
-        current.title,
+        current.id,
+        {
+          ...versionedFieldsOf(current),
+          content: parentContent,
+          media_refs: collectMediaRefs(parentContent),
+        },
         'anchor',
-        collectMediaRefs(parentContent),
-        current.metadata,
+        draft.parent.base_version_id,
         parentTrace,
       ),
-      childInput(
-        content,
-        draft.title,
-        parentId,
-        relationTypeForAnchors(anchorIds, parentContent),
-        draft.dates,
-        { anchors: anchorRefsFor(anchorIds, parentContent), authoring_trace: trace },
-      ),
-    ])
+      relatedInput(fields, draft.parent_id, relationTypeForAnchors(anchorIds, parentContent), {
+        anchors: anchorRefsFor(anchorIds, parentContent),
+        authoring_trace: trace,
+      }),
+    ]
+  }
 
-    await refreshRoot(parentId)
-    return child!
+  /**
+   * Brings the timeline up to date with entries just written: a new root joins it, and a revised
+   * root is refreshed. Everything else is reached through an entry already shown.
+   */
+  async function showWritten(written: Entry[]): Promise<void> {
+    for (const entry of written) {
+      if (entry.relation_type === null) await addRoot(entry.id)
+      else if (entry.relation_type === 'revision' && entry.parent_id) {
+        await refreshRoot(entry.parent_id)
+      }
+    }
   }
 
   async function getEntry(id: string): Promise<Entry | null> {
@@ -365,70 +370,64 @@ export const useEntriesStore = defineStore('entries', () => {
     rootEntries.value = [state, ...rootEntries.value]
   }
 
-  function rootInput(
-    content: string,
-    title: string | null,
-    trace: AuthoringTrace | null,
-    dates: EntryDates,
-  ): CreateEntryInput {
-    return createEntryInput({
-      content,
-      title: normalizeTitle(title),
-      media_refs: collectMediaRefs(content),
-      authoring_trace: trace,
-      dates,
-    })
+  function rootInput(fields: VersionedFields, trace: AuthoringTrace | null): CreateEntryInput {
+    return createEntryInput({ ...fields, authoring_trace: trace })
   }
 
-  function childInput(
-    content: string,
-    title: string | null,
+  function relatedInput(
+    fields: VersionedFields,
     parentId: string,
     relationType: NarrativeRelation,
-    dates: EntryDates,
     extra: Partial<CreateEntryInput>,
   ): CreateEntryInput {
     return createEntryInput({
-      content,
-      title: normalizeTitle(title),
+      ...fields,
       parent_id: parentId,
       relation_type: relationType,
-      media_refs: collectMediaRefs(content),
-      dates,
       ...extra,
     })
   }
 
   /**
-   * A revision's `CreateEntryInput`. Shared by `reviseEntry` and the two revision-writing branches
-   * of `createFromDraft` (an ordinary direct revision, and the parent half of an anchor-mode
-   * seal) — the only differences between them are the revision mode and which trace and
-   * media/metadata values the caller has already resolved.
-   *
-   * It takes the current aggregate rather than an id because a version carries the author's dates,
-   * location, medium, and title as well as the document: anything this revision is not changing has
-   * to be written forward onto it, or the fold would read the newest version and find nulls.
+   * A revision's `CreateEntryInput`. `fields` is the whole new version, not only what changed: a
+   * version carries the author's dates, location, medium, and title as well as the document, and
+   * the fold reads the newest one alone, so anything a revision leaves out would read as null.
    */
   function revisionInput(
-    current: AggregatedEntry,
-    content: string,
-    title: string | null,
+    entryId: string,
+    fields: VersionedFields,
     revisionMode: RevisionMode,
-    mediaRefs: string[],
-    metadata: Record<string, unknown>,
+    baseVersionId: string | null,
     trace: AuthoringTrace | null,
   ): CreateEntryInput {
     return createEntryInput({
-      ...versionedFieldsOf(current),
-      content,
-      title: normalizeTitle(title),
-      parent_id: current.id,
+      ...fields,
+      parent_id: entryId,
       relation_type: 'revision',
       revision_mode: revisionMode,
-      media_refs: mediaRefs,
-      metadata,
+      base_version_id: baseVersionId,
       authoring_trace: trace,
     })
+  }
+
+  /**
+   * The version a draft seals into: the fields the writer set beside the document, and the media
+   * the document references. `requireContent` guards it, as it does every write.
+   */
+  function fieldsFromDraft(entry: DraftSnapshot['entry']): VersionedFields {
+    const content = requireContent(entry.content, entry.title)
+
+    return versionedFieldsOf({
+      ...entry,
+      content,
+      title: normalizeTitle(entry.title),
+      media_refs: collectMediaRefs(content),
+    })
+  }
+
+  /** A new entry's version holding `content` alone, for the plain-text creators. */
+  function plainFields(content: string): VersionedFields {
+    return versionedFieldsOf(createEntryInput({ content, media_refs: collectMediaRefs(content) }))
   }
 
   /**
@@ -455,6 +454,24 @@ export const useEntriesStore = defineStore('entries', () => {
     return title?.trim() || null
   }
 
+  /**
+   * Whether a new version would change nothing a version holds. Documents compare by `sameContent`,
+   * so presentation alone isn't a change; `media_refs` follows from the document.
+   */
+  function sameVersion(a: VersionedFields, b: VersionedFields): boolean {
+    const dateKeys = Object.keys(a.dates) as (keyof EntryDates)[]
+
+    return (
+      sameContent(a.content, b.content) &&
+      a.title === b.title &&
+      dateKeys.every((key) => a.dates[key] === b.dates[key]) &&
+      a.location === b.location &&
+      a.original_medium === b.original_medium &&
+      a.original_medium_note === b.original_medium_note &&
+      JSON.stringify(a.metadata) === JSON.stringify(b.metadata)
+    )
+  }
+
   return {
     rootEntries,
     loading,
@@ -462,10 +479,12 @@ export const useEntriesStore = defineStore('entries', () => {
     rootCount,
     loadRootEntries,
     createTextEntry,
-    createChildEntry,
+    createRelatedEntry,
     createConnection,
     reviseEntry,
-    createFromDraft,
+    inputsForDraft,
+    draftHoldsWork,
+    showWritten,
     getEntry,
     getAggregatedEntry,
     getEntryHistory,

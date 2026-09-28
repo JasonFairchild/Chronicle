@@ -22,6 +22,7 @@ function makeEntry(overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>): E
     title: null,
     anchors: [],
     revision_mode: null,
+    base_version_id: null,
     authoring_trace: null,
     media_refs: [],
     metadata: {},
@@ -37,7 +38,7 @@ describe('reconstructEntryState', () => {
     const result = reconstructEntryState('root-1', [root])
 
     expect(docToPlainText(result!.content)).toBe('Original text')
-    expect(result?.children).toEqual([])
+    expect(result?.related_entries).toEqual([])
     expect(result?.connections).toEqual([])
     expect(result?.version).toEqual({
       index: 1,
@@ -68,10 +69,9 @@ describe('reconstructEntryState', () => {
 
     expect(docToPlainText(result!.content)).toBe('Started learning guitar.')
     // Newest first: a reader wants the latest word on what's happened at the top of the list.
-    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'Played a whole song.',
-      'Learned first chord.',
-    ])
+    expect(result?.related_entries.map((related) => docToPlainText(related.entry.content))).toEqual(
+      ['Played a whole song.', 'Learned first chord.'],
+    )
   })
 
   it('keeps annotations out of the parent’s content', () => {
@@ -88,7 +88,7 @@ describe('reconstructEntryState', () => {
 
     expect(docToPlainText(result!.content)).toBe('Original text')
     expect(docToPlainText(result!.content)).not.toContain('Remember this context')
-    expect(result?.children[0]?.relation_type).toBe('annotation')
+    expect(result?.related_entries[0]?.relation_type).toBe('annotation')
   })
 
   it('applies revisions last-wins and reports the version position', () => {
@@ -135,9 +135,9 @@ describe('reconstructEntryState', () => {
     const result = reconstructEntryState('root-1', [root, update, revision])
 
     expect(docToPlainText(result!.content)).toBe('I received the offer')
-    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'Start date is March 3.',
-    ])
+    expect(result?.related_entries.map((related) => docToPlainText(related.entry.content))).toEqual(
+      ['Start date is March 3.'],
+    )
   })
 
   it('carries media through a revision instead of dropping it', () => {
@@ -238,9 +238,9 @@ describe('reconstructEntryState', () => {
       asOf: new Date('2026-01-03T00:00:00.000Z'),
     })
 
-    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'Written the next day',
-    ])
+    expect(result?.related_entries.map((related) => docToPlainText(related.entry.content))).toEqual(
+      ['Written the next day'],
+    )
   })
 
   it('leaves out a connection that had not been made yet at asOf', () => {
@@ -282,14 +282,14 @@ describe('reconstructEntryState', () => {
 
     const entries = [root, child, grandchild]
 
-    expect(reconstructEntryState('root-1', entries, { depth: 1 })?.children[0]?.has_children).toBe(
-      true,
-    )
+    expect(
+      reconstructEntryState('root-1', entries, { depth: 1 })?.related_entries[0]?.has_children,
+    ).toBe(true)
     expect(
       reconstructEntryState('root-1', entries, {
         depth: 1,
         asOf: new Date('2026-01-03T00:00:00.000Z'),
-      })?.children[0]?.has_children,
+      })?.related_entries[0]?.has_children,
     ).toBe(false)
   })
 
@@ -316,14 +316,12 @@ describe('reconstructEntryState', () => {
 
     // The tiebreak still resolves 'aaa' before 'bbb' regardless of insertion order; displayed
     // newest-first, that puts 'Second' on top.
-    expect(forwards?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'Second',
-      'First',
-    ])
-    expect(backwards?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'Second',
-      'First',
-    ])
+    expect(
+      forwards?.related_entries.map((related) => docToPlainText(related.entry.content)),
+    ).toEqual(['Second', 'First'])
+    expect(
+      backwards?.related_entries.map((related) => docToPlainText(related.entry.content)),
+    ).toEqual(['Second', 'First'])
   })
 
   it('surfaces a connection from both endpoints with its direction', () => {
@@ -351,21 +349,21 @@ describe('reconstructEntryState', () => {
     })
   })
 
-  it('lists an entry’s children and connections newest first', () => {
+  it('lists an entry’s related entries and connections newest first', () => {
     const root = makeEntry({ id: 'root-1', content: 'Root' })
     const other = makeEntry({ id: 'other-1', content: 'Other' })
-    const olderChild = makeEntry({
-      id: 'child-1',
+    const olderRelated = makeEntry({
+      id: 'related-1',
       parent_id: 'root-1',
       relation_type: 'update',
-      content: 'Older child',
+      content: 'Older related entry',
       created_at: '2026-01-02T00:00:00.000Z',
     })
-    const newerChild = makeEntry({
-      id: 'child-2',
+    const newerRelated = makeEntry({
+      id: 'related-2',
       parent_id: 'root-1',
       relation_type: 'update',
-      content: 'Newer child',
+      content: 'Newer related entry',
       created_at: '2026-01-03T00:00:00.000Z',
     })
     const olderConnection = makeEntry({
@@ -388,16 +386,15 @@ describe('reconstructEntryState', () => {
     const result = reconstructEntryState('root-1', [
       root,
       other,
-      olderChild,
-      newerChild,
+      olderRelated,
+      newerRelated,
       olderConnection,
       newerConnection,
     ])
 
-    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual([
-      'Newer child',
-      'Older child',
-    ])
+    expect(result?.related_entries.map((related) => docToPlainText(related.entry.content))).toEqual(
+      ['Newer related entry', 'Older related entry'],
+    )
     expect(
       result?.connections.map((connection) => docToPlainText(connection.entry.content)),
     ).toEqual(['Newer connection', 'Older connection'])
@@ -424,9 +421,9 @@ describe('reconstructEntryState', () => {
 
     const entries = [from, to, connection, noteOnConnection]
 
-    expect(reconstructEntryState('entry-a', entries)?.children).toEqual([])
-    expect(reconstructEntryState('entry-b', entries)?.children).toEqual([])
-    expect(reconstructEntryState('connection-1', entries)?.children).toHaveLength(1)
+    expect(reconstructEntryState('entry-a', entries)?.related_entries).toEqual([])
+    expect(reconstructEntryState('entry-b', entries)?.related_entries).toEqual([])
+    expect(reconstructEntryState('connection-1', entries)?.related_entries).toHaveLength(1)
   })
 
   it('signals grandchildren without expanding them past the requested depth', () => {
@@ -448,8 +445,8 @@ describe('reconstructEntryState', () => {
 
     const result = reconstructEntryState('root-1', [root, child, grandchild], { depth: 1 })
 
-    expect(result?.children[0]?.has_children).toBe(true)
-    expect(result?.children[0]?.entry.children).toEqual([])
+    expect(result?.related_entries[0]?.has_children).toBe(true)
+    expect(result?.related_entries[0]?.entry.related_entries).toEqual([])
   })
 
   it('lets a revision rename an entry without losing the name it replaced', () => {
@@ -494,9 +491,11 @@ describe('reconstructEntryState', () => {
 
     const result = reconstructEntryState('entry-a', [first, second])
 
-    expect(result?.children.map((child) => docToPlainText(child.entry.content))).toEqual(['B'])
+    expect(result?.related_entries.map((related) => docToPlainText(related.entry.content))).toEqual(
+      ['B'],
+    )
     // The walk back round to 'entry-a' is dropped rather than expanded a second time.
-    expect(result?.children[0]?.entry.children).toEqual([])
+    expect(result?.related_entries[0]?.entry.related_entries).toEqual([])
   })
 
   it('carries the row’s own relation fields through, for a breadcrumb to read', () => {

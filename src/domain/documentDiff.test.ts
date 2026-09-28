@@ -123,7 +123,7 @@ describe('diffDocuments', () => {
     expect(diffDocuments(plain, bolded)).toEqual([{ kind: 'unchanged', text: 'It rained all day' }])
   })
 
-  it('ignores wording a child entry proposed, which the parent’s author never wrote', () => {
+  it('ignores wording a related entry proposed, which the parent’s author never wrote', () => {
     const annotated = serializeDocument({
       type: 'doc',
       content: [
@@ -144,7 +144,7 @@ describe('diffDocuments', () => {
       ],
     })
 
-    // The anchor mark and its wording are what a child added; the entry still says what it said.
+    // The anchor mark and its wording are what a related entry added; the entry still says what it said.
     expect(diffDocuments(textContent('I went to Lake Tahoe'), annotated)).toEqual([
       { kind: 'unchanged', text: 'I went to Lake Tahoe' },
     ])

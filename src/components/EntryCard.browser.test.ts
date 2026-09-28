@@ -26,7 +26,7 @@ function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEnt
     media_refs: [],
     metadata: {},
     version: { index: 1, total: 1, at: CREATED_AT, revision_id: null },
-    children: [],
+    related_entries: [],
     connections: [],
     ...overrides,
   }

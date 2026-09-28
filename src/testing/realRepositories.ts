@@ -26,7 +26,7 @@ function uniqueName(label: string): string {
 /**
  * The one database entries and drafts share within a test, matching what `repositories/index.ts`
  * does in production. They must share it: sealing an anchor-mode draft is meant to commit a parent
- * revision and its child in a single transaction, and a transaction cannot span two connections.
+ * revision and its related entry in one transaction, and a transaction cannot span two connections.
  * Two databases here would let such a test pass — or fail — for a reason production never sees.
  *
  * Opened on first use, so a spec needing only one of the two still opens only one connection, and

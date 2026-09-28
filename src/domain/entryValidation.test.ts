@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { assertValidRelation } from '@/domain/entryValidation'
+import {
+  assertValidRelation,
+  StaleVersionError,
+  type RelationLookups,
+} from '@/domain/entryValidation'
 import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
 
 function entry(partial: Partial<Entry>): Entry {
@@ -17,6 +21,7 @@ function entry(partial: Partial<Entry>): Entry {
     content: '',
     anchors: [],
     revision_mode: null,
+    base_version_id: null,
     authoring_trace: null,
     media_refs: [],
     metadata: {},
@@ -24,12 +29,12 @@ function entry(partial: Partial<Entry>): Entry {
   }
 }
 
-const noParent = () => undefined
+const nothing: RelationLookups = { loadParent: () => undefined, latestVersionId: (id) => id }
 
 describe('assertValidRelation', () => {
   it('accepts a root entry, which has no relation at all', async () => {
     await expect(
-      assertValidRelation(createEntryInput({ content: 'Root' }), noParent),
+      assertValidRelation(createEntryInput({ content: 'Root' }), nothing),
     ).resolves.toBeUndefined()
   })
 
@@ -37,7 +42,7 @@ describe('assertValidRelation', () => {
     await expect(
       assertValidRelation(
         createEntryInput({ content: 'Orphan', relation_type: 'annotation' }),
-        noParent,
+        nothing,
       ),
     ).rejects.toThrow(/requires a parent_id/)
   })
@@ -46,7 +51,7 @@ describe('assertValidRelation', () => {
     await expect(
       assertValidRelation(
         createEntryInput({ content: 'Half a link', parent_id: 'a', relation_type: 'connection' }),
-        noParent,
+        nothing,
       ),
     ).rejects.toThrow(/requires a target_id/)
   })
@@ -60,7 +65,7 @@ describe('assertValidRelation', () => {
           target_id: 'a',
           relation_type: 'connection',
         }),
-        noParent,
+        nothing,
       ),
     ).rejects.toThrow(/two different entries/)
   })
@@ -74,7 +79,7 @@ describe('assertValidRelation', () => {
           target_id: 'b',
           relation_type: 'annotation',
         }),
-        noParent,
+        nothing,
       ),
     ).rejects.toThrow(/Only connection entries/)
   })
@@ -85,20 +90,53 @@ describe('assertValidRelation', () => {
     await expect(
       assertValidRelation(
         createEntryInput({ content: 'Again', parent_id: 'rev-1', relation_type: 'revision' }),
-        loadParent,
+        { ...nothing, loadParent },
       ),
     ).rejects.toThrow(/cannot revise another revision/)
   })
 
-  it('allows a revision of an ordinary entry', async () => {
+  it('allows a revision of an ordinary entry, written against its latest version', async () => {
     const loadParent = async () => entry({ id: 'root-1' })
 
     await expect(
       assertValidRelation(
-        createEntryInput({ content: 'Reworded', parent_id: 'root-1', relation_type: 'revision' }),
-        loadParent,
+        createEntryInput({
+          content: 'Reworded',
+          parent_id: 'root-1',
+          relation_type: 'revision',
+          base_version_id: 'root-1',
+        }),
+        { ...nothing, loadParent },
       ),
     ).resolves.toBeUndefined()
+  })
+
+  it('refuses a revision written against a version since replaced', async () => {
+    await expect(
+      assertValidRelation(
+        createEntryInput({
+          content: 'Reworded',
+          parent_id: 'root-1',
+          relation_type: 'revision',
+          base_version_id: 'root-1',
+        }),
+        { ...nothing, latestVersionId: () => 'revision-2' },
+      ),
+    ).rejects.toThrow(StaleVersionError)
+  })
+
+  it('refuses a base version on anything that is not a revision', async () => {
+    await expect(
+      assertValidRelation(
+        createEntryInput({
+          content: 'Note',
+          parent_id: 'root-1',
+          relation_type: 'annotation',
+          base_version_id: 'root-1',
+        }),
+        nothing,
+      ),
+    ).rejects.toThrow(/Only revisions/)
   })
 
   it('allows a child whose parent has not arrived yet', async () => {
@@ -109,19 +147,20 @@ describe('assertValidRelation', () => {
           parent_id: 'not-here-yet',
           relation_type: 'annotation',
         }),
-        noParent,
+        nothing,
       ),
     ).resolves.toBeUndefined()
   })
 
-  it('never loads a parent for a rule that does not need one', async () => {
-    const loadParent = vi.fn(noParent)
+  it('never reads anything for a rule that does not need it', async () => {
+    const lookups = { loadParent: vi.fn(nothing.loadParent), latestVersionId: vi.fn((id) => id) }
 
     await assertValidRelation(
       createEntryInput({ content: 'Note', parent_id: 'root-1', relation_type: 'annotation' }),
-      loadParent,
+      lookups,
     )
 
-    expect(loadParent).not.toHaveBeenCalled()
+    expect(lookups.loadParent).not.toHaveBeenCalled()
+    expect(lookups.latestVersionId).not.toHaveBeenCalled()
   })
 })

@@ -43,8 +43,8 @@ transaction meta, and typing inside an open wording box never does — it's typi
 `media_changed` from `!sameMedia`, so attaching and removing both count. A paste into a wording
 box goes through its own `<input>` and sets neither.
 
-One recorder captures every stream: in anchor mode the parent's provisional document and the child's
-prose are two `AuthoringSession` instances. Anchor mode limits what the _editor_ can produce
+One recorder captures every stream: in anchor mode the parent's provisional document and the related
+entry's prose are two `TraceRecorder` instances. Anchor mode limits what the _editor_ can produce
 (ENTRY_MODEL.md, "Two creation experiences, kept separate"), not how it's recorded.
 
 A trace belongs on any typed entry, not only revisions, so a first draft is captured the same way.
@@ -111,53 +111,75 @@ they're derived and deletable, which no entry is.
 
 The draft store is persisted through the same local-first layer as entries, flushing a few hundred
 milliseconds after the first unsaved change, and so at that interval through continuous typing: a
-crash costs well under a second of it. This is autosave and
-unrelated to marks. Its event logs are append-only while the session runs; the only thing that
-disappears is the whole row, deleted after sealing once its contents live in an entry. That makes
-the draft store the write rule's sanctioned exception: working space, not history.
+crash costs well under a second of it. This is autosave and unrelated to marks. Its event logs are
+append-only while the session runs; the only thing that disappears is the whole row, removed when it
+is sealed or discarded. That makes the draft store the write rule's sanctioned exception: working
+space, not history.
 
 **Sealing is an explicit user action**, never an idle timeout. Until then the work is durable,
 recoverable, and absent from timelines, so drafts get their own list; none is stranded invisibly.
 
 ```ts
-interface AuthoringBuffer {
+interface DraftDocument {
+  base_version_id: string | null // the version it started from; null for a new entry
   base_content: string // the document as this session found it; never rewritten
   content: string
   events: AuthoringEvent[]
 }
 
-interface Draft {
+type DraftFields = Omit<VersionedFields, 'content' | 'media_refs'>
+
+type Draft = {
   session_id: string
-  target:
-    | { kind: 'new_root' }
-    | { kind: 'new_child'; parent_id: string } // anchor-mode
-    | { kind: 'new_connection'; parent_id: string; target_id: string }
-    | { kind: 'revision'; parent_id: string } // text-mode
-  started_at: string // shared by child and parent — one session, two documents
+  started_at: string // shared by both documents' traces — one session, two documents
   updated_at: string
-  dates: EntryDates
-  title: string | null
-  child: AuthoringBuffer // the entry this draft is chiefly for
-  parent: (AuthoringBuffer & { title: string | null }) | null
-}
+  entry: DraftDocument & DraftFields // the entry this session produces
+} & (
+  | { kind: 'new_root' }
+  | { kind: 'new_related'; parent_id: string; parent: DraftDocument } // anchor mode
+  | { kind: 'new_connection'; parent_id: string; target_id: string }
+  | { kind: 'revision'; parent_id: string } // text mode
+)
 ```
 
-`new_root`, `new_connection` and `revision` seal into one entry holding `child.content`, with
-`child.base_content` and `.events` as its trace. `new_child` seals into the child alone if nothing
-was anchored, or atomically into a parent revision plus the child if something was, the parent
-buffer becoming the revision's trace. `target` is what lets the drafts list say what each draft is
-attached to.
+`new_root`, `new_connection` and `revision` seal into one entry, the `entry` document becoming its
+trace. `new_related` seals into the related entry, plus a parent revision if anything was anchored,
+the `parent` document becoming that revision's trace. `kind` lets the drafts list say what each
+draft is attached to. A `DraftSnapshot` is a draft without its event logs: what the list reads and a
+draft row stores.
 
-`title` and `dates` sit at the top of `Draft`, not in `AuthoringBuffer`, since only the child's are
-writer-set. `parent.title` is the parent's title when the session began, kept only so a resumed
-session can display it; sealing uses the current aggregate's title instead.
+**The draft carries every versioned field**, and its values are what gets sealed: unset for a new
+entry, copied from the current version for a revision, so whatever the writer leaves alone saves
+unchanged. `media_refs` is derived when sealing, and the parent's title isn't stored, since anchor
+mode never changes it.
 
-**Which anchors this session may still change** is never stored as a list. It is the difference
-between `parent.base_content`, the parent as the session found it, and `parent.content`, the parent
-now: `anchorsPlacedSince(base, current)` (`domain/anchors.ts`) reads it on demand, so an anchor
-placed then undone leaves nothing to subtract. It survives a reload because the base is fixed: the
-reloaded `parent.content` already carries this session's anchors, indistinguishable from sealed ones
-without something older to compare against.
+**Each document records the version it started from**, which sealing copies into the revision it
+writes, refused if stale (ENTRY_MODEL.md, "Version chains"); `base_content` beside it is what
+rebasing a stale draft would need. The parent's pair also says which anchors this session may still
+change, never stored as a list: `anchorsPlacedSince(base, current)` (`domain/anchors.ts`) reads the
+difference on demand, so an anchor placed then undone leaves nothing to subtract, and it survives a
+reload, where `parent.content` alone can't tell this session's anchors from sealed ones.
+
+**A draft that could revise an entry is a claim** — a `revision`, or a `new_related` whose anchors
+revise the parent (`versionsRevisedBy`, `types/draft.ts`) — and the entry offers to resume it rather
+than start another. It is written when the session begins, so another tab sees it before anything is
+typed, and kept while the session is open however empty. Abandoning it removes it only if the stored
+draft holds no work (`draftHoldsWork`), judged on disk because another tab may have written since. A
+tab closed mid-session can't be relied on to finish a delete, so that draft stays; staleness is left
+to the refused save.
+
+**Sealing is one transaction.** `DraftRepository.seal` removes the draft and writes its entries
+together, so a crash can't leave a draft whose entries already exist, to be saved twice. The removal
+goes first, so a refused revision rolls it back too.
+
+**One draft, many tabs.** Disk is authoritative: resuming reads the stored draft, and a released
+session is dropped from memory once flushed. A tab being left flushes at once; a tab being returned
+to (visibility or focus, wired in `App.vue`) reloads each open draft whose stored `updated_at` isn't
+the one it last read or wrote, and closes one sealed or discarded elsewhere, saying so. Event rows
+are added, never put, so two tabs writing at once can't interleave one log: an append at an index
+already stored is a `DraftConflictError`, the whole save rolls back, and the losing tab keeps the
+other's version and shows its own text to copy. The gap — a title- or dates-only write from a tab
+not yet checked — needs focus, which checks first.
 
 ## Considered and rejected
 

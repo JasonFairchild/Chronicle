@@ -55,6 +55,7 @@ export function runEntryRepositoryContract(
           content: 'Reworded root',
           parent_id: parent.id,
           relation_type: 'revision',
+          base_version_id: parent.id,
         }),
       )
 
@@ -69,15 +70,53 @@ export function runEntryRepositoryContract(
 
     it('returns revisions oldest first, so the version chain folds in order', async () => {
       const parent = await repository.create(createEntryInput({ content: 'Root' }))
+      let base = parent.id
       for (const content of ['Second', 'Third', 'Fourth']) {
-        await repository.create(
-          createEntryInput({ content, parent_id: parent.id, relation_type: 'revision' }),
+        const revision = await repository.create(
+          createEntryInput({
+            content,
+            parent_id: parent.id,
+            relation_type: 'revision',
+            base_version_id: base,
+          }),
         )
+        base = revision.id
       }
 
       const revisions = await repository.listRevisions(parent.id)
 
       expect(revisions.map((entry) => entry.content)).toEqual(['Second', 'Third', 'Fourth'])
+    })
+
+    it('refuses a revision of a version that is no longer the latest, so versions never branch', async () => {
+      const root = await repository.create(createEntryInput({ content: 'One' }))
+      const revise = (content: string) =>
+        repository.create(
+          createEntryInput({
+            content,
+            parent_id: root.id,
+            relation_type: 'revision',
+            base_version_id: root.id,
+          }),
+        )
+
+      await revise('Two')
+      // Written against version one too, as a second tab would have been.
+      await expect(revise('Also two')).rejects.toThrow('was revised after')
+
+      const revisions = await repository.listRevisions(root.id)
+      expect(revisions.map((entry) => entry.content)).toEqual(['Two'])
+      expect(revisions[0]?.base_version_id).toBe(root.id)
+    })
+
+    it('refuses a revision that names no version it replaces', async () => {
+      const root = await repository.create(createEntryInput({ content: 'One' }))
+
+      await expect(
+        repository.create(
+          createEntryInput({ content: 'Two', parent_id: root.id, relation_type: 'revision' }),
+        ),
+      ).rejects.toThrow('must name the version it replaces')
     })
 
     it('stores a copy, so mutating the input afterwards cannot rewrite history', async () => {
@@ -177,7 +216,12 @@ export function runEntryRepositoryContract(
     it('refuses a revision of a revision', async () => {
       const root = await repository.create(createEntryInput({ content: 'Root' }))
       const revision = await repository.create(
-        createEntryInput({ content: 'Reworded', parent_id: root.id, relation_type: 'revision' }),
+        createEntryInput({
+          content: 'Reworded',
+          parent_id: root.id,
+          relation_type: 'revision',
+          base_version_id: root.id,
+        }),
       )
 
       await expect(
@@ -186,6 +230,7 @@ export function runEntryRepositoryContract(
             content: 'Reworded again',
             parent_id: revision.id,
             relation_type: 'revision',
+            base_version_id: revision.id,
           }),
         ),
       ).rejects.toThrow(/cannot revise another revision/)

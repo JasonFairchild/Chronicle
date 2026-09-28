@@ -4,8 +4,8 @@ import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 
 /**
- * The anchor-mode composer: the parent gaining provisional anchors on the left, the child entry's
- * own prose on the right, sealing atomically together (AUTHORING.md, "Drafts").
+ * The anchor-mode composer: the parent gaining provisional anchors on the left, the related
+ * entry's own prose on the right, sealing atomically together (AUTHORING.md, "Drafts").
  *
  * Shared rather than owned by `EntryDetailView`, because a session left as a draft has to come back
  * exactly as it was — and the only place to resume one from is `DraftsView`. Two copies of this
@@ -36,6 +36,7 @@ defineEmits<{
       </p>
 
       <DocumentEditor
+        :key="session.editorKey"
         label="Entry being annotated"
         anchor-mode
         with-title
@@ -62,13 +63,18 @@ defineEmits<{
       />
 
       <DocumentEditor
-        label="Your note"
+        :key="session.editorKey"
+        label="Related entry"
         with-title
         :title="session.title"
         :content="session.content"
         :disabled="session.saving"
         @change="session.handleChange"
       />
+
+      <p v-if="session.staleNotice" class="mt-2 text-sm text-[var(--color-error)]" role="status">
+        {{ session.staleNotice }}
+      </p>
 
       <div class="mt-3 flex justify-end gap-2">
         <button
@@ -80,7 +86,7 @@ defineEmits<{
           Discard
         </button>
         <!--
-          `canSave` rather than a check of its own: a note that says nothing is not an entry, and
+          `canSave` rather than a check of its own: an entry that says nothing is not one, and
           asking the same question the seal will ask is what keeps the button from offering a save
           the store is bound to refuse.
         -->

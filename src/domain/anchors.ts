@@ -3,8 +3,8 @@
  *
  * An anchor's position is a fact about the **parent's** document, so that is where it is stored: a
  * span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is an
- * `anchorInsert` node carrying `{ anchorId, text }`. A child entry keeps only ids and the wording
- * each one covered when it was sealed (ENTRY_MODEL.md, "Child entries and anchors").
+ * `anchorInsert` node carrying `{ anchorId, text }`. A related entry keeps only ids and the wording
+ * each one covered when it was sealed (ENTRY_MODEL.md, "Related entries and anchors").
  *
  * So there is no stored offset to reinterpret and nothing to resolve positionally: the editor
  * maintains anchor positions the way it maintains everything else, and this module only reads the
@@ -100,9 +100,9 @@ export function anchorIdsIn(content: string | EntryDocument): string[] {
  * immediately before it — `$from.nodeBefore`'s marks, in `anchorCommands.ts`'s terms — or null when
  * there is nothing to pair with.
  *
- * Only an anchor placed **this session** may absorb it: a sealed anchor from an earlier child sits in
- * the same document, and pairing with one would attach this entry's wording to another entry's
- * anchor. `sealed` is that earlier child's ids — the ones the session's base document already
+ * Only an anchor placed **this session** may absorb it: a sealed anchor from an earlier related
+ * entry sits in the same document, and pairing with one would attach this entry's wording to
+ * another entry's anchor. `sealed` is those earlier ids — the ones the session's base document already
  * carried, computed once when the editor mounts — which is what makes this pure and node-testable,
  * and what makes highlight-plus-inline-wording work for free.
  */
@@ -143,20 +143,18 @@ export function sessionAnchorIds(
  * A session's base is persisted (`Draft.parent.base_content`) rather than inferred from whatever the
  * editor happened to mount with, which is what makes this survive a resume: a reload reseeds the
  * editor from the draft's *current* parent document, where an anchor this session placed before the
- * reload is indistinguishable from one an earlier child sealed. Against the base it stays legible.
+ * reload is indistinguishable from one an earlier related entry sealed. Against the base it stays
+ * legible.
  */
 export function anchorsPlacedSince(
-  base: string | EntryDocument | null,
-  current: string | EntryDocument | null,
+  base: string | EntryDocument,
+  current: string | EntryDocument,
 ): string[] {
-  // Nullable because a non-`new_child` target's `Draft.parent` is null — no parent document at all
-  // means no anchors placed on one, rather than an error worth raising.
-  if (!current) return []
-  return sessionAnchorIds(new Set(base ? anchorIdsIn(base) : []), current)
+  return sessionAnchorIds(new Set(anchorIdsIn(base)), current)
 }
 
 /**
- * What a child entry stores for the anchors it just placed: the ids, plus the wording each one
+ * What a related entry stores for the anchors it just placed: the ids, plus the wording each one
  * covers at this moment.
  */
 export function anchorRefsFor(anchorIds: string[], content: string | EntryDocument): AnchorRef[] {
@@ -167,11 +165,11 @@ export function anchorRefsFor(anchorIds: string[], content: string | EntryDocume
 }
 
 /**
- * Whether a child reads as an annotation or an update, judged by what it did to its parent rather
- * than asked of the writer. Leaving the parent's wording alone and saying something about it claims
- * nothing changed — an annotation. Striking wording or proposing different wording reports a
- * correction, which is what an update is. A note with no anchors at all has nothing to go on and is
- * an annotation, the quieter of the two claims.
+ * Whether a related entry reads as an annotation or an update, judged by what it did to its parent
+ * rather than asked of the writer. Leaving the parent's wording alone and saying something about it
+ * claims nothing changed — an annotation. Striking wording or proposing different wording reports a
+ * correction, which is what an update is. One with no anchors at all has nothing to go on and is an
+ * annotation, the quieter of the two claims.
  */
 export function relationTypeForAnchors(
   anchorIds: string[],
@@ -198,7 +196,7 @@ function placedAnchors(anchorIds: string[], content: string | EntryDocument): Do
 }
 
 /**
- * Reads a child's anchors out of the parent's document as it stands now.
+ * Reads a related entry's anchors out of the parent's document as it stands now.
  *
  * An anchor whose mark a later revision deleted is not dropped: it comes back orphaned, carrying
  * the quote recorded at seal time, so breakage renders as legible history rather than silent loss.
@@ -265,7 +263,7 @@ export function innermostAnchorAt<T extends AnchorRange>(ranges: T[], pos: numbe
 /**
  * The first of `ranges` that overlaps `[from, to)` at all, or null when none does — what keeps
  * anchors exclusive: `markAnchor` (`editor/anchorCommands.ts`) refuses to place a new one wherever
- * this finds a hit, whether that range is this session's own or an earlier child's already-sealed
+ * this finds a hit, whether that range is this session's own or an earlier related entry's sealed
  * one. Two ranges that only touch, sharing an endpoint with no space between, are not overlapping.
  */
 export function anchorRangeOverlapping<T extends AnchorRange>(

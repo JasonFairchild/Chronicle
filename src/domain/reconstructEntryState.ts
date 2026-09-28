@@ -4,7 +4,7 @@ import {
   type AggregatedEntry,
   type Entry,
   type EntryVersion,
-  type ResolvedChild,
+  type ResolvedRelatedEntry,
   type ResolvedConnection,
 } from '@/types/entry'
 import { resolveAnchors } from './anchors'
@@ -35,7 +35,7 @@ interface Walk {
  * The ordered version chain for one entry: its original content first, then each revision.
  *
  * Only revisions write content. Annotations, updates, and connections never do, which is what keeps
- * a single fold coherent and lets a revision be applied without erasing a narrative child.
+ * a single fold coherent and lets a revision be applied without erasing a related entry.
  */
 export function buildEntryHistory(
   entryId: string,
@@ -51,8 +51,8 @@ export function buildEntryHistory(
  *
  * The pure core of the model: given the rows, it answers both "what does this entry say now" and
  * "what did it say at time T" with the same walk, which is what keeps historical reconstruction
- * from needing machinery of its own. Children are exposed as collections, never concatenated into
- * the parent's text — concatenating would make anchoring impossible and `content` untrue.
+ * from needing machinery of its own. Related entries are exposed as collections, never concatenated
+ * into the parent's text — concatenating would make anchoring impossible and `content` untrue.
  */
 export function reconstructEntryState(
   entryId: string,
@@ -66,6 +66,14 @@ export function reconstructEntryState(
   }
 
   return aggregate(entryId, walk, options.depth ?? DEFAULT_DEPTH)
+}
+
+/**
+ * The id of the row an entry's current version came from: its own for version one, the revision's
+ * after that. What a draft records as the version it started from.
+ */
+export function currentVersionId(entry: AggregatedEntry): string {
+  return entry.version.revision_id ?? entry.id
 }
 
 function buildIndex(entries: Entry[]): EntryIndex {
@@ -142,7 +150,7 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
 
   walk.seen.add(entryId)
 
-  const children = depth > 0 ? resolveChildren(descendants, current, walk, depth) : []
+  const relatedEntries = depth > 0 ? resolveRelatedEntries(descendants, current, walk, depth) : []
   const connections = depth > 0 ? resolveConnections(entryId, descendants, walk, depth) : []
 
   walk.seen.delete(entryId)
@@ -165,18 +173,18 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
       at: current.at,
       revision_id: current.revision_id,
     },
-    children,
+    related_entries: relatedEntries,
     connections,
   }
 }
 
-function resolveChildren(
+function resolveRelatedEntries(
   descendants: Entry[],
   current: EntryVersion,
   walk: Walk,
   depth: number,
-): ResolvedChild[] {
-  const resolved: ResolvedChild[] = []
+): ResolvedRelatedEntry[] {
+  const resolved: ResolvedRelatedEntry[] = []
 
   for (const child of descendants) {
     if (child.relation_type !== 'annotation' && child.relation_type !== 'update') continue
@@ -229,8 +237,9 @@ function resolveConnections(
     resolved.push({ entry, other_id: otherId, direction })
   }
 
-  // Same reasoning as `resolveChildren`: the merge above has to run oldest-first to break ties the
-  // same way `compareEntries` does everywhere else, but a reader wants the newest connection first.
+  // Same reasoning as `resolveRelatedEntries`: the merge above has to run oldest-first to break ties
+  // the same way `compareEntries` does everywhere else, but a reader wants the newest connection
+  // first.
   return resolved.reverse()
 }
 

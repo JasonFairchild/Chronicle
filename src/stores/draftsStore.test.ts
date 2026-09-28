@@ -13,7 +13,14 @@ import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { createEntryInput, emptyEntryDates } from '@/types/entry'
+import { makeDraft, parentDocument } from '@/testing/draftFixtures'
+import { createEntryInput, emptyEntryDates, type AggregatedEntry } from '@/types/entry'
+
+/** An entry already on record, as a session opened against it would find it. */
+async function existingEntry(text: string): Promise<AggregatedEntry> {
+  const created = await entryRepository.create(createEntryInput({ content: textContent(text) }))
+  return (await useEntriesStore().getAggregatedEntry(created.id))!
+}
 
 describe('useDraftsStore', () => {
   beforeEach(() => {
@@ -21,8 +28,9 @@ describe('useDraftsStore', () => {
     // Fresh in-memory adapters per test. The Dexie ones get their own persistence proof in
     // dexieDraftRepository.browser.test.ts; the store only needs to prove it talks to whatever
     // the composition root points at.
-    setEntryRepository(new InMemoryEntryRepository())
-    setDraftRepository(new InMemoryDraftRepository())
+    const entries = new InMemoryEntryRepository()
+    setEntryRepository(entries)
+    setDraftRepository(new InMemoryDraftRepository(entries))
   })
 
   afterEach(() => {
@@ -61,8 +69,8 @@ describe('useDraftsStore', () => {
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(docToPlainText(flushed!.child.content)).toBe('It rained all day.')
-    expect(flushed?.child.events).toHaveLength(3)
+    expect(docToPlainText(flushed!.entry.content)).toBe('It rained all day.')
+    expect(flushed?.entry.events).toHaveLength(3)
   })
 
   it('moves the snapshot but not the trace for a change that produced no steps', async () => {
@@ -85,9 +93,9 @@ describe('useDraftsStore', () => {
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(flushed?.child.content).toBe(textContent('We drove up on Friday'))
-    expect(flushed?.title).toBe('Lake Tahoe')
-    expect(flushed?.child.events).toHaveLength(1)
+    expect(flushed?.entry.content).toBe(textContent('We drove up on Friday'))
+    expect(flushed?.entry.title).toBe('Lake Tahoe')
+    expect(flushed?.entry.events).toHaveLength(1)
   })
 
   it('leaves a snapshot pending when its write fails, rather than retiring it unwritten', async () => {
@@ -113,7 +121,7 @@ describe('useDraftsStore', () => {
     // the failed attempt as written would have retired these words unsaved.
     await store.abandonDraft(sessionId)
 
-    expect(docToPlainText((await draftRepository.getById(sessionId))!.child.content)).toBe(
+    expect(docToPlainText((await draftRepository.getById(sessionId))!.entry.content)).toBe(
       'It rained all day.',
     )
   })
@@ -135,7 +143,7 @@ describe('useDraftsStore', () => {
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(flushed?.child.events.map((event) => event.kind)).toEqual(['edit', 'manual'])
+    expect(flushed?.entry.events.map((event) => event.kind)).toEqual(['edit', 'manual'])
   })
 
   it('keeps the dates alongside the words, so a reload loses neither', async () => {
@@ -154,7 +162,7 @@ describe('useDraftsStore', () => {
     await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
     const flushed = await draftRepository.getById(sessionId)
-    expect(flushed?.dates).toEqual({
+    expect(flushed?.entry.dates).toEqual({
       recorded_at: '1994-06-12',
       recorded_time_note: 'evening',
       occurred_at: '1994-06-11',
@@ -185,17 +193,12 @@ describe('useDraftsStore', () => {
     expect(store.drafts).toEqual([])
   })
 
-  it('seals an anchor-mode draft as a parent revision plus a child referencing its anchor', async () => {
+  it('seals an anchor-mode draft as a parent revision plus a related entry referencing its anchor', async () => {
     const store = useDraftsStore()
     const parentContent = 'The meeting went badly'
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent(parentContent) }),
-    )
+    const parent = await existingEntry(parentContent)
 
-    const sessionId = store.beginDraft(
-      { kind: 'new_child', parent_id: parent.id },
-      { parentContent: textContent(parentContent) },
-    )
+    const sessionId = store.beginDraft({ kind: 'new_related', parent })
     const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
     store.recordParentChange(sessionId, {
       content: markedParentContent,
@@ -207,13 +210,13 @@ describe('useDraftsStore', () => {
     })
     const sealed = await store.sealDraft(sessionId)
 
-    const child = await entryRepository.getById(sealed.id)
-    expect(child?.parent_id).toBe(parent.id)
-    expect(child?.relation_type).toBe('annotation')
-    expect(child?.anchors).toEqual([{ anchor_id: 'anchor-1', quote: 'meeting' }])
+    const related = await entryRepository.getById(sealed.id)
+    expect(related?.parent_id).toBe(parent.id)
+    expect(related?.relation_type).toBe('annotation')
+    expect(related?.anchors).toEqual([{ anchor_id: 'anchor-1', quote: 'meeting' }])
 
     // The parent gained a revision carrying the anchor, rather than the anchor sitting only on the
-    // child: an anchor's position is a fact about the parent's document (ENTRY_MODEL.md, "Child
+    // child: an anchor's position is a fact about the parent's document (ENTRY_MODEL.md, "Related
     // entries and anchors").
     const revisions = await entryRepository.listRevisions(parent.id)
     expect(revisions).toHaveLength(1)
@@ -221,21 +224,16 @@ describe('useDraftsStore', () => {
     expect(revisions[0]?.content).toBe(markedParentContent)
   })
 
-  it('records an anchor op into the parent stream, the same way the child stream would', async () => {
+  it('records an anchor op into the parent stream, the same way the entry’s own stream would', async () => {
     // One authoring pipeline, not two (AUTHORING.md, "Authoring capture"): anchor mode limits
     // what the editor can produce, not how a session records it, so `recordParentChange` and
-    // `recordChange` both reach the same `AuthoringSession.record`, and the parent's own trace
+    // `recordChange` both reach the same `TraceRecorder.record`, and the parent's own trace
     // starts from the parent as the session found it.
     const store = useDraftsStore()
     const parentContent = 'The meeting went badly'
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent(parentContent) }),
-    )
+    const parent = await existingEntry(parentContent)
 
-    const sessionId = store.beginDraft(
-      { kind: 'new_child', parent_id: parent.id },
-      { parentContent: textContent(parentContent) },
-    )
+    const sessionId = store.beginDraft({ kind: 'new_related', parent })
     store.recordParentChange(sessionId, {
       content: withAnchorMark(parentContent, 'anchor-1', 4, 11),
       steps: [{ stepType: 'addMark' }],
@@ -257,30 +255,22 @@ describe('useDraftsStore', () => {
   it('carries the parent’s own log through a resume', async () => {
     const store = useDraftsStore()
     const parentContent = 'The meeting went badly'
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent(parentContent) }),
-    )
+    const parent = await existingEntry(parentContent)
     const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
 
     await draftRepository.save(
-      {
-        session_id: 'interrupted-anchor',
-        target: { kind: 'new_child', parent_id: parent.id },
-        started_at: '2026-09-05T10:00:00.000Z',
-        updated_at: '2026-09-05T10:00:02.000Z',
-        dates: emptyEntryDates(),
-        title: null,
-        child: { base_content: '', content: '', events: [] },
-        parent: {
-          base_content: textContent(parentContent),
-          content: markedParentContent,
-          title: null,
-          events: [
+      makeDraft(
+        'interrupted-anchor',
+        {},
+        {
+          kind: 'new_related',
+          parent_id: parent.id,
+          parent: parentDocument(parent.id, textContent(parentContent), markedParentContent, [
             { kind: 'edit', at: 1_000, steps: [{ stepType: 'addMark' }], is_anchor_op: true },
-          ],
+          ]),
         },
-      },
-      { child: 0, parent: 0 },
+      ),
+      { entry: 0, parent: 0 },
     )
 
     await store.resumeDraft('interrupted-anchor')
@@ -303,14 +293,9 @@ describe('useDraftsStore', () => {
   it('records nothing into the parent stream for a change with no steps', async () => {
     const store = useDraftsStore()
     const parentContent = 'The meeting went badly'
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent(parentContent) }),
-    )
+    const parent = await existingEntry(parentContent)
 
-    const sessionId = store.beginDraft(
-      { kind: 'new_child', parent_id: parent.id },
-      { parentContent: textContent(parentContent) },
-    )
+    const sessionId = store.beginDraft({ kind: 'new_related', parent })
     // A stray update with nothing on the transaction — no step for the log to append.
     store.recordParentChange(sessionId, { content: textContent(parentContent), steps: [] })
     store.recordChange(sessionId, {
@@ -319,15 +304,17 @@ describe('useDraftsStore', () => {
     })
     await store.flush(sessionId)
 
-    expect(store.currentDraft(sessionId)?.parent?.events).toEqual([])
+    const current = store.currentDraft(sessionId)
+    if (current?.kind !== 'new_related') throw new Error('Expected a related-entry draft')
+    expect(current.parent.events).toEqual([])
   })
 
   it('seals a revision draft as a new version rather than touching the entry it edits', async () => {
     const store = useDraftsStore()
     const entries = useEntriesStore()
-    const original = await entries.createTextEntry('I recieved the offer')
+    const original = await existingEntry('I recieved the offer')
 
-    const sessionId = store.beginDraft({ kind: 'revision', parent_id: original.id })
+    const sessionId = store.beginDraft({ kind: 'revision', parent: original })
     store.recordChange(sessionId, {
       content: textContent('I received the offer'),
       steps: [{ stepType: 'replace' }],
@@ -342,27 +329,71 @@ describe('useDraftsStore', () => {
     )
   })
 
+  it('refuses the second of two revision drafts opened on one version, and keeps it', async () => {
+    const store = useDraftsStore()
+    const entries = useEntriesStore()
+    const original = await existingEntry('I recieved the offer')
+
+    const first = store.beginDraft({ kind: 'revision', parent: original })
+    const second = store.beginDraft({ kind: 'revision', parent: original })
+    store.recordChange(first, {
+      content: textContent('I received the offer'),
+      steps: [{ stepType: 'replace' }],
+    })
+    store.recordChange(second, {
+      content: textContent('I got the offer'),
+      steps: [{ stepType: 'replace' }],
+    })
+
+    await store.sealDraft(first)
+    // Sealing this too would make it version three, silently undoing the first draft's fix.
+    await expect(store.sealDraft(second)).rejects.toThrow('was revised after')
+
+    const aggregated = await entries.getAggregatedEntry(original.id)
+    expect(aggregated?.version.total).toBe(2)
+    expect(docToPlainText(aggregated!.content)).toBe('I received the offer')
+    expect(docToPlainText(store.currentDraft(second)!.entry.content)).toBe('I got the offer')
+  })
+
+  it('seals the dates a revision draft carries, starting from the version it revises', async () => {
+    const store = useDraftsStore()
+    const entries = useEntriesStore()
+    const created = await entryRepository.create(
+      createEntryInput({
+        content: textContent('From the green notebook'),
+        title: 'Notebook',
+        location: 'home',
+        dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
+      }),
+    )
+
+    const sessionId = store.beginDraft({
+      kind: 'revision',
+      parent: (await entries.getAggregatedEntry(created.id))!,
+    })
+    // Only the date moves: a correction with the words left alone is still a revision.
+    store.recordDates(sessionId, { ...emptyEntryDates(), occurred_at: '1994-06-12' })
+    await store.sealDraft(sessionId)
+
+    const aggregated = await entries.getAggregatedEntry(created.id)
+    expect(aggregated?.version.total).toBe(2)
+    expect(aggregated?.dates.occurred_at).toBe('1994-06-12')
+    // Everything left untouched came along from the version the draft started from.
+    expect(aggregated?.title).toBe('Notebook')
+    expect(aggregated?.location).toBe('home')
+  })
+
   it('resumes a draft left behind by a reload with its history intact', async () => {
     const store = useDraftsStore()
     await draftRepository.save(
-      {
-        session_id: 'interrupted',
-        target: { kind: 'new_root' },
-        started_at: '2026-09-05T10:00:00.000Z',
-        updated_at: '2026-09-05T10:00:02.000Z',
-        dates: emptyEntryDates(),
-        title: null,
-        child: {
-          base_content: '',
-          content: textContent('Half a thought'),
-          events: [
-            { kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] },
-            { kind: 'manual', at: 1_500 },
-          ],
-        },
-        parent: null,
-      },
-      { child: 0, parent: 0 },
+      makeDraft('interrupted', {
+        content: textContent('Half a thought'),
+        events: [
+          { kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] },
+          { kind: 'manual', at: 1_500 },
+        ],
+      }),
+      { entry: 0, parent: 0 },
     )
 
     const resumed = await store.resumeDraft('interrupted')
@@ -372,7 +403,7 @@ describe('useDraftsStore', () => {
     })
     const sealed = await store.sealDraft('interrupted')
 
-    expect(docToPlainText(resumed!.child.content)).toBe('Half a thought')
+    expect(docToPlainText(resumed!.entry.content)).toBe('Half a thought')
     const trace = (await useEntriesStore().getEntry(sealed.id))?.authoring_trace
     expect(trace?.started_at).toBe('2026-09-05T10:00:00.000Z')
     expect(trace?.events.map((event) => event.kind)).toEqual(['edit', 'manual', 'edit'])
@@ -390,7 +421,7 @@ describe('useDraftsStore', () => {
 
     await store.loadDrafts()
 
-    expect(store.drafts.map((draft) => docToPlainText(draft.child.content))).toEqual([
+    expect(store.drafts.map((draft) => docToPlainText(draft.entry.content))).toEqual([
       'Newer',
       'Older',
     ])
@@ -405,7 +436,7 @@ describe('useDraftsStore', () => {
     expect(store.currentDraft(sessionId)).toBeNull()
   })
 
-  it('flushes and keeps a session that was actually typed into when abandoned', async () => {
+  it('flushes a session that was actually typed into when abandoned, and lets it go', async () => {
     const store = useDraftsStore()
     const sessionId = store.beginDraft({ kind: 'new_root' })
     store.recordChange(sessionId, {
@@ -415,8 +446,245 @@ describe('useDraftsStore', () => {
 
     await store.abandonDraft(sessionId)
 
-    expect(docToPlainText(store.currentDraft(sessionId)!.child.content)).toBe('Half a thought')
-    expect(await draftRepository.getById(sessionId)).not.toBeNull()
+    expect(store.currentDraft(sessionId)).toBeNull()
+    const stored = await draftRepository.getById(sessionId)
+    expect(docToPlainText(stored!.entry.content)).toBe('Half a thought')
+  })
+
+  it('resumes what is on disk, not what this tab held when it last let the draft go', async () => {
+    const store = useDraftsStore()
+    const sessionId = store.beginDraft({ kind: 'new_root' })
+    store.recordChange(sessionId, {
+      content: textContent('Half a thought'),
+      steps: [{ stepType: 'replace' }],
+    })
+    await store.abandonDraft(sessionId)
+
+    // Another tab picks the draft up and carries on with it.
+    const stored = (await draftRepository.getById(sessionId))!
+    await draftRepository.save(
+      {
+        ...stored,
+        entry: {
+          ...stored.entry,
+          content: textContent('Half a thought, finished elsewhere'),
+          events: [...stored.entry.events, { kind: 'edit', at: 5_000, steps: [{ n: 2 }] }],
+        },
+      },
+      { entry: stored.entry.events.length, parent: 0 },
+    )
+
+    const resumed = await store.resumeDraft(sessionId)
+
+    expect(docToPlainText(resumed!.entry.content)).toBe('Half a thought, finished elsewhere')
+    expect(resumed?.entry.events).toHaveLength(2)
+  })
+
+  describe('a draft open in another tab too', () => {
+    /** A draft this tab has open and on disk, which another tab then writes as `content`. */
+    async function writtenElsewhere(content: string) {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, {
+        content: textContent('Half a thought'),
+        steps: [{ stepType: 'replace' }],
+      })
+      await store.flush(sessionId)
+
+      const stored = (await draftRepository.getById(sessionId))!
+      await draftRepository.save(
+        {
+          ...stored,
+          updated_at: '2099-01-01T00:00:00.000Z',
+          entry: {
+            ...stored.entry,
+            content: textContent(content),
+            events: [...stored.entry.events, { kind: 'edit', at: 5_000, steps: [{ n: 2 }] }],
+          },
+        },
+        { entry: stored.entry.events.length, parent: 0 },
+      )
+      return { store, sessionId }
+    }
+
+    it('picks up what the other tab wrote when this one is returned to', async () => {
+      const { store, sessionId } = await writtenElsewhere('Half a thought, carried on elsewhere')
+
+      await store.adoptChangesElsewhere()
+
+      const current = store.currentDraft(sessionId)
+      expect(docToPlainText(current!.entry.content)).toBe('Half a thought, carried on elsewhere')
+      expect(current?.entry.events).toHaveLength(2)
+      expect(store.elsewhere[sessionId]).toEqual({ count: 1, gone: false, unsaved: null })
+    })
+
+    it('closes a draft the other tab sealed or discarded', async () => {
+      const { store, sessionId } = await writtenElsewhere('Irrelevant')
+      await draftRepository.delete(sessionId)
+
+      await store.adoptChangesElsewhere()
+
+      expect(store.currentDraft(sessionId)).toBeNull()
+      expect(store.elsewhere[sessionId]?.gone).toBe(true)
+    })
+
+    it('keeps the other tab’s version and offers this one’s when both wrote at once', async () => {
+      const { store, sessionId } = await writtenElsewhere('Half a thought, from over there')
+      // Typed here before this tab caught up, so its next write collides with the other's.
+      store.recordChange(sessionId, {
+        content: textContent('Half a thought, from right here'),
+        steps: [{ stepType: 'replace' }],
+      })
+
+      await store.flush(sessionId)
+
+      const stored = await draftRepository.getById(sessionId)
+      expect(docToPlainText(stored!.entry.content)).toBe('Half a thought, from over there')
+      expect(stored?.entry.events).toHaveLength(2)
+      expect(docToPlainText(store.currentDraft(sessionId)!.entry.content)).toBe(
+        'Half a thought, from over there',
+      )
+      expect(docToPlainText(store.elsewhere[sessionId]!.unsaved!)).toBe(
+        'Half a thought, from right here',
+      )
+    })
+  })
+
+  describe('a draft that could revise an entry', () => {
+    /** Another tab: its own stores over the same storage. */
+    function anotherTab() {
+      setActivePinia(createPinia())
+      return useDraftsStore()
+    }
+
+    it.each(['revision', 'new_related'] as const)(
+      'claims the entry the moment a %s draft opens, so another tab resumes it instead',
+      async (kind) => {
+        const store = useDraftsStore()
+        const original = await existingEntry('I recieved the offer')
+
+        const sessionId = store.beginDraft({ kind, parent: original })
+        // Nothing typed: the claim is written on its own, and this waits for it to land.
+        await store.flush(sessionId)
+
+        const otherTab = anotherTab()
+        await otherTab.loadDrafts()
+        expect(otherTab.drafts).toEqual([
+          expect.objectContaining({ session_id: sessionId, kind, parent_id: original.id }),
+        ])
+        expect(await otherTab.resumeDraft(sessionId)).not.toBeNull()
+      },
+    )
+
+    it('keeps its claim on disk while its session is open, even emptied', async () => {
+      const store = useDraftsStore()
+      const parent = await existingEntry('The meeting went badly')
+      const sessionId = store.beginDraft({ kind: 'new_related', parent })
+
+      store.recordChange(sessionId, {
+        content: textContent('It rained'),
+        steps: [{ stepType: 'replace' }],
+      })
+      await store.flush(sessionId)
+      store.recordChange(sessionId, { content: '', steps: [{ stepType: 'replace' }] })
+      await store.flush(sessionId)
+
+      // Removing it here would let another tab begin a second draft on the same version.
+      expect(await draftRepository.list()).toHaveLength(1)
+    })
+
+    it.each(['revision', 'new_related'] as const)(
+      'releases an untouched %s claim once its composer closes',
+      async (kind) => {
+        const store = useDraftsStore()
+        const original = await existingEntry('I recieved the offer')
+        const sessionId = store.beginDraft({ kind, parent: original })
+
+        await store.abandonDraft(sessionId)
+
+        expect(await draftRepository.list()).toEqual([])
+      },
+    )
+
+    it('releases a revision changed back to the version it started from', async () => {
+      const store = useDraftsStore()
+      const original = await existingEntry('I recieved the offer')
+      const sessionId = store.beginDraft({ kind: 'revision', parent: original })
+
+      store.recordChange(sessionId, {
+        content: textContent('I received the offer'),
+        steps: [{ stepType: 'replace' }],
+      })
+      await store.flush(sessionId)
+      store.recordChange(sessionId, {
+        content: textContent('I recieved the offer'),
+        steps: [{ stepType: 'replace' }],
+      })
+      await store.abandonDraft(sessionId)
+
+      expect(await draftRepository.list()).toEqual([])
+    })
+
+    it('keeps a claim another tab has written in when this one lets it go', async () => {
+      const store = useDraftsStore()
+      const original = await existingEntry('I recieved the offer')
+      const sessionId = store.beginDraft({ kind: 'revision', parent: original })
+      await store.flush(sessionId)
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, {
+        content: textContent('I received the offer'),
+        steps: [{ stepType: 'replace' }],
+      })
+      await otherTab.flush(sessionId)
+
+      // Untouched here, but judged by what disk holds, not by what this tab did.
+      await store.abandonDraft(sessionId)
+
+      const stored = await draftRepository.getById(sessionId)
+      expect(docToPlainText(stored!.entry.content)).toBe('I received the offer')
+    })
+
+    it('keeps a resumed draft that holds work when it is let go untouched', async () => {
+      const store = useDraftsStore()
+      const original = await existingEntry('I recieved the offer')
+      await draftRepository.save(
+        makeDraft(
+          'interrupted-revision',
+          {
+            base_version_id: original.id,
+            base_content: original.content,
+            content: textContent('I received the offer'),
+          },
+          { kind: 'revision', parent_id: original.id },
+        ),
+        { entry: 0, parent: 0 },
+      )
+
+      await store.resumeDraft('interrupted-revision')
+      await store.abandonDraft('interrupted-revision')
+
+      expect(await draftRepository.getById('interrupted-revision')).not.toBeNull()
+    })
+
+    it('refreshes the drafts list on return, so a claim made in another tab shows here', async () => {
+      const store = useDraftsStore()
+      const original = await existingEntry('I recieved the offer')
+      await store.loadDrafts()
+
+      await draftRepository.save(
+        makeDraft(
+          'claimed-elsewhere',
+          { base_version_id: original.id, base_content: original.content },
+          { kind: 'revision', parent_id: original.id },
+        ),
+        { entry: 0, parent: 0 },
+      )
+      await store.adoptChangesElsewhere()
+
+      expect(store.drafts.map((draft) => draft.session_id)).toEqual(['claimed-elsewhere'])
+    })
   })
 
   it('does not resurrect a draft when sealing races an in-flight flush', async () => {
@@ -505,6 +773,6 @@ describe('useDraftsStore', () => {
     })
 
     await expect(store.sealDraft(sessionId)).rejects.toThrow('Entry content cannot be empty')
-    expect(docToPlainText(store.currentDraft(sessionId)!.child.content)).toBe('   ')
+    expect(docToPlainText(store.currentDraft(sessionId)!.entry.content)).toBe('   ')
   })
 })

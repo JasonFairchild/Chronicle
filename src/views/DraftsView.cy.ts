@@ -4,41 +4,10 @@ import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import type { Draft } from '@/types/draft'
-import { createEntryInput, emptyEntryDates } from '@/types/entry'
+import { makeDraft, parentDocument } from '@/testing/draftFixtures'
+import { createEntryInput } from '@/types/entry'
 
-function makeDraft(
-  overrides: Partial<Omit<Draft, 'child' | 'parent'>> &
-    Pick<Draft, 'session_id'> & {
-      content?: string
-      parentContent?: string
-      parentBaseContent?: string
-    },
-): Draft {
-  const { content, parentContent, parentBaseContent, ...rest } = overrides
-  return {
-    target: { kind: 'new_root' },
-    started_at: '2026-09-05T10:00:00.000Z',
-    updated_at: '2026-09-05T10:00:02.000Z',
-    dates: emptyEntryDates(),
-    title: null,
-    child: {
-      base_content: '',
-      content: content ?? '',
-      events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
-    },
-    parent:
-      parentContent !== undefined
-        ? {
-            content: parentContent,
-            title: null,
-            base_content: parentBaseContent ?? parentContent,
-            events: [],
-          }
-        : null,
-    ...rest,
-  }
-}
+const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('DraftsView', () => {
   let drafts: DexieDraftRepository
@@ -56,12 +25,12 @@ describe('DraftsView', () => {
   it('resumes an unsealed session and finishes it as one entry', () => {
     cy.then(() =>
       drafts.save(
-        makeDraft({
-          session_id: 'session-1',
+        makeDraft('session-1', {
           content: textContent('Half a thought'),
           title: 'Lake Tahoe',
+          events: TYPED,
         }),
-        { child: 0, parent: 0 },
+        { entry: 0, parent: 0 },
       ),
     )
     mountDrafts()
@@ -88,12 +57,16 @@ describe('DraftsView', () => {
         createEntryInput({ content: textContent('The meeting went badly') }),
       )
       await drafts.save(
-        makeDraft({
-          session_id: 'session-1',
-          target: { kind: 'new_child', parent_id: parent.id },
-          content: textContent('It was salvaged later'),
-        }),
-        { child: 0, parent: 0 },
+        makeDraft(
+          'session-1',
+          { content: textContent('It was salvaged later'), events: TYPED },
+          {
+            kind: 'new_related',
+            parent_id: parent.id,
+            parent: parentDocument(parent.id, parent.content),
+          },
+        ),
+        { entry: 0, parent: 0 },
       )
     })
     mountDrafts()
@@ -101,7 +74,7 @@ describe('DraftsView', () => {
     cy.findByText('Related entry on “The meeting went badly”').should('be.visible')
   })
 
-  it('reopens a related-entry draft on both halves, not the note alone', () => {
+  it('reopens a related-entry draft on both halves, not the related entry alone', () => {
     let parentId = ''
 
     cy.then(async () => {
@@ -110,22 +83,22 @@ describe('DraftsView', () => {
       )
       parentId = parent.id
       await drafts.save(
-        makeDraft({
-          session_id: 'session-1',
-          target: { kind: 'new_child', parent_id: parent.id },
-          content: textContent('Wrong lake'),
-          // The parent as this session found it, against which "anchor-1 is ours" still reads after
-          // the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
-          parentBaseContent: textContent('I went to Lake Tahoe with Dad'),
-          parentContent: withAnchorMark(
-            'I went to Lake Tahoe with Dad',
-            'anchor-1',
-            10,
-            20,
-            'strike',
-          ),
-        }),
-        { child: 0, parent: 0 },
+        makeDraft(
+          'session-1',
+          { content: textContent('Wrong lake'), events: TYPED },
+          {
+            kind: 'new_related',
+            parent_id: parent.id,
+            // The parent as this session found it, against which "anchor-1 is ours" still reads
+            // after the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
+            parent: parentDocument(
+              parent.id,
+              textContent('I went to Lake Tahoe with Dad'),
+              withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike'),
+            ),
+          },
+        ),
+        { entry: 0, parent: 0 },
       )
     })
     mountDrafts()
@@ -136,11 +109,11 @@ describe('DraftsView', () => {
     // finishing it: the parent it was marking has to come back with it.
     cy.findByRole('heading', { name: 'This entry' }).should('be.visible')
     cy.findByRole('textbox', { name: 'Entry being annotated' }).should('be.visible')
-    cy.findByRole('textbox', { name: 'Your note' }).should('be.visible')
+    cy.findByRole('textbox', { name: 'Related entry' }).should('be.visible')
 
     cy.findByRole('button', { name: 'Add entry' }).click()
 
-    // The anchor placed before the reload is still the one the sealed child refers to.
+    // The anchor placed before the reload is still the one the sealed related entry refers to.
     cy.then(() => entries.listChildren(parentId)).then((children) => {
       expect(children).to.have.length(1)
       expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')
@@ -150,8 +123,8 @@ describe('DraftsView', () => {
 
   it('discards a draft on request, the one thing that removes work', () => {
     cy.then(() =>
-      drafts.save(makeDraft({ session_id: 'session-1', content: textContent('Never mind') }), {
-        child: 0,
+      drafts.save(makeDraft('session-1', { content: textContent('Never mind'), events: TYPED }), {
+        entry: 0,
         parent: 0,
       }),
     )

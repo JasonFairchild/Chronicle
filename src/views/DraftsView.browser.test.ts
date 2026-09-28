@@ -7,41 +7,10 @@ import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { renderComponent } from '@/testing/renderComponent'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import type { Draft } from '@/types/draft'
-import { createEntryInput, emptyEntryDates } from '@/types/entry'
+import { makeDraft, parentDocument } from '@/testing/draftFixtures'
+import { createEntryInput } from '@/types/entry'
 
-function makeDraft(
-  overrides: Partial<Omit<Draft, 'child' | 'parent'>> &
-    Pick<Draft, 'session_id'> & {
-      content?: string
-      parentContent?: string
-      parentBaseContent?: string
-    },
-): Draft {
-  const { content, parentContent, parentBaseContent, ...rest } = overrides
-  return {
-    target: { kind: 'new_root' },
-    started_at: '2026-09-05T10:00:00.000Z',
-    updated_at: '2026-09-05T10:00:02.000Z',
-    dates: emptyEntryDates(),
-    title: null,
-    child: {
-      base_content: '',
-      content: content ?? '',
-      events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
-    },
-    parent:
-      parentContent !== undefined
-        ? {
-            content: parentContent,
-            title: null,
-            base_content: parentBaseContent ?? parentContent,
-            events: [],
-          }
-        : null,
-    ...rest,
-  }
-}
+const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('DraftsView (browser)', () => {
   let drafts: DexieDraftRepository
@@ -58,12 +27,12 @@ describe('DraftsView (browser)', () => {
 
   it('resumes an unsealed session and finishes it as one entry', async () => {
     await drafts.save(
-      makeDraft({
-        session_id: 'session-1',
+      makeDraft('session-1', {
         content: textContent('Half a thought'),
         title: 'Lake Tahoe',
+        events: TYPED,
       }),
-      { child: 0, parent: 0 },
+      { entry: 0, parent: 0 },
     )
 
     const screen = mountDrafts()
@@ -94,12 +63,16 @@ describe('DraftsView (browser)', () => {
       createEntryInput({ content: textContent('The meeting went badly') }),
     )
     await drafts.save(
-      makeDraft({
-        session_id: 'session-1',
-        target: { kind: 'new_child', parent_id: parent.id },
-        content: textContent('It was salvaged later'),
-      }),
-      { child: 0, parent: 0 },
+      makeDraft(
+        'session-1',
+        { content: textContent('It was salvaged later'), events: TYPED },
+        {
+          kind: 'new_related',
+          parent_id: parent.id,
+          parent: parentDocument(parent.id, parent.content),
+        },
+      ),
+      { entry: 0, parent: 0 },
     )
 
     const screen = mountDrafts()
@@ -109,27 +82,27 @@ describe('DraftsView (browser)', () => {
       .toBeVisible()
   })
 
-  it('reopens a related-entry draft on both halves, not the note alone', async () => {
+  it('reopens a related-entry draft on both halves, not the related entry alone', async () => {
     const parent = await entries.create(
       createEntryInput({ content: textContent('I went to Lake Tahoe with Dad') }),
     )
     await drafts.save(
-      makeDraft({
-        session_id: 'session-1',
-        target: { kind: 'new_child', parent_id: parent.id },
-        content: textContent('Wrong lake'),
-        // The parent as this session found it, against which "anchor-1 is ours" still reads after
-        // the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
-        parentBaseContent: textContent('I went to Lake Tahoe with Dad'),
-        parentContent: withAnchorMark(
-          'I went to Lake Tahoe with Dad',
-          'anchor-1',
-          10,
-          20,
-          'strike',
-        ),
-      }),
-      { child: 0, parent: 0 },
+      makeDraft(
+        'session-1',
+        { content: textContent('Wrong lake'), events: TYPED },
+        {
+          kind: 'new_related',
+          parent_id: parent.id,
+          // The parent as this session found it, against which "anchor-1 is ours" still reads
+          // after the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
+          parent: parentDocument(
+            parent.id,
+            textContent('I went to Lake Tahoe with Dad'),
+            withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike'),
+          ),
+        },
+      ),
+      { entry: 0, parent: 0 },
     )
 
     const screen = mountDrafts()
@@ -141,7 +114,7 @@ describe('DraftsView (browser)', () => {
     await expect
       .element(screen.getByRole('textbox', { name: 'Entry being annotated' }))
       .toBeVisible()
-    await expect.element(screen.getByRole('textbox', { name: 'Your note' })).toBeVisible()
+    await expect.element(screen.getByRole('textbox', { name: 'Related entry' })).toBeVisible()
 
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
@@ -149,17 +122,17 @@ describe('DraftsView (browser)', () => {
       expect(await entries.listChildren(parent.id)).toHaveLength(1)
     })
 
-    // The anchor placed before the reload is still the one the sealed child refers to.
-    const [child] = await entries.listChildren(parent.id)
-    expect(child?.anchors[0]?.quote).toBe('Lake Tahoe')
-    expect(child?.relation_type).toBe('update')
+    // The anchor placed before the reload is still the one the sealed related entry refers to.
+    const [related] = await entries.listChildren(parent.id)
+    expect(related?.anchors[0]?.quote).toBe('Lake Tahoe')
+    expect(related?.relation_type).toBe('update')
   })
 
   it('discards a draft on request, the one thing that removes work', async () => {
-    await drafts.save(makeDraft({ session_id: 'session-1', content: textContent('Never mind') }), {
-      child: 0,
-      parent: 0,
-    })
+    await drafts.save(
+      makeDraft('session-1', { content: textContent('Never mind'), events: TYPED }),
+      { entry: 0, parent: 0 },
+    )
 
     const screen = mountDrafts()
     await expect.element(screen.getByText('Never mind')).toBeVisible()

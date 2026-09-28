@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import { provideLayoutWidth } from '@/composables/useLayoutWidth'
+import { useStoragePersistence } from '@/composables/useStoragePersistence'
 
 const layoutWidth = provideLayoutWidth()
+const storage = useStoragePersistence()
 </script>
 
 <template>
@@ -18,6 +20,24 @@ const layoutWidth = provideLayoutWidth()
     </header>
 
     <main class="mx-auto px-4 py-8" :class="layoutWidth === 'wide' ? 'max-w-[96rem]' : 'max-w-3xl'">
+      <p
+        v-if="storage.showNotice.value"
+        class="mb-6 flex items-start justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)]"
+        role="status"
+      >
+        <span>
+          This browser may clear Chronicle’s data when space runs low. Installing Chronicle (your
+          browser’s Install or Add to Home Screen) usually lets it keep it.
+        </span>
+        <button
+          type="button"
+          class="shrink-0 hover:text-[var(--color-accent)]"
+          @click="storage.dismiss"
+        >
+          Dismiss
+        </button>
+      </p>
+
       <slot />
     </main>
   </div>

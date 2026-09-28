@@ -2,12 +2,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryCard from '@/components/EntryCard.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useMedia } from '@/composables/useMedia'
+import { useTabReturn } from '@/composables/useTabReturn'
+import { currentVersionId } from '@/domain/reconstructEntryState'
+import { versionsRevisedBy, type DraftSnapshot } from '@/types/draft'
 import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { entryLabel, entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
 
@@ -17,6 +22,7 @@ const props = defineProps<{
 
 const router = useRouter()
 const store = useEntriesStore()
+const drafts = useDraftsStore()
 const media = useMedia()
 const loading = ref(true)
 /** Set when the entry itself couldn't be fetched; exclusive with showing the article at all. */
@@ -50,11 +56,23 @@ const revisionSession = useDraftSession()
 const revisionAffectedAnchorIds = ref<string[]>([])
 
 /**
- * The open anchor-mode session, if a child entry is being composed against a passage. Mutually
+ * The open anchor-mode session, if a related entry is being composed against a passage. Mutually
  * exclusive with `revisionSession` (ENTRY_MODEL.md, "Two creation experiences, kept separate"):
  * hiding each control while the other is open is what enforces that in the UI.
  */
-const childSession = useDraftSession()
+const relatedSession = useDraftSession()
+
+/**
+ * A draft that could revise this entry, left open earlier. While there is one, Revise and Create
+ * related entry give way to resuming it, so two drafts never write versions against one start
+ * (PRODUCT.md §4.8). Read off the drafts list, which saving or discarding a draft reloads.
+ */
+const outstandingDraft = computed<DraftSnapshot | null>(
+  () =>
+    drafts.drafts.find((draft) =>
+      versionsRevisedBy(draft).some((revised) => revised.entry_id === props.id),
+    ) ?? null,
+)
 
 /** Two columns of readable width need more room than the page gives by default. */
 const layoutWidth = useLayoutWidth()
@@ -97,21 +115,22 @@ const versionLabel = computed(() => {
 })
 
 /**
- * The note each disturbed anchor belongs to, named rather than merely counted (PRODUCT.md §4.5).
- * Anchors, not children, are what a revision can disturb, so this reads them off every child's
- * resolved anchor list rather than off the children themselves.
+ * The related entry each disturbed anchor belongs to, named rather than merely counted
+ * (PRODUCT.md §4.5).
+ * Anchors, not related entries, are what a revision can disturb, so this reads them off each one's
+ * resolved anchor list rather than off the entries themselves.
  */
 const revisionWarnings = computed<string[]>(() => {
   if (revisionAffectedAnchorIds.value.length === 0) return []
 
   const owners = new Map<string, string>()
-  for (const child of aggregated.value?.children ?? []) {
-    for (const anchor of child.anchors) {
-      owners.set(anchor.anchor_id, entryLabel(child.entry))
+  for (const related of aggregated.value?.related_entries ?? []) {
+    for (const anchor of related.anchors) {
+      owners.set(anchor.anchor_id, entryLabel(related.entry))
     }
   }
 
-  const names = revisionAffectedAnchorIds.value.map((id) => owners.get(id) ?? 'a note')
+  const names = revisionAffectedAnchorIds.value.map((id) => owners.get(id) ?? 'a related entry')
   return [...new Set(names)]
 })
 
@@ -131,6 +150,59 @@ async function loadEntry(entryId: string): Promise<void> {
     error.value = toErrorMessage(err, 'Failed to load entry')
   } finally {
     loading.value = false
+  }
+
+  // Apart from the entry: failing to read drafts shouldn't blank a page that loaded.
+  await findOutstandingDraft().catch((err) => {
+    actionError.value = toErrorMessage(err, 'Failed to load drafts')
+  })
+}
+
+/**
+ * Re-reads the entry in place for a tab being returned to, since another tab may have saved a
+ * version or a related entry since. It leaves `loading` alone: loading hides the article, which
+ * would unmount an open composer and abandon its session.
+ */
+async function refreshEntry(): Promise<void> {
+  const entryId = props.id
+  if (loading.value || !aggregated.value) return
+
+  try {
+    const fresh = await store.getAggregatedEntry(entryId)
+    const crumbs = fresh ? await loadBreadcrumb(fresh) : []
+    if (entryId !== props.id) return // Navigated away while reading.
+
+    aggregated.value = fresh
+    breadcrumbEntries.value = crumbs
+  } catch (err) {
+    actionError.value = toErrorMessage(err, 'Failed to refresh entry')
+  }
+}
+
+useTabReturn(() => void refreshEntry())
+
+/**
+ * Reads the drafts table for one that could revise this entry. Asked again whenever a new draft is
+ * about to begin, not trusted from page load, since another tab may have started one since.
+ */
+async function findOutstandingDraft(): Promise<DraftSnapshot | null> {
+  await drafts.loadDrafts()
+  return outstandingDraft.value
+}
+
+/** Reopens the outstanding draft in place, in whichever composer it was written in. */
+async function resumeOutstandingDraft(): Promise<void> {
+  const draft = outstandingDraft.value
+  if (!draft) return
+
+  actionError.value = null
+  const session = draft.kind === 'revision' ? revisionSession : relatedSession
+
+  try {
+    // Gone since the list was read: sealed or discarded elsewhere, so nothing is outstanding.
+    if (!(await session.resume(draft.session_id))) await findOutstandingDraft()
+  } catch (err) {
+    actionError.value = toErrorMessage(err, 'Failed to resume draft')
   }
 }
 
@@ -164,8 +236,8 @@ function resetRevisionState(): void {
 }
 
 /** Discards an in-progress anchor-mode session rather than leaving it open. */
-function resetChildState(): void {
-  childSession.reset()
+function resetRelatedState(): void {
+  relatedSession.reset()
 }
 
 onMounted(() => {
@@ -178,7 +250,7 @@ watch(
     // Otherwise saving after navigating away would seal against whichever entry this session's
     // draft still points at, not the one now on screen.
     resetRevisionState()
-    resetChildState()
+    resetRelatedState()
     void loadEntry(entryId)
   },
 )
@@ -200,7 +272,7 @@ watch(
 // Raised only while the side-by-side session is open, and lowered again however it ends — saved,
 // discarded, or navigated away from.
 watch(
-  () => childSession.isOpen,
+  () => relatedSession.isOpen,
   (open) => {
     layoutWidth.value = open ? 'wide' : 'normal'
   },
@@ -217,17 +289,30 @@ function goToNewConnection(): void {
 
 /**
  * Opening an entry to revise it produces a pending revision draft, leaving the entry untouched
- * until it is sealed. The editor seeds from the current aggregate state rather than the stored
+ * until it is sealed. The draft seeds from the current aggregate state rather than the stored
  * row, or an entry that has already been revised would reopen at its first version.
  */
-function startRevising(): void {
+async function startRevising(): Promise<void> {
   const current = aggregated.value
-  if (!current) return
+  if (!current || (await resumedInstead())) return
 
-  revisionSession.begin(
-    { kind: 'revision', parent_id: props.id },
-    { content: current.content, title: current.title },
-  )
+  revisionSession.begin({ kind: 'revision', parent: current })
+}
+
+/**
+ * Before a new draft begins: reopens one already outstanding on this entry instead, and says
+ * whether it did. A check that fails begins nothing either.
+ */
+async function resumedInstead(): Promise<boolean> {
+  try {
+    if (!(await findOutstandingDraft())) return false
+  } catch (err) {
+    actionError.value = toErrorMessage(err, 'Failed to load drafts')
+    return true
+  }
+
+  await resumeOutstandingDraft()
+  return true
 }
 
 function handleRevisionChange(change: EditorChange): void {
@@ -252,34 +337,31 @@ async function cancelRevision(): Promise<void> {
 
 /**
  * Opens an anchor-mode session: two documents, the parent gaining provisional anchors and the
- * child's own prose, sealing atomically together (AUTHORING.md, "Drafts").
+ * related entry's own prose, sealing atomically together (AUTHORING.md, "Drafts").
  *
- * Anchoring is optional within it. Marking nothing and simply writing produces a note about the
- * entry at large, which is why there is one way in here rather than a separate form for that case.
+ * Anchoring is optional within it. Marking nothing and simply writing produces a related entry
+ * about this one at large, which is why there is one way in here rather than a separate form.
  */
-function startRelatedEntry(): void {
+async function startRelatedEntry(): Promise<void> {
   const current = aggregated.value
-  if (!current) return
+  if (!current || (await resumedInstead())) return
 
-  childSession.begin(
-    { kind: 'new_child', parent_id: props.id },
-    { parentContent: current.content, parentTitle: current.title },
-  )
+  relatedSession.begin({ kind: 'new_related', parent: current })
 }
 
-async function saveChildEntry(): Promise<void> {
+async function saveRelatedEntry(): Promise<void> {
   actionError.value = null
 
   try {
-    const saved = await childSession.save()
+    const saved = await relatedSession.save()
     if (saved) await loadEntry(props.id)
   } catch (err) {
     actionError.value = toErrorMessage(err, 'Failed to add entry')
   }
 }
 
-async function cancelChildEntry(): Promise<void> {
-  await childSession.discard()
+async function cancelRelatedEntry(): Promise<void> {
+  await relatedSession.discard()
 }
 
 /**
@@ -331,6 +413,9 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         {{ actionError }}
       </p>
 
+      <DraftElsewhereNotice :session="revisionSession" />
+      <DraftElsewhereNotice :session="relatedSession" />
+
       <p
         v-if="breadcrumbKind"
         class="flex flex-wrap items-center gap-1 text-sm text-[var(--color-text-muted)]"
@@ -360,23 +445,33 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </div>
 
           <div
-            v-if="!revisionSession.isOpen && !childSession.isOpen"
+            v-if="!revisionSession.isOpen && !relatedSession.isOpen"
             class="flex shrink-0 flex-wrap justify-end gap-2"
           >
             <button
+              v-if="outstandingDraft"
               type="button"
               class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              @click="startRelatedEntry"
+              @click="resumeOutstandingDraft"
             >
-              Create related entry
+              Resume draft
             </button>
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              @click="startRevising"
-            >
-              Revise entry
-            </button>
+            <template v-else>
+              <button
+                type="button"
+                class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                @click="startRelatedEntry"
+              >
+                Create related entry
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                @click="startRevising"
+              >
+                Revise entry
+              </button>
+            </template>
             <button
               type="button"
               class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
@@ -393,6 +488,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </p>
 
           <DocumentEditor
+            :key="revisionSession.editorKey"
             label="Revised entry"
             with-title
             :title="revisionSession.title"
@@ -400,6 +496,14 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             :disabled="revisionSession.saving"
             @change="handleRevisionChange"
           />
+
+          <p
+            v-if="revisionSession.staleNotice"
+            class="mt-2 text-sm text-[var(--color-error)]"
+            role="status"
+          >
+            {{ revisionSession.staleNotice }}
+          </p>
 
           <p
             v-if="revisionWarnings.length > 0"
@@ -430,16 +534,18 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </div>
         </template>
 
-        <template v-else-if="childSession.isOpen">
+        <template v-else-if="relatedSession.isOpen">
           <RelatedEntryComposer
-            :session="childSession"
-            @save="saveChildEntry"
-            @discard="cancelChildEntry"
+            :session="relatedSession"
+            @save="saveRelatedEntry"
+            @discard="cancelRelatedEntry"
           />
         </template>
 
         <template v-else>
+          <!-- Keyed on the version: the editor reads its content only on mount. -->
           <DocumentEditor
+            :key="currentVersionId(aggregated)"
             label="Entry content"
             with-title
             :title="aggregated.title"
@@ -466,30 +572,30 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </section>
         </template>
 
-        <section v-if="aggregated.children.length > 0" class="mt-6 space-y-3">
+        <section v-if="aggregated.related_entries.length > 0" class="mt-6 space-y-3">
           <h2 class="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Related entries
           </h2>
 
           <EntryCard
-            v-for="child in aggregated.children"
-            :key="child.entry.id"
-            :entry="child.entry"
+            v-for="related in aggregated.related_entries"
+            :key="related.entry.id"
+            :entry="related.entry"
           >
             <template #badge>
               <span class="text-xs uppercase tracking-wide text-[var(--color-accent)]">
-                {{ child.relation_type }}
+                {{ related.relation_type }}
               </span>
             </template>
 
             <template #extra>
-              <p v-if="child.has_children" class="mt-2 text-xs text-[var(--color-text-muted)]">
+              <p v-if="related.has_children" class="mt-2 text-xs text-[var(--color-text-muted)]">
                 has related entries
               </p>
 
-              <ul v-if="child.anchors.length > 0" class="mt-2 space-y-1">
+              <ul v-if="related.anchors.length > 0" class="mt-2 space-y-1">
                 <li
-                  v-for="resolved in child.anchors"
+                  v-for="resolved in related.anchors"
                   :key="resolved.anchor_id"
                   class="text-xs text-[var(--color-text-muted)]"
                   :class="{ italic: resolved.status === 'orphaned' }"

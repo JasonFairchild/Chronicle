@@ -5,7 +5,7 @@ import {
   type CreateEntryInput,
   type Entry,
 } from '@/types/entry'
-import { assertValidRelation } from '@/domain/entryValidation'
+import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
 import type { EntryRepository } from './entryRepository'
 
 /**
@@ -26,9 +26,16 @@ export class InMemoryEntryRepository implements EntryRepository {
     // is committed to the real map until every input has passed — an all-or-nothing write.
     const staged = new Map<string, Entry>()
     const loadParent = (id: string) => staged.get(id) ?? this.entries.get(id)
+    const latestVersionId = (entryId: string) =>
+      latestVersionOf(
+        entryId,
+        [...this.entries.values(), ...staged.values()].filter(
+          (entry) => entry.parent_id === entryId && entry.relation_type === 'revision',
+        ),
+      )
 
     for (const input of inputs) {
-      await assertValidRelation(input, loadParent)
+      await assertValidRelation(input, { loadParent, latestVersionId })
 
       const entry: Entry = {
         id: newEntryId(),

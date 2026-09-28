@@ -27,28 +27,29 @@ A change that breaks one of these is a bug even if nothing else complains.
 1. **It works offline.** Everything is on the device. Nothing waits on a network.
 2. **Nothing you typed is lost.** Writing is saved continuously and survives a crash, a closed
    laptop, or a reload.
-3. **Nothing fundamental is destroyed by a later action.** Edits, notes, and corrections add; they
-   never erase.
+3. **Nothing fundamental is destroyed by a later action.** Edits, related entries, and corrections
+   add; they never erase.
 4. **You can always see how something got to be the way it is.**
 5. **Nothing enters your history unless you put it there.** Saving is always a deliberate act.
 6. **It should be readable in the dark.** No part of the design may make a dark theme impossible.
 
 ## 3. Vocabulary
 
-| Word           | Means                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| **Entry**      | One record. Everything in Chronicle is one — a journal entry, a note on one, a link between two. |
-| **Timeline**   | The list of entries, newest first.                                                               |
-| **Annotation** | A note about an entry, or about one passage in it. Claims nothing changed.                       |
-| **Update**     | A note that strikes wording or proposes different wording. Same shape as an annotation.          |
-| **Connection** | A link from one entry to another, with your explanation of why they relate. Directional.         |
-| **Revision**   | A new version of an entry's own text. The previous version stays.                                |
-| **Draft**      | Writing in progress. Saved as you type, invisible to the timeline until you save it.             |
-| **Passage**    | Text you selected inside an entry, which a note can be attached to.                              |
+| Word              | Means                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| **Entry**         | One record. Everything in Chronicle is one — a journal entry, one about it, a link between two.  |
+| **Timeline**      | The list of entries, newest first.                                                               |
+| **Related entry** | An entry about another, as a whole or about passages in it: an annotation or an update.          |
+| **Annotation**    | A related entry about an entry, or about one passage in it. Claims nothing changed.              |
+| **Update**        | A related entry that strikes wording or proposes different wording. Same shape as an annotation. |
+| **Connection**    | A link from one entry to another, with your explanation of why they relate. Directional.         |
+| **Revision**      | A new version of an entry's own text. The previous version stays.                                |
+| **Draft**         | Writing in progress. Saved as you type, invisible to the timeline until you save it.             |
+| **Passage**       | Text you selected inside an entry, which a related entry can be attached to.                     |
 
 Two words are deliberately absent from the interface: "delete", in the sense of erasing history, and
 "edit", in the sense of replacing what was there. Annotation and update are never asked about
-either — they name what a note turned out to be, not a choice made before writing it.
+either — they name what a related entry turned out to be, not a choice made before writing it.
 
 ---
 
@@ -81,7 +82,7 @@ either — they name what a note turned out to be, not a choice made before writ
   if it has one (no stand-in label otherwise). A card also shows when the thing happened or was
   originally written, if given, and how many times the entry has been revised, if it has been.
 - Clicking a card opens that entry.
-- Notes, updates, connections, and revisions are not separate cards; they belong to their entry.
+- Related entries, connections, and revisions are not separate cards; they belong to their entry.
 
 ### 4.3 Reading an entry
 
@@ -89,10 +90,10 @@ either — they name what a note turned out to be, not a choice made before writ
   current text (the latest version). An untitled entry is headed by its creation date.
 - A revised entry says which version you're looking at and how many exist.
 - Attached images appear below the text.
-- Notes, updates, and connections attached to it are listed beneath, each showing what part of the
-  entry it points at. Immediate children are shown; deeper ones are indicated, not expanded.
-- A note whose passage no longer exists quotes what it _was_ attached to. A broken reference reads
-  as history, not as an error.
+- Related entries and connections attached to it are listed beneath, each showing what part of the
+  entry it points at. Immediate ones are shown; deeper ones are indicated, not expanded.
+- A related entry whose passage no longer exists quotes what it _was_ attached to. A broken
+  reference reads as history, not as an error.
 - A related entry's or connection's own page has a breadcrumb back to what it's attached to.
 
 ### 4.4 Writing a related entry
@@ -106,26 +107,26 @@ either — they name what a note turned out to be, not a choice made before writ
 - On the left, select a passage and a small menu offers **Highlight** or **Strike** (Ctrl+Alt+H /
   Ctrl+Alt+S); or place the cursor and type to propose wording right where it would go. Nothing
   else can change the entry's text from here.
-- Marking is optional. A note that marks nothing is about the entry as a whole, and the entry is not
-  revised at all.
+- Marking is optional. A related entry that marks nothing is about the entry as a whole, and the
+  entry is not revised at all.
 - Wording attaches to a highlight or a strike alike, renders inline right after its passage, and
   reads as proposed from its italic styling. A proofreader's-markup presentation (wording raised
   above the line, a caret on the baseline) exists but is dormant (`ANCHOR_MARKUP_MODE`): long
   wording overlapped trailing text on a packed line.
-- Saving anchors the passages and the note together in one action. The entry gains the anchors and
+- Saving anchors the passages and the related entry together in one action. The entry gains the anchors and
   nothing else; its previous version stays as it stood.
 - Annotation or update follows from what was marked, never asked: striking or proposing wording is
   an **update**; highlighting only, or marking nothing, is an **annotation**.
-- Notes can themselves be annotated, to any depth.
+- Related entries can themselves be annotated, to any depth.
 - An anchor placed earlier in the same, still-open session can be clicked — its passage or its
   wording — to reopen its box: edit the wording, switch highlight/strike (the same shortcuts), or
   remove it. Escape restores what the box held when it opened.
 - **Anchors are exclusive.** Selecting or clicking into an existing anchor's passage, even partly,
-  opens that anchor's box if this session placed it, and does nothing if an earlier note did. Once
-  saved, an anchor is fixed; pointing differently at the same passage means writing another note.
-  Resizing an anchor isn't offered; remove and recreate it.
-- Highlight color is a display setting, never stored with the note. Today it's one system scheme by
-  note kind.
+  opens that anchor's box if this session placed it, and does nothing if an earlier related entry
+  did. Once saved, an anchor is fixed; pointing differently at the same passage means writing another
+  related entry. Resizing an anchor isn't offered; remove and recreate it.
+- Highlight color is a display setting, never stored with the related entry. Today it's one system
+  scheme by anchor kind.
 
 ### 4.5 Revising an entry
 
@@ -134,9 +135,9 @@ either — they name what a note turned out to be, not a choice made before writ
 - Saving appends a new version; the old one stays and the version count goes up. Images are kept.
 - Renaming, or clearing the title, is an ordinary revision; old names stay with their versions.
 - Existing anchors show while you edit. If the edit changes the text under one — inserting into it,
-  or deleting part or all of it — a warning names the note before you save, and stays even if you
-  change the text back. Moving an anchor by editing elsewhere, or typing right against its edge, is
-  not a change. The note survives either way.
+  or deleting part or all of it — a warning names the related entry before you save, and stays even
+  if you change the text back. Moving an anchor by editing elsewhere, or typing right against its
+  edge, is not a change. The related entry survives either way.
 
 ### 4.6 Connections
 
@@ -145,7 +146,7 @@ either — they name what a note turned out to be, not a choice made before writ
 - It has no separate label for how two entries relate: its title is its name on both ends, and like
   any title it is optional — untitled, it's named by its opening words.
 - It is visible from both ends, marked outgoing or incoming, and can be annotated and revised like
-  any entry. Its notes belong to the connection, not to either end.
+  any entry. Its related entries belong to the connection, not to either end.
 
 ### 4.7 Images
 
@@ -160,8 +161,26 @@ either — they name what a note turned out to be, not a choice made before writ
   or update, since an unsaved draft hasn't settled that (§4.4).
 - A draft can be resumed where it left off, saved, or discarded. Drafts never appear on the
   timeline.
+- **One outstanding draft per entry, so versions never branch.** Opening a revision or a related
+  entry (whose anchors revise the parent) starts a draft on that entry at once, and until it's saved
+  or discarded the entry offers **Resume draft** in place of Revise and Create related entry, in
+  every tab. Only one change to an entry can be in progress, the price of a history with nothing to
+  merge. Leaving the draft without changing anything removes it; one open when its tab closes
+  stays on the Drafts page. If the version a draft started from has been replaced anyway, saving
+  refuses and says why, and the draft stays.
+- **Two tabs never diverge.** Leaving a tab saves its draft at once. Returning to a tab first loads
+  any newer version of its draft, closes one saved or discarded elsewhere and says so, and shows the
+  entry's latest version, so nothing is revised from a stale one. If two tabs save at once, the
+  first wins and the other shows its own text to copy.
 
-### 4.9 How writing is remembered — Invisible for now
+### 4.9 Keeping it on this device
+
+- At startup Chronicle asks the browser to keep its storage through the browser's own clean-ups
+  when space runs low. If the browser declines, a quiet, dismissible line says so and suggests
+  installing Chronicle, which usually earns it. Nothing in the browser protects against clearing the
+  site's data; only a backup outside it can (§5.8).
+
+### 4.10 How writing is remembered — Invisible for now
 
 While you write, Chronicle records how the text came to be, not only the result. Each change
 carries signals: a pause, a paste (a drop doesn't count), an image, a finished sentence. Which of
@@ -193,18 +212,6 @@ belong in such a view.
 - **Dates can't be corrected from the screen**, and nothing offers to fill in where an entry
   happened or what it was first written in. The model already supports both as ordinary revisions.
   The creation date stays untouchable.
-- **Two tabs never diverge.** Returning to a tab whose draft was changed in another tab adopts the
-  newer version before anything more can be typed.
-- **One outstanding draft per entry, so versions never branch.** While a draft that could revise an
-  entry is outstanding (a revision, or a related entry, whose anchors revise the parent), neither
-  Revise nor a new related entry is offered on it; the writer resumes that draft instead. The cost,
-  two ideas about one entry at once, is worth a history that stays a single line with nothing to
-  merge. A draft also records the version it started from, and saving refuses if that is no longer
-  the latest, as a backstop for anything that slips past the block. Together they make each
-  version's predecessor the version it was written against, not just the one sealed before it.
-  Today neither exists: a draft started against a version since revised saves over it silently,
-  and for a related entry reverts the parent to the stale version and orphans what the other change
-  added. Across devices, if ever, this relies on sync keeping up.
 
 ### 5.4 Revising a related entry, and locking anchored text
 
@@ -212,32 +219,33 @@ Builds on anchor wording becoming ordinary text (CHRONICLE_PLAN.md, "Anchor word
 text").
 
 - **Revise** on a related entry reopens the two-pane experience of §4.4 rather than plain editing:
-  the parent's latest version on the left, the note's latest version on the right.
-- On the left, the note's own anchors behave like ones placed in the current session: reopen,
-  switch highlight/strike, edit or remove wording, or remove the anchor. They can also be reshaped
-  while keeping their identity and their wording: unmark part of one to shrink it, or extend it over
-  adjacent text. New anchors can be added. Every other note's anchors show but can't be touched, and
-  nothing else on the left can change, as in any related entry.
-- Saving revises whichever side changed, together: the note, the parent's anchors, or both. The note
-  stays about its parent for good; it can't be revised into a freestanding entry.
-- Annotation or update follows the note's current anchors, so a revision that removes its last
-  strike and wording makes it an annotation.
+  the parent's latest version on the left, the related entry's latest version on the right.
+- On the left, the related entry's own anchors behave like ones placed in the current session:
+  reopen, switch highlight/strike, edit or remove wording, or remove the anchor. They can also be
+  reshaped while keeping their identity and their wording: unmark part of one to shrink it, or
+  extend it over adjacent text. New anchors can be added. Every other related entry's anchors show
+  but can't be touched, and nothing else on the left can change, as in any related entry.
+- Saving revises whichever side changed, together: the related entry, the parent's anchors, or
+  both. It stays about its parent for good; it can't be revised into a freestanding entry.
+- Annotation or update follows its current anchors, so a revision that removes its last strike and
+  wording makes it an annotation.
 - **Anchored text is locked everywhere else.** Revising the parent itself shows every anchor but
   can't change the text under one, its wording, or its kind; typing against an anchor's edge is
-  still fine. An anchor is removed only by deliberately revising the note that placed it, so it
-  never goes missing by accident. That replaces §4.5's warning on an affected anchor, and with it the
-  quote a note saves to render "was attached to: …" once its anchor is gone.
-- Anchors stay exclusive (§4.4): a passage belongs to at most one note, so a lock never has two
-  owners. Saying something different about an anchored passage means revising the note that holds
-  it.
-- A revise-note session is a draft like any other (§4.8), listed as a revision of its note.
+  still fine. An anchor is removed only by deliberately revising the related entry that placed it,
+  so it never goes missing by accident. That replaces §4.5's warning on an affected anchor, and with
+  it the quote a related entry saves to render "was attached to: …" once its anchor is gone.
+- Anchors stay exclusive (§4.4): a passage belongs to at most one related entry, so a lock never has
+  two owners. Saying something different about an anchored passage means revising the related entry
+  that holds it.
+- Revising a related entry is a draft like any other (§4.8), listed as a revision of it, and is
+  outstanding against both it and its parent.
 - Reading a parent with several related entries offers its anchors grouped by related entry.
 - Open: whether formatting (bold, a list) may still change over anchored text, since it leaves the
-  words alone; the lean is to lock it too. A parent revised while the draft is open is §5.3's gap.
+  words alone; the lean is to lock it too.
 
 ### 5.5 Finding things
 
-- Full-text search across entries, notes, and connections.
+- Full-text search across entries, related entries, and connections.
 - Filtering by kind, date range, tag, and whether an entry has been revised.
 - **Tags**, as a real filterable thing rather than a note inside the text.
 
@@ -283,10 +291,13 @@ text").
   curiosity than reading tool, but the capture already supports it.
 - Tuning how often moments get bookmarked, re-reading an old session under new rules, or turning
   capture off — and whether any of that is a user-facing setting at all.
+- **Sittings:** a draft picked up again later records that it was, so the history view can show how
+  many sittings a piece took. Without it, a return is only a long pause, indistinguishable from a
+  tab left open.
 
 ### Drafts
 
-- **Archiving a draft instead of discarding it**, which frees its entry for another draft (§5.3's
+- **Archiving a draft instead of discarding it**, which frees its entry for another draft (§4.8's
   one-per-entry block) without losing what was written — promise 2 kept, promise 5 intact, since
   an archived draft still never reaches the timeline. It keeps its text and authoring trace as-is.
   Restoring is best-effort: a related entry's own text always comes back, but anchors whose parent
@@ -299,17 +310,20 @@ Ordinary formatting, strikethrough included, can look like what an anchor op ren
 op has to be distinct through its own presentation. Today that rests on italic-plus-color wording;
 the dormant proofreader's markup (§4.4) would be stronger once it's back.
 
-- Ordinary (note-less) highlighting would collide with the comment anchor's yellow.
+- Ordinary highlighting, belonging to no related entry, would collide with the comment anchor's
+  yellow.
 - Arbitrary text color, if ever added, would weaken the italic-plus-color signal.
-- Anchor color schemes as a display setting: by op kind (today), auto-assigned per note,
+- Anchor color schemes as a display setting: by op kind (today), auto-assigned per related entry,
   user-defined palettes, or by tag once tags exist.
 - Inline vs. raised wording per anchor op, not one mode for everything. A strike with replacement
   wording reads naturally inline; added wording that doesn't flow with the original reads better
   raised above the line. The writer could set it per op.
 - Numbering anchor ops so a passage and its explanation are obviously paired: per related entry, in
   document order, which under §5.4's lock changes only while that entry is being revised.
-- Hovering an anchor shows which note it belongs to; a preview of the note sitting near its passage.
-- An overall "current state" presentation of an entry with all its notes' anchors shown together.
+- Hovering an anchor shows which related entry it belongs to; a preview of it sitting near its
+  passage.
+- An overall "current state" presentation of an entry with all its related entries' anchors shown
+  together.
 
 ### Extending what can be anchored
 
@@ -325,7 +339,7 @@ The anchor menu (§4.4) is contextual so these have somewhere to land:
   with your own context and dates — never bulk-creating entries nobody has read.
 - Reading text off a scanned page to pre-fill a draft, still ending in human review.
 - Importing from other journaling apps or plain text files.
-- Printing or exporting one entry with its notes and history attached.
+- Printing or exporting one entry with its related entries and history attached.
 
 ### The writing experience
 

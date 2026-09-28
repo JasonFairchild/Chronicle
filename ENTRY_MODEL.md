@@ -3,20 +3,23 @@
 How entries are shaped, how they relate, and how they change over time. How a writing session is
 captured, and the draft it lives in until it's saved, is [AUTHORING.md](./AUTHORING.md).
 
-A child entry is not a note stapled to a parent. It is a set of **operations on specific places in
+A related entry is not a note stapled to a parent. It is a set of **operations on specific places in
 the parent**, grouped under one explanation. That idea drives most of what follows.
+
+"Child" means only the tree link: any entry whose `parent_id` points at another, revisions and
+connections included. An annotation or update specifically is a **related entry**.
 
 ## Two invariants
 
-**No child entry is ever destructive.** A parent's stored text is never altered by its children.
-Strikes and insertions are presentational. Content changes only through the version chain.
+**No related entry or connection is ever destructive.** A parent's stored text is never altered by
+them. Strikes and insertions are presentational. Content changes only through the version chain.
 
 **Timeline membership is a view filter, not a model fact.** Any entry may appear in a timeline;
 revisions in a filtered timeline are a legitimate view. Marks are not entries and never appear.
 
-## Child entries and anchors
+## Related entries and anchors
 
-A child doesn't store where it points; the parent's own document does, since a position is a fact
+A related entry doesn't store where it points; the parent's own document does, since a position is a fact
 about the parent. A span op (`comment`, `strike`) is an `anchor` **mark** on the parent's text
 carrying `{ anchor_id, kind }`. A collapsed op (inserted wording, including a strike's replacement)
 is an **atom inline node**, `anchorInsert`, carrying `{ anchor_id, text }`, since a mark can't hold a
@@ -33,18 +36,19 @@ touching any existing anchor never places a new one over it.
 There is no `replace` op. "I would have written this differently" is a strike plus an
 `anchorInsert` sharing its id; a replace op would imply hiding the parent's text, which nothing does.
 
-**What the child stores.** `anchors: AnchorRef[]`, each `{ anchor_id, quote }`: an id referencing a
-mark or node in the parent, plus the wording it covered at seal time. Empty means the child is about
-the parent at large. `quote` is what renders "was attached to: …" once a later revision has removed
+**What the related entry stores.** `anchors: AnchorRef[]`, each `{ anchor_id, quote }`: an id
+referencing a mark or node in the parent, plus the wording it covered at seal time. Empty means it is
+about the parent at large. `quote` is what renders "was attached to: …" once a later revision has removed
 the anchor.
 
 **Where wording lives.** The parent's document holds anchor structure and any wording with a
-position in it; the child holds the prose explanation. Per-op commentary should lead to additional related entries.
-Inline wording is plain single-line text; a thought needing more belongs on the child.
+position in it; the related entry holds the prose explanation. Per-op commentary should lead to
+additional related entries. Inline wording is plain single-line text; a thought needing more belongs
+on the related entry.
 `docToPlainText` skips anchor-carried wording, so previews and search never fill with words the
 parent's author didn't write.
 
-**Annotation and update are labels, not structure.** A child with a strike or proposed wording
+**Annotation and update are labels, not structure.** A related entry with a strike or proposed wording
 behaves like an update, one with only comments like an annotation; the difference falls out of what
 the user did. The labels drive icons, defaults, and filtering, never domain logic. Only `connection`
 and `revision` are structural.
@@ -53,43 +57,43 @@ and `revision` are structural.
 
 `resolveAnchors` (`domain/anchors.ts`) walks the parent's current document for each `anchor_id`:
 found is `present`, and the document says what it covers now; not found is `orphaned`, and the
-child's `quote` renders instead. There is no ladder in between, because there is no position to
+related entry's `quote` renders instead. There is no ladder in between, because there is no position to
 drift: the mark survived the parent's edits or a revision removed it.
 
 Live editing needs no resolution: anchors are marks in the document being edited, so a revision
-renders them natively. Resolution is for a reader reconstructing what a child points at.
+renders them natively. Resolution is for a reader reconstructing what a related entry points at.
 
 ## Two creation experiences, kept separate
 
-Revising an entry's own text and creating a child entry are modes that never mix in one sitting.
+Revising an entry's own text and creating a related entry are modes that never mix in one sitting.
 Text mode is ordinary editing and cannot add anchors. Anchor mode (`DocumentEditor.vue`'s
 `anchor-mode` prop) allows only select-then-comment/strike and proposing wording at the caret.
 
-That makes "no child entry is destructive" hold by construction, for two independent reasons. A
+That makes "no related entry is destructive" hold by construction, for two independent reasons. A
 `filterTransaction` guard (`isAnchorEdit`, `editor/anchorCommands.ts`) rejects everything in anchor
 mode except the anchor commands and undoing them. And `docToPlainText` is blind to what those
 commands produce — marks aren't text, and it skips `anchorInsert` — so `sameContent(before, after)`
 holds for any anchor-mode session.
 
 An anchor-mode session edits two documents and seals atomically, via `EntryRepository.createMany`,
-into a parent revision (`revision_mode: 'anchor'`) and the child. If nothing was anchored, only the
-child is written. `createMany` is all-or-nothing, so a revision whose anchors no entry explains, or a
-child pointing at ids nothing carries, is never representable. `revision_mode` is a real column
-because a card's revision count reads only `'direct'` revisions.
+into a parent revision (`revision_mode: 'anchor'`) and the related entry. If nothing was anchored,
+only the related entry is written. `createMany` is all-or-nothing, so a revision whose anchors no
+entry explains, or an entry pointing at ids nothing carries, is never representable. `revision_mode`
+is a real column because a card's revision count reads only `'direct'` revisions.
 
 **Annotation vs update is derived at seal time.** `relationTypeForAnchors` (`domain/anchors.ts`)
 reads the anchors the session placed: a `strike` or proposed wording makes an `update`; only
-`comment`s, or no anchors, make an `annotation`. So `DraftTarget`'s `new_child` carries no
+`comment`s, or no anchors, make an `annotation`. So a `new_related` draft carries no
 `relation_type`.
 
 **Before sealing**, a session may reopen, switch, or remove the anchors it placed (AUTHORING.md,
 "Drafts", says how it knows which). **After sealing, anchors are fixed** — append-only, like entries.
-Reopening a sealed child's anchors would be ordinary document steps on the parent and is possible in
-principle, and decided but not built (PRODUCT.md §5.4); it, not overlap, is the intended way to say something
-different about an anchored passage.
+Reopening a sealed related entry's anchors would be ordinary document steps on the parent and is
+possible in principle, and decided but not built (PRODUCT.md §5.4); it, not overlap, is the intended
+way to say something different about an anchored passage.
 
-**Color.** Never stored. It is computed at render time from the active scheme, the child, and the
-kind, so swapping schemes never touches history. The only scheme built is by kind
+**Color.** Never stored. It is computed at render time from the active scheme, the related entry,
+and the kind, so swapping schemes never touches history. The only scheme built is by kind
 (`--color-anchor-*` in `src/assets/main.css`); others are in PRODUCT.md §6.
 
 **Warning on an affected anchor.** A revision warns when the text _under_ an anchor changes —
@@ -98,15 +102,23 @@ shifts it, including typing against its edge. It is judged from ProseMirror's st
 comparing text: `mapAnchorSpans` (`editor/anchorCommands.ts`) checks each step's replaced range
 against the anchor as it stood before that step, and `changesInside` (`domain/anchorWarnings.ts`) is
 the pure judgment. Length comparison was tried first and missed a same-length paste. Tracking is
-sticky for the session, and `EntryDetailView.vue` names each affected note before saving.
+sticky for the session, and `EntryDetailView.vue` names each affected related entry before saving.
 
 ## Version chains
 
 Each entry owns a linear chain: its own content is version one, frozen at creation, and its
 revisions are versions two onward. Current state is the last version at or before the viewing time,
-a plain fold. A revision's parent may not itself be a revision. Branching would need concurrent
-multi-device edits, which is out of scope. A subtree's activity stream is derived by merging child
-chains on timestamp.
+a plain fold. A revision's parent may not itself be a revision. A subtree's activity stream is
+derived by merging child chains on timestamp.
+
+**The chain never branches.** A version's id is the id of the row it came from: the entry's own for
+version one, the revision's after that. Each revision records the version it replaced in
+`base_version_id`, copied from the draft that wrote it, and `assertValidRelation`
+(`domain/entryValidation.ts`) refuses one whose base isn't its entry's latest version with a
+`StaleVersionError`. The check runs inside `createMany`'s transaction, so nothing can land between it
+and the write, and it covers every write path. So each version's predecessor is the one it was
+written against, not merely the one sealed before it, and a branch that sync ever produced would be
+visible in the data rather than silently shadowing a version.
 
 Every link carries `content`, the resulting document snapshot, and `authoring_trace`, how it was
 typed — identically for an entry and each of its revisions.
@@ -130,7 +142,7 @@ created through the full composer (`NewConnectionView.vue`). Both endpoints surf
 `parent_id === id || target_id === id` and marked `outgoing` or `incoming`.
 
 **`parent_id` alone defines containment; `target_id` is gathered but never traversed.** Walking
-`target_id` as if it were a parent breaks three things: a note on a connection folds into both
+`target_id` as if it were a parent breaks three things: a related entry on a connection folds into both
 endpoints and counts twice; connections chain, so the walk can cycle, and a visited set makes the
 result depend on traversal order; and "an entry's subtree" stops being well defined. So a
 connection's children belong to the connection.
@@ -182,17 +194,18 @@ interface Entry extends VersionedFields {
   target_id: string | null // connections only
   anchors: AnchorRef[] // empty = about the parent at large
   revision_mode: RevisionMode | null // revisions only; null everywhere else
+  base_version_id: string | null // revisions only: the version this one replaced
   authoring_trace: AuthoringTrace | null
 }
 ```
 
-| relation      | parent_id | target_id   | writes parent content | children |
-| ------------- | --------- | ----------- | --------------------- | -------- |
-| `null` (root) | null      | null        | is the base state     | yes      |
-| `annotation`  | required  | null        | never                 | yes      |
-| `update`      | required  | null        | never                 | yes      |
-| `connection`  | source    | destination | never                 | yes      |
-| `revision`    | required  | null        | yes, last-wins        | no       |
+| relation      | parent_id | target_id   | writes parent content                      | children |
+| ------------- | --------- | ----------- | ------------------------------------------ | -------- |
+| `null` (root) | null      | null        | is the base state                          | yes      |
+| `annotation`  | required  | null        | never                                      | yes      |
+| `update`      | required  | null        | never                                      | yes      |
+| `connection`  | source    | destination | never                                      | yes      |
+| `revision`    | required  | null        | yes, replacing the latest version it names | no       |
 
 **`id` is a UUIDv7.** `created_at` has millisecond resolution, so it isn't a total order; a v7 id
 carries a millisecond timestamp in its leading bits, so ids sort correctly as plain text and every
@@ -233,8 +246,8 @@ image node; a display kind is derived when needed. `content` is always a seriali
 
 ## Aggregate
 
-Children are exposed as collections, never concatenated into the parent's text, which would make
-anchoring impossible and `content` at a given time untrue.
+Related entries are exposed as collections, never concatenated into the parent's text, which would
+make anchoring impossible and `content` at a given time untrue.
 
 ```ts
 interface AggregatedEntry extends VersionedFields {
@@ -242,14 +255,14 @@ interface AggregatedEntry extends VersionedFields {
   created_at: string
   // VersionedFields are this entry's OWN state at asOf, folded from its version chain.
   version: { index: number; total: number; at: string; revision_id: string | null }
-  children: ResolvedChild[] // annotations and updates, in created_at order
+  related_entries: ResolvedRelatedEntry[] // annotations and updates, newest first
   connections: ResolvedConnection[]
 }
 
-interface ResolvedChild {
+interface ResolvedRelatedEntry {
   entry: AggregatedEntry
   relation_type: RelationType
-  anchors: ResolvedAnchor[] // this child's anchors, read out of the parent's current document
+  anchors: ResolvedAnchor[] // its anchors, read out of the parent's current document
   has_children: boolean // grandchildren are indicated, not expanded
 }
 
@@ -273,6 +286,6 @@ Default depth is 2: a parent view shows immediate descendants and signals that d
   children; a revision table would cost the unified `Entry` and revisions in filtered timelines.
 - **ProseMirror block ids as anchors.** Node attributes duplicate on split and vanish on merge, and
   give paragraph granularity where users want a sentence.
-- **Anchors as offsets stored on the child**, resolved by a fallback ladder (exact position, mapped
+- **Anchors as offsets stored on the related entry**, resolved by a fallback ladder (exact position, mapped
   through steps, quote search, orphaned). Every failure traced to one cause — a fact about the
   parent's document stored somewhere else — and moving anchors into the parent deleted the ladder.

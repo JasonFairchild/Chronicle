@@ -7,17 +7,15 @@ for the user is [PRODUCT.md](./PRODUCT.md) §5; this doc holds the order and the
 
 In order. Reorder here as priorities shift.
 
-1. **Docs pass.** Give each doc one responsibility, then consolidate and cut.
-2. **Reading pass on authoring capture** (AUTHORING.md and the code under it), trimming as it goes.
-3. **Test overhaul on Drafts** — contract, store, Dexie, browser, and Cypress — with the lessons
+1. **Test overhaul on Drafts** — contract, store, Dexie, browser, and Cypress — with the lessons
    recorded in TESTING.md and applied to later tests.
-4. **Session tracking as a ProseMirror plugin** (below).
-5. **Anchor wording as marked text** (below). Likely done together with 4, and before 7, since seed
+2. **Session tracking as a ProseMirror plugin** (below).
+3. **Anchor wording as marked text** (below). Likely done together with 2, and before 5, since seed
    traces record whichever document shape exists.
-6. **Validating content against the schema before it's stored** (below).
-7. **Seed data carrying a real authoring trace**, so the history view has long, replayable sessions
+4. **Validating content against the schema before it's stored** (below).
+5. **Seed data carrying a real authoring trace**, so the history view has long, replayable sessions
    to be designed against.
-8. **The scrubbable history view** (PRODUCT.md §5.1). Paint each frame with a read-only editor view
+6. **The scrubbable history view** (PRODUCT.md §5.1). Paint each frame with a read-only editor view
    and a `DecorationSet` built from its `FrameChange` ranges: no injected marks, no hand-built HTML.
 
 Further out, with no order yet: everything else in PRODUCT.md §5.

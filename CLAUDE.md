@@ -27,6 +27,7 @@ run is two calls. Prefer Read, Grep and Glob to the shell — they never prompt.
 | TESTING.md        | how tests are written                   | any test                                                              |
 | PRODUCT.md        | behavior: built, decided, maybe         | anything user-visible                                                 |
 | CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work                                              |
+| ARCHITECTURE.md   | the one-page diagram of layers and flow | adding, removing or rerouting a store, table, repository or flow      |
 
 ## Rules
 

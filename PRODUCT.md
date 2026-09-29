@@ -274,6 +274,9 @@ text").
 
 - Finished light and dark themes, with a switch that remembers the choice.
 - A polished install experience, on a phone home screen or a desktop.
+- **No failure is silent.** An error the screen in use doesn't handle itself still reaches the
+  writer, as a plain app-wide notice, never only the console. Failures with a known way forward (a
+  draft changed in another tab, one that can't be reopened) stay where the writer can act on them.
 
 ---
 
@@ -306,6 +309,11 @@ text").
   Restoring is best-effort: a related entry's own text always comes back, but anchors whose parent
   has since changed are dropped for the writer to place again. Archived drafts can still be deleted
   for good, so old ones don't pile up.
+- **A draft that can't be reopened** (its start time won't parse) behaves the same from the Drafts
+  list and from its entry. Today only the list shows its text, and as plain text. It could open
+  read-only instead, formatting intact for copying. Or, when its trace still reads as a sensible
+  sequence, the writer could choose to carry on with it under an estimated or fresh start time,
+  knowing the history's timing is a guess.
 
 ### Making anchor ops unmistakable
 

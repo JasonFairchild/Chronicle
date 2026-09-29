@@ -6,8 +6,8 @@ import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
-import { isEmptyEntry, previewText } from '@/domain/entryDocument'
-import { useDraftsStore } from '@/stores/draftsStore'
+import { docToPlainText, isEmptyEntry, previewText } from '@/domain/entryDocument'
+import { DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { DraftSnapshot } from '@/types/draft'
 import { entryLabel, formatDate, toErrorMessage } from '@/utils/format'
@@ -20,6 +20,7 @@ const store = useEntriesStore()
 
 const session = useDraftSession()
 const error = ref<string | null>(null)
+const unreadableId = ref<string | null>(null) // Shown whole, so its words can be copied before discarding.
 
 /** What each draft is attached to, so the list can name it rather than just describe its kind. */
 const parentLabels = ref<Record<string, string>>({})
@@ -96,7 +97,12 @@ async function resume(draft: DraftSnapshot): Promise<void> {
   // Reopening rebuilds the authoring session from what was flushed, so the event log continues
   // rather than restarting at the reload. This has to finish before the editor mounts — otherwise
   // typing right after clicking "Resume" could record into a session that isn't open yet.
-  await session.resume(draft.session_id)
+  try {
+    await session.resume(draft.session_id)
+  } catch (err) {
+    if (err instanceof DraftUnreadableError) unreadableId.value = draft.session_id
+    error.value = toErrorMessage(err, 'Failed to resume draft')
+  }
 }
 
 async function seal(): Promise<void> {
@@ -221,7 +227,16 @@ async function discard(sessionId: string): Promise<void> {
         </template>
 
         <template v-else>
-          <p class="whitespace-pre-wrap text-sm leading-relaxed">
+          <template v-if="draft.session_id === unreadableId">
+            <p class="mb-2 text-xs text-[var(--color-text-muted)]">
+              Everything it holds, to copy before you discard it:
+            </p>
+            <p v-if="draft.entry.title" class="font-medium">{{ draft.entry.title }}</p>
+            <p class="whitespace-pre-wrap text-sm leading-relaxed">
+              {{ docToPlainText(draft.entry.content) }}
+            </p>
+          </template>
+          <p v-else class="whitespace-pre-wrap text-sm leading-relaxed">
             {{ previewText(draft.entry.content, PREVIEW_LIMIT) }}
           </p>
 

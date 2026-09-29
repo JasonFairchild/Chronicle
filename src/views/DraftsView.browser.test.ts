@@ -143,6 +143,38 @@ describe('DraftsView (browser)', () => {
     expect(await entries.listRootEntries()).toEqual([])
   })
 
+  it('shows all of a draft that will not reopen for copying, and still discards it', async () => {
+    const text =
+      'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
+      'home, and why none of it went the way we planned.'
+    await drafts.save(
+      {
+        ...makeDraft('session-1', {
+          content: textContent(text),
+          title: 'Lake Tahoe',
+          events: TYPED,
+        }),
+        started_at: 'not a timestamp',
+      },
+      { entry: 0, parent: 0 },
+    )
+
+    const screen = mountDrafts()
+    await screen.getByRole('button', { name: 'Resume' }).click()
+
+    await expect
+      .element(screen.getByRole('alert'))
+      .toHaveTextContent(
+        'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
+      )
+    await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
+    await expect.element(screen.getByText(text)).toBeVisible()
+
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
+  })
+
   it('says so plainly when there is nothing in progress', async () => {
     const screen = mountDrafts()
 

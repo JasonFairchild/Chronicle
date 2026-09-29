@@ -139,6 +139,37 @@ describe('DraftsView', () => {
     })
   })
 
+  it('shows all of a draft that will not reopen for copying, and still discards it', () => {
+    const text =
+      'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
+      'home, and why none of it went the way we planned.'
+    cy.then(() =>
+      drafts.save(
+        {
+          ...makeDraft('session-1', {
+            content: textContent(text),
+            title: 'Lake Tahoe',
+            events: TYPED,
+          }),
+          started_at: 'not a timestamp',
+        },
+        { entry: 0, parent: 0 },
+      ),
+    )
+    mountDrafts()
+
+    cy.findByRole('button', { name: 'Resume' }).click()
+    cy.findByRole('alert').should(
+      'have.text',
+      'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
+    )
+    cy.findByText('Lake Tahoe').should('be.visible')
+    cy.findByText(text).should('be.visible')
+
+    cy.findByRole('button', { name: 'Discard' }).click()
+    cy.findByText('No drafts in progress.').should('be.visible')
+  })
+
   it('says so plainly when there is nothing in progress', () => {
     mountDrafts()
 

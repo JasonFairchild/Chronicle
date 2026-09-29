@@ -71,6 +71,19 @@ export interface ChangedElsewhere {
   unsaved: string | null
 }
 
+/**
+ * A stored draft no trace can carry on from, because its start time won't parse. Its words are on
+ * disk but out of reach, so discarding is the only way forward.
+ */
+export class DraftUnreadableError extends Error {
+  constructor() {
+    super(
+      'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
+    )
+    this.name = 'DraftUnreadableError'
+  }
+}
+
 interface ActiveSession {
   /** Every event log lives in the recorders, joined to this only by `materialize`. */
   draft: DraftSnapshot
@@ -154,13 +167,18 @@ export const useDraftsStore = defineStore('drafts', () => {
 
   /** Holds a draft open: its snapshot, and a recorder per document carrying on from its log. */
   function open(draft: Draft, persisted: boolean): ActiveSession {
-    const recorderFor = (document: DraftDocument) =>
-      TraceRecorder.resume(
-        draft.session_id,
-        draft.started_at,
-        document.base_content,
-        document.events,
-      )
+    const recorderFor = (document: DraftDocument) => {
+      try {
+        return TraceRecorder.resume(
+          draft.session_id,
+          draft.started_at,
+          document.base_content,
+          document.events,
+        )
+      } catch {
+        throw new DraftUnreadableError()
+      }
+    }
 
     return {
       draft: toSnapshot(draft),

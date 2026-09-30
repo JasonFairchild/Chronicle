@@ -8,7 +8,8 @@ for the user is [PRODUCT.md](./PRODUCT.md) §5; this doc holds the order and the
 In order. Reorder here as priorities shift.
 
 1. **Test overhaul on Drafts** — contract, store, Dexie, browser, and Cypress — with the lessons
-   recorded in TESTING.md and applied to later tests.
+   recorded in TESTING.md and applied to later tests. Working plan:
+   [TEST_OVERHAUL.md](./TEST_OVERHAUL.md).
 2. **Session tracking as a ProseMirror plugin** (below).
 3. **Anchor wording as marked text** (below). Likely done together with 2, and before 5, since seed
    traces record whichever document shape exists.

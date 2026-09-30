@@ -28,6 +28,7 @@ run is two calls. Prefer Read, Grep and Glob to the shell — they never prompt.
 | PRODUCT.md        | behavior: built, decided, maybe         | anything user-visible                                                 |
 | CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work                                              |
 | ARCHITECTURE.md   | the one-page diagram of layers and flow | adding, removing or rerouting a store, table, repository or flow      |
+| TEST_OVERHAUL.md  | the drafts test overhaul (temporary)    | any draft test, until it's folded into TESTING.md                     |
 
 ## Rules
 
@@ -37,6 +38,10 @@ run is two calls. Prefer Read, Grep and Glob to the shell — they never prompt.
 - **No related entry or connection is destructive.** Only a `revision` writes content.
 - **Sort entries with `compareEntries`, never `created_at` alone** — it ties at millisecond resolution.
 - Tests alongside every feature.
+- **Verify narrowly; pushes run everything.** Run the specs covering what changed —
+  `npm run test -- <path>`, `npm run test:browser -- <path>`, `npm run cy:run -- --spec <path>` —
+  and `npm run typecheck`. Pre-push runs both component suites (`lefthook.yml`), so run them in full
+  only for a broad change: a store, repository, editor schema, or shared test setup.
 - Composition API + `<script setup>`; all data access behind the repository layer.
 - No hard-coded colors that block dark mode.
 - **Semantics first.** Native elements before ARIA; reach for a role or `aria-*` only where no

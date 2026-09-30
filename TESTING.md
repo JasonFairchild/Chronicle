@@ -6,12 +6,12 @@ duplicated specs for tool comparison.
 
 ## Where tests live
 
-| Suffix              | Runner              | Environment   | What belongs here                                              |
-| ------------------- | ------------------- | ------------- | -------------------------------------------------------------- |
-| `*.test.ts`         | Vitest, `unit`      | node          | Pure logic: the fold, anchor resolution, id generation, stores |
-| `*.browser.test.ts` | Vitest, `browser`   | real Chromium | Components, and anything needing real browser APIs             |
-| `*.cy.ts`           | Cypress             | real browser  | Components, mirroring the `.browser.test.ts` spec              |
-| `*.contract.ts`     | imported, never run | either        | A shared suite run against multiple implementations            |
+| Suffix              | Runner              | Environment   | What belongs here                                       |
+| ------------------- | ------------------- | ------------- | ------------------------------------------------------- |
+| `*.test.ts`         | Vitest, `unit`      | node          | Pure logic; timing, races and faults the UI can't drive |
+| `*.browser.test.ts` | Vitest, `browser`   | real Chromium | Components, and anything needing real browser APIs      |
+| `*.cy.ts`           | Cypress             | real browser  | Components, mirroring the `.browser.test.ts` spec       |
+| `*.contract.ts`     | imported, never run | either        | A shared suite run against multiple implementations     |
 
 **Duplicate component specs are intentional.** `EntryCard.browser.test.ts` and
 `EntryCard.cy.ts` cover the same cases on purpose, to compare the two runners. Don't consolidate
@@ -38,12 +38,50 @@ real origin private file system, and neither has anything to fall back to in nod
   Don't assert internal state, private methods, or DOM structure nobody interacts with.
 - **Don't test child components.** They get their own specs, or are treated as third party.
   Selecting or interacting with a child's elements as a means to an end is fine; asserting on
-  behavior that belongs to the child is not.
+  behavior that belongs to the child is not. Where a parent only configures a child and the one
+  visible result is styling — a table's `striped` prop, say — assert the prop it passes
+  (`findComponent(Table).props('striped')`), not the computed CSS; the child's spec already proves
+  what the prop does.
 - **Prefer whole flows.** One test covering a complete scenario beats several granular ones. Longer
   tests are fine when they represent one coherent idea, such as select a passage, strike it, propose
   wording, save, and see it rendered.
 - **Prefer spying over mocking.** Use real logic wherever possible so tests exercise real code
   paths. Minimize mocking, especially at first.
+- **Use a fail first approach.** Every new test should be proven to fail as expected before being
+  made to pass. For already working code, it can be broken, tested then restored.
+
+## Layers
+
+Tests are one design, judged together rather than file by file. Component specs come first and
+carry what a user would care about; unit specs cover what's left. Overlap between those two levels
+is kept to a minimum — unlike the Cypress ↔ Browser Mode duplication, which is deliberate.
+
+**Component specs are narrow end-to-end tests.** They run real stores over real repositories on a
+real, isolated database (see "Swap the repository" below), so they prove a flow from the click down
+to what's stored. Keep them independent of which backend that is:
+
+- **Arrange through the repository interface, act through the UI, assert through the UI.** Read the
+  repository only for what no screen can show: nothing left on disk, the original row untouched, a
+  trace that has no view yet.
+- **Type storage handles as the interfaces** (`DraftRepository`, `EntryRepository`), never an
+  adapter class. Changing what backs component specs — in-memory adapters under a desktop shell,
+  say — should then touch `src/testing/realRepositories.ts` alone. The contract suites are what
+  make that swap safe.
+- **A repository read doesn't retry.** In Cypress, place it after a UI assertion that waits on the
+  same write; in Vitest, wrap it in `vi.waitFor`. Retrying only helps presence: an absence ("no
+  draft was written") passes on the first try (see Don'ts).
+
+**A unit test is warranted on top of component coverage for:**
+
+1. Pure logic with many cases, where a table of inputs beats a UI flow per case.
+2. Timing, ordering and races the UI can't drive deterministically.
+3. Fault injection — a failed write, a conflict — where forcing it through the UI would mean mocking
+   under a real stack.
+4. Contracts: one interface, several implementations.
+5. Definitions whose value is the point: the schema, the route table, a constant.
+
+Not for re-walking a flow a component spec already walks, or re-proving a child's behavior. When a
+component spec comes to cover the reason a unit test exists, delete the unit test.
 
 ## Don'ts
 
@@ -56,6 +94,10 @@ Be hardline on these, particularly for new tests.
 - Don't add triple-slash references in test files.
 - Don't import `mount` directly. Use `cy.mount` in Cypress, `renderComponent` (not `render`) in
   Vitest Browser Mode.
+- Don't assert absence without a baseline: something the test waits on that is guaranteed to come
+  at or after the point the unwanted thing would have appeared — the element seen before the action
+  that removes it, a later UI state, another write through the same path, a spied action resolving.
+  A red run against unfixed code is no substitute; an absence checked too early passes either way.
 - Don't reach for a test id when a role or text query works.
 - Don't use a regex when an exact string matches. Reserve regex for genuinely partial or dynamic
   text, such as a version label embedded in a longer sentence.
@@ -95,8 +137,8 @@ it sets `role="textbox"` and an `aria-label` from its `label` prop: query it as
 `getByRole('textbox', { name: 'New entry' })`. The title is a separate, ordinary input beside it —
 `getByRole('textbox', { name: 'Title' })` — so filling one leaves the other alone. Filling the body
 replaces its whole document; to append, click and use `{Control>}{End}{/Control}` (Cypress:
-`{ctrl}{end}`). Cypress has no `{tab}` sequence (cypress-io/cypress#299), so a spec that needs Tab
-dispatches the keydown on `cy.focused()` — see `DocumentEditor.cy.ts`.
+`{ctrl}{end}`). Cypress's `.type()` has no `{tab}`; press it natively with
+`cy.press(Cypress.Keyboard.Keys.TAB)`.
 
 ## Structure and naming
 
@@ -206,4 +248,6 @@ Application → IndexedDB. Browser specs gets a uniquely-named DB, disposed in t
 
 ## Known gaps
 
-- Nothing outstanding.
+- A draft's multi-tab behavior (tab return, two tabs saving at once) is tested only at store level,
+  and there is no true end-to-end layer yet.
+- The drafts tests are mid-overhaul toward "Layers": [TEST_OVERHAUL.md](./TEST_OVERHAUL.md).

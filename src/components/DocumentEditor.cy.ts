@@ -91,17 +91,8 @@ describe('DocumentEditor', () => {
       attrs: { onChange },
     })
 
-    // Cypress's `.type()` has no `{tab}` sequence (cypress-io/cypress#299), so the keydown the
-    // title field listens for is dispatched directly, on whichever element has focus.
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
-    cy.focused().trigger('keydown', {
-      key: 'Tab',
-      code: 'Tab',
-      keyCode: 9,
-      which: 9,
-      bubbles: true,
-      cancelable: true,
-    })
+    cy.press(Cypress.Keyboard.Keys.TAB)
     cy.focused().type('We drove up on Friday.')
 
     cy.get('@change').then((stub) => {

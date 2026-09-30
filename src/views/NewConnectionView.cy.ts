@@ -38,7 +38,9 @@ describe('NewConnectionView', () => {
       // Not checking the resulting route here: `cy.mount`'s router runs on in-memory history,
       // which never touches the real address bar `cy.location()` reads — see
       // EntryDetailView.cy.ts for the same limitation. The Vitest browser spec checks the
-      // post-save route directly against the router instance it built itself.
+      // post-save route directly against the router instance it built itself. The composer
+      // closes only once the save has landed.
+      cy.findByRole('textbox', { name: 'New connection' }).should('not.exist')
       cy.then(() => repository.listConnectionsFor(source.id)).then((connections) => {
         expect(connections[0]?.title).to.equal('Led to it')
         expect(connections[0]?.dates.occurred_at).to.equal('2020-01-01')
@@ -64,6 +66,8 @@ describe('NewConnectionView', () => {
       cy.findByRole('textbox', { name: 'New connection' }).type('These rhyme.')
       cy.findByRole('button', { name: 'Add connection' }).click()
 
+      // The composer closes only once the save has landed.
+      cy.findByRole('textbox', { name: 'New connection' }).should('not.exist')
       cy.then(() => repository.listConnectionsFor(source.id)).then((connections) => {
         expect(connections[0]?.title).to.equal(null)
         expect(connections[0]?.target_id).to.equal(destination.id)
@@ -82,11 +86,6 @@ describe('NewConnectionView', () => {
 
       cy.findByLabelText('Connect to').select(destination.id)
       cy.findByRole('button', { name: 'Add connection' }).should('be.disabled')
-
-      // Picking a target begins a real draft session. Discarding it here, rather than leaving
-      // it for unmount to clean up fire-and-forget, keeps that write from racing this test's
-      // own isolated database being torn down right after.
-      cy.findByRole('button', { name: 'Discard' }).click()
     })
   })
 

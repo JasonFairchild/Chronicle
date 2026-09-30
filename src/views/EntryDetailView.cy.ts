@@ -297,9 +297,6 @@ describe('EntryDetailView', () => {
       cy.findByRole('textbox', { name: 'Related entry' }).type('x{backspace}')
 
       cy.findByRole('button', { name: 'Add entry' }).should('be.disabled')
-      cy.then(() => repository.listChildren(parent.id)).then((children) => {
-        expect(children).to.have.length(0)
-      })
       cy.findByRole('button', { name: 'Discard' }).click()
     })
   })
@@ -393,12 +390,15 @@ describe('EntryDetailView', () => {
       // Another tab: its own stores over the same database, where Revise was clicked and nothing
       // typed yet.
       setActivePinia(createPinia())
-      const otherTab = useDraftsStore()
       const aggregated = await useEntriesStore().getAggregatedEntry(parent.id)
-      const sessionId = otherTab.beginDraft({ kind: 'revision', parent: aggregated! })
-      await otherTab.flush(sessionId)
+      cy.spy(drafts, 'save').as('saveDraft')
+      useDraftsStore().beginDraft({ kind: 'revision', parent: aggregated! })
       return parent
     }).then((parent) => {
+      // Beginning alone writes the claim; waiting on that write, not a flush of our own, proves it.
+      cy.get('@saveDraft')
+        .should('have.been.calledOnce')
+        .then((save) => save.firstCall.returnValue)
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Resume draft' }).should('be.visible')

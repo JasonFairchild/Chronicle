@@ -96,13 +96,6 @@ describe('NewConnectionView (browser)', () => {
     await screen.getByLabelText('Connect to').selectOptions(destination.id)
 
     await expect.element(screen.getByRole('button', { name: 'Add connection' })).toBeDisabled()
-
-    // Picking a target begins a real draft session. Discarding it and waiting for that to land
-    // keeps the write from racing this test's own isolated database being torn down afterward.
-    await screen.getByRole('button', { name: 'Discard' }).click()
-    await vi.waitFor(async () => {
-      expect(await drafts.list()).toEqual([])
-    })
   })
 
   it('keeps a half-written connection when the screen is left without discarding it', async () => {

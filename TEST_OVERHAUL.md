@@ -21,6 +21,7 @@ Drafts first; lessons are then applied to later tests. In scope:
   which owns flush-on-leave and the drafts' tab-return check), real reloads, a second tab.
 - **Specs couple to the backend more than they need to.** They type storage as `DexieDraftRepository`
   / `DexieEntryRepository`, and several assert through the repository where the UI could show it.
+  The types were fixed in Pass 1.
 - **Unit and component levels overlap.** Of `draftsStore.test.ts`'s ~34 cases, roughly a quarter
   duplicate component coverage, roughly a third are user-visible behavior tested only in the store,
   and the durability and race cases are the store's real reason for unit tests.
@@ -28,31 +29,34 @@ Drafts first; lessons are then applied to later tests. In scope:
   mirror: "offers the draft already in progress on an entry rather than a second one", "shows the
   version another tab saved once this tab is returned to", "offers the draft another tab has only
   just opened on an entry, before a word is typed", "saves a revision that only changes formatting".
+  Mirrored in Pass 1.
 
 ## Why the draft code exists
 
 The inventory every pass is measured against. Sources: PRODUCT.md §4.1, §4.5, §4.8; AUTHORING.md
-"Drafts". A first draft, to verify in Pass 1. "EDV" is `EntryDetailView`.
+"Drafts". Checked against what each spec asserts at the end of Pass 1 (2026-09-30); what the
+check found is under the tables. "EDV" is `EntryDetailView`.
 
 ### User-visible
 
 | #   | Behavior                                                                     | Covered now                                                | Target                    |
 | --- | ---------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------- |
 | U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | EntryForm, both runners                                    | component ✓               |
-| U2  | A composer opened and left writes nothing                                    | EntryForm (weak: absence asserted before any flush), store | component, strengthened   |
+| U2  | A composer opened and left writes nothing                                    | EntryForm, both runners; store (weak)                      | component ✓               |
 | U3  | Leaving mid-draft keeps it                                                   | EDV, NewConnectionView; not the new-entry composer         | component                 |
-| U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView ("Related entry on" only); order in store       | component                 |
-| U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView (dates missing)                                 | component                 |
-| U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView                                                 | component ✓               |
+| U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView: one label of four, no time; order in store     | component                 |
+| U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView (dates missing); EDV resumes a revision's words | component                 |
+| U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView (Cypress doesn't count the entries)             | component ✓               |
 | U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView (not while another is open); store              | component                 |
 | U8  | A draft emptied of its words disappears                                      | store only                                                 | component                 |
-| U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, Browser Mode only                                     | component, both runners   |
-| U10 | Leaving an untouched claim frees the entry                                   | store; EDV checks revisions, not the buttons coming back   | component                 |
+| U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                          | component ✓               |
+| U10 | Leaving an untouched claim frees the entry                                   | store only; no EDV test leaves a claim untouched           | component                 |
 | U11 | A stale version refuses the save, says why, and the draft stays              | store only; `staleNotice` is in no UI test                 | component                 |
 | U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                 | component ✓               |
-| U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | store only (the entry-refresh half is in EDV Browser Mode) | spike component, else E2E |
+| U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | store only (the entry-refresh half is in EDV)              | spike component, else E2E |
 | U14 | Two tabs save at once: the first wins, the other shows its text to copy      | store only                                                 | spike component, else E2E |
 | U15 | After saving, the composer is empty; an empty entry can't be saved           | EntryForm and the other composers                          | component ✓               |
+| U16 | A revision saves formatting alone; one that changes nothing is refused       | EDV (formatting); the refusal in entriesStore only         | component                 |
 
 ### Durability the user can't see
 
@@ -67,9 +71,26 @@ Unit tests, unless a pass finds a component spec that drives one deterministical
 | I5  | Seal is one transaction; a refused seal leaves the draft                     | contract               |
 | I6  | Event logs are append-only; a conflicting append refuses the whole save      | contract (entry log)   |
 | I7  | The stored draft doesn't share the caller's object                           | contract               |
-| I8  | A claim is written at begin, before anything is typed                        | store; EDV Browser     |
+| I8  | A claim is written at begin, before anything is typed                        | store; EDV             |
 | I9  | Releasing a claim is judged on what disk holds                               | store                  |
 | I10 | A resume continues the trace: events carry on, `started_at` is kept          | store                  |
+
+### What the check found
+
+Component specs named without a runner cover both.
+
+- **U2.** The store's "writes nothing for a composer that was opened and walked away from" never
+  lets the session go, so it reads before any flush could land, as the old EntryForm test did.
+- **U4.** The page labels four kinds; only "Related entry on" is asserted. The preview appears only
+  as the wait before Resume or Discard.
+- **U6.** Cypress destructures the first root entry; only Browser Mode checks there is exactly one.
+- **U7.** In EDV and NewConnectionView, only Browser Mode shows Discard reaching disk, through
+  waits written as cleanup ("will not save a related entry that says nothing", "abandons a
+  revision…", "will not add a connection with no content"). The Cypress mirrors click and stop.
+- **U10.** The old row credited EDV, but "abandons a revision without touching the entry" discards
+  typed work. It doesn't let an untouched claim go.
+- **U16**, new: the formatting-only test mirrored in Commit 4 covered a behavior no row named.
+- **I1.** The whole burst lands before the timer fires, so a debounce would pass too.
 
 ### Pure logic
 
@@ -173,18 +194,40 @@ Grouped into proposed commits (the user may let more build up between them).
 
 **Commit 5 — inventory** (last, since the commits above change what specs assert)
 
-- [ ] Verify the inventory above against what each spec actually asserts.
+- [x] Verify the inventory above against what each spec actually asserts.
 
 ### Pass 2 — fill component gaps
+
+Grouped into proposed commits, as in Pass 1.
+
+**Commit 1 — tests that couldn't fail**
 
 - [x] U2 strengthened, done early: its disabled→enabled flip only re-proved `DocumentEditor`'s
       "reports nothing when only its editability changes", and passed without it; it now mounts
       and unmounts.
-- [ ] Look for more tests like the old U2: a parent spec re-driving a child's behavior, or a test
-      still green with the fix it names reverted. Revert the fix to check; Commit 5's read of every
-      assertion is where candidates turn up.
-- [ ] U3 (new entry), U4, U5 (dates), U7, U8, U10, U11, in DraftsView and the
+- [x] Look for more tests like the old U2: a parent spec re-driving a child's behavior, or a test
+      still green with the fix it names reverted. Found:
+  - EDV "offers the draft another tab has only just opened…" flushed the other tab itself, so it
+    stayed green with `beginDraft`'s claim write removed (checked in both runners). It now waits
+    on the write beginning starts, through a spy on the repository's `save`.
+  - EDV "will not save a related entry that says nothing" read for a child nothing could have
+    written; NewConnectionView "will not add a connection with no content" discarded to settle a
+    write that never happens, since a connection claims nothing. Both dropped, in both runners.
+  - Cypress still read the repository straight after a click in five places (EntryForm ×2,
+    NewConnectionView ×2, DraftsView "reopens…"). Each now waits on the composer emptying or
+    closing, checked by delaying `sealDraft` 500ms. A disabled editor shows its title as text, so
+    "no Title textbox" passes the moment a save starts; the body textbox is the one to wait on.
+  - Outside drafts, for a later pass: EDV's anchor-warning tests walk `changesInside`'s edge cases
+    (moved, touching either edge, same-length paste) through the page. `anchorWarnings.test.ts`
+    already tables them, and `affectedAnchorIds` is `DocumentEditor`'s, whose spec has no test of
+    it. "stays quiet when a revision only moves an anchor" also checks its absence with no baseline.
+
+**Later commits**
+
+- [ ] U3 (new entry), U4, U5 (dates), U7, U8, U10, U11, U16, in DraftsView and the
       composer specs. U11 seeds a draft on a superseded version through the repository.
+- [ ] Close the runner gaps the inventory check found: U6's entry count and U7's Discard reaching
+      disk, in Cypress. Decide whether U7's Browser waits are assertions and say so.
 - [ ] Spike U13, U14 and I2 at component level. `DraftsView` doesn't listen for tab return; `App.vue`
       does. Try mounting `App` at `/drafts`, a second Pinia as the other tab, and a dispatched
       `focus` / `visibilitychange` / `pagehide`. Record the outcome in D4 either way.
@@ -192,7 +235,8 @@ Grouped into proposed commits (the user may let more build up between them).
 ### Pass 3 — prune unit tests
 
 - [ ] Map each `draftsStore.test.ts` case to an inventory row; delete those whose row a component
-      spec now covers; regroup the rest by durability concern.
+      spec now covers; regroup the rest by durability concern. The weak U2 case goes, and I1
+      gains a case that tells a throttle from a debounce.
 - [ ] Trace internals (a no-steps change skipped, an anchor op in the parent stream): move to
       traceRecorder tests if they aren't there already, or drop.
 - [ ] The same exercise for the draft cases in `entriesStore.test.ts`.

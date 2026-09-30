@@ -21,7 +21,7 @@ describe('EntryForm', () => {
     cy.focused().type('We drove up on Friday.')
 
     // Still a draft: nothing a person has not finished belongs in the timeline.
-    cy.get<sinon.SinonSpy>('@saveDraft')
+    cy.get('@saveDraft')
       .should('have.been.called')
       .then((saveDraft) => saveDraft.firstCall.returnValue)
     cy.then(async () => {
@@ -52,6 +52,8 @@ describe('EntryForm', () => {
     cy.findByRole('textbox', { name: 'New entry' }).type('From the green notebook')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
+    // The composer empties only once the save has landed.
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
     cy.then(async () => {
       const [saved] = await entries.listRootEntries()
       expect(saved?.dates.occurred_at).to.equal('1994-06-11')
@@ -105,6 +107,8 @@ describe('EntryForm', () => {
 
     cy.findByRole('button', { name: 'Save entry' }).should('be.enabled').click()
 
+    // The composer empties only once the save has landed.
+    cy.findByRole('textbox', { name: 'New entry' }).should('not.contain.text', 'We drove up')
     cy.then(async () => {
       const [saved] = await entries.listRootEntries()
       expect(saved?.title).to.equal(null)

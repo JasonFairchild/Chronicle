@@ -296,7 +296,6 @@ describe('EntryDetailView (browser)', () => {
     await userEvent.keyboard('x{Backspace}')
 
     await expect.element(screen.getByRole('button', { name: 'Add entry' })).toBeDisabled()
-    expect(await repository.listChildren(parent.id)).toEqual([])
 
     await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
@@ -389,10 +388,13 @@ describe('EntryDetailView (browser)', () => {
     // Another tab: its own stores over the same database, where Revise was clicked and nothing
     // typed yet.
     setActivePinia(createPinia())
-    const otherTab = useDraftsStore()
     const aggregated = await useEntriesStore().getAggregatedEntry(parent.id)
-    const sessionId = otherTab.beginDraft({ kind: 'revision', parent: aggregated! })
-    await otherTab.flush(sessionId)
+    const save = vi.spyOn(drafts, 'save')
+    useDraftsStore().beginDraft({ kind: 'revision', parent: aggregated! })
+
+    // Beginning alone writes the claim; waiting on that write, not a flush of our own, proves it.
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce())
+    await save.mock.results[0]!.value
 
     const screen = await mountDetail(parent.id)
 

@@ -95,7 +95,9 @@ describe('DraftsView', () => {
 
     cy.findByRole('button', { name: 'Add entry' }).click()
 
-    // The anchor placed before the reload is still the one the sealed related entry refers to.
+    // The list empties only once the save has landed. The anchor placed before the reload is
+    // still the one the sealed related entry refers to.
+    cy.findByText('No drafts in progress.').should('be.visible')
     cy.then(() => entries.listChildren(parentId)).then((children) => {
       expect(children).to.have.length(1)
       expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')

@@ -4,6 +4,7 @@ import DraftsView from '@/views/DraftsView.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
@@ -256,6 +257,35 @@ describe('DraftsView (browser)', () => {
       .toBeVisible()
     expect(await entries.listRevisions(parent.id)).toHaveLength(1)
     expect(await drafts.list()).toHaveLength(1)
+  })
+
+  it('lets go of an untouched claim when the page is left', async () => {
+    const parent = await entries.create(createEntryInput({ content: textContent('The first go') }))
+    // A revision nobody has typed in yet: its words are still the entry's own.
+    await seedDraft(
+      drafts,
+      makeDraft('session-1', {
+        entry: {
+          base_version_id: parent.id,
+          base_content: parent.content,
+          content: parent.content,
+        },
+        kind: { kind: 'revision', parent_id: parent.id },
+      }),
+    )
+
+    const screen = renderComponent(DraftsView)
+    await screen.getByRole('button', { name: 'Resume' }).click()
+    await expect.element(screen.getByRole('textbox', { name: 'Draft' })).toBeVisible()
+
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
+    screen.unmount()
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+
+    const returned = renderComponent(DraftsView)
+
+    await expect.element(returned.getByText('No drafts in progress.')).toBeVisible()
   })
 
   it('shows all of a draft that will not reopen for copying, and still discards it', async () => {

@@ -386,6 +386,27 @@ describe('EntryDetailView', () => {
     })
   })
 
+  it('frees the entry when the page is left with a revision opened and untouched', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      mountDetail(parent.id).then(({ wrapper }) => {
+        cy.findByRole('button', { name: 'Revise entry' }).click()
+        cy.findByRole('textbox', { name: 'Revised entry' }).should('be.visible')
+
+        // Leaving the page, not moving to another entry, is how most sessions end.
+        cy.then(async () => {
+          const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+          wrapper.unmount()
+          expect(abandonDraft).to.have.callCount(1)
+          await abandonDraft.firstCall.returnValue
+        })
+      })
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
+      cy.findByRole('button', { name: 'Resume draft' }).should('not.exist')
+    })
+  })
+
   it('shows the version another tab saved once this tab is returned to', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
@@ -682,17 +703,27 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('abandons a revision without touching the entry', () => {
+  it('discards a revision on request, leaving the entry untouched', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
       cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end} — actually never mind')
+      // Revise wrote a claim, and Discard waits on that write before deleting: there is always a
+      // row to remove.
+      cy.then(() => {
+        cy.spy(useDraftsStore(), 'discardDraft').as('discardDraft')
+      })
       cy.findByRole('button', { name: 'Discard revision' }).click()
 
       cy.findByText(PARENT_TEXT).should('be.visible')
-      cy.then(() => repository.listRevisions(parent.id)).then((revisions) => {
-        expect(revisions).to.have.length(0)
+      // Resolves once the delete has landed.
+      cy.get('@discardDraft')
+        .should('have.been.calledOnce')
+        .then((discardDraft) => discardDraft.firstCall.returnValue)
+      cy.then(async () => {
+        expect(await drafts.list()).to.have.length(0)
+        expect(await repository.listRevisions(parent.id)).to.have.length(0)
       })
     })
   })

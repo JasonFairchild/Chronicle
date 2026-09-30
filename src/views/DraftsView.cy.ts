@@ -2,6 +2,7 @@ import DraftsView from '@/views/DraftsView.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
@@ -261,6 +262,40 @@ describe('DraftsView', () => {
       expect(await entries.listRevisions(parentId)).to.have.length(1)
       expect(await drafts.list()).to.have.length(1)
     })
+  })
+
+  it('lets go of an untouched claim when the page is left', () => {
+    cy.then(async () => {
+      const parent = await entries.create(
+        createEntryInput({ content: textContent('The first go') }),
+      )
+      // A revision nobody has typed in yet: its words are still the entry's own.
+      await seedDraft(
+        drafts,
+        makeDraft('session-1', {
+          entry: {
+            base_version_id: parent.id,
+            base_content: parent.content,
+            content: parent.content,
+          },
+          kind: { kind: 'revision', parent_id: parent.id },
+        }),
+      )
+    })
+    cy.mount(DraftsView).then(({ wrapper }) => {
+      cy.findByRole('button', { name: 'Resume' }).click()
+      cy.findByRole('textbox', { name: 'Draft' }).should('be.visible')
+
+      cy.then(async () => {
+        const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+        wrapper.unmount()
+        expect(abandonDraft).to.have.callCount(1)
+        await abandonDraft.firstCall.returnValue
+      })
+    })
+    cy.mount(DraftsView)
+
+    cy.findByText('No drafts in progress.').should('be.visible')
   })
 
   it('shows all of a draft that will not reopen for copying, and still discards it', () => {

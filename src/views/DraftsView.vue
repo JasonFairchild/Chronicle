@@ -41,6 +41,8 @@ watch(anchorModeOpen, (open) => {
 
 onBeforeUnmount(() => {
   layoutWidth.value = 'normal'
+  // Leaving keeps the open draft's work and releases an untouched claim, as every composer does.
+  session.reset()
 })
 
 onMounted(() => {

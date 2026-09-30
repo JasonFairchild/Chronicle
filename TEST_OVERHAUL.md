@@ -47,10 +47,10 @@ check found is under the tables. "EDV" is `EntryDetailView`.
 | U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView                                                  | component ✓               |
 | U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView; EDV resumes a revision's words                  | component ✓               |
 | U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView                                                  | component ✓               |
-| U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView; composers in Browser Mode only; store           | component                 |
+| U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView, EDV (revision), NewConnectionView; store        | component ✓               |
 | U8  | A draft emptied of its words disappears                                      | EntryForm; store                                            | component ✓               |
 | U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                           | component ✓               |
-| U10 | Leaving an untouched claim frees the entry                                   | EDV; store                                                  | component ✓               |
+| U10 | Leaving an untouched claim frees the entry                                   | EDV (entry change, page left), DraftsView; store            | component ✓               |
 | U11 | A stale version refuses the save, says why, and the draft stays              | DraftsView (a revision; not the anchor-mode wording); store | component ✓               |
 | U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                  | component ✓               |
 | U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | store only (the entry-refresh half is in EDV)               | spike component, else E2E |
@@ -235,10 +235,24 @@ Grouped into proposed commits, as in Pass 1.
 
 - [x] U3 and U8 in EntryForm; U10 and U16's refusal in EDV.
 
+**Commit 4 — U7 in the composers**
+
+- [x] Close the runner gap the inventory check found: U7's Discard reaching disk in the composers,
+      in Cypress. EDV's "abandons a revision…" became "discards a revision on request…", and
+      NewConnectionView gained "discards a half-written connection on request". Each spies on
+      `discardDraft`, awaits it, and reads the repository, with a row on disk first: Revise's
+      claim, or typing that has reached disk, since a connection claims nothing.
+- [x] Decided: the remaining Browser waits after Discard (the related-entry and anchor-warning
+      tests in EDV) are cleanup, not U7's assertions. They fail when Discard doesn't delete, since
+      a claim lands well before the click, but only by that timing: a retried absence passes the
+      moment it's first true. U7 rests on the two tests above.
+- [x] Found on the way, a bug: EDV and DraftsView let their sessions go only on a change of entry,
+      never when the page itself was left, so an untouched claim outlived it and the entry offered
+      **Resume draft** for nothing. U10's test had changed the `id` prop, the one path that worked.
+      Each view now resets on unmount; a test per view leaves the page, red first in both runners.
+
 **Later commits**
 
-- [ ] Close the runner gap the inventory check found: U7's Discard reaching disk in the composers,
-      in Cypress. Decide whether U7's Browser waits are assertions and say so.
 - [ ] Spike U13, U14 and I2 at component level. `DraftsView` doesn't listen for tab return; `App.vue`
       does. Try mounting `App` at `/drafts`, a second Pinia as the other tab, and a dispatched
       `focus` / `visibilitychange` / `pagehide`. Record the outcome in D4 either way.

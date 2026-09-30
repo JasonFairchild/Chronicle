@@ -119,6 +119,38 @@ describe('NewConnectionView', () => {
     })
   })
 
+  it('discards a half-written connection on request', () => {
+    cy.then(async () => ({
+      source: await repository.create(createEntryInput({ content: textContent('Left my job') })),
+      destination: await repository.create(
+        createEntryInput({ content: textContent('Started the degree') }),
+      ),
+    })).then(({ source, destination }) => {
+      mountNewConnection(source.id)
+      cy.spy(drafts, 'save').as('saveDraft')
+
+      cy.findByLabelText('Connect to').select(destination.id)
+      cy.findByRole('textbox', { name: 'New connection' }).type('These rhyme, somehow')
+      // A connection claims nothing, so only typing puts a row on disk for Discard to remove.
+      cy.get('@saveDraft')
+        .should('have.been.called')
+        .then((saveDraft) => saveDraft.firstCall.returnValue)
+
+      cy.then(() => {
+        cy.spy(useDraftsStore(), 'discardDraft').as('discardDraft')
+      })
+      cy.findByRole('button', { name: 'Discard' }).click()
+
+      // Resolves once the delete has landed.
+      cy.get('@discardDraft')
+        .should('have.been.calledOnce')
+        .then((discardDraft) => discardDraft.firstCall.returnValue)
+      cy.then(async () => {
+        expect(await drafts.list()).to.have.length(0)
+      })
+    })
+  })
+
   it('says there is nothing to connect to rather than showing an empty picker', () => {
     cy.then(() =>
       repository.create(createEntryInput({ content: textContent('Left my job') })),

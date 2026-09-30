@@ -384,6 +384,27 @@ describe('EntryDetailView (browser)', () => {
       .not.toBeInTheDocument()
   })
 
+  it('frees the entry when the page is left with a revision opened and untouched', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+    await expect.element(screen.getByRole('textbox', { name: 'Revised entry' })).toBeVisible()
+
+    // Leaving the page, not moving to another entry, is how most sessions end.
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
+    screen.unmount()
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+
+    const returned = await mountDetail(parent.id)
+
+    await expect.element(returned.getByRole('button', { name: 'Revise entry' })).toBeVisible()
+    await expect
+      .element(returned.getByRole('button', { name: 'Resume draft' }))
+      .not.toBeInTheDocument()
+  })
+
   it('shows the version another tab saved once this tab is returned to', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
     const screen = await mountDetail(parent.id)
@@ -696,7 +717,7 @@ describe('EntryDetailView (browser)', () => {
     expect(await repository.listRevisions(parent.id)).toEqual([])
   })
 
-  it('abandons a revision without touching the entry', async () => {
+  it('discards a revision on request, leaving the entry untouched', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
@@ -704,17 +725,17 @@ describe('EntryDetailView (browser)', () => {
 
     await screen.getByRole('textbox', { name: 'Revised entry' }).click()
     await userEvent.keyboard('{Control>}{End}{/Control} — actually never mind')
+    // Revise wrote a claim, and Discard waits on that write before deleting: there is always a
+    // row to remove.
+    const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
     await screen.getByRole('button', { name: 'Discard revision' }).click()
 
     await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
+    // Resolves once the delete has landed.
+    expect(discardDraft).toHaveBeenCalledOnce()
+    await discardDraft.mock.results[0]!.value
+    expect(await drafts.list()).toEqual([])
     expect(await repository.listRevisions(parent.id)).toEqual([])
-
-    // Discarding is fire-and-forget from the click alone; wait for it to actually reach the
-    // draft store before the test ends, or its in-flight write can outlive this test's own
-    // isolated database.
-    await vi.waitFor(async () => {
-      expect(await drafts.list()).toEqual([])
-    })
   })
 
   it('navigates to a dedicated screen to add a connection', async () => {

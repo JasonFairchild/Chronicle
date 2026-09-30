@@ -125,6 +125,31 @@ describe('NewConnectionView (browser)', () => {
     })
   })
 
+  it('discards a half-written connection on request', async () => {
+    const source = await repository.create(
+      createEntryInput({ content: textContent('Left my job') }),
+    )
+    const destination = await repository.create(
+      createEntryInput({ content: textContent('Started the degree') }),
+    )
+
+    const { screen } = await mountNewConnection(source.id)
+    await screen.getByLabelText('Connect to').selectOptions(destination.id)
+    await screen.getByRole('textbox', { name: 'New connection' }).fill('These rhyme, somehow')
+    // A connection claims nothing, so only typing puts a row on disk for Discard to remove.
+    await vi.waitFor(async () => {
+      expect(await drafts.list()).toHaveLength(1)
+    })
+
+    const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    // Resolves once the delete has landed.
+    expect(discardDraft).toHaveBeenCalledOnce()
+    await discardDraft.mock.results[0]!.value
+    expect(await drafts.list()).toEqual([])
+  })
+
   it('says there is nothing to connect to rather than showing an empty picker', async () => {
     const source = await repository.create(
       createEntryInput({ content: textContent('Left my job') }),

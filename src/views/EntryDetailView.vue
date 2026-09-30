@@ -229,13 +229,13 @@ async function loadBreadcrumb(entry: AggregatedEntry): Promise<{ id: string; lab
   })
 }
 
-/** Discards an in-progress revision rather than leaving it open. */
+/** Lets go of the revision session: its work stays a draft, and an untouched claim is released. */
 function resetRevisionState(): void {
   revisionSession.reset()
   revisionAffectedAnchorIds.value = []
 }
 
-/** Discards an in-progress anchor-mode session rather than leaving it open. */
+/** Lets go of the anchor-mode session, the same way. */
 function resetRelatedState(): void {
   relatedSession.reset()
 }
@@ -280,6 +280,9 @@ watch(
 
 onBeforeUnmount(() => {
   layoutWidth.value = 'normal'
+  // Leaving the page ends its sessions as surely as changing entry does.
+  resetRevisionState()
+  resetRelatedState()
 })
 
 /** Connections get the full entry model (title, dates, rich content), so they're a whole screen. */

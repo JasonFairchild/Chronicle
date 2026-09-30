@@ -39,24 +39,24 @@ check found is under the tables. "EDV" is `EntryDetailView`.
 
 ### User-visible
 
-| #   | Behavior                                                                     | Covered now                                                 | Target                    |
-| --- | ---------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------- |
-| U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | EntryForm, both runners                                     | component ✓               |
-| U2  | A composer opened and left writes nothing                                    | EntryForm, both runners; store (weak)                       | component ✓               |
-| U3  | Leaving mid-draft keeps it                                                   | EntryForm, EDV, NewConnectionView                           | component ✓               |
-| U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView                                                  | component ✓               |
-| U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView; EDV resumes a revision's words                  | component ✓               |
-| U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView                                                  | component ✓               |
-| U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView, EDV (revision), NewConnectionView; store        | component ✓               |
-| U8  | A draft emptied of its words disappears                                      | EntryForm; store                                            | component ✓               |
-| U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                           | component ✓               |
-| U10 | Leaving an untouched claim frees the entry                                   | EDV (entry change, page left), DraftsView; store            | component ✓               |
-| U11 | A stale version refuses the save, says why, and the draft stays              | DraftsView (a revision; not the anchor-mode wording); store | component ✓               |
-| U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                  | component ✓               |
-| U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | store only (the entry-refresh half is in EDV)               | spike component, else E2E |
-| U14 | Two tabs save at once: the first wins, the other shows its text to copy      | store only                                                  | spike component, else E2E |
-| U15 | After saving, the composer is empty; an empty entry can't be saved           | EntryForm and the other composers                           | component ✓               |
-| U16 | A revision saves formatting alone; one that changes nothing is refused       | EDV                                                         | component ✓               |
+| #   | Behavior                                                                     | Covered now                                                 | Target      |
+| --- | ---------------------------------------------------------------------------- | ----------------------------------------------------------- | ----------- |
+| U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | EntryForm, both runners                                     | component ✓ |
+| U2  | A composer opened and left writes nothing                                    | EntryForm, both runners; store (weak)                       | component ✓ |
+| U3  | Leaving mid-draft keeps it                                                   | EntryForm, EDV, NewConnectionView                           | component ✓ |
+| U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView                                                  | component ✓ |
+| U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView; EDV resumes a revision's words                  | component ✓ |
+| U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView                                                  | component ✓ |
+| U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView, EDV (revision), NewConnectionView; store        | component ✓ |
+| U8  | A draft emptied of its words disappears                                      | EntryForm; store                                            | component ✓ |
+| U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                           | component ✓ |
+| U10 | Leaving an untouched claim frees the entry                                   | EDV (entry change, page left), DraftsView; store            | component ✓ |
+| U11 | A stale version refuses the save, says why, and the draft stays              | DraftsView (a revision; not the anchor-mode wording); store | component ✓ |
+| U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                  | component ✓ |
+| U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | App; EDV (the entry refresh); store                         | component ✓ |
+| U14 | Two tabs save at once: the first wins, the other shows its text to copy      | DraftsView; store                                           | component ✓ |
+| U15 | After saving, the composer is empty; an empty entry can't be saved           | EntryForm and the other composers                           | component ✓ |
+| U16 | A revision saves formatting alone; one that changes nothing is refused       | EDV                                                         | component ✓ |
 
 ### Durability the user can't see
 
@@ -65,7 +65,7 @@ Unit tests, unless a pass finds a component spec that drives one deterministical
 | #   | Behavior                                                                     | Covered now            |
 | --- | ---------------------------------------------------------------------------- | ---------------------- |
 | I1  | Flush within `DRAFT_FLUSH_MS`, throttled rather than debounced               | store (one burst only) |
-| I2  | Leaving a tab flushes at once (`pagehide` / hidden → `flushAll`)             | **nothing**            |
+| I2  | Leaving a tab flushes at once (`pagehide` / hidden → `flushAll`)             | App                    |
 | I3  | A failed write stays pending for the next chance                             | store                  |
 | I4  | Seal and discard wait for a flush already writing, so nothing is resurrected | store (seal only)      |
 | I5  | Seal is one transaction; a refused seal leaves the draft                     | contract               |
@@ -253,9 +253,19 @@ Grouped into proposed commits, as in Pass 1.
 
 **Later commits**
 
-- [ ] Spike U13, U14 and I2 at component level. `DraftsView` doesn't listen for tab return; `App.vue`
-      does. Try mounting `App` at `/drafts`, a second Pinia as the other tab, and a dispatched
-      `focus` / `visibilitychange` / `pagehide`. Record the outcome in D4 either way.
+**Commit 5 — multi-tab at component level**
+
+- [x] Spike U13, U14 and I2 at component level. It worked in both runners, as-is: `App.browser.test.ts`
+      / `App.cy.ts` mount `App` at `/drafts` or `/` through the test router, a second Pinia made
+      active stands in for the other tab, and `focus` / `pagehide` are dispatched on `window`.
+      U14 needs no `App`, since the conflict surfaces on this tab's own write, so it went into
+      DraftsView. Red runs covered App's listeners, `useDraftSession`'s watch on
+      `drafts.elsewhere`, and conflict adoption in `flush`. Outcome in D4.
+- [x] `visibilitychange` too, both ways: hiding flushes, showing again catches up. Left out at first
+      as "`pagehide` reaches the same `flushAll`", but on a phone a hidden tab can be killed
+      without `pagehide`, and a return can show the tab without focusing it, so these are the
+      listeners that matter most there. `visibilityState` is a read-only getter, shadowed by an
+      own property on `document` and deleted in `afterEach`. Red with each check inverted.
 
 ### Pass 3 — prune unit tests
 
@@ -285,19 +295,22 @@ Cypress first, then Browser Mode, then unit. Final lessons into TESTING.md.
 
 ### Later — a real E2E layer
 
-Pages in one Playwright browser context share IndexedDB: true two-tab, reload and `pagehide` tests
-for U13, U14 and I2. Cypress runs inside a single tab and has historically not supported several;
+Pages in one Playwright browser context share IndexedDB: true two-tab, reload and `pagehide` tests.
+U13, U14 and I2 are covered at component level (D4), so what's left for E2E is what a component
+can't fake: a real reload, a real second tab, the browser's own events. Cypress runs inside a single tab and has historically not supported several;
 check its current state when this starts. Several tools side by side is a plus for a portfolio
 piece, not a liability.
 
 ## Decisions
 
-Open:
-
-- **D4 — multi-tab at component level or E2E.** Decided by the Pass 2 spike.
+Open: none.
 
 Decided:
 
+- **D4 — multi-tab at component level.** The Pass 2 spike worked in both runners: a second Pinia
+  over the same database is the other tab, `App` mounted through the test router supplies the
+  listeners, and events dispatched on `window` stand in for leaving or returning. It fakes the
+  browser's side (no real second tab, no real reload), which stays for the E2E layer.
 - **D2 — fake steps.** Fixtures may record `{ stepType: 'replace' }` / `{ n: 1 }` where nothing
   replays them; tests moved up to component level get real steps from the editor. Revisit when the
   history view replays traces.
@@ -357,3 +370,5 @@ What went into TESTING.md, and when.
   that only configures a child asserts the prop, not the styling it produces.
 - 2026-09-30 — "Layers": with no UI to wait on, spy on a call that already awaits the write rather
   than polling; a let-go session's `abandonDraft` is the example (D3).
+- 2026-09-30 — "Known gaps": multi-tab behavior is now component-tested with the other tab
+  simulated (D4); what that fakes is named there.

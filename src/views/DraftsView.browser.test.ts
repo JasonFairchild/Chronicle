@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
+import { createPinia, setActivePinia } from 'pinia'
 import DraftsView from '@/views/DraftsView.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import type { DraftRepository } from '@/repositories/draftRepository'
@@ -286,6 +287,43 @@ describe('DraftsView (browser)', () => {
     const returned = renderComponent(DraftsView)
 
     await expect.element(returned.getByText('No drafts in progress.')).toBeVisible()
+  })
+
+  it('keeps the version another tab saved first, and shows what this one had to copy', async () => {
+    await seedDraft(
+      drafts,
+      makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
+    )
+    const screen = renderComponent(DraftsView)
+    await screen.getByRole('button', { name: 'Resume' }).click()
+    await expect.element(screen.getByRole('textbox', { name: 'Draft' })).toBeVisible()
+
+    // Another tab, with its own stores over the same database, writes the draft first.
+    setActivePinia(createPinia())
+    const otherTab = useDraftsStore()
+    await otherTab.resumeDraft('session-1')
+    otherTab.recordChange('session-1', {
+      content: textContent('Half a thought, finished elsewhere'),
+      steps: [{ stepType: 'replace' }],
+    })
+    await otherTab.flush('session-1')
+
+    // This tab hasn't caught up, so its next write lands on a draft that has moved on.
+    await screen.getByRole('textbox', { name: 'Draft' }).click()
+    await userEvent.keyboard('{Control>}{End}{/Control} here')
+
+    await expect
+      .element(
+        screen.getByText(
+          'This draft was changed elsewhere at the same time, and now shows what was saved ' +
+            'there. What you had here is below.',
+        ),
+      )
+      .toBeVisible()
+    await expect.element(screen.getByText('Half a thought here')).toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Draft' }))
+      .toHaveTextContent('Half a thought, finished elsewhere')
   })
 
   it('shows all of a draft that will not reopen for copying, and still discards it', async () => {

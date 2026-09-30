@@ -1,3 +1,4 @@
+import { createPinia, setActivePinia } from 'pinia'
 import DraftsView from '@/views/DraftsView.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import type { DraftRepository } from '@/repositories/draftRepository'
@@ -296,6 +297,46 @@ describe('DraftsView', () => {
     cy.mount(DraftsView)
 
     cy.findByText('No drafts in progress.').should('be.visible')
+  })
+
+  it('keeps the version another tab saved first, and shows what this one had to copy', () => {
+    cy.then(() =>
+      seedDraft(
+        drafts,
+        makeDraft('session-1', {
+          entry: { content: textContent('Half a thought'), events: TYPED },
+        }),
+      ),
+    )
+    cy.mount(DraftsView)
+
+    cy.findByRole('button', { name: 'Resume' }).click()
+    cy.findByRole('textbox', { name: 'Draft' }).should('be.visible')
+
+    // Another tab, with its own stores over the same database, writes the draft first.
+    cy.then(async () => {
+      setActivePinia(createPinia())
+      const otherTab = useDraftsStore()
+      await otherTab.resumeDraft('session-1')
+      otherTab.recordChange('session-1', {
+        content: textContent('Half a thought, finished elsewhere'),
+        steps: [{ stepType: 'replace' }],
+      })
+      await otherTab.flush('session-1')
+    })
+
+    // This tab hasn't caught up, so its next write lands on a draft that has moved on.
+    cy.findByRole('textbox', { name: 'Draft' }).type('{ctrl+end} here')
+
+    cy.findByText(
+      'This draft was changed elsewhere at the same time, and now shows what was saved there. ' +
+        'What you had here is below.',
+    ).should('be.visible')
+    cy.findByText('Half a thought here').should('be.visible')
+    cy.findByRole('textbox', { name: 'Draft' }).should(
+      'contain.text',
+      'Half a thought, finished elsewhere',
+    )
   })
 
   it('shows all of a draft that will not reopen for copying, and still discards it', () => {

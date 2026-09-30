@@ -252,6 +252,10 @@ Application → IndexedDB. Browser specs gets a uniquely-named DB, disposed in t
 
 ## Known gaps
 
-- A draft's multi-tab behavior (tab return, two tabs saving at once) is tested only at store level,
-  and there is no true end-to-end layer yet.
+- A draft's multi-tab behavior (tab return, two tabs saving at once, leaving a tab) is tested at
+  component level with the other tab simulated: a second Pinia over the same database, driven
+  through its store rather than a UI, and the browser's own events dispatched in place of
+  switching, hiding or closing a tab: `focus` and `pagehide` on `window`, and `visibilitychange`
+  on `document` with `visibilityState` shadowed by an own property, deleted after each test. A real
+  second tab and a real reload wait for an end-to-end layer, which doesn't exist yet.
 - The drafts tests are mid-overhaul toward "Layers": [TEST_OVERHAUL.md](./TEST_OVERHAUL.md).

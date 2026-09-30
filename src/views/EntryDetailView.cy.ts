@@ -361,6 +361,31 @@ describe('EntryDetailView', () => {
     })
   })
 
+  it('frees the entry when a revision is opened and left untouched', () => {
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      const other = await seed({ content: textContent('A different day entirely') })
+      return { parent, other }
+    }).then(({ parent, other }) => {
+      mountDetail(parent.id).then(({ wrapper }) => {
+        cy.findByRole('button', { name: 'Revise entry' }).click()
+        cy.findByRole('textbox', { name: 'Revised entry' }).should('be.visible')
+
+        // Opening Revise claims the entry at once; leaving with nothing typed gives the claim up.
+        cy.then(async () => {
+          const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+          await wrapper.setProps({ id: other.id })
+          expect(abandonDraft).to.have.callCount(1)
+          await abandonDraft.firstCall.returnValue
+          await wrapper.setProps({ id: parent.id })
+        })
+
+        cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
+        cy.findByRole('button', { name: 'Resume draft' }).should('not.exist')
+      })
+    })
+  })
+
   it('shows the version another tab saved once this tab is returned to', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
@@ -639,6 +664,20 @@ describe('EntryDetailView', () => {
       cy.then(() => repository.listRevisions(parent.id)).then(([revision]) => {
         expect(docToPlainText(revision!.content)).to.equal(PARENT_TEXT)
         expect(revision!.content).to.contain('"bold"')
+      })
+    })
+  })
+
+  it('refuses a revision that changes nothing, and says so', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      cy.findByRole('button', { name: 'Save revision' }).click()
+
+      cy.findByRole('alert').should('have.text', 'No changes to save')
+      cy.then(() => repository.listRevisions(parent.id)).then((revisions) => {
+        expect(revisions).to.have.length(0)
       })
     })
   })

@@ -93,6 +93,40 @@ describe('EntryForm (browser)', () => {
     expect(await draftRepository.list()).toEqual([])
   })
 
+  it('keeps what was typed when the composer is left without saving', async () => {
+    const screen = renderComponent(EntryForm)
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await userEvent.keyboard('{Enter}We drove up on Friday.')
+
+    // Leaving is not discarding: the session is let go, and what it held stays a draft.
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
+    screen.unmount()
+
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+    const [draft] = await draftRepository.list()
+    expect(draft?.entry.title).toBe('Lake Tahoe')
+    expect(docToPlainText(draft!.entry.content)).toBe('We drove up on Friday.')
+  })
+
+  it('drops a draft whose words are all deleted', async () => {
+    const screen = renderComponent(EntryForm)
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('Lake Tahoe')
+    // On disk with its words first, so there is a row for deleting them to remove.
+    await vi.waitFor(async () => {
+      expect(await draftRepository.list()).toHaveLength(1)
+    })
+
+    await screen.getByRole('textbox', { name: 'New entry' }).click()
+    await userEvent.keyboard('{Control>}a{/Control}{Backspace}')
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
+    screen.unmount()
+
+    // Resolves once the session's flush has landed.
+    await abandonDraft.mock.results[0]!.value
+    expect(await draftRepository.list()).toEqual([])
+  })
+
   it('will not save an empty document', async () => {
     const screen = renderComponent(EntryForm)
 

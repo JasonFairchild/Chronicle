@@ -5,7 +5,8 @@ import type { EntryRepository } from '@/repositories/entryRepository'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
-import { createEntryInput } from '@/types/entry'
+import { createEntryInput, emptyEntryDates } from '@/types/entry'
+import { formatDate } from '@/utils/format'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -18,12 +19,17 @@ describe('DraftsView', () => {
     entries = freshEntryRepository()
   })
 
-  it('resumes an unsealed session and finishes it as one entry', () => {
+  it('resumes a draft with its words, title and dates, and finishes it as one entry', () => {
     cy.then(() =>
       seedDraft(
         drafts,
         makeDraft('session-1', {
-          entry: { content: textContent('Half a thought'), title: 'Lake Tahoe', events: TYPED },
+          entry: {
+            content: textContent('Half a thought'),
+            title: 'Lake Tahoe',
+            dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
+            events: TYPED,
+          },
         }),
       ),
     )
@@ -31,36 +37,94 @@ describe('DraftsView', () => {
 
     cy.findByText('Half a thought').should('be.visible')
     cy.findByRole('button', { name: 'Resume' }).click()
+    cy.findByLabelText('Happened').should('have.value', '1994-06-11')
     cy.findByRole('textbox', { name: 'Draft' }).type('{ctrl+end}, finished at last.')
     cy.findByRole('button', { name: 'Save as entry' }).click()
 
     cy.findByText('No drafts in progress.').should('be.visible')
 
     cy.then(async () => {
-      const [saved] = await entries.listRootEntries()
-      expect(saved?.title).to.equal('Lake Tahoe')
-      expect(docToPlainText(saved!.content)).to.equal('Half a thought, finished at last.')
+      const roots = await entries.listRootEntries()
+      expect(roots).to.have.length(1)
+      expect(roots[0]?.title).to.equal('Lake Tahoe')
+      expect(roots[0]?.dates.occurred_at).to.equal('1994-06-11')
+      expect(docToPlainText(roots[0]!.content)).to.equal('Half a thought, finished at last.')
       // Sealing discards the buffer, so the same words cannot exist twice.
       expect(await drafts.list()).to.have.length(0)
     })
   })
 
-  it('names what each draft is attached to rather than only what kind it is', () => {
+  it('lists drafts newest first, each with what it would become, when, and how it begins', () => {
     cy.then(async () => {
       const parent = await entries.create(
         createEntryInput({ content: textContent('The meeting went badly') }),
       )
+      const other = await entries.create(
+        createEntryInput({ content: textContent('Started the degree') }),
+      )
+      // Seeded out of order, so the order shown is the list's own.
       await seedDraft(
         drafts,
-        makeDraft('session-1', {
+        makeDraft('related', {
           entry: { content: textContent('It was salvaged later'), events: TYPED },
           kind: relatedTo(parent),
+          updatedAt: '2026-09-05T10:01:00.000Z',
+        }),
+      )
+      await seedDraft(
+        drafts,
+        makeDraft('root', {
+          entry: { content: textContent('A thought of its own'), events: TYPED },
+          updatedAt: '2026-09-05T10:04:00.000Z',
+        }),
+      )
+      await seedDraft(
+        drafts,
+        makeDraft('connection', {
+          entry: { content: textContent('One led to the other'), events: TYPED },
+          kind: { kind: 'new_connection', parent_id: parent.id, target_id: other.id },
+          updatedAt: '2026-09-05T10:02:00.000Z',
+        }),
+      )
+      await seedDraft(
+        drafts,
+        makeDraft('revision', {
+          entry: {
+            base_version_id: parent.id,
+            base_content: parent.content,
+            content: textContent('The meeting went well'),
+            events: TYPED,
+          },
+          kind: { kind: 'revision', parent_id: parent.id },
+          updatedAt: '2026-09-05T10:03:00.000Z',
         }),
       )
     })
     cy.mount(DraftsView)
 
-    cy.findByText('Related entry on “The meeting went badly”').should('be.visible')
+    const rows = [
+      ['New entry', '2026-09-05T10:04:00.000Z', 'A thought of its own'],
+      ['Revision of “The meeting went badly”', '2026-09-05T10:03:00.000Z', 'The meeting went well'],
+      [
+        'Connection from “The meeting went badly”',
+        '2026-09-05T10:02:00.000Z',
+        'One led to the other',
+      ],
+      [
+        'Related entry on “The meeting went badly”',
+        '2026-09-05T10:01:00.000Z',
+        'It was salvaged later',
+      ],
+    ] as const
+    rows.forEach(([label, touched, preview], index) => {
+      cy.findAllByRole('listitem')
+        .eq(index)
+        .within(() => {
+          cy.findByText(label).should('be.visible')
+          cy.findByText(formatDate(touched)).should('be.visible')
+          cy.findByText(preview).should('be.visible')
+        })
+    })
   })
 
   it('reopens a related-entry draft on both halves, not the related entry alone', () => {
@@ -120,6 +184,82 @@ describe('DraftsView', () => {
     cy.findByText('No drafts in progress.').should('be.visible')
     cy.then(async () => {
       expect(await entries.listRootEntries()).to.have.length(0)
+    })
+  })
+
+  it('discards a listed draft while another is open, leaving the open one as it was', () => {
+    cy.then(async () => {
+      await seedDraft(
+        drafts,
+        makeDraft('open', {
+          entry: { content: textContent('Keep writing this'), events: TYPED },
+          updatedAt: '2026-09-05T10:02:00.000Z',
+        }),
+      )
+      await seedDraft(
+        drafts,
+        makeDraft('listed', {
+          entry: { content: textContent('Never mind'), events: TYPED },
+          updatedAt: '2026-09-05T10:01:00.000Z',
+        }),
+      )
+    })
+    cy.mount(DraftsView)
+
+    cy.findAllByRole('listitem').eq(0).findByRole('button', { name: 'Resume' }).click()
+    cy.findByText('Never mind').should('be.visible')
+
+    cy.findAllByRole('listitem').eq(1).findByRole('button', { name: 'Discard' }).click()
+
+    // The list is reread from disk after a discard, so the row going is the delete landing.
+    cy.findByText('Never mind').should('not.exist')
+    cy.findByRole('textbox', { name: 'Draft' }).should('contain.text', 'Keep writing this')
+  })
+
+  it('refuses a draft on a version since replaced, says why, and keeps it', () => {
+    let parentId = ''
+
+    cy.then(async () => {
+      const parent = await entries.create(
+        createEntryInput({ content: textContent('The first go') }),
+      )
+      parentId = parent.id
+      await seedDraft(
+        drafts,
+        makeDraft('session-1', {
+          entry: {
+            base_version_id: parent.id,
+            base_content: parent.content,
+            content: textContent('The first go, reworded'),
+            events: TYPED,
+          },
+          kind: { kind: 'revision', parent_id: parent.id },
+        }),
+      )
+      // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
+      await entries.create(
+        createEntryInput({
+          content: textContent('The second go'),
+          parent_id: parent.id,
+          relation_type: 'revision',
+          revision_mode: 'direct',
+          base_version_id: parent.id,
+        }),
+      )
+    })
+    cy.mount(DraftsView)
+
+    cy.findByRole('button', { name: 'Resume' }).click()
+    cy.findByRole('button', { name: 'Save as entry' }).click()
+
+    cy.findByRole('status').should(
+      'have.text',
+      'This entry was revised after this draft began, so saving this would overwrite that ' +
+        'version. Copy what you need, then discard it.',
+    )
+    cy.then(async () => {
+      expect(await entries.listRevisions(parentId)).to.have.length(1)
+      expect(await drafts.list()).to.have.length(1)
     })
   })
 

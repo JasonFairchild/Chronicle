@@ -361,6 +361,29 @@ describe('EntryDetailView (browser)', () => {
       .toHaveTextContent(`${PARENT_TEXT}, and Mom`)
   })
 
+  it('frees the entry when a revision is opened and left untouched', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const other = await repository.create(
+      createEntryInput({ content: textContent('A different day entirely') }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+    await expect.element(screen.getByRole('textbox', { name: 'Revised entry' })).toBeVisible()
+
+    // Opening Revise claims the entry at once; leaving with nothing typed gives the claim up.
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
+    await screen.rerender({ id: other.id })
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+    await screen.rerender({ id: parent.id })
+
+    await expect.element(screen.getByRole('button', { name: 'Revise entry' })).toBeVisible()
+    await expect
+      .element(screen.getByRole('button', { name: 'Resume draft' }))
+      .not.toBeInTheDocument()
+  })
+
   it('shows the version another tab saved once this tab is returned to', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
     const screen = await mountDetail(parent.id)
@@ -656,6 +679,21 @@ describe('EntryDetailView (browser)', () => {
     const [revision] = await repository.listRevisions(parent.id)
     expect(docToPlainText(revision!.content)).toBe(PARENT_TEXT)
     expect(revision!.content).toContain('"bold"')
+  })
+
+  it('refuses a revision that changes nothing, and says so', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+    await screen.getByRole('button', { name: 'Save revision' }).click()
+
+    await expect
+      .element(
+        screen.getByRole('alert').and(screen.getByText('No changes to save', { exact: true })),
+      )
+      .toBeVisible()
+    expect(await repository.listRevisions(parent.id)).toEqual([])
   })
 
   it('abandons a revision without touching the entry', async () => {

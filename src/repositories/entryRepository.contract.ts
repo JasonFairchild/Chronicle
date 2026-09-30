@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { StaleVersionError } from '@/domain/entryValidation'
 import { createEntryInput } from '@/types/entry'
 import type { EntryRepository } from './entryRepository'
 
@@ -102,7 +103,7 @@ export function runEntryRepositoryContract(
 
       await revise('Two')
       // Written against version one too, as a second tab would have been.
-      await expect(revise('Also two')).rejects.toThrow('was revised after')
+      await expect(revise('Also two')).rejects.toThrow(StaleVersionError)
 
       const revisions = await repository.listRevisions(root.id)
       expect(revisions.map((entry) => entry.content)).toEqual(['Two'])

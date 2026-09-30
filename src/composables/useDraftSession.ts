@@ -186,8 +186,9 @@ export function useDraftSession() {
    * Seals the session. Resolves to `null` — rather than running at all — when there is nothing
    * open or a save is already in flight, so a caller can guard a button's click handler with
    * `if (!(await session.save())) return` the same way it would have guarded on a local flag. A
-   * real sealing failure (empty content, "no changes to save") still throws, for the caller's own
-   * try/catch and error message to handle.
+   * stale version also resolves to `null`: `staleNotice` is what explains it, per kind, so a
+   * caller's own error message would only repeat it less precisely. Any other sealing failure
+   * (empty content, "no changes to save") still throws, for the caller's try/catch to report.
    */
   async function save(): Promise<Entry | null> {
     const id = sessionId.value
@@ -199,8 +200,9 @@ export function useDraftSession() {
       sessionId.value = null
       return entry
     } catch (err) {
-      if (err instanceof StaleVersionError) stale.value = true
-      throw err
+      if (!(err instanceof StaleVersionError)) throw err
+      stale.value = true
+      return null
     } finally {
       saving.value = false
     }

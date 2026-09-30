@@ -16,10 +16,7 @@ export interface RelationLookups {
  */
 export class StaleVersionError extends Error {
   constructor() {
-    super(
-      'This entry was revised after this was started, so saving it would overwrite that version. ' +
-        'Copy what you need, then discard it.',
-    )
+    super('The revision’s base version is no longer its entry’s latest')
     this.name = 'StaleVersionError'
   }
 }

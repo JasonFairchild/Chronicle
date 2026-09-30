@@ -39,24 +39,24 @@ check found is under the tables. "EDV" is `EntryDetailView`.
 
 ### User-visible
 
-| #   | Behavior                                                                     | Covered now                                                | Target                    |
-| --- | ---------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------- |
-| U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | EntryForm, both runners                                    | component ✓               |
-| U2  | A composer opened and left writes nothing                                    | EntryForm, both runners; store (weak)                      | component ✓               |
-| U3  | Leaving mid-draft keeps it                                                   | EDV, NewConnectionView; not the new-entry composer         | component                 |
-| U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView: one label of four, no time; order in store     | component                 |
-| U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView (dates missing); EDV resumes a revision's words | component                 |
-| U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView (Cypress doesn't count the entries)             | component ✓               |
-| U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView (not while another is open); store              | component                 |
-| U8  | A draft emptied of its words disappears                                      | store only                                                 | component                 |
-| U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                          | component ✓               |
-| U10 | Leaving an untouched claim frees the entry                                   | store only; no EDV test leaves a claim untouched           | component                 |
-| U11 | A stale version refuses the save, says why, and the draft stays              | store only; `staleNotice` is in no UI test                 | component                 |
-| U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                 | component ✓               |
-| U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | store only (the entry-refresh half is in EDV)              | spike component, else E2E |
-| U14 | Two tabs save at once: the first wins, the other shows its text to copy      | store only                                                 | spike component, else E2E |
-| U15 | After saving, the composer is empty; an empty entry can't be saved           | EntryForm and the other composers                          | component ✓               |
-| U16 | A revision saves formatting alone; one that changes nothing is refused       | EDV (formatting); the refusal in entriesStore only         | component                 |
+| #   | Behavior                                                                     | Covered now                                                 | Target                    |
+| --- | ---------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------- |
+| U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | EntryForm, both runners                                     | component ✓               |
+| U2  | A composer opened and left writes nothing                                    | EntryForm, both runners; store (weak)                       | component ✓               |
+| U3  | Leaving mid-draft keeps it                                                   | EntryForm, EDV, NewConnectionView                           | component ✓               |
+| U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView                                                  | component ✓               |
+| U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView; EDV resumes a revision's words                  | component ✓               |
+| U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView                                                  | component ✓               |
+| U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView; composers in Browser Mode only; store           | component                 |
+| U8  | A draft emptied of its words disappears                                      | EntryForm; store                                            | component ✓               |
+| U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                           | component ✓               |
+| U10 | Leaving an untouched claim frees the entry                                   | EDV; store                                                  | component ✓               |
+| U11 | A stale version refuses the save, says why, and the draft stays              | DraftsView (a revision; not the anchor-mode wording); store | component ✓               |
+| U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                  | component ✓               |
+| U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | store only (the entry-refresh half is in EDV)               | spike component, else E2E |
+| U14 | Two tabs save at once: the first wins, the other shows its text to copy      | store only                                                  | spike component, else E2E |
+| U15 | After saving, the composer is empty; an empty entry can't be saved           | EntryForm and the other composers                           | component ✓               |
+| U16 | A revision saves formatting alone; one that changes nothing is refused       | EDV                                                         | component ✓               |
 
 ### Durability the user can't see
 
@@ -222,12 +222,23 @@ Grouped into proposed commits, as in Pass 1.
     already tables them, and `affectedAnchorIds` is `DocumentEditor`'s, whose spec has no test of
     it. "stays quiet when a revision only moves an anchor" also checks its absence with no baseline.
 
+**Commit 2 — DraftsView gaps**
+
+- [x] U4: one test lists all four kinds out of seeded order, each row's label, time and preview. It
+      replaces "names what each draft is attached to…", which checked one label.
+- [x] U5: the resume test seeds a date, sees it in the form, and saves it; U6's entry count joined
+      its Cypress half while there.
+- [x] U7 for a listed draft while another is open; U11 for a revision, seeded on a version since
+      replaced. The anchor-mode wording of the stale notice is left to the store.
+
+**Commit 3 — composer gaps**
+
+- [x] U3 and U8 in EntryForm; U10 and U16's refusal in EDV.
+
 **Later commits**
 
-- [ ] U3 (new entry), U4, U5 (dates), U7, U8, U10, U11, U16, in DraftsView and the
-      composer specs. U11 seeds a draft on a superseded version through the repository.
-- [ ] Close the runner gaps the inventory check found: U6's entry count and U7's Discard reaching
-      disk, in Cypress. Decide whether U7's Browser waits are assertions and say so.
+- [ ] Close the runner gap the inventory check found: U7's Discard reaching disk in the composers,
+      in Cypress. Decide whether U7's Browser waits are assertions and say so.
 - [ ] Spike U13, U14 and I2 at component level. `DraftsView` doesn't listen for tab return; `App.vue`
       does. Try mounting `App` at `/drafts`, a second Pinia as the other tab, and a dispatched
       `focus` / `visibilitychange` / `pagehide`. Record the outcome in D4 either way.

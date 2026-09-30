@@ -112,17 +112,21 @@ describe('assertValidRelation', () => {
   })
 
   it('refuses a revision written against a version since replaced', async () => {
-    await expect(
-      assertValidRelation(
-        createEntryInput({
-          content: 'Reworded',
-          parent_id: 'root-1',
-          relation_type: 'revision',
-          base_version_id: 'root-1',
-        }),
-        { ...nothing, latestVersionId: () => 'revision-2' },
-      ),
-    ).rejects.toThrow(StaleVersionError)
+    const check = assertValidRelation(
+      createEntryInput({
+        content: 'Reworded',
+        parent_id: 'root-1',
+        relation_type: 'revision',
+        base_version_id: 'root-1',
+      }),
+      { ...nothing, latestVersionId: () => 'revision-2' },
+    )
+
+    await expect(check).rejects.toThrow(StaleVersionError)
+    await expect(check).rejects.toHaveProperty(
+      'message',
+      'The revision’s base version is no longer its entry’s latest',
+    )
   })
 
   it('refuses a base version on anything that is not a revision', async () => {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
+import { StaleVersionError } from '@/domain/entryValidation'
 import { deriveMarks } from '@/domain/marks'
 import {
   draftRepository,
@@ -344,7 +345,7 @@ describe('useDraftsStore', () => {
 
     await store.sealDraft(first)
     // Sealing this too would make it version three, silently undoing the first draft's fix.
-    await expect(store.sealDraft(second)).rejects.toThrow('was revised after')
+    await expect(store.sealDraft(second)).rejects.toThrow(StaleVersionError)
 
     const aggregated = await entries.getAggregatedEntry(original.id)
     expect(aggregated?.version.total).toBe(2)

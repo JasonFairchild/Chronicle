@@ -88,6 +88,46 @@ describe('EntryForm', () => {
     })
   })
 
+  it('keeps what was typed when the composer is left without saving', () => {
+    cy.mount(EntryForm).then(({ wrapper }) => {
+      cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
+      cy.focused().type('We drove up on Friday.')
+
+      // Leaving is not discarding: the session is let go, and what it held stays a draft.
+      cy.then(async () => {
+        const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+        wrapper.unmount()
+
+        expect(abandonDraft).to.have.callCount(1)
+        await abandonDraft.firstCall.returnValue
+        const [draft] = await draftRepository.list()
+        expect(draft?.entry.title).to.equal('Lake Tahoe')
+        expect(docToPlainText(draft!.entry.content)).to.equal('We drove up on Friday.')
+      })
+    })
+  })
+
+  it('drops a draft whose words are all deleted', () => {
+    cy.mount(EntryForm).then(({ wrapper }) => {
+      cy.spy(draftRepository, 'save').as('saveDraft')
+      cy.findByRole('textbox', { name: 'New entry' }).type('Lake Tahoe')
+      // On disk with its words first, so there is a row for deleting them to remove.
+      cy.get('@saveDraft')
+        .should('have.been.called')
+        .then((saveDraft) => saveDraft.firstCall.returnValue)
+
+      cy.findByRole('textbox', { name: 'New entry' }).type('{selectall}{backspace}')
+      cy.then(async () => {
+        const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+        wrapper.unmount()
+
+        // Resolves once the session's flush has landed.
+        await abandonDraft.firstCall.returnValue
+        expect(await draftRepository.list()).to.have.length(0)
+      })
+    })
+  })
+
   it('will not save an empty document', () => {
     cy.mount(EntryForm)
 

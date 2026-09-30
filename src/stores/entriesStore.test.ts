@@ -51,24 +51,6 @@ describe('useEntriesStore', () => {
     await expect(store.createTextEntry('   ')).rejects.toThrow('Entry content cannot be empty')
   })
 
-  it('seals a draft whose title field was left empty, storing no title for it', async () => {
-    const draft = makeDraft('session-untitled', {
-      entry: {
-        // The field was offered and not filled in — whitespace typed and abandoned collapses to
-        // null the same way. Nothing is owed — a journal entry that would only ever be named
-        // "Tuesday" is better left unnamed.
-        title: '   ',
-        content: serializeDocument(plainTextDocument('We drove up on Friday.')),
-      },
-    })
-
-    const sealed = await sealDraft(draft)
-
-    expect(sealed.title).toBeNull()
-    expect(docToPlainText(sealed.content)).toBe('We drove up on Friday.')
-    expect(await entryRepository.listRootEntries()).toHaveLength(1)
-  })
-
   it('gives a related entry the title its draft carries', async () => {
     const store = useEntriesStore()
     const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
@@ -138,51 +120,6 @@ describe('useEntriesStore', () => {
         insertion: null,
       },
     ])
-  })
-
-  it('reads a struck passage as an update, since striking reports a correction', async () => {
-    const store = useEntriesStore()
-    const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
-    const struck = withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike')
-
-    const draft = makeDraft('session-2', {
-      entry: { content: textContent('It was actually Donner Lake') },
-      kind: relatedTo(parent, { content: struck }),
-    })
-
-    await sealDraft(draft)
-
-    const aggregated = await store.getAggregatedEntry(parent.id)
-    expect(aggregated?.related_entries[0]?.relation_type).toBe('update')
-  })
-
-  it('carries the dates a writer supplied through to the entry and its aggregate', async () => {
-    const store = useEntriesStore()
-
-    const draft = makeDraft('session-3', {
-      entry: {
-        dates: {
-          recorded_at: '1994-06-12',
-          recorded_time_note: 'evening',
-          occurred_at: '1994-06-11',
-          occurred_time_note: 'late morning',
-        },
-        content: textContent('Transcribed out of the green notebook'),
-      },
-    })
-
-    const created = await sealDraft(draft)
-
-    expect(created.dates.occurred_at).toBe('1994-06-11')
-    expect(created.dates.recorded_time_note).toBe('evening')
-
-    const aggregated = await store.getAggregatedEntry(created.id)
-    expect(aggregated?.dates).toEqual({
-      recorded_at: '1994-06-12',
-      recorded_time_note: 'evening',
-      occurred_at: '1994-06-11',
-      occurred_time_note: 'late morning',
-    })
   })
 
   it('surfaces a connection on both entries it joins', async () => {

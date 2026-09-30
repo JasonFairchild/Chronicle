@@ -24,7 +24,7 @@ Drafts first; lessons are then applied to later tests. In scope:
   The types were fixed in Pass 1.
 - **Unit and component levels overlap.** Of `draftsStore.test.ts`'s ~34 cases, roughly a quarter
   duplicate component coverage, roughly a third are user-visible behavior tested only in the store,
-  and the durability and race cases are the store's real reason for unit tests.
+  and the durability and race cases are the store's real reason for unit tests. Pruned in Pass 3.
 - **Runner parity has drifted.** `EntryDetailView.browser.test.ts` has four tests with no Cypress
   mirror: "offers the draft already in progress on an entry rather than a second one", "shows the
   version another tab saved once this tab is returned to", "offers the draft another tab has only
@@ -39,48 +39,46 @@ check found is under the tables. "EDV" is `EntryDetailView`.
 
 ### User-visible
 
-| #   | Behavior                                                                     | Covered now                                                 | Target      |
-| --- | ---------------------------------------------------------------------------- | ----------------------------------------------------------- | ----------- |
-| U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | EntryForm, both runners                                     | component ✓ |
-| U2  | A composer opened and left writes nothing                                    | EntryForm, both runners; store (weak)                       | component ✓ |
-| U3  | Leaving mid-draft keeps it                                                   | EntryForm, EDV, NewConnectionView                           | component ✓ |
-| U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView                                                  | component ✓ |
-| U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView; EDV resumes a revision's words                  | component ✓ |
-| U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView                                                  | component ✓ |
-| U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView, EDV (revision), NewConnectionView; store        | component ✓ |
-| U8  | A draft emptied of its words disappears                                      | EntryForm; store                                            | component ✓ |
-| U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                           | component ✓ |
-| U10 | Leaving an untouched claim frees the entry                                   | EDV (entry change, page left), DraftsView; store            | component ✓ |
-| U11 | A stale version refuses the save, says why, and the draft stays              | DraftsView (a revision; not the anchor-mode wording); store | component ✓ |
-| U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                  | component ✓ |
-| U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | App; EDV (the entry refresh); store                         | component ✓ |
-| U14 | Two tabs save at once: the first wins, the other shows its text to copy      | DraftsView; store                                           | component ✓ |
-| U15 | After saving, the composer is empty; an empty entry can't be saved           | EntryForm and the other composers                           | component ✓ |
-| U16 | A revision saves formatting alone; one that changes nothing is refused       | EDV                                                         | component ✓ |
+| #   | Behavior                                                                     | Covered now                                                | Target      |
+| --- | ---------------------------------------------------------------------------- | ---------------------------------------------------------- | ----------- |
+| U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | EntryForm, both runners                                    | component ✓ |
+| U2  | A composer opened and left writes nothing                                    | EntryForm, both runners                                    | component ✓ |
+| U3  | Leaving mid-draft keeps it                                                   | EntryForm, EDV, NewConnectionView                          | component ✓ |
+| U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView                                                 | component ✓ |
+| U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView; EDV resumes a revision's words                 | component ✓ |
+| U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView                                                 | component ✓ |
+| U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView, EDV (revision), NewConnectionView              | component ✓ |
+| U8  | A draft emptied of its words disappears                                      | EntryForm                                                  | component ✓ |
+| U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                          | component ✓ |
+| U10 | Leaving an untouched claim frees the entry                                   | EDV (entry change, page left), DraftsView; store (related) | component ✓ |
+| U11 | A stale version refuses the save, says why, and the draft stays              | DraftsView (a revision; not the anchor-mode wording)       | component ✓ |
+| U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                 | component ✓ |
+| U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | App; EDV (the entry refresh); store (the drafts list)      | component ✓ |
+| U14 | Two tabs save at once: the first wins, the other shows its text to copy      | DraftsView                                                 | component ✓ |
+| U15 | After saving, the composer is empty; an empty entry can't be saved           | EntryForm and the other composers                          | component ✓ |
+| U16 | A revision saves formatting alone; one that changes nothing is refused       | EDV                                                        | component ✓ |
 
 ### Durability the user can't see
 
 Unit tests, unless a pass finds a component spec that drives one deterministically.
 
-| #   | Behavior                                                                     | Covered now            |
-| --- | ---------------------------------------------------------------------------- | ---------------------- |
-| I1  | Flush within `DRAFT_FLUSH_MS`, throttled rather than debounced               | store (one burst only) |
-| I2  | Leaving a tab flushes at once (`pagehide` / hidden → `flushAll`)             | App                    |
-| I3  | A failed write stays pending for the next chance                             | store                  |
-| I4  | Seal and discard wait for a flush already writing, so nothing is resurrected | store (seal only)      |
-| I5  | Seal is one transaction; a refused seal leaves the draft                     | contract               |
-| I6  | Event logs are append-only; a conflicting append refuses the whole save      | contract (entry log)   |
-| I7  | The stored draft doesn't share the caller's object                           | contract               |
-| I8  | A claim is written at begin, before anything is typed                        | store; EDV             |
-| I9  | Releasing a claim is judged on what disk holds                               | store                  |
-| I10 | A resume continues the trace: events carry on, `started_at` is kept          | store                  |
+| #   | Behavior                                                                     | Covered now          |
+| --- | ---------------------------------------------------------------------------- | -------------------- |
+| I1  | Flush within `DRAFT_FLUSH_MS`, throttled rather than debounced               | store                |
+| I2  | Leaving a tab flushes at once (`pagehide` / hidden → `flushAll`)             | App                  |
+| I3  | A failed write stays pending, including what a refused seal left unwritten   | store                |
+| I4  | Seal and discard wait for a flush already writing, so nothing is resurrected | store                |
+| I5  | Seal is one transaction; a refused seal leaves the draft                     | contract             |
+| I6  | Event logs are append-only; a conflicting append refuses the whole save      | contract (entry log) |
+| I7  | The stored draft doesn't share the caller's object                           | contract             |
+| I8  | A claim is written at begin, before anything is typed                        | EDV; store (related) |
+| I9  | Releasing a claim is judged on what disk holds                               | store                |
+| I10 | A resume continues the trace: events carry on, `started_at` is kept          | store                |
 
 ### What the check found
 
 Component specs named without a runner cover both.
 
-- **U2.** The store's "writes nothing for a composer that was opened and walked away from" never
-  lets the session go, so it reads before any flush could land, as the old EntryForm test did.
 - **U4.** The page labels four kinds; only "Related entry on" is asserted. The preview appears only
   as the wait before Resume or Discard.
 - **U6.** Cypress destructures the first root entry; only Browser Mode checks there is exactly one.
@@ -90,13 +88,12 @@ Component specs named without a runner cover both.
 - **U10.** The old row credited EDV, but "abandons a revision without touching the entry" discards
   typed work. It doesn't let an untouched claim go.
 - **U16**, new: the formatting-only test mirrored in Commit 4 covered a behavior no row named.
-- **I1.** The whole burst lands before the timer fires, so a debounce would pass too.
 
 ### Pure logic
 
 `versionsRevisedBy`, `toSnapshot` / `withEvents`, `draftHoldsWork`, `inputsForDraft`,
 `anchorsPlacedSince` — covered through the store, the contract, `entriesStore.test.ts` and
-`anchors.test.ts`. Revisit in Pass 3.
+`anchors.test.ts`. Pass 3 left them there: none has enough cases to earn a table of its own.
 
 ## Coverage baseline
 
@@ -269,13 +266,30 @@ Grouped into proposed commits, as in Pass 1.
 
 ### Pass 3 — prune unit tests
 
-- [ ] Map each `draftsStore.test.ts` case to an inventory row; delete those whose row a component
+- [x] Map each `draftsStore.test.ts` case to an inventory row; delete those whose row a component
       spec now covers; regroup the rest by durability concern. The weak U2 case goes, and I1
-      gains a case that tells a throttle from a debounce.
-- [ ] Trace internals (a no-steps change skipped, an anchor op in the parent stream): move to
-      traceRecorder tests if they aren't there already, or drop.
-- [ ] The same exercise for the draft cases in `entriesStore.test.ts`.
-- [ ] `npm run test:coverage` as a check that no inventory row lost its test — not as a target.
+      gains a case that tells a throttle from a debounce. 34 cases became 20, in four groups:
+      writing while typing, ending a session, resuming, and claims. Gone: U2, U3, U4, U6, U7,
+      U8, U13's reload and close, U14, the plain seal and revision seal, and the in-memory
+      cleanup after an abandon. Claims keep only the related-entry kind, since EDV walks
+      Revise's. I1's burst case became one that a debounce fails. Two cases added, each red
+      first: I4 for discard as well as seal, and the refused seal's reschedule. Only the deleted
+      "refuses the second of two revision drafts" had reached that reschedule, and it never
+      asserted it.
+- [x] Trace internals (a no-steps change skipped, an anchor op in the parent stream): move to
+      traceRecorder tests if they aren't there already, or drop. The no-steps skip is the
+      store's own (`recordInto`), not the recorder's, so its entry-stream case stays and the
+      parent-stream twin went. The anchor-op case went: `marks.test.ts` derives the `anchor`
+      reason, and `DocumentEditor` specs report `is_anchor_op`. The anchor-mode seal went too,
+      covered by EDV and `entriesStore.test.ts`.
+- [x] The same exercise for the draft cases in `entriesStore.test.ts`. Gone: the empty title
+      and the supplied dates (EntryForm), and the strike read as an update (EDV). Kept: the
+      comment anchor (no page seals a plain comment), a related entry's title, and the
+      refusals, which the UI can't reach or which table what counts as a change.
+- [x] `npm run test:coverage` as a check that no inventory row lost its test — not as a target.
+      2026-09-30: `draftsStore.ts` 97.2% combined (from 96.6%), `entriesStore.ts` 100%. What's
+      left uncovered in the store is error handling and guards (a failed refresh or reload, a
+      call on a session that isn't open), none of it an inventory row.
 
 ### Pass 4 — contract and the Dexie file
 
@@ -292,6 +306,20 @@ Grouped into proposed commits, as in Pass 1.
 ### Pass 5 — the user's review
 
 Cypress first, then Browser Mode, then unit. Final lessons into TESTING.md.
+
+During or after the review, move up the store cases a page can reach, each a new test in both
+runners, red first, and then delete the unit case. That leaves the store with timing, fault
+injection, the trace, and a claim's multi-tab edges.
+
+- [ ] A related-entry claim taken and released: Create related entry, leave, and both ways in
+      are offered again (EDV, as Revise's already is).
+- [ ] A resumed draft holding work survives the page being left (DraftsView, beside "lets go of an
+      untouched claim when the page is left").
+- [ ] The drafts list refreshes on tab return, showing a claim another tab made (`App` at
+      `/drafts`).
+- [ ] Typed dates reach the draft (a date in EntryForm's "keeps what was typed when the composer
+      is left without saving").
+- [ ] A revision changed back to its version is released on leaving (EDV).
 
 ### Later — a real E2E layer
 

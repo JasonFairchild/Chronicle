@@ -1,36 +1,24 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
+import Dexie from 'dexie'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
-import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
-import {
-  runDraftRepositoryContract,
-  type DraftStorage,
-} from '@/repositories/draftRepository.contract'
+import { runDraftRepositoryContract } from '@/repositories/draftRepository.contract'
 import { makeDraft } from '@/testing/draftFixtures'
+import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
 // Real IndexedDB, via Playwright Chromium, for the same reason the entry adapter is proven here:
-// Dexie has nothing to fall back to in node. Each test gets its own database name, and every one
-// opened is deleted afterwards so a run leaves nothing behind in the browser's storage.
-let dbCounter = 0
-const opened: DexieDraftRepository[] = []
-
-/** Drafts and entries on one database, as the composition root has them, so a seal is one write. */
-function freshStorage(): DraftStorage {
-  const database = new ChronicleDatabase(`chronicle-drafts-${Date.now()}-${dbCounter++}`)
-  const drafts = new DexieDraftRepository(database)
-  opened.push(drafts)
-  return { drafts, entries: new DexieEntryRepository(database) }
-}
-
-afterEach(async () => {
-  await Promise.all(opened.splice(0).map((repository) => repository.dispose()))
-})
-
-runDraftRepositoryContract('Dexie', () => freshStorage())
+// Dexie has nothing to fall back to in node. Drafts and entries share one database per test, as
+// the composition root has them, so a seal is one write; `realRepositories.ts` deletes it after.
+runDraftRepositoryContract('Dexie', () => ({
+  drafts: freshDraftRepository(),
+  entries: freshEntryRepository(),
+}))
 
 describe('DexieDraftRepository persistence', () => {
   it('still holds an unsealed draft after the tab is closed and reopened', async () => {
     const databaseName = `chronicle-drafts-persistence-${Date.now()}`
+    // By name, so a failing assertion can't leave it behind; Dexie closes open connections first.
+    onTestFinished(() => Dexie.delete(databaseName))
+
     const beforeReload = new DexieDraftRepository(databaseName)
     await beforeReload.save(
       makeDraft('session-1', {
@@ -50,7 +38,5 @@ describe('DexieDraftRepository persistence', () => {
 
     expect(recovered?.entry.content).toBe('Never got round to finishing this')
     expect(recovered?.entry.events).toHaveLength(1)
-
-    await afterReload.dispose()
   })
 })

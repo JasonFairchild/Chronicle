@@ -69,7 +69,7 @@ Unit tests, unless a pass finds a component spec that drives one deterministical
 | I3  | A failed write stays pending, including what a refused seal left unwritten   | store                |
 | I4  | Seal and discard wait for a flush already writing, so nothing is resurrected | store                |
 | I5  | Seal is one transaction; a refused seal leaves the draft                     | contract             |
-| I6  | Event logs are append-only; a conflicting append refuses the whole save      | contract (entry log) |
+| I6  | Event logs are append-only; a conflicting append refuses the whole save      | contract             |
 | I7  | The stored draft doesn't share the caller's object                           | contract             |
 | I8  | A claim is written at begin, before anything is typed                        | EDV; store (related) |
 | I9  | Releasing a claim is judged on what disk holds                               | store                |
@@ -293,15 +293,32 @@ Grouped into proposed commits, as in Pass 1.
 
 ### Pass 4 — contract and the Dexie file
 
-- [ ] A conflict on the **parent** log.
-- [ ] A save with no new events never conflicts — the title-only gap AUTHORING.md documents — stated
+- [x] A conflict on the **parent** log. The losing save also appends to the entry log, which alone
+      would have taken it, so the test proves the whole save is refused.
+- [x] A save with no new events never conflicts — the title-only gap AUTHORING.md documents — stated
       as intended.
-- [ ] The `list` tie-break on equal `updated_at`, and a multi-input seal returning `inputs` order.
-- [ ] A refused seal leaves the draft exactly as it was, not only the same event count.
-- [ ] `dexieDraftRepository.browser.test.ts`: fold its own `freshStorage` into
+- [x] The `list` tie-break on equal `updated_at`, and a multi-input seal returning `inputs` order.
+- [x] A refused seal leaves the draft exactly as it was, not only the same event count.
+- [x] `dexieDraftRepository.browser.test.ts`: fold its own `freshStorage` into
       `realRepositories.ts` or register it for cleanup; the persistence test leaks its database when
-      an assertion fails.
-- [ ] Remove `InMemoryDraftRepository.clear()`, unused.
+      an assertion fails. The contract takes `freshDraftRepository()` and `freshEntryRepository()`,
+      and the persistence test deletes its database by name in `onTestFinished`.
+- [x] Remove `InMemoryDraftRepository.clear()`, unused. `DexieDraftRepository.dispose()` went too,
+      unused once the Dexie file stopped calling it.
+
+Each new or strengthened case was run red against the in-memory adapter, broken once per case.
+
+**To consider later — one cleanup path for all real storage.** Component specs already have it:
+`realRepositories.ts` keeps a list of what to dispose, and one global `afterEach` per runner
+(`browserSetup.ts`, `cypress/support/component.ts`) empties it, so no spec cleans up by hand. The
+adapter specs are the holdouts: the entry, mark-set and OPFS files each keep their own list and
+`afterEach`, and their persistence tests dispose at the end of the body, so a failed assertion
+leaks, as the draft one did. A `freshDatabaseName()` / `freshDirectoryName()` in
+`realRepositories.ts` that registers deletion by name, plus a `freshMarkSetRepository()`, would
+fold all of them in, leaving no spec that registers cleanup itself. Rejected alternative: sweep
+every `chronicle-test-*` database in the global hook (`indexedDB.databases()`) with nothing
+registered. It catches forgotten cleanup, but it depends on a naming convention the persistence
+tests don't follow yet, and it hides which test made what.
 
 ### Pass 5 — the user's review
 
@@ -400,3 +417,10 @@ What went into TESTING.md, and when.
   than polling; a let-go session's `abandonDraft` is the example (D3).
 - 2026-09-30 — "Known gaps": multi-tab behavior is now component-tested with the other tab
   simulated (D4); what that fakes is named there.
+
+Candidates, not yet in TESTING.md:
+
+- Register cleanup for real storage when it's created, not at the end of the test body, where a
+  failed assertion skips it. Better still, never by hand: see Pass 4's "one cleanup path".
+- Before deleting a unit test for overlap, check which lines only it reached. A test can reach a
+  path without asserting it: the refused seal's reschedule in Pass 3.

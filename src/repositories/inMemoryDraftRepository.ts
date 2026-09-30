@@ -67,12 +67,6 @@ export class InMemoryDraftRepository implements DraftRepository {
     this.parentEvents.delete(sessionId)
   }
 
-  clear(): void {
-    this.snapshots.clear()
-    this.entryEvents.clear()
-    this.parentEvents.clear()
-  }
-
   private reassemble(snapshot: DraftSnapshot): Draft {
     return withEvents(snapshot, {
       entry: this.entryEvents.get(snapshot.session_id) ?? [],

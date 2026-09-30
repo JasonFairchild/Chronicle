@@ -105,11 +105,6 @@ export class DexieDraftRepository implements DraftRepository {
   close(): void {
     this.db.close()
   }
-
-  /** Test-only: deletes the underlying IndexedDB database and closes this instance. */
-  async dispose(): Promise<void> {
-    await this.db.delete()
-  }
 }
 
 function eventRows(

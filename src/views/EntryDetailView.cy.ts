@@ -1,7 +1,7 @@
 import EntryDetailView from '@/views/EntryDetailView.vue'
-import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
-import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
-import type { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
+import type { DraftRepository } from '@/repositories/draftRepository'
+import type { EntryRepository } from '@/repositories/entryRepository'
+import type { MediaRepository } from '@/repositories/mediaRepository'
 import {
   freshDraftRepository,
   freshEntryRepository,
@@ -22,9 +22,9 @@ function mountDetail(id: string): Cypress.Chainable {
 
 // A fresh, isolated real repository per test, pointed at by the composition root, so the mounted
 // component's own useEntriesStore() call reaches the same instance this file seeds into.
-let repository: DexieEntryRepository
-let media: OpfsMediaRepository
-let drafts: DexieDraftRepository
+let repository: EntryRepository
+let media: MediaRepository
+let drafts: DraftRepository
 
 /**
  * Creates one entry in the active repository. Plain async rather than a command, so a test that

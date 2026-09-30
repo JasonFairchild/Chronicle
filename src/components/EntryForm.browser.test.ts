@@ -3,24 +3,20 @@ import { userEvent } from 'vitest/browser'
 import EntryForm from '@/components/EntryForm.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
-import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
+import type { EntryRepository } from '@/repositories/entryRepository'
 import { renderComponent } from '@/testing/renderComponent'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
 describe('EntryForm (browser)', () => {
-  let entries: DexieEntryRepository
+  let entries: EntryRepository
 
   beforeEach(() => {
     entries = freshEntryRepository()
     freshDraftRepository()
   })
 
-  function mountForm(props: { disabled?: boolean } = {}) {
-    return renderComponent(EntryForm, { props })
-  }
-
   it('holds a session as a draft and commits one entry only when it is saved', async () => {
-    const screen = mountForm()
+    const screen = renderComponent(EntryForm)
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await userEvent.keyboard('{Enter}We drove up on Friday.')
@@ -43,7 +39,7 @@ describe('EntryForm (browser)', () => {
   })
 
   it('saves when something happened and when it was first written down, with the entry', async () => {
-    const screen = mountForm()
+    const screen = renderComponent(EntryForm)
 
     // Exact, or "Happened" would also match the "Time it happened" beside it.
     await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
@@ -66,7 +62,7 @@ describe('EntryForm (browser)', () => {
   })
 
   it('starts a fresh empty session after a save rather than reopening the last one', async () => {
-    const screen = mountForm()
+    const screen = renderComponent(EntryForm)
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('The first one')
     await screen.getByRole('textbox', { name: 'New entry' }).fill('First entry')
@@ -83,7 +79,7 @@ describe('EntryForm (browser)', () => {
   })
 
   it('leaves no draft behind for a composer that was only opened', async () => {
-    const screen = mountForm({ disabled: true })
+    const screen = renderComponent(EntryForm, { props: { disabled: true } })
 
     // What the timeline finishing its load looks like from here. An editor becoming editable is
     // not an edit: treating it as one would start a writing session nobody began, leaving an empty
@@ -97,7 +93,7 @@ describe('EntryForm (browser)', () => {
   })
 
   it('will not save an empty document', async () => {
-    const screen = mountForm()
+    const screen = renderComponent(EntryForm)
 
     await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeDisabled()
 
@@ -107,7 +103,7 @@ describe('EntryForm (browser)', () => {
   })
 
   it('saves an entry that was never given a title', async () => {
-    const screen = mountForm()
+    const screen = renderComponent(EntryForm)
 
     // The title field is offered and skipped. A daily journal is mostly entries nobody would name,
     // and a required title there produces filler rather than better names.

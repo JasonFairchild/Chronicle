@@ -129,19 +129,20 @@ Grouped into proposed commits (the user may let more build up between them).
 
 **Commit 1 — types and fixture**
 
-- [ ] Type storage handles in specs as the interfaces (`DraftRepository`, `EntryRepository`), and
+- [x] Type storage handles in specs as the interfaces (`DraftRepository`, `EntryRepository`), and
       the `freshXRepository()` return types in `realRepositories.ts` with them.
-- [ ] Settle the draft fixture (D1). First: 55 call sites, so later items are written in its shape.
+- [x] Settle the draft fixture (D1). First: 55 call sites, so later items are written in its shape.
 
 **Commit 2 — small cleanups**
 
-- [ ] `DraftsView.browser.test.ts` "resumes an unsealed session…": its comment says sealing writes
+- [x] `DraftsView.browser.test.ts` "resumes an unsealed session…": its comment says sealing writes
       the entry before deleting the draft, but `DexieDraftRepository.seal` is one transaction with
       the delete first. Fix the comment and drop the second `vi.waitFor` it justifies.
-- [ ] Assert the unreadable-draft alert exactly in both runners (Vitest uses the partial
+- [x] Assert the unreadable-draft alert exactly in both runners (Vitest uses the partial
       `toHaveTextContent`, Cypress the exact `have.text`).
-- [ ] Drop one-line mount wrappers (`mountDrafts`, `mountForm`); `mountDetail` earns its place.
-- [ ] Seed with one `cy.then(async …)` yielding what the test uses — the `seed` precedent in
+- [x] Drop one-line mount wrappers (`mountDrafts`, `mountForm`); `mountDetail` earns its place.
+      `mountNewConnection` stays too: it hides the route setup, as `mountDetail` does.
+- [x] Seed with one `cy.then(async …)` yielding what the test uses — the `seed` precedent in
       `EntryDetailView.cy.ts` — in place of `NewConnectionView.cy.ts`'s nested pyramids.
 
 **Commit 3 — retrying and meaningful assertions**
@@ -229,9 +230,10 @@ Decided:
   repository, as `EntryForm.cy.ts` does; its details stay in unit tests.
 
 - **D1 — fixture shape.** `makeDraft(sessionId, { entry, kind, updatedAt })`: the id stays first,
-  the rest named, so no call passes placeholders to reach a later argument. A `relatedTo(parent)`
-  builder derives a related draft's `kind`, `parent_id` and `parent` from the parent entry, kept
-  only if the anchor case (a custom `parentDocument`) still reads well through it. A
+  the rest named, so no call passes placeholders to reach a later argument. A
+  `relatedTo(parent, since)` builder derives a related draft's `kind`, `parent_id` and `parent`
+  from the parent's `id` and `content`; `since` carries anchor marks and their events, and a plain
+  `{ id, content }` stands in for a parent that isn't stored. It replaced `parentDocument`. A
   `seedDraft(drafts, draft)` saves with nothing persisted, for component specs and store tests;
   the contract keeps `NOTHING_PERSISTED` explicit, since the persisted counts are what it tests.
 - This plan lives here, checked in, until folded into TESTING.md.
@@ -250,7 +252,9 @@ A running list for the Vitest Browser Mode vs Cypress write-up.
 - **Retrying.** `vi.waitFor` retries an async block, repository reads included; Cypress retries
   queries and `.should`, but not a `cy.then` callback.
 - **Seeding.** Inline `await` in Vitest; `cy.then(async …)` chains in Cypress.
-- **Text matching.** `toHaveTextContent` is partial by default; `have.text` is exact.
+- **Text matching.** `toHaveTextContent` is partial by default; `have.text` is exact. Vitest's exact
+  form is a locator intersection, `getByRole('alert').and(getByText(text, { exact: true }))`,
+  asserted visible — no regex. Should this go in TESTING.md's "Queries and selectors" later?
 - **Keyboard.** Cypress's `.type()` simulates keys in JavaScript and has no `{tab}`; `cy.press()`
   sends a native key through the browser, Tab included. Vitest's `userEvent` goes native throughout.
 - **Another tab.** A second Pinia over the same database works in Vitest; untried under `cy.mount`.

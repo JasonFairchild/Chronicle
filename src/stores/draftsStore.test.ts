@@ -13,7 +13,7 @@ import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { makeDraft, parentDocument } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput, emptyEntryDates, type AggregatedEntry } from '@/types/entry'
 
 /** An entry already on record, as a session opened against it would find it. */
@@ -258,19 +258,16 @@ describe('useDraftsStore', () => {
     const parent = await existingEntry(parentContent)
     const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
 
-    await draftRepository.save(
-      makeDraft(
-        'interrupted-anchor',
-        {},
-        {
-          kind: 'new_related',
-          parent_id: parent.id,
-          parent: parentDocument(parent.id, textContent(parentContent), markedParentContent, [
+    await seedDraft(
+      draftRepository,
+      makeDraft('interrupted-anchor', {
+        kind: relatedTo(parent, {
+          content: markedParentContent,
+          events: [
             { kind: 'edit', at: 1_000, steps: [{ stepType: 'addMark' }], is_anchor_op: true },
-          ]),
-        },
-      ),
-      { entry: 0, parent: 0 },
+          ],
+        }),
+      }),
     )
 
     await store.resumeDraft('interrupted-anchor')
@@ -385,15 +382,17 @@ describe('useDraftsStore', () => {
 
   it('resumes a draft left behind by a reload with its history intact', async () => {
     const store = useDraftsStore()
-    await draftRepository.save(
+    await seedDraft(
+      draftRepository,
       makeDraft('interrupted', {
-        content: textContent('Half a thought'),
-        events: [
-          { kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] },
-          { kind: 'manual', at: 1_500 },
-        ],
+        entry: {
+          content: textContent('Half a thought'),
+          events: [
+            { kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] },
+            { kind: 'manual', at: 1_500 },
+          ],
+        },
       }),
-      { entry: 0, parent: 0 },
     )
 
     const resumed = await store.resumeDraft('interrupted')
@@ -649,17 +648,16 @@ describe('useDraftsStore', () => {
     it('keeps a resumed draft that holds work when it is let go untouched', async () => {
       const store = useDraftsStore()
       const original = await existingEntry('I recieved the offer')
-      await draftRepository.save(
-        makeDraft(
-          'interrupted-revision',
-          {
+      await seedDraft(
+        draftRepository,
+        makeDraft('interrupted-revision', {
+          entry: {
             base_version_id: original.id,
             base_content: original.content,
             content: textContent('I received the offer'),
           },
-          { kind: 'revision', parent_id: original.id },
-        ),
-        { entry: 0, parent: 0 },
+          kind: { kind: 'revision', parent_id: original.id },
+        }),
       )
 
       await store.resumeDraft('interrupted-revision')
@@ -673,13 +671,12 @@ describe('useDraftsStore', () => {
       const original = await existingEntry('I recieved the offer')
       await store.loadDrafts()
 
-      await draftRepository.save(
-        makeDraft(
-          'claimed-elsewhere',
-          { base_version_id: original.id, base_content: original.content },
-          { kind: 'revision', parent_id: original.id },
-        ),
-        { entry: 0, parent: 0 },
+      await seedDraft(
+        draftRepository,
+        makeDraft('claimed-elsewhere', {
+          entry: { base_version_id: original.id, base_content: original.content },
+          kind: { kind: 'revision', parent_id: original.id },
+        }),
       )
       await store.adoptChangesElsewhere()
 

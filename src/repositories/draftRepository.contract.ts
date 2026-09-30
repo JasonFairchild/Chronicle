@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { StaleVersionError } from '@/domain/entryValidation'
-import { makeDraft, parentDocument } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { createEntryInput, type AuthoringEvent } from '@/types/entry'
 import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
 import type { EntryRepository } from './entryRepository'
@@ -31,7 +31,10 @@ export function runDraftRepositoryContract(
     })
 
     it('seals a draft into its entries and removes it, as one write', async () => {
-      await repository.save(makeDraft('session-1', { content: 'Finished' }), NOTHING_PERSISTED)
+      await repository.save(
+        makeDraft('session-1', { entry: { content: 'Finished' } }),
+        NOTHING_PERSISTED,
+      )
 
       const [sealed] = await repository.seal('session-1', [
         createEntryInput({ content: 'Finished' }),
@@ -53,8 +56,10 @@ export function runDraftRepositoryContract(
       await entries.create(staleRevision())
       await repository.save(
         makeDraft('session-1', {
-          content: 'Two, from a stale start',
-          events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
+          entry: {
+            content: 'Two, from a stale start',
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
+          },
         }),
         NOTHING_PERSISTED,
       )
@@ -69,9 +74,8 @@ export function runDraftRepositoryContract(
 
     it('saves a draft and reads it back whole', async () => {
       await repository.save(
-        makeDraft(
-          'session-1',
-          {
+        makeDraft('session-1', {
+          entry: {
             dates: {
               recorded_at: '1994-06-12',
               recorded_time_note: 'evening',
@@ -85,17 +89,14 @@ export function runDraftRepositoryContract(
               { kind: 'manual', at: 1_500 },
             ],
           },
-          {
-            kind: 'new_related',
-            parent_id: 'entry-9',
-            parent: parentDocument(
-              'entry-9',
-              'The full parent document, as this session found it',
-              'The full parent document, with a provisional anchor mark',
-              [{ kind: 'edit', at: 1_000, steps: [{ n: 'p1' }], is_anchor_op: true }],
-            ),
-          },
-        ),
+          kind: relatedTo(
+            { id: 'entry-9', content: 'The full parent document, as this session found it' },
+            {
+              content: 'The full parent document, with a provisional anchor mark',
+              events: [{ kind: 'edit', at: 1_000, steps: [{ n: 'p1' }], is_anchor_op: true }],
+            },
+          ),
+        }),
         NOTHING_PERSISTED,
       )
 
@@ -125,14 +126,15 @@ export function runDraftRepositoryContract(
     })
 
     it('overwrites in place, because a live session is working space rather than history', async () => {
-      await repository.save(makeDraft('session-1', { content: 'It rai' }), NOTHING_PERSISTED)
       await repository.save(
-        makeDraft(
-          'session-1',
-          { content: 'It rained all day.' },
-          { kind: 'new_root' },
-          '2026-09-05T10:00:05.000Z',
-        ),
+        makeDraft('session-1', { entry: { content: 'It rai' } }),
+        NOTHING_PERSISTED,
+      )
+      await repository.save(
+        makeDraft('session-1', {
+          entry: { content: 'It rained all day.' },
+          updatedAt: '2026-09-05T10:00:05.000Z',
+        }),
         NOTHING_PERSISTED,
       )
 
@@ -142,11 +144,11 @@ export function runDraftRepositoryContract(
 
     it('lists drafts most recently touched first', async () => {
       await repository.save(
-        makeDraft('older', {}, { kind: 'new_root' }, '2026-09-05T10:00:00.000Z'),
+        makeDraft('older', { updatedAt: '2026-09-05T10:00:00.000Z' }),
         NOTHING_PERSISTED,
       )
       await repository.save(
-        makeDraft('newer', {}, { kind: 'new_root' }, '2026-09-05T11:00:00.000Z'),
+        makeDraft('newer', { updatedAt: '2026-09-05T11:00:00.000Z' }),
         NOTHING_PERSISTED,
       )
 
@@ -156,8 +158,7 @@ export function runDraftRepositoryContract(
     it('lists a snapshot carrying the content but not the event log', async () => {
       await repository.save(
         makeDraft('session-1', {
-          content: 'It rai',
-          events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
+          entry: { content: 'It rai', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
         }),
         NOTHING_PERSISTED,
       )
@@ -180,7 +181,7 @@ export function runDraftRepositoryContract(
     })
 
     it("does not keep the caller's object, so a session that keeps typing cannot rewrite what it stored", async () => {
-      const draft = makeDraft('session-1', { content: 'It rai' })
+      const draft = makeDraft('session-1', { entry: { content: 'It rai' } })
 
       await repository.save(draft, NOTHING_PERSISTED)
       draft.entry.content = 'It rained all day, mutated after the save resolved'
@@ -191,18 +192,19 @@ export function runDraftRepositoryContract(
     it('appends only the events it has not already stored, and reads the whole log back', async () => {
       await repository.save(
         makeDraft('session-1', {
-          content: 'It rai',
-          events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
+          entry: { content: 'It rai', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
         }),
         NOTHING_PERSISTED,
       )
       await repository.save(
         makeDraft('session-1', {
-          content: 'It rained',
-          events: [
-            { kind: 'edit', at: 1_000, steps: [{ n: 1 }] },
-            { kind: 'edit', at: 2_000, steps: [{ n: 2 }] },
-          ],
+          entry: {
+            content: 'It rained',
+            events: [
+              { kind: 'edit', at: 1_000, steps: [{ n: 1 }] },
+              { kind: 'edit', at: 2_000, steps: [{ n: 2 }] },
+            ],
+          },
         }),
         { entry: 1, parent: 0 },
       )
@@ -213,15 +215,17 @@ export function runDraftRepositoryContract(
 
     it('refuses to append over events already stored, so two tabs cannot interleave one log', async () => {
       const first: AuthoringEvent = { kind: 'edit', at: 1_000, steps: [{ n: 1 }] }
-      await repository.save(makeDraft('session-1', { content: 'One', events: [first] }), {
-        entry: 0,
-        parent: 0,
-      })
+      await repository.save(
+        makeDraft('session-1', { entry: { content: 'One', events: [first] } }),
+        NOTHING_PERSISTED,
+      )
       // Two tabs both loaded one event. This one appends its second first...
       await repository.save(
         makeDraft('session-1', {
-          content: 'One two',
-          events: [first, { kind: 'edit', at: 2_000, steps: [{ n: 2 }] }],
+          entry: {
+            content: 'One two',
+            events: [first, { kind: 'edit', at: 2_000, steps: [{ n: 2 }] }],
+          },
         }),
         { entry: 1, parent: 0 },
       )
@@ -230,8 +234,10 @@ export function runDraftRepositoryContract(
       await expect(
         repository.save(
           makeDraft('session-1', {
-            content: 'One three',
-            events: [first, { kind: 'edit', at: 3_000, steps: [{ n: 3 }] }],
+            entry: {
+              content: 'One three',
+              events: [first, { kind: 'edit', at: 3_000, steps: [{ n: 3 }] }],
+            },
           }),
           { entry: 1, parent: 0 },
         ),
@@ -245,8 +251,7 @@ export function runDraftRepositoryContract(
     it("forgets a session's events when its draft is deleted", async () => {
       await repository.save(
         makeDraft('session-1', {
-          content: 'It rai',
-          events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
+          entry: { content: 'It rai', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
         }),
         NOTHING_PERSISTED,
       )
@@ -254,45 +259,44 @@ export function runDraftRepositoryContract(
 
       // Reused session id, as a fresh `beginDraft` would never produce, but the row's absence is
       // what a stale, un-cleaned-up event row would betray.
-      await repository.save(makeDraft('session-1', { content: 'Fresh start' }), NOTHING_PERSISTED)
+      await repository.save(
+        makeDraft('session-1', { entry: { content: 'Fresh start' } }),
+        NOTHING_PERSISTED,
+      )
 
       expect((await repository.getById('session-1'))?.entry.events).toEqual([])
     })
 
     it("reassembles a resumed session's logs in the order they were written", async () => {
-      const related = { kind: 'new_related', parent_id: 'entry-9' } as const
+      const parent = { id: 'entry-9', content: 'Parent base' }
 
       await repository.save(
-        makeDraft(
-          'session-1',
-          { content: 'One', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
-          {
-            ...related,
-            parent: parentDocument('entry-9', 'Parent base', 'Parent one', [
-              { kind: 'edit', at: 1_000, steps: [{ n: 'p1' }] },
-            ]),
-          },
-        ),
+        makeDraft('session-1', {
+          entry: { content: 'One', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
+          kind: relatedTo(parent, {
+            content: 'Parent one',
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 'p1' }] }],
+          }),
+        }),
         NOTHING_PERSISTED,
       )
       await repository.save(
-        makeDraft(
-          'session-1',
-          {
+        makeDraft('session-1', {
+          entry: {
             content: 'One two',
             events: [
               { kind: 'edit', at: 1_000, steps: [{ n: 1 }] },
               { kind: 'manual', at: 2_000 },
             ],
           },
-          {
-            ...related,
-            parent: parentDocument('entry-9', 'Parent base', 'Parent one two', [
+          kind: relatedTo(parent, {
+            content: 'Parent one two',
+            events: [
               { kind: 'edit', at: 1_000, steps: [{ n: 'p1' }] },
               { kind: 'edit', at: 2_000, steps: [{ n: 'p2' }] },
-            ]),
-          },
-        ),
+            ],
+          }),
+        }),
         { entry: 1, parent: 1 },
       )
 

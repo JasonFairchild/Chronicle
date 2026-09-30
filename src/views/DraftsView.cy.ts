@@ -1,39 +1,33 @@
 import DraftsView from '@/views/DraftsView.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
-import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
+import type { DraftRepository } from '@/repositories/draftRepository'
+import type { EntryRepository } from '@/repositories/entryRepository'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { makeDraft, parentDocument } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput } from '@/types/entry'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('DraftsView', () => {
-  let drafts: DexieDraftRepository
-  let entries: DexieEntryRepository
+  let drafts: DraftRepository
+  let entries: EntryRepository
 
   beforeEach(() => {
     drafts = freshDraftRepository()
     entries = freshEntryRepository()
   })
 
-  function mountDrafts() {
-    cy.mount(DraftsView)
-  }
-
   it('resumes an unsealed session and finishes it as one entry', () => {
     cy.then(() =>
-      drafts.save(
+      seedDraft(
+        drafts,
         makeDraft('session-1', {
-          content: textContent('Half a thought'),
-          title: 'Lake Tahoe',
-          events: TYPED,
+          entry: { content: textContent('Half a thought'), title: 'Lake Tahoe', events: TYPED },
         }),
-        { entry: 0, parent: 0 },
       ),
     )
-    mountDrafts()
+    cy.mount(DraftsView)
 
     cy.findByText('Half a thought').should('be.visible')
     cy.findByRole('button', { name: 'Resume' }).click()
@@ -56,20 +50,15 @@ describe('DraftsView', () => {
       const parent = await entries.create(
         createEntryInput({ content: textContent('The meeting went badly') }),
       )
-      await drafts.save(
-        makeDraft(
-          'session-1',
-          { content: textContent('It was salvaged later'), events: TYPED },
-          {
-            kind: 'new_related',
-            parent_id: parent.id,
-            parent: parentDocument(parent.id, parent.content),
-          },
-        ),
-        { entry: 0, parent: 0 },
+      await seedDraft(
+        drafts,
+        makeDraft('session-1', {
+          entry: { content: textContent('It was salvaged later'), events: TYPED },
+          kind: relatedTo(parent),
+        }),
       )
     })
-    mountDrafts()
+    cy.mount(DraftsView)
 
     cy.findByText('Related entry on “The meeting went badly”').should('be.visible')
   })
@@ -82,26 +71,19 @@ describe('DraftsView', () => {
         createEntryInput({ content: textContent('I went to Lake Tahoe with Dad') }),
       )
       parentId = parent.id
-      await drafts.save(
-        makeDraft(
-          'session-1',
-          { content: textContent('Wrong lake'), events: TYPED },
-          {
-            kind: 'new_related',
-            parent_id: parent.id,
-            // The parent as this session found it, against which "anchor-1 is ours" still reads
-            // after the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
-            parent: parentDocument(
-              parent.id,
-              textContent('I went to Lake Tahoe with Dad'),
-              withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike'),
-            ),
-          },
-        ),
-        { entry: 0, parent: 0 },
+      await seedDraft(
+        drafts,
+        makeDraft('session-1', {
+          entry: { content: textContent('Wrong lake'), events: TYPED },
+          // The parent as this session found it, against which "anchor-1 is ours" still reads
+          // after the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
+          kind: relatedTo(parent, {
+            content: withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike'),
+          }),
+        }),
       )
     })
-    mountDrafts()
+    cy.mount(DraftsView)
 
     cy.findByRole('button', { name: 'Resume' }).click()
 
@@ -123,12 +105,12 @@ describe('DraftsView', () => {
 
   it('discards a draft on request, the one thing that removes work', () => {
     cy.then(() =>
-      drafts.save(makeDraft('session-1', { content: textContent('Never mind'), events: TYPED }), {
-        entry: 0,
-        parent: 0,
-      }),
+      seedDraft(
+        drafts,
+        makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
+      ),
     )
-    mountDrafts()
+    cy.mount(DraftsView)
 
     cy.findByText('Never mind').should('be.visible')
     cy.findByRole('button', { name: 'Discard' }).click()
@@ -144,19 +126,14 @@ describe('DraftsView', () => {
       'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
       'home, and why none of it went the way we planned.'
     cy.then(() =>
-      drafts.save(
-        {
-          ...makeDraft('session-1', {
-            content: textContent(text),
-            title: 'Lake Tahoe',
-            events: TYPED,
-          }),
-          started_at: 'not a timestamp',
-        },
-        { entry: 0, parent: 0 },
-      ),
+      seedDraft(drafts, {
+        ...makeDraft('session-1', {
+          entry: { content: textContent(text), title: 'Lake Tahoe', events: TYPED },
+        }),
+        started_at: 'not a timestamp',
+      }),
     )
-    mountDrafts()
+    cy.mount(DraftsView)
 
     cy.findByRole('button', { name: 'Resume' }).click()
     cy.findByRole('alert').should(
@@ -171,7 +148,7 @@ describe('DraftsView', () => {
   })
 
   it('says so plainly when there is nothing in progress', () => {
-    mountDrafts()
+    cy.mount(DraftsView)
 
     cy.findByText('No drafts in progress.').should('be.visible')
   })

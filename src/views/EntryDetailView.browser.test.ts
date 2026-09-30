@@ -4,9 +4,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
-import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
-import type { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
+import type { DraftRepository } from '@/repositories/draftRepository'
+import type { EntryRepository } from '@/repositories/entryRepository'
+import type { MediaRepository } from '@/repositories/mediaRepository'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import {
@@ -37,9 +37,9 @@ async function mountDetail(id: string) {
 describe('EntryDetailView (browser)', () => {
   // A fresh, isolated real repository per test, pointed at by the composition root, so the
   // mounted component's own useEntriesStore() call reaches the same instance this file seeds.
-  let repository: DexieEntryRepository
-  let media: OpfsMediaRepository
-  let drafts: DexieDraftRepository
+  let repository: EntryRepository
+  let media: MediaRepository
+  let drafts: DraftRepository
 
   beforeEach(() => {
     repository = freshEntryRepository()

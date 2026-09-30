@@ -2,40 +2,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import DraftsView from '@/views/DraftsView.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
-import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
+import type { DraftRepository } from '@/repositories/draftRepository'
+import type { EntryRepository } from '@/repositories/entryRepository'
 import { renderComponent } from '@/testing/renderComponent'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { makeDraft, parentDocument } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput } from '@/types/entry'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('DraftsView (browser)', () => {
-  let drafts: DexieDraftRepository
-  let entries: DexieEntryRepository
+  let drafts: DraftRepository
+  let entries: EntryRepository
 
   beforeEach(() => {
     drafts = freshDraftRepository()
     entries = freshEntryRepository()
   })
 
-  function mountDrafts() {
-    return renderComponent(DraftsView)
-  }
-
   it('resumes an unsealed session and finishes it as one entry', async () => {
-    await drafts.save(
+    await seedDraft(
+      drafts,
       makeDraft('session-1', {
-        content: textContent('Half a thought'),
-        title: 'Lake Tahoe',
-        events: TYPED,
+        entry: { content: textContent('Half a thought'), title: 'Lake Tahoe', events: TYPED },
       }),
-      { entry: 0, parent: 0 },
     )
 
-    const screen = mountDrafts()
+    const screen = renderComponent(DraftsView)
     await expect.element(screen.getByText('Half a thought')).toBeVisible()
 
     await screen.getByRole('button', { name: 'Resume' }).click()
@@ -50,11 +44,8 @@ describe('DraftsView (browser)', () => {
     const [saved] = await entries.listRootEntries()
     expect(saved?.title).toBe('Lake Tahoe')
     expect(docToPlainText(saved!.content)).toBe('Half a thought, finished at last.')
-    // Sealing writes the entry before it deletes the draft row, so the delete can still be
-    // in flight right after the entry appears — wait for it rather than assume it's already done.
-    await vi.waitFor(async () => {
-      expect(await drafts.list()).toEqual([])
-    })
+    // Sealing writes the entry and deletes the draft in one transaction, so both have landed.
+    expect(await drafts.list()).toEqual([])
     await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
   })
 
@@ -62,20 +53,15 @@ describe('DraftsView (browser)', () => {
     const parent = await entries.create(
       createEntryInput({ content: textContent('The meeting went badly') }),
     )
-    await drafts.save(
-      makeDraft(
-        'session-1',
-        { content: textContent('It was salvaged later'), events: TYPED },
-        {
-          kind: 'new_related',
-          parent_id: parent.id,
-          parent: parentDocument(parent.id, parent.content),
-        },
-      ),
-      { entry: 0, parent: 0 },
+    await seedDraft(
+      drafts,
+      makeDraft('session-1', {
+        entry: { content: textContent('It was salvaged later'), events: TYPED },
+        kind: relatedTo(parent),
+      }),
     )
 
-    const screen = mountDrafts()
+    const screen = renderComponent(DraftsView)
 
     await expect
       .element(screen.getByText('Related entry on “The meeting went badly”'))
@@ -86,26 +72,19 @@ describe('DraftsView (browser)', () => {
     const parent = await entries.create(
       createEntryInput({ content: textContent('I went to Lake Tahoe with Dad') }),
     )
-    await drafts.save(
-      makeDraft(
-        'session-1',
-        { content: textContent('Wrong lake'), events: TYPED },
-        {
-          kind: 'new_related',
-          parent_id: parent.id,
-          // The parent as this session found it, against which "anchor-1 is ours" still reads
-          // after the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
-          parent: parentDocument(
-            parent.id,
-            textContent('I went to Lake Tahoe with Dad'),
-            withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike'),
-          ),
-        },
-      ),
-      { entry: 0, parent: 0 },
+    await seedDraft(
+      drafts,
+      makeDraft('session-1', {
+        entry: { content: textContent('Wrong lake'), events: TYPED },
+        // The parent as this session found it, against which "anchor-1 is ours" still reads after
+        // the reload — see `anchorsPlacedSince` (`domain/anchors.ts`).
+        kind: relatedTo(parent, {
+          content: withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike'),
+        }),
+      }),
     )
 
-    const screen = mountDrafts()
+    const screen = renderComponent(DraftsView)
     await screen.getByRole('button', { name: 'Resume' }).click()
 
     // An anchor-mode session edits two documents at once, and leaving it is not the same as
@@ -129,12 +108,12 @@ describe('DraftsView (browser)', () => {
   })
 
   it('discards a draft on request, the one thing that removes work', async () => {
-    await drafts.save(
-      makeDraft('session-1', { content: textContent('Never mind'), events: TYPED }),
-      { entry: 0, parent: 0 },
+    await seedDraft(
+      drafts,
+      makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
     )
 
-    const screen = mountDrafts()
+    const screen = renderComponent(DraftsView)
     await expect.element(screen.getByText('Never mind')).toBeVisible()
 
     await screen.getByRole('button', { name: 'Discard' }).click()
@@ -147,26 +126,28 @@ describe('DraftsView (browser)', () => {
     const text =
       'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
       'home, and why none of it went the way we planned.'
-    await drafts.save(
-      {
-        ...makeDraft('session-1', {
-          content: textContent(text),
-          title: 'Lake Tahoe',
-          events: TYPED,
-        }),
-        started_at: 'not a timestamp',
-      },
-      { entry: 0, parent: 0 },
-    )
+    await seedDraft(drafts, {
+      ...makeDraft('session-1', {
+        entry: { content: textContent(text), title: 'Lake Tahoe', events: TYPED },
+      }),
+      started_at: 'not a timestamp',
+    })
 
-    const screen = mountDrafts()
+    const screen = renderComponent(DraftsView)
     await screen.getByRole('button', { name: 'Resume' }).click()
 
     await expect
-      .element(screen.getByRole('alert'))
-      .toHaveTextContent(
-        'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
+      .element(
+        screen
+          .getByRole('alert')
+          .and(
+            screen.getByText(
+              'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
+              { exact: true },
+            ),
+          ),
       )
+      .toBeVisible()
     await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
     await expect.element(screen.getByText(text)).toBeVisible()
 
@@ -176,7 +157,7 @@ describe('DraftsView (browser)', () => {
   })
 
   it('says so plainly when there is nothing in progress', async () => {
-    const screen = mountDrafts()
+    const screen = renderComponent(DraftsView)
 
     await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
   })

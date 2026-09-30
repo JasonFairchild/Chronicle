@@ -11,7 +11,7 @@ import {
 import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { makeDraft, parentDocument } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo, type DraftKind } from '@/testing/draftFixtures'
 import type { Draft } from '@/types/draft'
 import { createEntryInput, type Entry } from '@/types/entry'
 
@@ -53,11 +53,13 @@ describe('useEntriesStore', () => {
 
   it('seals a draft whose title field was left empty, storing no title for it', async () => {
     const draft = makeDraft('session-untitled', {
-      // The field was offered and not filled in — whitespace typed and abandoned collapses to null
-      // the same way. Nothing is owed — a journal entry that would only ever be named "Tuesday" is
-      // better left unnamed.
-      title: '   ',
-      content: serializeDocument(plainTextDocument('We drove up on Friday.')),
+      entry: {
+        // The field was offered and not filled in — whitespace typed and abandoned collapses to
+        // null the same way. Nothing is owed — a journal entry that would only ever be named
+        // "Tuesday" is better left unnamed.
+        title: '   ',
+        content: serializeDocument(plainTextDocument('We drove up on Friday.')),
+      },
     })
 
     const sealed = await sealDraft(draft)
@@ -71,18 +73,13 @@ describe('useEntriesStore', () => {
     const store = useEntriesStore()
     const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
 
-    const draft = makeDraft(
-      'session-titled-related',
-      {
+    const draft = makeDraft('session-titled-related', {
+      entry: {
         title: 'A later thought',
         content: serializeDocument(plainTextDocument('Still think about this trip')),
       },
-      {
-        kind: 'new_related',
-        parent_id: parent.id,
-        parent: parentDocument(parent.id, parent.content),
-      },
-    )
+      kind: relatedTo(parent),
+    })
 
     const sealed = await sealDraft(draft)
 
@@ -117,16 +114,11 @@ describe('useEntriesStore', () => {
     const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
     const marked = withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20)
 
-    const draft = makeDraft(
-      'session-1',
-      { content: textContent('It was actually Donner Lake') },
-      {
-        kind: 'new_related',
-        parent_id: parent.id,
-        // "anchor-1 is this session's" is the difference between these two documents, not a list.
-        parent: parentDocument(parent.id, textContent('I went to Lake Tahoe with Dad'), marked),
-      },
-    )
+    const draft = makeDraft('session-1', {
+      entry: { content: textContent('It was actually Donner Lake') },
+      // "anchor-1 is this session's" is the difference between these two documents, not a list.
+      kind: relatedTo(parent, { content: marked }),
+    })
 
     await sealDraft(draft)
 
@@ -153,15 +145,10 @@ describe('useEntriesStore', () => {
     const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
     const struck = withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20, 'strike')
 
-    const draft = makeDraft(
-      'session-2',
-      { content: textContent('It was actually Donner Lake') },
-      {
-        kind: 'new_related',
-        parent_id: parent.id,
-        parent: parentDocument(parent.id, textContent('I went to Lake Tahoe with Dad'), struck),
-      },
-    )
+    const draft = makeDraft('session-2', {
+      entry: { content: textContent('It was actually Donner Lake') },
+      kind: relatedTo(parent, { content: struck }),
+    })
 
     await sealDraft(draft)
 
@@ -173,13 +160,15 @@ describe('useEntriesStore', () => {
     const store = useEntriesStore()
 
     const draft = makeDraft('session-3', {
-      dates: {
-        recorded_at: '1994-06-12',
-        recorded_time_note: 'evening',
-        occurred_at: '1994-06-11',
-        occurred_time_note: 'late morning',
+      entry: {
+        dates: {
+          recorded_at: '1994-06-12',
+          recorded_time_note: 'evening',
+          occurred_at: '1994-06-11',
+          occurred_time_note: 'late morning',
+        },
+        content: textContent('Transcribed out of the green notebook'),
       },
-      content: textContent('Transcribed out of the green notebook'),
     })
 
     const created = await sealDraft(draft)
@@ -232,9 +221,8 @@ describe('useEntriesStore', () => {
       createEntryInput({ content: withPhoto, media_refs: ['blob-1'] }),
     )
 
-    const draft = makeDraft(
-      'session-4',
-      {
+    const draft = makeDraft('session-4', {
+      entry: {
         content: serializeDocument({
           type: 'doc',
           content: [
@@ -244,8 +232,8 @@ describe('useEntriesStore', () => {
         }),
         base_version_id: created.id,
       },
-      { kind: 'revision', parent_id: created.id },
-    )
+      kind: { kind: 'revision', parent_id: created.id },
+    })
 
     await sealDraft(draft)
 
@@ -279,13 +267,15 @@ describe('useEntriesStore', () => {
   it('carries the author’s dates through a revision instead of dropping them', async () => {
     const store = useEntriesStore()
     const draft = makeDraft('session-dated', {
-      dates: {
-        recorded_at: '1994-06-12',
-        recorded_time_note: 'evening',
-        occurred_at: '1994-06-11',
-        occurred_time_note: 'morning',
+      entry: {
+        dates: {
+          recorded_at: '1994-06-12',
+          recorded_time_note: 'evening',
+          occurred_at: '1994-06-11',
+          occurred_time_note: 'morning',
+        },
+        content: serializeDocument(plainTextDocument('From the notebook')),
       },
-      content: serializeDocument(plainTextDocument('From the notebook')),
     })
     const created = await sealDraft(draft)
 
@@ -349,20 +339,15 @@ describe('useEntriesStore', () => {
 
   describe('refusing a write it cannot make', () => {
     /** A sealed draft standing in for whichever session the test is about to refuse. */
-    function draftFor(
-      kind: NonNullable<Parameters<typeof makeDraft>[2]>,
-      body: string,
-      title: string | null = null,
-    ): Draft {
-      return makeDraft(
-        'session-refused',
-        {
+    function draftFor(kind: DraftKind, body: string, title: string | null = null): Draft {
+      return makeDraft('session-refused', {
+        entry: {
           title,
           content: serializeDocument(plainTextDocument(body)),
           base_version_id: kind.kind === 'revision' ? kind.parent_id : null,
         },
         kind,
-      )
+      })
     }
 
     it('will not revise an entry that is not there', async () => {
@@ -381,15 +366,10 @@ describe('useEntriesStore', () => {
       // An anchor placed since the session began is what sends this down the sealing path at all;
       // without one it would be an ordinary unanchored note and never look the parent up.
       const draft = draftFor(
-        {
-          kind: 'new_related',
-          parent_id: 'never-created',
-          parent: parentDocument(
-            'never-created',
-            textContent(parentText),
-            withAnchorMark(parentText, 'anchor-1', 10, 20),
-          ),
-        },
+        relatedTo(
+          { id: 'never-created', content: textContent(parentText) },
+          { content: withAnchorMark(parentText, 'anchor-1', 10, 20) },
+        ),
         'A note',
       )
 
@@ -413,11 +393,10 @@ describe('useEntriesStore', () => {
       const created = await store.createTextEntry('Nothing to see here')
       const words = { type: 'text', text: 'Nothing to see here' }
       const revisedTo = (content: EntryDocument) =>
-        makeDraft(
-          'session-refused',
-          { content: serializeDocument(content), base_version_id: created.id },
-          { kind: 'revision', parent_id: created.id },
-        )
+        makeDraft('session-refused', {
+          entry: { content: serializeDocument(content), base_version_id: created.id },
+          kind: { kind: 'revision', parent_id: created.id },
+        })
 
       await expect(
         sealDraft(

@@ -2,6 +2,9 @@ import { setDraftRepository, setEntryRepository, setMediaRepository } from '@/re
 import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
 import { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
+import type { DraftRepository } from '@/repositories/draftRepository'
+import type { EntryRepository } from '@/repositories/entryRepository'
+import type { MediaRepository } from '@/repositories/mediaRepository'
 import { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
 
 /**
@@ -47,19 +50,19 @@ function sharedDatabase(): ChronicleDatabase {
   return opened
 }
 
-export function freshEntryRepository(): DexieEntryRepository {
+export function freshEntryRepository(): EntryRepository {
   const repository = new DexieEntryRepository(sharedDatabase())
   setEntryRepository(repository)
   return repository
 }
 
-export function freshDraftRepository(): DexieDraftRepository {
+export function freshDraftRepository(): DraftRepository {
   const repository = new DexieDraftRepository(sharedDatabase())
   setDraftRepository(repository)
   return repository
 }
 
-export function freshMediaRepository(): OpfsMediaRepository {
+export function freshMediaRepository(): MediaRepository {
   const repository = new OpfsMediaRepository(uniqueName('media'))
   setMediaRepository(repository)
   disposers.push(() => repository.dispose())

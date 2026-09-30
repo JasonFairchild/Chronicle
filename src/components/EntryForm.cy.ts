@@ -1,23 +1,19 @@
 import EntryForm from '@/components/EntryForm.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
+import type { EntryRepository } from '@/repositories/entryRepository'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
-import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 
 describe('EntryForm', () => {
-  let entries: DexieEntryRepository
+  let entries: EntryRepository
 
   beforeEach(() => {
     entries = freshEntryRepository()
     freshDraftRepository()
   })
 
-  function mountForm() {
-    cy.mount(EntryForm)
-  }
-
   it('holds a session as a draft and commits one entry only when it is saved', () => {
-    mountForm()
+    cy.mount(EntryForm)
 
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
     cy.focused().type('We drove up on Friday.')
@@ -40,7 +36,7 @@ describe('EntryForm', () => {
   })
 
   it('saves when something happened and when it was first written down, with the entry', () => {
-    mountForm()
+    cy.mount(EntryForm)
 
     cy.findByLabelText('Happened').type('1994-06-11')
     cy.findByLabelText('Time it happened').type('late morning')
@@ -60,7 +56,7 @@ describe('EntryForm', () => {
   })
 
   it('starts a fresh empty session after a save rather than reopening the last one', () => {
-    mountForm()
+    cy.mount(EntryForm)
 
     cy.findByRole('textbox', { name: 'Title' }).type('The first one')
     cy.findByRole('textbox', { name: 'New entry' }).type('First entry')
@@ -85,7 +81,7 @@ describe('EntryForm', () => {
   })
 
   it('will not save an empty document', () => {
-    mountForm()
+    cy.mount(EntryForm)
 
     cy.findByRole('button', { name: 'Save entry' }).should('be.disabled')
 
@@ -95,7 +91,7 @@ describe('EntryForm', () => {
   })
 
   it('saves an entry that was never given a title', () => {
-    mountForm()
+    cy.mount(EntryForm)
 
     // The title field is offered and skipped. A daily journal is mostly entries nobody would name,
     // and a required title there produces filler rather than better names.

@@ -34,8 +34,10 @@ describe('DexieDraftRepository persistence', () => {
     const beforeReload = new DexieDraftRepository(databaseName)
     await beforeReload.save(
       makeDraft('session-1', {
-        content: 'Never got round to finishing this',
-        events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
+        entry: {
+          content: 'Never got round to finishing this',
+          events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
+        },
       }),
       { entry: 0, parent: 0 },
     )

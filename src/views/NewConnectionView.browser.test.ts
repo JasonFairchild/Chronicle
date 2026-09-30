@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import NewConnectionView from '@/views/NewConnectionView.vue'
-import type { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
-import type { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
+import type { DraftRepository } from '@/repositories/draftRepository'
+import type { EntryRepository } from '@/repositories/entryRepository'
 import { textContent } from '@/domain/entryDocument'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
@@ -21,8 +21,8 @@ async function mountNewConnection(id: string) {
 }
 
 describe('NewConnectionView (browser)', () => {
-  let repository: DexieEntryRepository
-  let drafts: DexieDraftRepository
+  let repository: EntryRepository
+  let drafts: DraftRepository
 
   beforeEach(() => {
     repository = freshEntryRepository()

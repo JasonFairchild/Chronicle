@@ -3,6 +3,7 @@ import NewConnectionView from '@/views/NewConnectionView.vue'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
 import { textContent } from '@/domain/entryDocument'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
@@ -117,15 +118,17 @@ describe('NewConnectionView (browser)', () => {
     await screen.getByRole('textbox', { name: 'New connection' }).fill('These rhyme, somehow')
 
     // Navigating away is not discarding. Only the Discard button throws work away.
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
     screen.unmount()
 
-    await vi.waitFor(async () => {
-      const [draft] = await drafts.list()
-      expect(draft).toMatchObject({
-        kind: 'new_connection',
-        parent_id: source.id,
-        target_id: destination.id,
-      })
+    // `reset()` abandons the session fire-and-forget; this resolves once its flush lands.
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+    const [draft] = await drafts.list()
+    expect(draft).toMatchObject({
+      kind: 'new_connection',
+      parent_id: source.id,
+      target_id: destination.id,
     })
   })
 

@@ -2,6 +2,7 @@ import EntryForm from '@/components/EntryForm.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import type { EntryRepository } from '@/repositories/entryRepository'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
 describe('EntryForm', () => {
@@ -14,17 +15,23 @@ describe('EntryForm', () => {
 
   it('holds a session as a draft and commits one entry only when it is saved', () => {
     cy.mount(EntryForm)
+    cy.spy(draftRepository, 'save').as('saveDraft')
 
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
     cy.focused().type('We drove up on Friday.')
 
     // Still a draft: nothing a person has not finished belongs in the timeline.
+    cy.get<sinon.SinonSpy>('@saveDraft')
+      .should('have.been.called')
+      .then((saveDraft) => saveDraft.firstCall.returnValue)
     cy.then(async () => {
       expect(await entries.listRootEntries()).to.have.length(0)
     })
 
     cy.findByRole('button', { name: 'Save entry' }).click()
 
+    // The composer empties only once the save has landed.
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
     cy.then(async () => {
       const [saved] = await entries.listRootEntries()
       expect(saved?.title).to.equal('Lake Tahoe')
@@ -68,14 +75,13 @@ describe('EntryForm', () => {
   })
 
   it('leaves no draft behind for a composer that was only opened', () => {
-    // What the timeline finishing its load looks like from here. An editor becoming editable is
-    // not an edit: treating it as one would start a writing session nobody began, leaving an empty
-    // draft behind per visit to the page.
-    cy.mount(EntryForm, { props: { disabled: true } }).then(({ wrapper }) =>
-      wrapper.setProps({ disabled: false }),
-    )
+    cy.mount(EntryForm).then(async ({ wrapper }) => {
+      const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+      wrapper.unmount()
 
-    cy.then(async () => {
+      // Resolves once the session's flush has landed, so an empty draft would be on disk by now.
+      expect(abandonDraft).to.have.callCount(1)
+      await abandonDraft.firstCall.returnValue
       expect(await draftRepository.list()).to.have.length(0)
     })
   })

@@ -4,6 +4,7 @@ import EntryForm from '@/components/EntryForm.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import type { EntryRepository } from '@/repositories/entryRepository'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
@@ -22,6 +23,9 @@ describe('EntryForm (browser)', () => {
     await userEvent.keyboard('{Enter}We drove up on Friday.')
 
     // Still a draft: nothing a person has not finished belongs in the timeline.
+    await vi.waitFor(async () => {
+      expect(await draftRepository.list()).toHaveLength(1)
+    })
     expect(await entries.listRootEntries()).toEqual([])
 
     await screen.getByRole('button', { name: 'Save entry' }).click()
@@ -79,17 +83,14 @@ describe('EntryForm (browser)', () => {
   })
 
   it('leaves no draft behind for a composer that was only opened', async () => {
-    const screen = renderComponent(EntryForm, { props: { disabled: true } })
-
-    // What the timeline finishing its load looks like from here. An editor becoming editable is
-    // not an edit: treating it as one would start a writing session nobody began, leaving an empty
-    // draft behind per visit to the page.
-    await screen.rerender({ disabled: false })
+    const screen = renderComponent(EntryForm)
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
     screen.unmount()
 
-    await vi.waitFor(async () => {
-      expect(await draftRepository.list()).toEqual([])
-    })
+    // Resolves once the session's flush has landed, so an empty draft would be on disk by now.
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+    expect(await draftRepository.list()).toEqual([])
   })
 
   it('will not save an empty document', async () => {

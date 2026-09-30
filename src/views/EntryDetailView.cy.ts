@@ -2,6 +2,7 @@ import EntryDetailView from '@/views/EntryDetailView.vue'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
 import type { MediaRepository } from '@/repositories/mediaRepository'
+import { useDraftsStore } from '@/stores/draftsStore'
 import {
   freshDraftRepository,
   freshEntryRepository,
@@ -313,12 +314,17 @@ describe('EntryDetailView', () => {
 
         // The session has to close — saving after this would seal against the wrong entry — but
         // closing it is not the same as throwing it away.
-        cy.then(() => wrapper.setProps({ id: other.id }))
-      })
+        cy.then(async () => {
+          const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+          await wrapper.setProps({ id: other.id })
 
-      cy.then(() => drafts.list()).then((saved) => {
-        expect(saved[0]).to.deep.include({ kind: 'new_related', parent_id: parent.id })
-        expect(docToPlainText(saved[0]!.entry.content)).to.equal('Half a thought about this')
+          // Resolves once the session's flush has landed.
+          expect(abandonDraft).to.have.callCount(1)
+          await abandonDraft.firstCall.returnValue
+          const [saved] = await drafts.list()
+          expect(saved).to.deep.include({ kind: 'new_related', parent_id: parent.id })
+          expect(docToPlainText(saved!.entry.content)).to.equal('Half a thought about this')
+        })
       })
     })
   })
@@ -329,12 +335,11 @@ describe('EntryDetailView', () => {
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
 
-      // The page heading carries the parent's title too, so this looks specifically inside the
-      // composer's own "Entry being annotated" half — the half that only shows a title because the
-      // session reads `parentTitle` off the entry — rather than passing on the heading above it.
-      cy.findByRole('textbox', { name: 'Entry being annotated' })
-        .closest('.rounded-lg')
-        .should('contain.text', 'The Tahoe trip')
+      // The page heading carries the parent's title too, so this looks only inside the composer's
+      // own half, which shows a title only because the session reads `parentTitle` off the entry.
+      cy.findByRole('region', { name: 'This entry' })
+        .findByText('The Tahoe trip')
+        .should('be.visible')
     })
   })
 

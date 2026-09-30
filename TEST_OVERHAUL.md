@@ -147,19 +147,23 @@ Grouped into proposed commits (the user may let more build up between them).
 
 **Commit 3 — retrying and meaningful assertions**
 
-- [ ] Make assertions retry (TESTING.md, "Layers"): a UI assertion first; a repository read only
+- [x] Make assertions retry (TESTING.md, "Layers"): a UI assertion first; a repository read only
       after one waiting on the same write, or after the session let go has flushed (D3). Known
       cases: the hand-rolled `waitForSavedDraft` poll in `NewConnectionView.cy.ts`; the unretried
       reads right after a click or unmount in `EntryForm.cy.ts` ("holds a session as a draft…") and
       `EntryDetailView.cy.ts` ("keeps a related entry in progress…").
-- [ ] Give absence assertions a baseline (TESTING.md, Don'ts) — "leaves no draft behind for a
+- [x] Give absence assertions a baseline (TESTING.md, Don'ts) — "leaves no draft behind for a
       composer that was only opened" proves nothing in either runner: `EntryForm.cy.ts` never
       unmounts and reads before the flush timer; `EntryForm.browser.test.ts` unmounts, but its
       `vi.waitFor` passes before `abandonDraft` has flushed. A spied `abandonDraft` resolving marks
       the moment — it awaits the flush.
-- [ ] Replace `.closest('.rounded-lg')` in `EntryDetailView.cy.ts` ("shows the parent's own title…")
+- [x] Replace `.closest('.rounded-lg')` in `EntryDetailView.cy.ts` ("shows the parent's own title…")
       with a semantic query. May need a labelled group in the source; say so before changing it,
-      and call it out in the commit message.
+      and call it out in the commit message. Done in both runners: `RelatedEntryComposer`'s two
+      halves are now regions named by their headings.
+- [x] Found on the way: "holds a session as a draft…" never checked that typing kept a draft, and
+      its "not in the timeline yet" absence had no baseline. It now waits for the draft to reach
+      disk first, in both runners.
 
 **Commit 4 — runner parity**
 
@@ -172,7 +176,13 @@ Grouped into proposed commits (the user may let more build up between them).
 
 ### Pass 2 — fill component gaps
 
-- [ ] U2 strengthened, U3 (new entry), U4, U5 (dates), U7, U8, U10, U11, in DraftsView and the
+- [x] U2 strengthened, done early: its disabled→enabled flip only re-proved `DocumentEditor`'s
+      "reports nothing when only its editability changes", and passed without it; it now mounts
+      and unmounts.
+- [ ] Look for more tests like the old U2: a parent spec re-driving a child's behavior, or a test
+      still green with the fix it names reverted. Revert the fix to check; Commit 5's read of every
+      assertion is where candidates turn up.
+- [ ] U3 (new entry), U4, U5 (dates), U7, U8, U10, U11, in DraftsView and the
       composer specs. U11 seeds a draft on a superseded version through the repository.
 - [ ] Spike U13, U14 and I2 at component level. `DraftsView` doesn't listen for tab return; `App.vue`
       does. Try mounting `App` at `/drafts`, a second Pinia as the other tab, and a dispatched
@@ -250,7 +260,11 @@ A running list for the Vitest Browser Mode vs Cypress write-up.
 - **Router.** `cy.mount` builds its router inside the command and never hands it back, so a spec
   can't inspect the route after navigating; Vitest builds its own with `createTestRouter()`.
 - **Retrying.** `vi.waitFor` retries an async block, repository reads included; Cypress retries
-  queries and `.should`, but not a `cy.then` callback.
+  queries and `.should`, but not a `cy.then` callback. So to wait for a write no UI shows outside a
+  let-go, Vitest retries the read, and Cypress aliases a spy on the repository method, waits on
+  `should('have.been.called')`, then on the call's returned promise.
+- **Spies.** `vi.spyOn` and `cy.spy` both work on a Pinia store's actions after mounting; each
+  exposes the call's returned promise (`mock.results[0].value` / `firstCall.returnValue`).
 - **Seeding.** Inline `await` in Vitest; `cy.then(async …)` chains in Cypress.
 - **Text matching.** `toHaveTextContent` is partial by default; `have.text` is exact. Vitest's exact
   form is a locator intersection, `getByRole('alert').and(getByText(text, { exact: true }))`,
@@ -269,3 +283,5 @@ What went into TESTING.md, and when.
   meaningful absence, when a unit test is warranted.
 - 2026-09-29 — Don'ts: an absence needs a baseline that could have failed it. Philosophy: a parent
   that only configures a child asserts the prop, not the styling it produces.
+- 2026-09-30 — "Layers": with no UI to wait on, spy on a call that already awaits the write rather
+  than polling; a let-go session's `abandonDraft` is the example (D3).

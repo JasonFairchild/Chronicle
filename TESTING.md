@@ -70,6 +70,10 @@ to what's stored. Keep them independent of which backend that is:
 - **A repository read doesn't retry.** In Cypress, place it after a UI assertion that waits on the
   same write; in Vitest, wrap it in `vi.waitFor`. Retrying only helps presence: an absence ("no
   draft was written") passes on the first try (see Don'ts).
+- **When no UI marks the moment, wait on a signal the code already gives** rather than writing a
+  polling helper: spy on the call that awaits the write, await its promise, then read plainly — for
+  absence as well as presence, in both runners. For example, a draft session let go (an unmount, a
+  change of entry) calls `drafts.abandonDraft`, which resolves once its flush has landed.
 
 **A unit test is warranted on top of component coverage for:**
 

@@ -318,13 +318,15 @@ describe('EntryDetailView (browser)', () => {
 
     // The session has to close — saving after this would seal against the wrong entry — but
     // closing it is not the same as throwing it away.
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
     await screen.rerender({ id: other.id })
 
-    await vi.waitFor(async () => {
-      const [draft] = await drafts.list()
-      expect(draft).toMatchObject({ kind: 'new_related', parent_id: parent.id })
-      expect(docToPlainText(draft!.entry.content)).toBe('Half a thought about this')
-    })
+    // Resolves once the session's flush has landed.
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+    const [draft] = await drafts.list()
+    expect(draft).toMatchObject({ kind: 'new_related', parent_id: parent.id })
+    expect(docToPlainText(draft!.entry.content)).toBe('Half a thought about this')
   })
 
   it('offers the draft already in progress on an entry rather than a second one', async () => {
@@ -408,14 +410,11 @@ describe('EntryDetailView (browser)', () => {
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
 
-    const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
-    await expect.element(parentEditor).toBeVisible()
-
-    // The page heading carries the parent's title too, so this looks specifically inside the
-    // composer's own "Entry being annotated" half — the half that only shows a title because the
-    // session reads `parentTitle` off the entry — rather than passing on the heading above it.
-    const editorRoot = parentEditor.element().closest('.rounded-lg')
-    expect(editorRoot?.textContent).toContain('The Tahoe trip')
+    // The page heading carries the parent's title too, so this looks only inside the composer's
+    // own half, which shows a title only because the session reads `parentTitle` off the entry.
+    await expect
+      .element(screen.getByRole('region', { name: 'This entry' }).getByText('The Tahoe trip'))
+      .toBeVisible()
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', async () => {

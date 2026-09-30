@@ -2,8 +2,8 @@ import NewConnectionView from '@/views/NewConnectionView.vue'
 import { textContent } from '@/domain/entryDocument'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
-import type { DraftSnapshot } from '@/types/draft'
 import { createEntryInput } from '@/types/entry'
 
 function mountNewConnection(id: string): Cypress.Chainable {
@@ -102,22 +102,19 @@ describe('NewConnectionView', () => {
         cy.findByRole('textbox', { name: 'New connection' }).type('These rhyme, somehow')
 
         // Navigating away is not discarding. Only the Discard button throws work away.
-        cy.then(() => wrapper.unmount())
-      })
+        cy.then(async () => {
+          const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+          wrapper.unmount()
 
-      // `reset()` abandons the session fire-and-forget (`useDraftSession.reset`), so the write
-      // isn't necessarily done the instant `unmount()` returns — poll rather than assume.
-      cy.then(function waitForSavedDraft(): Promise<DraftSnapshot[]> {
-        return drafts
-          .list()
-          .then((saved) =>
-            saved.length > 0 ? saved : Cypress.Promise.delay(50).then(waitForSavedDraft),
-          )
-      }).then((saved) => {
-        expect(saved[0]).to.deep.include({
-          kind: 'new_connection',
-          parent_id: source.id,
-          target_id: destination.id,
+          // `reset()` abandons the session fire-and-forget; this resolves once its flush lands.
+          expect(abandonDraft).to.have.callCount(1)
+          await abandonDraft.firstCall.returnValue
+          const [saved] = await drafts.list()
+          expect(saved).to.deep.include({
+            kind: 'new_connection',
+            parent_id: source.id,
+            target_id: destination.id,
+          })
         })
       })
     })

@@ -26,8 +26,8 @@ defineEmits<{
 
 <template>
   <div class="grid gap-6 lg:grid-cols-2">
-    <section>
-      <h2 class="mb-2 text-sm font-medium">This entry</h2>
+    <section aria-labelledby="anchor-mode-parent-heading">
+      <h2 id="anchor-mode-parent-heading" class="mb-2 text-sm font-medium">This entry</h2>
       <p id="anchor-mode-instructions" class="mb-2 text-sm text-[var(--color-text-muted)]">
         Select a passage, then Highlight or Strike it (Ctrl+Alt+H / Ctrl+Alt+S) — or place the
         cursor and type to propose wording. Click an anchor you've placed to change its wording,
@@ -49,8 +49,8 @@ defineEmits<{
       />
     </section>
 
-    <section>
-      <h2 class="mb-2 text-sm font-medium">The related entry</h2>
+    <section aria-labelledby="anchor-mode-related-heading">
+      <h2 id="anchor-mode-related-heading" class="mb-2 text-sm font-medium">The related entry</h2>
       <p class="mb-2 text-sm text-[var(--color-text-muted)]">
         Marking a passage is optional — with nothing marked this becomes a note about the entry as a
         whole.

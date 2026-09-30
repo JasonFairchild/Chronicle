@@ -1,8 +1,10 @@
+import { createPinia, setActivePinia } from 'pinia'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
 import type { MediaRepository } from '@/repositories/mediaRepository'
 import { useDraftsStore } from '@/stores/draftsStore'
+import { useEntriesStore } from '@/stores/entriesStore'
 import {
   freshDraftRepository,
   freshEntryRepository,
@@ -329,6 +331,81 @@ describe('EntryDetailView', () => {
     })
   })
 
+  it('offers the draft already in progress on an entry rather than a second one', () => {
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      const other = await seed({ content: textContent('A different day entirely') })
+      return { parent, other }
+    }).then(({ parent, other }) => {
+      mountDetail(parent.id).then(({ wrapper }) => {
+        cy.findByRole('button', { name: 'Revise entry' }).click()
+        cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}, and Mom')
+
+        // Left, not discarded: the draft stays outstanding against this entry.
+        cy.then(async () => {
+          const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+          await wrapper.setProps({ id: other.id })
+          expect(abandonDraft).to.have.callCount(1)
+          await abandonDraft.firstCall.returnValue
+          await wrapper.setProps({ id: parent.id })
+        })
+
+        // Two drafts on one version would branch it, so neither way in starts another.
+        cy.findByRole('button', { name: 'Resume draft' }).should('be.visible')
+        cy.findByRole('button', { name: 'Revise entry' }).should('not.exist')
+        cy.findByRole('button', { name: 'Create related entry' }).should('not.exist')
+
+        cy.findByRole('button', { name: 'Resume draft' }).click()
+        cy.findByRole('textbox', { name: 'Revised entry' }).should(
+          'contain.text',
+          `${PARENT_TEXT}, and Mom`,
+        )
+      })
+    })
+  })
+
+  it('shows the version another tab saved once this tab is returned to', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      mountDetail(parent.id)
+      cy.findByText(PARENT_TEXT).should('be.visible')
+
+      // Saved in another tab while this one sat in the background.
+      cy.then(() =>
+        seed({
+          content: textContent('I went to Donner Lake with Dad'),
+          parent_id: parent.id,
+          relation_type: 'revision',
+          revision_mode: 'direct',
+          base_version_id: parent.id,
+        }),
+      )
+      cy.window().then((win) => win.dispatchEvent(new Event('focus')))
+
+      cy.findByText('I went to Donner Lake with Dad').should('be.visible')
+      cy.findByText('Version 2 of 2').should('be.visible')
+    })
+  })
+
+  it('offers the draft another tab has only just opened on an entry, before a word is typed', () => {
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+
+      // Another tab: its own stores over the same database, where Revise was clicked and nothing
+      // typed yet.
+      setActivePinia(createPinia())
+      const otherTab = useDraftsStore()
+      const aggregated = await useEntriesStore().getAggregatedEntry(parent.id)
+      const sessionId = otherTab.beginDraft({ kind: 'revision', parent: aggregated! })
+      await otherTab.flush(sessionId)
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Resume draft' }).should('be.visible')
+      cy.findByRole('button', { name: 'Revise entry' }).should('not.exist')
+    })
+  })
+
   it('shows the parent’s own title in the anchor-mode composer, not just its body', () => {
     cy.then(() => seed({ content: PARENT_CONTENT, title: 'The Tahoe trip' })).then((parent) => {
       mountDetail(parent.id)
@@ -545,6 +622,23 @@ describe('EntryDetailView', () => {
       // The entry itself is never rewritten; the version chain is what carries the change.
       cy.then(() => repository.getById(parent.id)).then((stored) => {
         expect(docToPlainText(stored!.content)).to.equal(PARENT_TEXT)
+      })
+    })
+  })
+
+  it('saves a revision that only changes formatting', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      cy.findByRole('textbox', { name: 'Revised entry' }).type('{selectall}')
+      cy.findByRole('button', { name: 'Bold' }).click()
+      cy.findByRole('button', { name: 'Save revision' }).click()
+
+      cy.findByText(/Version 2 of 2/).should('be.visible')
+      cy.then(() => repository.listRevisions(parent.id)).then(([revision]) => {
+        expect(docToPlainText(revision!.content)).to.equal(PARENT_TEXT)
+        expect(revision!.content).to.contain('"bold"')
       })
     })
   })

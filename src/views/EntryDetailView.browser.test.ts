@@ -341,10 +341,10 @@ describe('EntryDetailView (browser)', () => {
     await userEvent.keyboard('{Control>}{End}{/Control}, and Mom')
 
     // Left, not discarded: the draft stays outstanding against this entry.
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
     await screen.rerender({ id: other.id })
-    await vi.waitFor(async () => {
-      expect(await drafts.list()).toHaveLength(1)
-    })
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
     await screen.rerender({ id: parent.id })
 
     // Two drafts on one version would branch it, so neither way in starts another.

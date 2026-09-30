@@ -167,8 +167,9 @@ Grouped into proposed commits (the user may let more build up between them).
 
 **Commit 4 — runner parity**
 
-- [ ] Mirror the four Browser-only EDV tests into Cypress. The other tab there is a second Pinia over
-      the same database (`setActivePinia(createPinia())`); try the same under `cy.mount`.
+- [x] Mirror the four Browser-only EDV tests into Cypress. The other tab there is a second Pinia over
+      the same database (`setActivePinia(createPinia())`); try the same under `cy.mount`. It works
+      as-is. The Browser "already in progress" test now waits on `abandonDraft` too (D3), not a poll.
 
 **Commit 5 — inventory** (last, since the commits above change what specs assert)
 
@@ -271,7 +272,9 @@ A running list for the Vitest Browser Mode vs Cypress write-up.
   asserted visible — no regex. Should this go in TESTING.md's "Queries and selectors" later?
 - **Keyboard.** Cypress's `.type()` simulates keys in JavaScript and has no `{tab}`; `cy.press()`
   sends a native key through the browser, Tab included. Vitest's `userEvent` goes native throughout.
-- **Another tab.** A second Pinia over the same database works in Vitest; untried under `cy.mount`.
+- **Another tab.** A second Pinia over the same database works in both runners: set it active in a
+  `cy.then` before `cy.mount`, which installs its own. Returning to the tab is a `focus` event on
+  `window` (`cy.window()` in Cypress).
 - **Component internals.** `cy.mount` yields the Vue Test Utils wrapper (`findComponent`, `props`,
   `setProps`); `vitest-browser-vue`'s `render` exposes none of that beyond `rerender` and `emitted`.
 

@@ -82,6 +82,26 @@ describe('EntryForm (browser)', () => {
     })
   })
 
+  it('throws a draft away on Discard and starts over empty', async () => {
+    const screen = renderComponent(EntryForm)
+
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await userEvent.keyboard('{Enter}We drove up on Friday.')
+    // On disk first, so there is a row for Discard to remove.
+    await vi.waitFor(async () => {
+      expect(await draftRepository.list()).toHaveLength(1)
+    })
+    const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('')
+    expect(screen.getByText('We drove up on Friday.').query()).toBeNull()
+    // Resolves once the delete has landed.
+    expect(discardDraft).toHaveBeenCalledOnce()
+    await discardDraft.mock.results[0]!.value
+    expect(await draftRepository.list()).toEqual([])
+  })
+
   it('leaves no draft behind for a composer that was only opened', async () => {
     const screen = renderComponent(EntryForm)
     const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')

@@ -76,6 +76,32 @@ describe('EntryForm', () => {
     cy.findByText('First entry').should('not.exist')
   })
 
+  it('throws a draft away on Discard and starts over empty', () => {
+    cy.mount(EntryForm)
+    cy.spy(draftRepository, 'save').as('saveDraft')
+
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
+    cy.focused().type('We drove up on Friday.')
+    // On disk first, so there is a row for Discard to remove.
+    cy.get('@saveDraft')
+      .should('have.been.called')
+      .then((saveDraft) => saveDraft.firstCall.returnValue)
+    cy.then(() => {
+      cy.spy(useDraftsStore(), 'discardDraft').as('discardDraft')
+    })
+    cy.findByRole('button', { name: 'Discard' }).click()
+
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
+    cy.findByText('We drove up on Friday.').should('not.exist')
+    // Resolves once the delete has landed.
+    cy.get('@discardDraft')
+      .should('have.been.calledOnce')
+      .then((discardDraft) => discardDraft.firstCall.returnValue)
+    cy.then(async () => {
+      expect(await draftRepository.list()).to.have.length(0)
+    })
+  })
+
   it('leaves no draft behind for a composer that was only opened', () => {
     cy.mount(EntryForm).then(async ({ wrapper }) => {
       const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')

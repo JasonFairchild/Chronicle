@@ -562,7 +562,7 @@ describe('EntryDetailView (browser)', () => {
     // otherwise still be pending when this test ends — closing it here keeps that write from
     // landing in whichever repository the next test's `beforeEach` happens to have installed by
     // the time a stray timer fires.
-    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
       expect(await drafts.list()).toEqual([])
     })
@@ -588,7 +588,7 @@ describe('EntryDetailView (browser)', () => {
 
     expect(screen.getByText(/This changes the passage/).query()).toBeNull()
 
-    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
       expect(await drafts.list()).toEqual([])
     })
@@ -621,7 +621,7 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(editorLocator).toHaveTextContent('I went to (Lake Tahoe) with Dad')
     expect(screen.getByText(/This changes the passage/).query()).toBeNull()
 
-    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
       expect(await drafts.list()).toEqual([])
     })
@@ -659,7 +659,7 @@ describe('EntryDetailView (browser)', () => {
       .element(screen.getByText('This changes the passage Wonderful trip is about.'))
       .toBeVisible()
 
-    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
       expect(await drafts.list()).toEqual([])
     })
@@ -702,6 +702,20 @@ describe('EntryDetailView (browser)', () => {
     expect(revision!.content).toContain('"bold"')
   })
 
+  it('revises when something happened without touching the text', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+
+    // Exact, or "Happened" would also match the "Time it happened" beside it.
+    await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
+    await screen.getByRole('button', { name: 'Save revision' }).click()
+
+    await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
+    await expect.element(screen.getByText(/Happened .*1994/)).toBeVisible()
+  })
+
   it('refuses a revision that changes nothing, and says so', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 
@@ -728,7 +742,7 @@ describe('EntryDetailView (browser)', () => {
     // Revise wrote a claim, and Discard waits on that write before deleting: there is always a
     // row to remove.
     const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
-    await screen.getByRole('button', { name: 'Discard revision' }).click()
+    await screen.getByRole('button', { name: 'Discard' }).click()
 
     await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
     // Resolves once the delete has landed.

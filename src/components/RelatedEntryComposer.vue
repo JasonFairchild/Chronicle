@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import DocumentEditor from '@/components/DocumentEditor.vue'
-import EntryDatesFields from '@/components/EntryDatesFields.vue'
+import EntryComposer from '@/components/EntryComposer.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 
 /**
  * The anchor-mode composer: the parent gaining provisional anchors on the left, the related
- * entry's own prose on the right, sealing atomically together (AUTHORING.md, "Drafts").
+ * entry written in `EntryComposer` on the right, sealing atomically together (AUTHORING.md,
+ * "Drafts"). The parent gets no fields: an anchor revision gains the anchors and nothing else
+ * (PRODUCT.md §4.4).
  *
  * Shared rather than owned by `EntryDetailView`, because a session left as a draft has to come back
  * exactly as it was — and the only place to resume one from is `DraftsView`. Two copies of this
@@ -56,49 +58,13 @@ defineEmits<{
         whole.
       </p>
 
-      <EntryDatesFields
-        :model-value="session.dates"
-        :disabled="session.saving"
-        @update:model-value="session.handleDatesChange"
-      />
-
-      <DocumentEditor
-        :key="session.editorKey"
+      <EntryComposer
+        :session="session"
         label="Related entry"
-        with-title
-        :title="session.title"
-        :content="session.content"
-        :disabled="session.saving"
-        @change="session.handleChange"
+        save-label="Add entry"
+        @save="$emit('save')"
+        @discard="$emit('discard')"
       />
-
-      <p v-if="session.staleNotice" class="mt-2 text-sm text-[var(--color-error)]" role="status">
-        {{ session.staleNotice }}
-      </p>
-
-      <div class="mt-3 flex justify-end gap-2">
-        <button
-          type="button"
-          class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
-          :disabled="session.saving"
-          @click="$emit('discard')"
-        >
-          Discard
-        </button>
-        <!--
-          `canSave` rather than a check of its own: an entry that says nothing is not one, and
-          asking the same question the seal will ask is what keeps the button from offering a save
-          the store is bound to refuse.
-        -->
-        <button
-          type="button"
-          class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="session.saving || !session.canSave"
-          @click="$emit('save')"
-        >
-          Add entry
-        </button>
-      </div>
     </section>
   </div>
 </template>

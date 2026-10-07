@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import DocumentEditor from '@/components/DocumentEditor.vue'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
-import EntryDatesFields from '@/components/EntryDatesFields.vue'
+import EntryComposer from '@/components/EntryComposer.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
@@ -184,49 +183,14 @@ async function discard(sessionId: string): Promise<void> {
           @discard="discard(draft.session_id)"
         />
 
-        <template v-else-if="session.sessionId === draft.session_id">
-          <EntryDatesFields
-            :model-value="session.dates"
-            :disabled="session.saving"
-            @update:model-value="session.handleDatesChange"
-          />
-
-          <DocumentEditor
-            :key="session.editorKey"
-            label="Draft"
-            with-title
-            :title="session.title"
-            :content="session.content"
-            :disabled="session.saving"
-            @change="session.handleChange"
-          />
-
-          <p
-            v-if="session.staleNotice"
-            class="mt-2 text-sm text-[var(--color-error)]"
-            role="status"
-          >
-            {{ session.staleNotice }}
-          </p>
-
-          <div class="mt-3 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
-              @click="discard(draft.session_id)"
-            >
-              Discard
-            </button>
-            <button
-              type="button"
-              class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="session.saving || !session.canSave"
-              @click="seal"
-            >
-              Save as entry
-            </button>
-          </div>
-        </template>
+        <EntryComposer
+          v-else-if="session.sessionId === draft.session_id"
+          :session="session"
+          label="Draft"
+          save-label="Save as entry"
+          @save="seal"
+          @discard="discard(draft.session_id)"
+        />
 
         <template v-else>
           <template v-if="draft.session_id === unreadableId">

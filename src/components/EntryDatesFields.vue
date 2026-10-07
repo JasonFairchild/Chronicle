@@ -34,7 +34,7 @@ const recordedTimeNote = field('recorded_time_note')
 </script>
 
 <template>
-  <fieldset class="mb-3">
+  <fieldset>
     <legend
       class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]"
     >

@@ -30,6 +30,8 @@ export default defineConfig({
         cacheDir: 'node_modules/.vite-cypress',
       },
     },
+    viewportWidth: 800,
+    viewportHeight: 800,
     specPattern: 'src/**/*.cy.{ts,tsx}',
     supportFile: 'cypress/support/component.ts',
     indexHtmlFile: 'cypress/support/component-index.html',

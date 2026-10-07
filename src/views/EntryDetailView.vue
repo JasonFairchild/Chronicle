@@ -4,6 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryCard from '@/components/EntryCard.vue'
+import EntryComposer from '@/components/EntryComposer.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
@@ -318,9 +319,8 @@ async function resumedInstead(): Promise<boolean> {
   return true
 }
 
-function handleRevisionChange(change: EditorChange): void {
+function trackAffectedAnchors(change: EditorChange): void {
   revisionAffectedAnchorIds.value = change.affectedAnchorIds ?? []
-  revisionSession.handleChange(change)
 }
 
 async function saveRevision(): Promise<void> {
@@ -490,51 +490,25 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             Editing appends a new version. The current text stays in the entry's history either way.
           </p>
 
-          <DocumentEditor
-            :key="revisionSession.editorKey"
+          <EntryComposer
+            :session="revisionSession"
             label="Revised entry"
-            with-title
-            :title="revisionSession.title"
-            :content="revisionSession.content"
-            :disabled="revisionSession.saving"
-            @change="handleRevisionChange"
-          />
-
-          <p
-            v-if="revisionSession.staleNotice"
-            class="mt-2 text-sm text-[var(--color-error)]"
-            role="status"
+            save-label="Save revision"
+            @change="trackAffectedAnchors"
+            @save="saveRevision"
+            @discard="cancelRevision"
           >
-            {{ revisionSession.staleNotice }}
-          </p>
-
-          <p
-            v-if="revisionWarnings.length > 0"
-            class="mt-2 text-sm text-[var(--color-accent)]"
-            role="status"
-          >
-            This changes the passage {{ revisionWarnings.join(', ') }}
-            {{ revisionWarnings.length === 1 ? 'is' : 'are' }} about.
-          </p>
-
-          <div class="mt-3 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
-              :disabled="revisionSession.saving"
-              @click="cancelRevision"
-            >
-              Discard revision
-            </button>
-            <button
-              type="button"
-              class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="revisionSession.saving || !revisionSession.canSave"
-              @click="saveRevision"
-            >
-              Save revision
-            </button>
-          </div>
+            <template #notices>
+              <p
+                v-if="revisionWarnings.length > 0"
+                class="text-sm text-[var(--color-accent)]"
+                role="status"
+              >
+                This changes the passage {{ revisionWarnings.join(', ') }}
+                {{ revisionWarnings.length === 1 ? 'is' : 'are' }} about.
+              </p>
+            </template>
+          </EntryComposer>
         </template>
 
         <template v-else-if="relatedSession.isOpen">

@@ -1,14 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
-import DocumentEditor from '@/components/DocumentEditor.vue'
+import { onBeforeUnmount, ref } from 'vue'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
-import EntryDatesFields from '@/components/EntryDatesFields.vue'
+import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { toErrorMessage } from '@/utils/format'
-
-const props = defineProps<{
-  disabled?: boolean
-}>()
 
 /**
  * Typing here is a draft session, not an entry. Nothing reaches the entries table until someone
@@ -24,11 +19,8 @@ session.begin({ kind: 'new_root' })
 
 const error = ref<string | null>(null)
 
-/** The session's own condition, plus the two this composer adds: not busy, not switched off. */
-const canSave = computed(() => session.canSave && !props.disabled && !session.saving)
-
-async function handleSubmit(): Promise<void> {
-  if (!canSave.value) return
+async function handleSave(): Promise<void> {
+  if (!session.canSave) return
 
   error.value = null
 
@@ -44,6 +36,18 @@ async function handleSubmit(): Promise<void> {
   }
 }
 
+/** Throws the draft away and starts over, the same fresh session a save leaves behind. */
+async function handleDiscard(): Promise<void> {
+  error.value = null
+
+  try {
+    await session.discard()
+    session.begin({ kind: 'new_root' })
+  } catch (err) {
+    error.value = toErrorMessage(err, 'Failed to discard draft')
+  }
+}
+
 // Whatever is pending has to reach disk before this component goes away — and if this composer
 // was opened and never typed into, there is nothing to keep, so the session is dropped rather
 // than left open forever.
@@ -53,43 +57,23 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <form
+  <div
     class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm"
-    @submit.prevent="handleSubmit"
   >
     <p class="mb-2 text-sm font-medium">New entry</p>
 
-    <EntryDatesFields
-      :model-value="session.dates"
-      :disabled="disabled || session.saving"
-      @update:model-value="session.handleDatesChange"
-    />
-
     <DraftElsewhereNotice :session="session" />
 
-    <DocumentEditor
-      :key="session.editorKey"
+    <EntryComposer
+      :session="session"
       label="New entry"
-      with-title
-      :title="session.title"
-      :content="session.content"
-      :disabled="disabled || session.saving"
-      @change="session.handleChange"
-    />
-
-    <p v-if="error" class="mt-2 text-sm text-[var(--color-error)]" role="alert">{{ error }}</p>
-
-    <div class="mt-3 flex items-center justify-between gap-3">
-      <p class="text-xs text-[var(--color-text-muted)]">
-        Saved as a draft while you write. Nothing joins the timeline until you save it.
-      </p>
-      <button
-        type="submit"
-        class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="!canSave"
-      >
-        Save entry
-      </button>
-    </div>
-  </form>
+      save-label="Save entry"
+      @save="handleSave"
+      @discard="handleDiscard"
+    >
+      <template #notices>
+        <p v-if="error" class="text-sm text-[var(--color-error)]" role="alert">{{ error }}</p>
+      </template>
+    </EntryComposer>
+  </div>
 </template>

@@ -19,7 +19,7 @@ onMounted(() => {
         Root entries appear here, newest first. Each record is immutable: edits append a new version
         and notes become related entries.
       </p>
-      <EntryForm :disabled="store.loading" />
+      <EntryForm />
     </section>
 
     <section>

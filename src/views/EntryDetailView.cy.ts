@@ -548,7 +548,7 @@ describe('EntryDetailView', () => {
 
       cy.findByText(/This changes the passage/).should('be.visible')
       cy.findByText('Wonderful trip').should('be.visible')
-      cy.findByRole('button', { name: 'Discard revision' }).click()
+      cy.findByRole('button', { name: 'Discard' }).click()
     })
   })
 
@@ -571,7 +571,7 @@ describe('EntryDetailView', () => {
       cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}!')
 
       cy.findByText(/This changes the passage/).should('not.exist')
-      cy.findByRole('button', { name: 'Discard revision' }).click()
+      cy.findByRole('button', { name: 'Discard' }).click()
     })
   })
 
@@ -607,7 +607,7 @@ describe('EntryDetailView', () => {
         'I went to (Lake Tahoe) with Dad',
       )
       cy.findByText(/This changes the passage/).should('not.exist')
-      cy.findByRole('button', { name: 'Discard revision' }).click()
+      cy.findByRole('button', { name: 'Discard' }).click()
     })
   })
 
@@ -644,7 +644,7 @@ describe('EntryDetailView', () => {
         'I went to Lane Tahoe with Dad',
       )
       cy.findByText('This changes the passage Wonderful trip is about.').should('be.visible')
-      cy.findByRole('button', { name: 'Discard revision' }).click()
+      cy.findByRole('button', { name: 'Discard' }).click()
     })
   })
 
@@ -689,6 +689,19 @@ describe('EntryDetailView', () => {
     })
   })
 
+  it('revises when something happened without touching the text', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      cy.findByLabelText('Happened').type('1994-06-11')
+      cy.findByRole('button', { name: 'Save revision' }).click()
+
+      cy.findByText(/Version 2 of 2/).should('be.visible')
+      cy.findByText(/Happened .*1994/).should('be.visible')
+    })
+  })
+
   it('refuses a revision that changes nothing, and says so', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
@@ -714,7 +727,7 @@ describe('EntryDetailView', () => {
       cy.then(() => {
         cy.spy(useDraftsStore(), 'discardDraft').as('discardDraft')
       })
-      cy.findByRole('button', { name: 'Discard revision' }).click()
+      cy.findByRole('button', { name: 'Discard' }).click()
 
       cy.findByText(PARENT_TEXT).should('be.visible')
       // Resolves once the delete has landed.

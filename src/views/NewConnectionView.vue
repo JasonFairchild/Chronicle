@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import DocumentEditor from '@/components/DocumentEditor.vue'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
-import EntryDatesFields from '@/components/EntryDatesFields.vue'
+import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { AggregatedEntry } from '@/types/entry'
@@ -128,47 +127,14 @@ onBeforeUnmount(() => {
           </option>
         </select>
 
-        <template v-if="session.isOpen">
-          <EntryDatesFields
-            :model-value="session.dates"
-            :disabled="session.saving"
-            @update:model-value="session.handleDatesChange"
-          />
-
-          <DocumentEditor
-            :key="session.editorKey"
-            label="New connection"
-            with-title
-            :title="session.title"
-            :content="session.content"
-            :disabled="session.saving"
-            @change="session.handleChange"
-          />
-
-          <div class="flex items-center justify-between gap-3">
-            <p class="text-xs text-[var(--color-text-muted)]">
-              Saved as a draft while you write. Nothing joins the timeline until you save it.
-            </p>
-            <div class="flex justify-end gap-2">
-              <button
-                type="button"
-                class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
-                :disabled="session.saving"
-                @click="discard"
-              >
-                Discard
-              </button>
-              <button
-                type="button"
-                class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="session.saving || !session.canSave"
-                @click="save"
-              >
-                Add connection
-              </button>
-            </div>
-          </div>
-        </template>
+        <EntryComposer
+          v-if="session.isOpen"
+          :session="session"
+          label="New connection"
+          save-label="Add connection"
+          @save="save"
+          @discard="discard"
+        />
       </template>
     </template>
   </div>

@@ -424,3 +424,12 @@ Candidates, not yet in TESTING.md:
   failed assertion skips it. Better still, never by hand: see Pass 4's "one cleanup path".
 - Before deleting a unit test for overlap, check which lines only it reached. A test can reach a
   path without asserting it: the refused seal's reschedule in Pass 3.
+- Test placement, from Pass 5:
+  - A spec tests what its own file adds. The real stack beneath it is how the spec acts and
+    observes, not what it's about.
+  - A shell that holds no state of its own (`EntryComposer`, `RelatedEntryComposer`) is proven
+    once, through its simplest owner. Every other owner proves only its own wiring.
+  - A flow that ends on another page mounts App at the starting route, so the landing page renders
+    and is asserted in the UI. The spec still lives with the view whose code does the navigating.
+    This replaces the repository reads after a save that a view mounted alone forces.
+  - The repository is read only for what no screen shows: a draft gone from disk, a trace.

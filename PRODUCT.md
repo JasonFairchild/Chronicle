@@ -92,8 +92,10 @@ either — they name what a related entry turned out to be, not a choice made be
 
 ### 4.3 Reading an entry
 
-- Shows the title, whichever details were given (§4.1), the creation date, and the current text
-  (the latest version). An untitled entry is headed by its creation date.
+- Shows the title, the creation date, and the current text (the latest version), with whichever
+  details were given (§4.1) below it, as when writing. An untitled entry is headed by the day it was
+  written, set as a dateline ("Wed, Oct 7, 2026") rather than a title. The text is for reading: no
+  editing controls appear until Revise.
 - A revised entry says which version you're looking at and how many exist.
 - Attached images appear below the text.
 - Related entries and connections attached to it are listed beneath, each showing what part of the
@@ -220,7 +222,9 @@ a view.
 
 ### 5.3 Known gaps
 
-- None open.
+- **A related entry's own page doesn't show what it marked.** It says which entry it's about, but
+  its strikes and highlights show only on that entry, so landing on it after saving (§4.4) doesn't
+  show what was just done. Likely fix: keep some of that entry, and what was marked, in view.
 
 ### 5.4 Revising a related entry, and locking anchored text
 
@@ -290,6 +294,8 @@ text").
 
 - Finished light and dark themes, with a switch that remembers the choice.
 - A polished install experience, on a phone home screen or a desktop.
+- **Designed for phone width**, not only fitted to it. Today no page scrolls sideways on a phone,
+  but none was laid out with one in mind.
 - **No failure is silent.** An error the screen in use doesn't handle itself still reaches the
   writer, as a plain app-wide notice, never only the console. Failures with a known way forward (a
   draft changed in another tab, one that can't be reopened) stay where the writer can act on them.
@@ -303,6 +309,7 @@ text").
 - An optional nudge toward titling where an unnamed entry would cost legibility later (a
   many-target connection, anything a graph view must label). A nudge, never a requirement.
 - Navigating by connection rather than by time.
+- Stepping from an entry to the one before or after it in time.
 - One entry's whole subtree as an activity stream: everything that ever happened to it, in order.
 - Expanding past the default two levels of depth on demand.
 - Pinning or color-coding the entries that matter.

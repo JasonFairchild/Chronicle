@@ -19,7 +19,7 @@ import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import { createEntryInput, emptyEntryDates } from '@/types/entry'
-import { formatDate } from '@/utils/format'
+import { formatDate, formatDateline, formatTime } from '@/utils/format'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
@@ -62,6 +62,30 @@ describe('EntryDetailView (browser)', () => {
     const screen = await mountDetail(parent.id)
 
     await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
+  })
+
+  it('heads an untitled entry with the day it was written, and its time below', async () => {
+    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+
+    const screen = await mountDetail(parent.id)
+
+    await expect
+      .element(screen.getByRole('heading', { name: formatDateline(parent.created_at) }))
+      .toBeVisible()
+    await expect
+      .element(screen.getByText(`Created at ${formatTime(parent.created_at)}`, { exact: true }))
+      .toBeVisible()
+  })
+
+  it('shows the title once, as the page’s heading', async () => {
+    const parent = await repository.create(
+      createEntryInput({ content: PARENT_CONTENT, title: 'The Tahoe trip' }),
+    )
+
+    const screen = await mountDetail(parent.id)
+
+    await expect.element(screen.getByRole('heading', { name: 'The Tahoe trip' })).toBeVisible()
+    expect(screen.getByText('The Tahoe trip', { exact: true }).elements()).toHaveLength(1)
   })
 
   it('shows a related entry separately rather than spliced into the parent', async () => {
@@ -293,7 +317,7 @@ describe('EntryDetailView (browser)', () => {
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
     await expect
-      .element(screen.getByRole('textbox', { name: 'Entry content' }))
+      .element(screen.getByRole('article'))
       .toHaveTextContent('Still think about this trip')
     await expect.element(screen.getByText('About', { exact: true })).toBeVisible()
     await expect
@@ -454,7 +478,7 @@ describe('EntryDetailView (browser)', () => {
     window.dispatchEvent(new Event('focus'))
 
     await expect.element(screen.getByText('I went to Donner Lake with Dad')).toBeVisible()
-    await expect.element(screen.getByText('Version 2 of 2')).toBeVisible()
+    await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
   })
 
   it('offers the draft another tab has only just opened on an entry, before a word is typed', async () => {

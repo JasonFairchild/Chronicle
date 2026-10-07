@@ -15,7 +15,13 @@ import { versionsRevisedBy, type DraftSnapshot } from '@/types/draft'
 import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import { entryDetailLines, entryLabel, formatDate, toErrorMessage } from '@/utils/format'
+import {
+  entryDetailLines,
+  entryLabel,
+  formatDateline,
+  formatTime,
+  toErrorMessage,
+} from '@/utils/format'
 
 const props = defineProps<{
   id: string
@@ -79,7 +85,7 @@ const outstandingDraft = computed<DraftSnapshot | null>(
 const layoutWidth = useLayoutWidth()
 
 /**
- * An entry nobody named is headed by when it was written.
+ * An entry nobody named is headed by the day it was written, set as a dateline rather than a title.
  *
  * Not `entryLabel`, which names an entry where only one line fits: here the text is already on the
  * page, so opening with a truncated copy of the sentence directly below it would only say the same
@@ -89,21 +95,18 @@ const layoutWidth = useLayoutWidth()
 const heading = computed(() => {
   const entry = aggregated.value
   if (!entry) return 'Entry detail'
-  return entry.title || formatDate(entry.created_at, 'full')
+  return entry.title || formatDateline(entry.created_at)
 })
 
-/**
- * The muted line under the heading. Drops "Created …" when the heading is already that date, so an
- * untitled entry says when it was written once rather than twice.
- */
+/** The muted line under the heading. An untitled entry's heading is already the day, so only the time. */
 const metaLine = computed(() => {
   const entry = aggregated.value
   if (!entry) return ''
 
-  return [
-    ...(entry.title ? [`Created ${formatDate(entry.created_at, 'full')}`] : []),
-    ...(versionLabel.value ? [versionLabel.value] : []),
-  ].join(' · ')
+  const created = entry.title
+    ? `Created ${formatDateline(entry.created_at)} at ${formatTime(entry.created_at)}`
+    : `Created at ${formatTime(entry.created_at)}`
+  return [created, ...(versionLabel.value ? [versionLabel.value] : [])].join(' · ')
 })
 
 /** The writer's own details, one line each. Empty when they gave none, so nothing is shown. */
@@ -400,13 +403,6 @@ function describeAnchor(resolved: ResolvedAnchor): string {
 
 <template>
   <div class="space-y-6">
-    <RouterLink
-      to="/timeline"
-      class="inline-flex text-sm text-[var(--color-accent)] hover:underline"
-    >
-      ← Back to timeline
-    </RouterLink>
-
     <div v-if="loading" class="text-sm text-[var(--color-text-muted)]">Loading entry...</div>
 
     <div v-else-if="error" class="text-sm text-[var(--color-error)]" role="alert">{{ error }}</div>
@@ -440,53 +436,57 @@ function describeAnchor(resolved: ResolvedAnchor): string {
       </p>
 
       <article class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-        <header
-          class="mb-4 flex items-start justify-between gap-4 border-b border-[var(--color-border)] pb-4"
-        >
-          <div>
-            <h1 class="text-xl font-semibold">{{ heading }}</h1>
-            <p v-for="line in detailLines" :key="line" class="mt-1 text-sm">{{ line }}</p>
-            <p v-if="metaLine" class="mt-1 text-sm text-[var(--color-text-muted)]">
-              {{ metaLine }}
-            </p>
+        <header class="mb-4">
+          <!-- Wraps rather than squeezing: on a narrow screen, or beside a long title, the actions
+               drop to their own line instead of crushing the heading into a column. -->
+          <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <!-- An untitled entry's dateline is muted and unbolded, so it never reads as a title. -->
+            <h1
+              class="min-w-0 flex-1 basis-60 break-words text-xl"
+              :class="aggregated.title ? 'font-semibold' : 'text-[var(--color-text-muted)]'"
+            >
+              {{ heading }}
+            </h1>
+
+            <div
+              v-if="!revisionSession.isOpen && !relatedSession.isOpen"
+              class="flex flex-wrap gap-2"
+            >
+              <button
+                v-if="outstandingDraft"
+                type="button"
+                class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                @click="resumeOutstandingDraft"
+              >
+                Resume draft
+              </button>
+              <template v-else>
+                <button
+                  type="button"
+                  class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  @click="startRelatedEntry"
+                >
+                  Create related entry
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  @click="startRevising"
+                >
+                  Revise entry
+                </button>
+              </template>
+              <button
+                type="button"
+                class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                @click="goToNewConnection"
+              >
+                Add connection
+              </button>
+            </div>
           </div>
 
-          <div
-            v-if="!revisionSession.isOpen && !relatedSession.isOpen"
-            class="flex shrink-0 flex-wrap justify-end gap-2"
-          >
-            <button
-              v-if="outstandingDraft"
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              @click="resumeOutstandingDraft"
-            >
-              Resume draft
-            </button>
-            <template v-else>
-              <button
-                type="button"
-                class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                @click="startRelatedEntry"
-              >
-                Create related entry
-              </button>
-              <button
-                type="button"
-                class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                @click="startRevising"
-              >
-                Revise entry
-              </button>
-            </template>
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              @click="goToNewConnection"
-            >
-              Add connection
-            </button>
-          </div>
+          <p v-if="metaLine" class="mt-1 text-sm text-[var(--color-text-muted)]">{{ metaLine }}</p>
         </header>
 
         <template v-if="revisionSession.isOpen">
@@ -524,15 +524,21 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         </template>
 
         <template v-else>
-          <!-- Keyed on the version: the editor reads its content only on mount. -->
+          <!-- Keyed on the version: the editor reads its content only on mount. The heading above is
+               the title, so the document shows its body alone. -->
           <DocumentEditor
             :key="currentVersionId(aggregated)"
             label="Entry content"
-            with-title
-            :title="aggregated.title"
             :content="aggregated.content"
-            disabled
+            display-only
           />
+
+          <div
+            v-if="detailLines.length > 0"
+            class="mt-4 space-y-1 border-t border-[var(--color-border)] pt-3 text-sm"
+          >
+            <p v-for="line in detailLines" :key="line">{{ line }}</p>
+          </div>
 
           <section v-if="aggregated.media_refs.length > 0" ref="mediaEl" class="mt-4 space-y-2">
             <h2

@@ -253,6 +253,20 @@ describe('DocumentEditor (browser)', () => {
     expect(screen.getByText('Lake Tahoe').query()).toBeNull()
   })
 
+  it('shows a document that is only displayed as text, with no toolbar or field to type in', async () => {
+    const screen = mountEditor({
+      displayOnly: true,
+      withTitle: true,
+      title: 'Lake Tahoe',
+      content: serializeDocument(plainTextDocument('We drove up on Friday.')),
+    })
+
+    await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
+    await expect.element(screen.getByText('We drove up on Friday.')).toBeVisible()
+    expect(screen.getByRole('toolbar').query()).toBeNull()
+    expect(screen.getByRole('textbox').query()).toBeNull()
+  })
+
   it('stores an attached image in the media store and refers to it by id alone', async () => {
     const screen = mountEditor()
 

@@ -5,6 +5,10 @@ import { useStoragePersistence } from '@/composables/useStoragePersistence'
 
 const layoutWidth = provideLayoutWidth()
 const storage = useStoragePersistence()
+
+/** Keyed on the `aria-current` RouterLink sets, so what's marked is what a screen reader hears. */
+const navLink =
+  'hover:text-[var(--color-accent)] aria-[current=page]:text-[var(--color-accent)] aria-[current=page]:underline aria-[current=page]:underline-offset-4'
 </script>
 
 <template>
@@ -13,11 +17,9 @@ const storage = useStoragePersistence()
       <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
         <RouterLink to="/" class="text-lg font-semibold tracking-tight"> Chronicle </RouterLink>
         <nav class="flex items-center gap-4 text-sm">
-          <RouterLink to="/entries/new" class="hover:text-[var(--color-accent)]">
-            New entry
-          </RouterLink>
-          <RouterLink to="/timeline" class="hover:text-[var(--color-accent)]">Timeline</RouterLink>
-          <RouterLink to="/drafts" class="hover:text-[var(--color-accent)]">Drafts</RouterLink>
+          <RouterLink to="/entries/new" :class="navLink">New entry</RouterLink>
+          <RouterLink to="/timeline" :class="navLink">Timeline</RouterLink>
+          <RouterLink to="/drafts" :class="navLink">Drafts</RouterLink>
         </nav>
       </div>
     </header>

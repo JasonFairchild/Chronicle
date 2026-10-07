@@ -15,7 +15,7 @@ import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
-import { formatDate } from '@/utils/format'
+import { formatDate, formatDateline, formatTime } from '@/utils/format'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
@@ -52,6 +52,24 @@ describe('EntryDetailView', () => {
       mountDetail(parent.id)
 
       cy.findByText(PARENT_TEXT).should('be.visible')
+    })
+  })
+
+  it('heads an untitled entry with the day it was written, and its time below', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('heading', { name: formatDateline(parent.created_at) }).should('be.visible')
+      cy.findByText(`Created at ${formatTime(parent.created_at)}`).should('be.visible')
+    })
+  })
+
+  it('shows the title once, as the page’s heading', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT, title: 'The Tahoe trip' })).then((parent) => {
+      mountDetail(parent.id)
+
+      cy.findByRole('heading', { name: 'The Tahoe trip' }).should('be.visible')
+      cy.findAllByText('The Tahoe trip').should('have.length', 1)
     })
   })
 
@@ -283,10 +301,7 @@ describe('EntryDetailView', () => {
       cy.findByRole('textbox', { name: 'Related entry' }).type('Still think about this trip')
       cy.findByRole('button', { name: 'Add entry' }).click()
 
-      cy.findByRole('textbox', { name: 'Entry content' }).should(
-        'contain.text',
-        'Still think about this trip',
-      )
+      cy.findByRole('article').should('contain.text', 'Still think about this trip')
       cy.findByText('About').should('be.visible')
       cy.findByRole('link', { name: PARENT_TEXT }).should(
         'have.attr',
@@ -444,7 +459,7 @@ describe('EntryDetailView', () => {
       cy.window().then((win) => win.dispatchEvent(new Event('focus')))
 
       cy.findByText('I went to Donner Lake with Dad').should('be.visible')
-      cy.findByText('Version 2 of 2').should('be.visible')
+      cy.findByText(/Version 2 of 2/).should('be.visible')
     })
   })
 

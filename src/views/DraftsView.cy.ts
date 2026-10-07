@@ -45,10 +45,7 @@ describe('DraftsView', () => {
     cy.findByRole('button', { name: 'Save as entry' }).click()
 
     cy.findByRole('heading', { name: 'Lake Tahoe' }).should('be.visible')
-    cy.findByRole('textbox', { name: 'Entry content' }).should(
-      'contain.text',
-      'Half a thought, finished at last.',
-    )
+    cy.findByRole('article').should('contain.text', 'Half a thought, finished at last.')
     cy.findByText(/Happened .*1994/).should('be.visible')
     cy.then(async () => {
       // Sealing discards the buffer, so the same words cannot exist twice.
@@ -80,11 +77,8 @@ describe('DraftsView', () => {
     cy.findByRole('button', { name: 'Save as entry' }).click()
 
     // A revision is a version of the entry, not a page of its own.
-    cy.findByText('Version 2 of 2').should('be.visible')
-    cy.findByRole('textbox', { name: 'Entry content' }).should(
-      'contain.text',
-      'The first go, reworded',
-    )
+    cy.findByText(/Version 2 of 2/).should('be.visible')
+    cy.findByRole('article').should('contain.text', 'The first go, reworded')
   })
 
   it('lists drafts newest first, each with what it would become, when, and how it begins', () => {

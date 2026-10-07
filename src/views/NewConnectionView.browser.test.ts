@@ -60,7 +60,7 @@ describe('NewConnectionView (browser)', () => {
 
     await expect.element(screen.getByRole('heading', { name: 'Led to it' })).toBeVisible()
     await expect
-      .element(screen.getByRole('textbox', { name: 'Entry content' }))
+      .element(screen.getByRole('article'))
       .toHaveTextContent('The layoff made room for it.')
     await expect.element(screen.getByText(/Happened .*2020/)).toBeVisible()
     await expect.element(screen.getByText('Connects', { exact: true })).toBeVisible()

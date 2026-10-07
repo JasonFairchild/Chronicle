@@ -20,6 +20,13 @@ const whenLines = computed(() => entryWhenLines(props.entry.dates))
 
 /** A short, stable name for the card as a whole — its accessible name, not its full text. */
 const label = computed(() => entryLabel(props.entry))
+
+/** Every version past the first is a revision, anchor revisions included, as the entry page counts. */
+const revisedLine = computed(() => {
+  const revisions = props.entry.version.total - 1
+  if (revisions < 1) return null
+  return revisions === 1 ? 'Revised once' : `Revised ${revisions} times`
+})
 </script>
 
 <template>
@@ -61,6 +68,9 @@ const label = computed(() => entryLabel(props.entry))
         <time class="text-xs text-[var(--color-text-muted)]" :datetime="entry.created_at">
           {{ formatDate(entry.created_at) }}
         </time>
+        <span v-if="revisedLine" class="text-xs text-[var(--color-text-muted)]">
+          {{ revisedLine }}
+        </span>
       </div>
     </div>
   </RouterLink>

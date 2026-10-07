@@ -1,17 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { emptyEntryDates, emptyEntryDetails } from '@/types/entry'
-import { entryDetailLines, entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
+import {
+  entryDetailLines,
+  entryWhenLines,
+  formatDate,
+  formatDateline,
+  formatTime,
+  toErrorMessage,
+} from '@/utils/format'
 
 describe('formatDate', () => {
   // The locale is the browser's on purpose, so these assert what the format *carries* rather than
   // pinning an exact string that would read differently on a machine set to another locale.
-  it('renders an instant with its time, and a fuller date when asked for one', () => {
-    const medium = formatDate('2026-09-11T15:04:05.000Z')
-    const full = formatDate('2026-09-11T15:04:05.000Z', 'full')
+  it('renders an instant as a date with its time, the day alone, or the time alone', () => {
+    const instant = '2026-09-11T15:04:05.000Z'
+    const time = formatTime(instant)
 
-    expect(medium).toContain('2026')
-    expect(full).toContain('2026')
-    expect(full.length).toBeGreaterThan(medium.length)
+    expect(formatDate(instant)).toContain('2026')
+    expect(formatDate(instant)).toContain(time)
+    expect(formatDateline(instant)).toContain('2026')
+    expect(formatDateline(instant)).not.toContain(time)
+    expect(time).not.toContain('2026')
   })
 })
 

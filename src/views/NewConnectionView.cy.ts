@@ -38,10 +38,7 @@ describe('NewConnectionView', () => {
       cy.findByRole('button', { name: 'Add connection' }).click()
 
       cy.findByRole('heading', { name: 'Led to it' }).should('be.visible')
-      cy.findByRole('textbox', { name: 'Entry content' }).should(
-        'contain.text',
-        'The layoff made room for it.',
-      )
+      cy.findByRole('article').should('contain.text', 'The layoff made room for it.')
       cy.findByText(/Happened .*2020/).should('be.visible')
       cy.findByText('Connects').should('be.visible')
       cy.findByRole('link', { name: 'Left my job' }).should(

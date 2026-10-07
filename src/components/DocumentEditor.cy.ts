@@ -226,6 +226,23 @@ describe('DocumentEditor', () => {
     cy.findByText('Lake Tahoe').should('not.exist')
   })
 
+  it('shows a document that is only displayed as text, with no toolbar or field to type in', () => {
+    cy.mount(DocumentEditor, {
+      props: {
+        label: 'Entry content',
+        displayOnly: true,
+        withTitle: true,
+        title: 'Lake Tahoe',
+        content: serializeDocument(plainTextDocument('We drove up on Friday.')),
+      },
+    })
+
+    cy.findByText('Lake Tahoe').should('be.visible')
+    cy.findByText('We drove up on Friday.').should('be.visible')
+    cy.findByRole('toolbar').should('not.exist')
+    cy.findByRole('textbox').should('not.exist')
+  })
+
   it('turns a selection into a link at the address it is given', () => {
     const onChange = cy.stub().as('change')
 

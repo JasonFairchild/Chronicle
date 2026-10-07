@@ -132,9 +132,8 @@ expect(screen.getByRole('combobox', { name: 'Anchor action' }).query()).toBeNull
 cy.findByRole('combobox', { name: 'Anchor action' }).should('not.exist') // Cypress
 ```
 
-Test ids are legitimate when the thing being located has no semantic role at all. The entry body in
-`EntryDetailView` carries `data-testid="entry-content"` because a selection test needs that exact
-element to compute character offsets, and no role identifies it.
+Test ids are legitimate when the thing being located has no semantic role at all, such as a plain
+container a test needs exact character offsets inside.
 
 **Driving the editor.** `DocumentEditor` renders a contenteditable, which has no implicit role, so
 it sets `role="textbox"` and an `aria-label` from its `label` prop: query it as

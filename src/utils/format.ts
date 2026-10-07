@@ -21,14 +21,28 @@ export function entryLabel(entry: { title: string | null; content: string }): st
 }
 
 /**
- * A stored ISO timestamp as local text.
- *
- * `dateStyle` is the one thing call sites genuinely differ on — a timeline card wants a compact
- * date, an entry's own header wants the full one — so it is a parameter rather than two functions.
- * The locale is deliberately the browser's, since this is a local-first app with one reader.
+ * A stored ISO timestamp as local text, date and time. The locale is deliberately the browser's,
+ * since this is a local-first app with one reader.
  */
-export function formatDate(iso: string, dateStyle: 'full' | 'medium' = 'medium'): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle, timeStyle: 'short' }).format(new Date(iso))
+export function formatDate(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(iso),
+  )
+}
+
+/** The day alone, with its weekday, as a journal page is headed: "Wed, Oct 7, 2026". */
+export function formatDateline(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(iso))
+}
+
+/** The time of day alone: "12:58 AM". */
+export function formatTime(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(iso))
 }
 
 /**

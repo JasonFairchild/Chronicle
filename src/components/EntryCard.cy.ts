@@ -63,6 +63,16 @@ describe('EntryCard', () => {
     cy.findByText(formatDate(CREATED_AT)).should('be.visible')
   })
 
+  it('says how many times the entry has been revised', () => {
+    mountCard(
+      makeAggregated({
+        version: { index: 3, total: 3, at: CREATED_AT, revision_id: 'revision-2' },
+      }),
+    )
+
+    cy.findByText('Revised 2 times').should('be.visible')
+  })
+
   it('renders badge and extra slot content when given', () => {
     mountCard(makeAggregated(), {
       badge: '<span>Update</span>',

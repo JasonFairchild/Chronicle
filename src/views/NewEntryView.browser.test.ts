@@ -49,9 +49,7 @@ describe('NewEntryView (browser)', () => {
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
     await expect.element(screen.getByRole('heading', { name: 'Lake Tahoe' })).toBeVisible()
-    await expect
-      .element(screen.getByRole('textbox', { name: 'Entry content' }))
-      .toHaveTextContent('We drove up on Friday.')
+    await expect.element(screen.getByRole('article')).toHaveTextContent('We drove up on Friday.')
     await expect.element(screen.getByText(/Happened .*1994 · late morning/)).toBeVisible()
     await expect.element(screen.getByText('Where: home', { exact: true })).toBeVisible()
     // Not asked for, so not invented.
@@ -74,9 +72,7 @@ describe('NewEntryView (browser)', () => {
     await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
-    await expect
-      .element(screen.getByRole('textbox', { name: 'Entry content' }))
-      .toHaveTextContent('We drove up on Friday.')
+    await expect.element(screen.getByRole('article')).toHaveTextContent('We drove up on Friday.')
     const [saved] = await entries.listRootEntries()
     expect(saved?.title).toBeNull()
   })

@@ -84,7 +84,7 @@ import type { AnchorKind } from '@/types/entry'
 
 const props = withDefaults(
   defineProps<{
-    /** Accessible name for the editing surface. */
+    /** Accessible name for the editing surface. Unused when `displayOnly`, which has none. */
     label: string
     /** Seed content, serialized. Read once, on mount: the editor owns the document after that. */
     content?: string
@@ -92,7 +92,14 @@ const props = withDefaults(
     title?: string | null
     /** Titled entries get the title field above the toolbar; untitled ones do not. */
     withTitle?: boolean
+    /** Editing paused, as while a save is in flight; the editor keeps its look. */
     disabled?: boolean
+    /**
+     * A stored document shown for reading: no box, no toolbar, and not announced as a textbox,
+     * since nothing here can be typed. Rendered by this editor's schema all the same, so anchors and
+     * images look exactly as they did while being written.
+     */
+    displayOnly?: boolean
     /**
      * The other creation experience (ENTRY_MODEL.md, "Two creation experiences, kept separate").
      * Surrounding text becomes unreachable — only the anchor menu (`AnchorMenu.vue`) and the
@@ -116,6 +123,7 @@ const props = withDefaults(
     title: null,
     withTitle: false,
     disabled: false,
+    displayOnly: false,
     anchorMode: false,
     anchorBaseContent: undefined,
     describedBy: undefined,
@@ -204,20 +212,22 @@ const editor = useEditor({
     baseContent: props.anchorBaseContent,
   }),
   content: initialDocument,
-  editable: !props.disabled,
+  editable: !props.disabled && !props.displayOnly,
   editorProps: {
     attributes: {
       // A contenteditable div has no implicit role, so it is spelled out here rather than left to
       // a test id: this is the field a person types into and it should say so.
-      role: 'textbox',
-      'aria-multiline': 'true',
-      'aria-label': props.label,
+      ...(props.displayOnly
+        ? {}
+        : { role: 'textbox', 'aria-multiline': 'true', 'aria-label': props.label }),
       // The anchor-mode modifier keeps the selection visibly painted even once focus leaves the
       // editor for a menu control — see the `::selection` rule below, and `AnchorMenu`'s own
       // `shouldShow` override for the analogous problem on the menu's own side.
-      class: props.anchorMode
-        ? 'chronicle-document chronicle-document--anchor min-h-32'
-        : 'chronicle-document min-h-32',
+      class: props.displayOnly
+        ? 'chronicle-document'
+        : props.anchorMode
+          ? 'chronicle-document chronicle-document--anchor min-h-32'
+          : 'chronicle-document min-h-32',
       ...(props.describedBy ? { 'aria-describedby': props.describedBy } : {}),
       ...anchorMarkupAttr(initialDocument),
     },
@@ -343,7 +353,7 @@ const editor = useEditor({
 // to the document, and TipTap emits one by default.
 watch(
   () => props.disabled,
-  (disabled) => editor.value?.setEditable(!disabled, false),
+  (disabled) => editor.value?.setEditable(!disabled && !props.displayOnly, false),
 )
 
 onBeforeUnmount(() => editor.value?.destroy())
@@ -688,7 +698,11 @@ defineExpose({
 </script>
 
 <template>
-  <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)]">
+  <div
+    :class="{
+      'rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)]': !displayOnly,
+    }"
+  >
     <!--
       Its own field, above the toolbar rather than inside the editing surface, because none of the
       toolbar applies to it: a title is one line of plain text, and an ordinary `<input>` is the one
@@ -700,7 +714,7 @@ defineExpose({
       parent's document may change.
     -->
     <div
-      v-if="withTitle && !disabled && !anchorMode"
+      v-if="withTitle && !disabled && !displayOnly && !anchorMode"
       class="border-b border-[var(--color-border)] px-3 py-2"
     >
       <label :for="`${id}-title`" class="sr-only">Title</label>
@@ -731,7 +745,7 @@ defineExpose({
     </p>
 
     <div
-      v-if="editor && !anchorMode"
+      v-if="editor && !anchorMode && !displayOnly"
       class="flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-2 py-1"
       role="toolbar"
       :aria-label="`${label} formatting`"
@@ -899,7 +913,11 @@ defineExpose({
       {{ attachError }}
     </p>
 
-    <EditorContent :editor="editor" class="px-3 py-2 text-sm leading-relaxed" />
+    <EditorContent
+      :editor="editor"
+      class="text-sm leading-relaxed"
+      :class="{ 'px-3 py-2': !displayOnly }"
+    />
   </div>
 </template>
 

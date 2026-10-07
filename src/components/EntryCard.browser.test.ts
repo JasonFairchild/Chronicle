@@ -74,6 +74,16 @@ describe('EntryCard (browser)', () => {
     await expect.element(screen.getByText(formatDate(CREATED_AT))).toBeVisible()
   })
 
+  it('says how many times the entry has been revised', async () => {
+    const screen = await mountCard(
+      makeAggregated({
+        version: { index: 3, total: 3, at: CREATED_AT, revision_id: 'revision-2' },
+      }),
+    )
+
+    await expect.element(screen.getByText('Revised 2 times', { exact: true })).toBeVisible()
+  })
+
   it('renders badge and extra slot content when given', async () => {
     const screen = await mountCard(makeAggregated(), {
       badge: '<span>Update</span>',

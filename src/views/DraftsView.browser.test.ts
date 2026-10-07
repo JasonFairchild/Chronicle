@@ -62,7 +62,7 @@ describe('DraftsView (browser)', () => {
 
     await expect.element(screen.getByRole('heading', { name: 'Lake Tahoe' })).toBeVisible()
     await expect
-      .element(screen.getByRole('textbox', { name: 'Entry content' }))
+      .element(screen.getByRole('article'))
       .toHaveTextContent('Half a thought, finished at last.')
     await expect.element(screen.getByText(/Happened .*1994/)).toBeVisible()
     // Sealing writes the entry and deletes the draft in one transaction, so both have landed.
@@ -89,10 +89,8 @@ describe('DraftsView (browser)', () => {
     await screen.getByRole('button', { name: 'Save as entry' }).click()
 
     // A revision is a version of the entry, not a page of its own.
-    await expect.element(screen.getByText('Version 2 of 2', { exact: true })).toBeVisible()
-    await expect
-      .element(screen.getByRole('textbox', { name: 'Entry content' }))
-      .toHaveTextContent('The first go, reworded')
+    await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
+    await expect.element(screen.getByRole('article')).toHaveTextContent('The first go, reworded')
   })
 
   it('lists drafts newest first, each with what it would become, when, and how it begins', async () => {

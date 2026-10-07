@@ -38,10 +38,7 @@ describe('NewEntryView', () => {
     cy.findByRole('button', { name: 'Save entry' }).click()
 
     cy.findByRole('heading', { name: 'Lake Tahoe' }).should('be.visible')
-    cy.findByRole('textbox', { name: 'Entry content' }).should(
-      'contain.text',
-      'We drove up on Friday.',
-    )
+    cy.findByRole('article').should('contain.text', 'We drove up on Friday.')
     cy.findByText(/Happened .*1994 · late morning/).should('be.visible')
     cy.findByText('Where: home').should('be.visible')
     // Not asked for, so not invented.
@@ -63,10 +60,7 @@ describe('NewEntryView', () => {
     cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
-    cy.findByRole('textbox', { name: 'Entry content' }).should(
-      'contain.text',
-      'We drove up on Friday.',
-    )
+    cy.findByRole('article').should('contain.text', 'We drove up on Friday.')
     cy.then(async () => {
       const [saved] = await entries.listRootEntries()
       expect(saved?.title).to.equal(null)

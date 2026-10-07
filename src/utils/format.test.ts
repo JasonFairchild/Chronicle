@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { emptyEntryDates } from '@/types/entry'
-import { entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
+import { emptyEntryDates, emptyEntryDetails } from '@/types/entry'
+import { entryDetailLines, entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
 
 describe('formatDate', () => {
   // The locale is the browser's on purpose, so these assert what the format *carries* rather than
@@ -52,6 +52,36 @@ describe('entryWhenLines', () => {
     expect(entryWhenLines({ ...emptyEntryDates(), occurred_at: 'sometime in June' })).toEqual([
       'Happened sometime in June',
     ])
+  })
+})
+
+describe('entryDetailLines', () => {
+  // Time notes rather than days, so the lines don't depend on the machine's locale.
+  it('lists every detail given, in the order the form asks for them', () => {
+    const lines = entryDetailLines({
+      dates: { ...emptyEntryDates(), occurred_time_note: 'morning', recorded_time_note: 'evening' },
+      location: 'home',
+      original_medium: 'paper journal',
+      original_medium_note: 'blue Moleskine',
+    })
+
+    expect(lines).toEqual([
+      'Happened morning',
+      'Where: home',
+      'Originally written evening',
+      'Written in paper journal · blue Moleskine',
+    ])
+  })
+
+  it('keeps a note on what it was written in, even without the medium itself', () => {
+    expect(
+      entryDetailLines({ ...emptyEntryDetails(), original_medium_note: 'blue Moleskine' }),
+    ).toEqual(['Written in blue Moleskine'])
+  })
+
+  it('says nothing at all when nothing was given', () => {
+    expect(entryDetailLines(emptyEntryDetails())).toEqual([])
+    expect(entryDetailLines({ ...emptyEntryDetails(), location: '   ' })).toEqual([])
   })
 })
 

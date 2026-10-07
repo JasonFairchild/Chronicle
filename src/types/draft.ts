@@ -1,4 +1,4 @@
-import { emptyEntryDates, versionedFieldsOf } from './entry'
+import { emptyEntryDetails, versionedFieldsOf } from './entry'
 import type { AuthoringEvent, VersionedFields } from './entry'
 
 /** One document a session is writing: where it started and where it is. */
@@ -76,10 +76,7 @@ export function newDraftEntry(): DraftSnapshot['entry'] {
     base_version_id: null,
     base_content: '',
     content: '',
-    dates: emptyEntryDates(),
-    location: null,
-    original_medium: null,
-    original_medium_note: null,
+    ...emptyEntryDetails(),
     title: null,
     metadata: {},
   }

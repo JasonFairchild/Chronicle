@@ -42,13 +42,16 @@ describe('EntryForm (browser)', () => {
     expect(await draftRepository.list()).toEqual([])
   })
 
-  it('saves when something happened and when it was first written down, with the entry', async () => {
+  it('saves every detail with the entry', async () => {
     const screen = renderComponent(EntryForm)
 
-    // Exact, or "Happened" would also match the "Time it happened" beside it.
+    // Exact, or a label would also match the note beside it ("Time it happened").
     await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
     await screen.getByLabelText('Time it happened').fill('late morning')
+    await screen.getByLabelText('Where', { exact: true }).fill('home')
     await screen.getByLabelText('Originally written', { exact: true }).fill('1994-06-12')
+    await screen.getByLabelText('Written in', { exact: true }).fill('paper journal')
+    await screen.getByLabelText('More about what it was written in').fill('blue Moleskine')
     await screen.getByRole('textbox', { name: 'Title' }).fill('The green notebook')
     await screen.getByRole('textbox', { name: 'New entry' }).fill('From the green notebook')
     await screen.getByRole('button', { name: 'Save entry' }).click()
@@ -60,9 +63,12 @@ describe('EntryForm (browser)', () => {
     const [saved] = await entries.listRootEntries()
     expect(saved?.dates.occurred_at).toBe('1994-06-11')
     expect(saved?.dates.occurred_time_note).toBe('late morning')
+    expect(saved?.location).toBe('home')
     expect(saved?.dates.recorded_at).toBe('1994-06-12')
     // Not asked for, so not invented.
     expect(saved?.dates.recorded_time_note).toBeNull()
+    expect(saved?.original_medium).toBe('paper journal')
+    expect(saved?.original_medium_note).toBe('blue Moleskine')
   })
 
   it('starts a fresh empty session after a save rather than reopening the last one', async () => {
@@ -113,10 +119,17 @@ describe('EntryForm (browser)', () => {
     expect(await draftRepository.list()).toEqual([])
   })
 
-  it('keeps what was typed when the composer is left without saving', async () => {
+  it('keeps what was typed, details and all, when the composer is left without saving', async () => {
     const screen = renderComponent(EntryForm)
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await userEvent.keyboard('{Enter}We drove up on Friday.')
+    await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
+    await screen.getByLabelText('Time it happened').fill('late morning')
+    await screen.getByLabelText('Where', { exact: true }).fill('home')
+    await screen.getByLabelText('Originally written', { exact: true }).fill('1994-06-12')
+    await screen.getByLabelText('Time it was originally written').fill('evening')
+    await screen.getByLabelText('Written in', { exact: true }).fill('paper journal')
+    await screen.getByLabelText('More about what it was written in').fill('blue Moleskine')
 
     // Leaving is not discarding: the session is let go, and what it held stays a draft.
     const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
@@ -127,6 +140,15 @@ describe('EntryForm (browser)', () => {
     const [draft] = await draftRepository.list()
     expect(draft?.entry.title).toBe('Lake Tahoe')
     expect(docToPlainText(draft!.entry.content)).toBe('We drove up on Friday.')
+    expect(draft?.entry.dates).toEqual({
+      occurred_at: '1994-06-11',
+      occurred_time_note: 'late morning',
+      recorded_at: '1994-06-12',
+      recorded_time_note: 'evening',
+    })
+    expect(draft?.entry.location).toBe('home')
+    expect(draft?.entry.original_medium).toBe('paper journal')
+    expect(draft?.entry.original_medium_note).toBe('blue Moleskine')
   })
 
   it('drops a draft whose words are all deleted', async () => {

@@ -62,10 +62,12 @@ either — they name what a related entry turned out to be, not a choice made be
   the body. **A title is optional** — much journal writing has no name worth giving, and a required
   field produces "Tuesday". Where only one line can be shown, an entry is named by its title, else
   its opening words. Related entries (§4.4) get the same optional field.
-- Two optional dates sit below the writing area: when the thing **happened**, and when it was
-  **originally written** somewhere else. Each is a day plus a free line for the time ("morning",
-  "3:30 pm"), the way a paper journal says it. Every place an entry is written offers them,
-  revising included.
+- Optional details sit below the writing area, never collapsed, everywhere an entry is written,
+  revising included. Each date is a day plus a free line for the time ("morning", "3:30 pm"), the
+  way a paper journal says it. Two groups:
+  - **When and where:** when the thing **happened**, and **where**.
+  - **Written before, somewhere else:** when it was **originally written**, and what it was
+    **written in** ("paper journal"), with a note ("blue Moleskine, 2014–2016").
 - The toolbar offers undo/redo, two heading levels, bold, italic, underline, strikethrough, bulleted
   and numbered lists, quotes, links, clear formatting, and adding an image. All of it works from the
   keyboard too, including markdown shortcuts such as `## ` and `- `.
@@ -89,8 +91,8 @@ either — they name what a related entry turned out to be, not a choice made be
 
 ### 4.3 Reading an entry
 
-- Shows the title, the happened and originally-written dates if given, the creation date, and the
-  current text (the latest version). An untitled entry is headed by its creation date.
+- Shows the title, whichever details were given (§4.1), the creation date, and the current text
+  (the latest version). An untitled entry is headed by its creation date.
 - A revised entry says which version you're looking at and how many exist.
 - Attached images appear below the text.
 - Related entries and connections attached to it are listed beneath, each showing what part of the
@@ -104,7 +106,7 @@ either — they name what a related entry turned out to be, not a choice made be
 - An entry offers **Create related entry** and **Revise entry**: one way to say something about an
   entry, whether or not it points at a passage.
 - Creating a related entry opens two columns: the entry being written about on the left, the new
-  entry (with the same optional title and dates as §4.1) on the right. This anchoring mode never
+  entry (with the same optional title and details as §4.1) on the right. This anchoring mode never
   mixes with revising the entry's own text (ENTRY_MODEL.md, "Two creation experiences, kept
   separate").
 - On the left, select a passage and a small menu offers **Highlight** or **Strike** (Ctrl+Alt+H /
@@ -145,7 +147,7 @@ either — they name what a related entry turned out to be, not a choice made be
 
 ### 4.6 Connections
 
-- **Add connection** opens a full screen with the same tools as any entry (title, dates, rich text)
+- **Add connection** opens a full screen with the same tools as any entry (title, details, rich text)
   plus a choice of which entry it points to. A connection is an entry that also names a destination.
 - It has no separate label for how two entries relate: its title is its name on both ends, and like
   any title it is optional — untitled, it's named by its opening words.

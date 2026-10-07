@@ -42,12 +42,15 @@ describe('EntryForm', () => {
     })
   })
 
-  it('saves when something happened and when it was first written down, with the entry', () => {
+  it('saves every detail with the entry', () => {
     cy.mount(EntryForm)
 
     cy.findByLabelText('Happened').type('1994-06-11')
     cy.findByLabelText('Time it happened').type('late morning')
+    cy.findByLabelText('Where').type('home')
     cy.findByLabelText('Originally written').type('1994-06-12')
+    cy.findByLabelText('Written in').type('paper journal')
+    cy.findByLabelText('More about what it was written in').type('blue Moleskine')
     cy.findByRole('textbox', { name: 'Title' }).type('The green notebook')
     cy.findByRole('textbox', { name: 'New entry' }).type('From the green notebook')
     cy.findByRole('button', { name: 'Save entry' }).click()
@@ -58,9 +61,12 @@ describe('EntryForm', () => {
       const [saved] = await entries.listRootEntries()
       expect(saved?.dates.occurred_at).to.equal('1994-06-11')
       expect(saved?.dates.occurred_time_note).to.equal('late morning')
+      expect(saved?.location).to.equal('home')
       expect(saved?.dates.recorded_at).to.equal('1994-06-12')
       // Not asked for, so not invented.
       expect(saved?.dates.recorded_time_note).to.equal(null)
+      expect(saved?.original_medium).to.equal('paper journal')
+      expect(saved?.original_medium_note).to.equal('blue Moleskine')
     })
   })
 
@@ -113,10 +119,17 @@ describe('EntryForm', () => {
     })
   })
 
-  it('keeps what was typed when the composer is left without saving', () => {
+  it('keeps what was typed, details and all, when the composer is left without saving', () => {
     cy.mount(EntryForm).then(({ wrapper }) => {
       cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
       cy.focused().type('We drove up on Friday.')
+      cy.findByLabelText('Happened').type('1994-06-11')
+      cy.findByLabelText('Time it happened').type('late morning')
+      cy.findByLabelText('Where').type('home')
+      cy.findByLabelText('Originally written').type('1994-06-12')
+      cy.findByLabelText('Time it was originally written').type('evening')
+      cy.findByLabelText('Written in').type('paper journal')
+      cy.findByLabelText('More about what it was written in').type('blue Moleskine')
 
       // Leaving is not discarding: the session is let go, and what it held stays a draft.
       cy.then(async () => {
@@ -128,6 +141,15 @@ describe('EntryForm', () => {
         const [draft] = await draftRepository.list()
         expect(draft?.entry.title).to.equal('Lake Tahoe')
         expect(docToPlainText(draft!.entry.content)).to.equal('We drove up on Friday.')
+        expect(draft?.entry.dates).to.deep.equal({
+          occurred_at: '1994-06-11',
+          occurred_time_note: 'late morning',
+          recorded_at: '1994-06-12',
+          recorded_time_note: 'evening',
+        })
+        expect(draft?.entry.location).to.equal('home')
+        expect(draft?.entry.original_medium).to.equal('paper journal')
+        expect(draft?.entry.original_medium_note).to.equal('blue Moleskine')
       })
     })
   })

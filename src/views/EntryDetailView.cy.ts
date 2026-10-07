@@ -249,7 +249,7 @@ describe('EntryDetailView', () => {
     cy.findByText('Entry not found.').should('be.visible')
   })
 
-  it('shows the dates the writer gave, alongside when the entry was created', () => {
+  it('shows the details the writer gave, alongside when the entry was created', () => {
     cy.then(() =>
       seed({
         content: PARENT_CONTENT,
@@ -259,12 +259,17 @@ describe('EntryDetailView', () => {
           occurred_time_note: 'late morning',
           recorded_at: '1994-06-12',
         },
+        location: 'home',
+        original_medium: 'paper journal',
+        original_medium_note: 'blue Moleskine',
       }),
     ).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByText(/Happened .*1994 · late morning/).should('be.visible')
+      cy.findByText('Where: home').should('be.visible')
       cy.findByText(/Originally written .*1994/).should('be.visible')
+      cy.findByText('Written in paper journal · blue Moleskine').should('be.visible')
     })
   })
 
@@ -693,16 +698,26 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('revises when something happened without touching the text', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+  it('revises one detail, leaving the others and the text as they were', () => {
+    cy.then(() =>
+      seed({
+        content: PARENT_CONTENT,
+        dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
+        location: 'home',
+        original_medium: 'paper journal',
+      }),
+    ).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
-      cy.findByLabelText('Happened').type('1994-06-11')
+      cy.findByLabelText('Where').clear().type('the cabin')
       cy.findByRole('button', { name: 'Save revision' }).click()
 
       cy.findByText(/Version 2 of 2/).should('be.visible')
+      cy.findByText('Where: the cabin').should('be.visible')
       cy.findByText(/Happened .*1994/).should('be.visible')
+      cy.findByText('Written in paper journal').should('be.visible')
+      cy.findByText(PARENT_TEXT).should('be.visible')
     })
   })
 

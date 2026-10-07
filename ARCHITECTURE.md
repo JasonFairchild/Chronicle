@@ -80,7 +80,7 @@ flowchart TB
 
   %% write path
   DE ==>|"@change: EditorChange<br/>content · title · steps · signals"| SES
-  SES ==>|"recordChange · recordParentChange<br/>recordDates"| DS
+  SES ==>|"recordChange · recordParentChange<br/>recordDetails"| DS
   TAB -->|"tab hidden: flushAll<br/>tab back: adoptChangesElsewhere"| DS
   DS <-->|"save, throttled 300ms: upsert<br/>getById: resume · another tab's"| T_DRAFTS
   DS <-->|"save: append new events only<br/>getById: rejoin the log"| T_EVENTS

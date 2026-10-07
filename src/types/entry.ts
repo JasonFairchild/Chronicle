@@ -84,6 +84,31 @@ export interface VersionedFields {
   metadata: Record<string, unknown> // Only what neither drives domain logic nor gets queried.
 }
 
+/** What a writer sets beside an entry's title and document: when, where, and what it was first written in. */
+export type EntryDetails = Pick<
+  VersionedFields,
+  'dates' | 'location' | 'original_medium' | 'original_medium_note'
+>
+
+export function emptyEntryDetails(): EntryDetails {
+  return {
+    dates: emptyEntryDates(),
+    location: null,
+    original_medium: null,
+    original_medium_note: null,
+  }
+}
+
+/** Copies the details off any carrier into plain objects, dates included, so the copy aliases nothing. */
+export function entryDetailsOf(source: EntryDetails): EntryDetails {
+  return {
+    dates: { ...source.dates },
+    location: source.location,
+    original_medium: source.original_medium,
+    original_medium_note: source.original_medium_note,
+  }
+}
+
 /** Shallow-copies the versioned fields off any carrier, so a version never aliases the row it came from. */
 export function versionedFieldsOf(source: VersionedFields): VersionedFields {
   return {
@@ -170,10 +195,7 @@ export function createEntryInput(
   partial: Partial<CreateEntryInput> & Pick<CreateEntryInput, 'content'>,
 ): CreateEntryInput {
   return {
-    dates: emptyEntryDates(),
-    location: null,
-    original_medium: null,
-    original_medium_note: null,
+    ...emptyEntryDetails(),
     parent_id: null,
     relation_type: null,
     target_id: null,

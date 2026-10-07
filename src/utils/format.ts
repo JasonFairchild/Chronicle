@@ -6,7 +6,7 @@
  */
 
 import { previewText } from '@/domain/entryDocument'
-import type { EntryDates } from '@/types/entry'
+import type { EntryDates, EntryDetails } from '@/types/entry'
 
 /**
  * How to name an entry where only one line fits — a picker option, a connection's arrow, the note a
@@ -47,19 +47,44 @@ export function entryWhenLines(dates: EntryDates): string[] {
 }
 
 /**
- * A user-supplied day and its freeform time as one phrase — "Jun 12, 1994 · morning". Null when
- * neither was given; either half alone is a legitimate answer, since a remembered "one winter
- * evening" with no date is still worth keeping.
+ * Every detail the writer gave, as labelled lines in the form's order: when it happened and where,
+ * then when and in what it was first written. For an entry's own page; a card, with less room,
+ * shows `entryWhenLines`. "Where" takes a colon because it asks rather than describes.
+ */
+export function entryDetailLines(details: EntryDetails): string[] {
+  const { dates } = details
+  const happened = formatWhen(dates.occurred_at, dates.occurred_time_note)
+  const where = details.location?.trim()
+  const written = formatWhen(dates.recorded_at, dates.recorded_time_note)
+  const medium = phrase(details.original_medium, details.original_medium_note)
+
+  return [
+    ...(happened ? [`Happened ${happened}`] : []),
+    ...(where ? [`Where: ${where}`] : []),
+    ...(written ? [`Originally written ${written}`] : []),
+    ...(medium ? [`Written in ${medium}`] : []),
+  ]
+}
+
+/**
+ * A user-supplied day and its freeform time as one phrase — "Jun 12, 1994 · morning". Either half
+ * alone is a legitimate answer, since a remembered "one winter evening" with no date is still worth
+ * keeping.
  */
 function formatWhen(
   day: string | null | undefined,
   timeNote: string | null | undefined,
 ): string | null {
-  const date = day ? formatDay(day) : ''
-  const time = timeNote?.trim() ?? ''
+  return phrase(day ? formatDay(day) : null, timeNote)
+}
 
-  if (date && time) return `${date} · ${time}`
-  return date || time || null
+/** A value and its note as "value · note", either alone, or null when neither says anything. */
+function phrase(value: string | null | undefined, note: string | null | undefined): string | null {
+  const main = value?.trim() ?? ''
+  const extra = note?.trim() ?? ''
+
+  if (main && extra) return `${main} · ${extra}`
+  return main || extra || null
 }
 
 /**

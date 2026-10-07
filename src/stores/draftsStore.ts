@@ -16,12 +16,13 @@ import {
   type DraftSnapshot,
 } from '@/types/draft'
 import {
+  entryDetailsOf,
   newEntryId,
   newEntryTimestamp,
   type AggregatedEntry,
   type ChangeSignals,
   type Entry,
-  type EntryDates,
+  type EntryDetails,
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 import { useEntriesStore } from './entriesStore'
@@ -258,18 +259,18 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * Records the dates typed alongside the words. Spread into a plain object rather than stored by
+   * Records the details set alongside the words. Copied into plain objects rather than stored by
    * reference: these arrive from a form's reactive state, and a Vue proxy does not survive the
    * `structuredClone` on the way into the repository.
    */
-  function recordDates(sessionId: string, dates: EntryDates): void {
+  function recordDetails(sessionId: string, details: EntryDetails): void {
     const entry = requireActive(sessionId)
     const { draft } = entry
 
     entry.draft = {
       ...draft,
       updated_at: newEntryTimestamp(),
-      entry: { ...draft.entry, dates: { ...dates } },
+      entry: { ...draft.entry, ...entryDetailsOf(details) },
     }
     entry.dirty = true
 
@@ -593,7 +594,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     resumeDraft,
     recordChange,
     recordParentChange,
-    recordDates,
+    recordDetails,
     addMark,
     flush,
     flushAll,

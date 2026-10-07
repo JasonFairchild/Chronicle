@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
-import EntryDatesFields from '@/components/EntryDatesFields.vue'
+import EntryDetailsFields from '@/components/EntryDetailsFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 
 /**
@@ -71,10 +71,10 @@ function handleSave(): void {
 
     <slot name="notices" />
 
-    <EntryDatesFields
-      :model-value="session.dates"
+    <EntryDetailsFields
+      :model-value="session.details"
       :disabled="session.saving"
-      @update:model-value="session.handleDatesChange"
+      @update:model-value="session.handleDetailsChange"
     />
 
     <div class="flex justify-end gap-2">

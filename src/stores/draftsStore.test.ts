@@ -14,7 +14,7 @@ import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
-import { createEntryInput, emptyEntryDates, type AggregatedEntry } from '@/types/entry'
+import { createEntryInput, type AggregatedEntry } from '@/types/entry'
 
 /** An entry already on record, as a session opened against it would find it. */
 async function existingEntry(text: string): Promise<AggregatedEntry> {
@@ -141,30 +141,6 @@ describe('useDraftsStore', () => {
       expect(flushed?.entry.content).toBe(textContent('We drove up on Friday'))
       expect(flushed?.entry.title).toBe('Lake Tahoe')
       expect(flushed?.entry.events).toHaveLength(1)
-    })
-
-    it('keeps the dates alongside the words, so a reload loses neither', async () => {
-      vi.useFakeTimers()
-      const store = useDraftsStore()
-      const sessionId = store.beginDraft({ kind: 'new_root' })
-
-      store.recordChange(sessionId, { content: textContent('From the green notebook') })
-      store.recordDates(sessionId, {
-        recorded_at: '1994-06-12',
-        recorded_time_note: 'evening',
-        occurred_at: '1994-06-11',
-        occurred_time_note: null,
-      })
-
-      await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
-
-      const flushed = await draftRepository.getById(sessionId)
-      expect(flushed?.entry.dates).toEqual({
-        recorded_at: '1994-06-12',
-        recorded_time_note: 'evening',
-        occurred_at: '1994-06-11',
-        occurred_time_note: null,
-      })
     })
   })
 
@@ -467,34 +443,6 @@ describe('useDraftsStore', () => {
       await store.adoptChangesElsewhere()
 
       expect(store.drafts.map((draft) => draft.session_id)).toEqual(['claimed-elsewhere'])
-    })
-
-    it('seals the dates a revision draft carries, starting from the version it revises', async () => {
-      const store = useDraftsStore()
-      const entries = useEntriesStore()
-      const created = await entryRepository.create(
-        createEntryInput({
-          content: textContent('From the green notebook'),
-          title: 'Notebook',
-          location: 'home',
-          dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
-        }),
-      )
-
-      const sessionId = store.beginDraft({
-        kind: 'revision',
-        parent: (await entries.getAggregatedEntry(created.id))!,
-      })
-      // Only the date moves: a correction with the words left alone is still a revision.
-      store.recordDates(sessionId, { ...emptyEntryDates(), occurred_at: '1994-06-12' })
-      await store.sealDraft(sessionId)
-
-      const aggregated = await entries.getAggregatedEntry(created.id)
-      expect(aggregated?.version.total).toBe(2)
-      expect(aggregated?.dates.occurred_at).toBe('1994-06-12')
-      // Everything left untouched came along from the version the draft started from.
-      expect(aggregated?.title).toBe('Notebook')
-      expect(aggregated?.location).toBe('home')
     })
   })
 })

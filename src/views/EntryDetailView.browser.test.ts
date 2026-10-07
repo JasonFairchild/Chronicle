@@ -247,7 +247,7 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByText('Entry not found.')).toBeVisible()
   })
 
-  it('shows the dates the writer gave, alongside when the entry was created', async () => {
+  it('shows the details the writer gave, alongside when the entry was created', async () => {
     const parent = await repository.create(
       createEntryInput({
         content: PARENT_CONTENT,
@@ -257,13 +257,20 @@ describe('EntryDetailView (browser)', () => {
           occurred_time_note: 'late morning',
           recorded_at: '1994-06-12',
         },
+        location: 'home',
+        original_medium: 'paper journal',
+        original_medium_note: 'blue Moleskine',
       }),
     )
 
     const screen = await mountDetail(parent.id)
 
     await expect.element(screen.getByText(/Happened .*1994 · late morning/)).toBeVisible()
+    await expect.element(screen.getByText('Where: home', { exact: true })).toBeVisible()
     await expect.element(screen.getByText(/Originally written .*1994/)).toBeVisible()
+    await expect
+      .element(screen.getByText('Written in paper journal · blue Moleskine', { exact: true }))
+      .toBeVisible()
   })
 
   it('adds a related entry about the whole entry when the session marks nothing', async () => {
@@ -711,18 +718,29 @@ describe('EntryDetailView (browser)', () => {
     expect(revision!.content).toContain('"bold"')
   })
 
-  it('revises when something happened without touching the text', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+  it('revises one detail, leaving the others and the text as they were', async () => {
+    const parent = await repository.create(
+      createEntryInput({
+        content: PARENT_CONTENT,
+        dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
+        location: 'home',
+        original_medium: 'paper journal',
+      }),
+    )
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
 
-    // Exact, or "Happened" would also match the "Time it happened" beside it.
-    await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
+    await screen.getByLabelText('Where', { exact: true }).fill('the cabin')
     await screen.getByRole('button', { name: 'Save revision' }).click()
 
     await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
+    await expect.element(screen.getByText('Where: the cabin', { exact: true })).toBeVisible()
     await expect.element(screen.getByText(/Happened .*1994/)).toBeVisible()
+    await expect
+      .element(screen.getByText('Written in paper journal', { exact: true }))
+      .toBeVisible()
+    await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
   })
 
   it('refuses a revision that changes nothing, and says so', async () => {

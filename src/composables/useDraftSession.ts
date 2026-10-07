@@ -5,7 +5,7 @@ import { StaleVersionError } from '@/domain/entryValidation'
 import { useDraftsStore, type DraftStart } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { Draft, DraftSnapshot } from '@/types/draft'
-import { emptyEntryDates, type Entry, type EntryDates } from '@/types/entry'
+import { emptyEntryDetails, entryDetailsOf, type Entry, type EntryDetails } from '@/types/entry'
 
 /**
  * One single-document draft session: begin or resume it, mirror an editor's changes into it, seal
@@ -24,7 +24,7 @@ export function useDraftSession() {
   const sessionId = ref<string | null>(null)
   const content = ref('')
   const title = ref<string | null>(null)
-  const dates = ref<EntryDates>(emptyEntryDates())
+  const details = ref<EntryDetails>(emptyEntryDetails())
   const saving = ref(false)
   /**
    * The parent document as an anchor-mode session has provisionally marked it — `Draft.parent`,
@@ -147,7 +147,7 @@ export function useDraftSession() {
     kind.value = draft.kind
     content.value = draft.entry.content
     title.value = draft.entry.title
-    dates.value = draft.entry.dates
+    details.value = entryDetailsOf(draft.entry)
     parentContent.value = draft.kind === 'new_related' ? draft.parent.content : ''
     parentBaseContent.value = draft.kind === 'new_related' ? draft.parent.base_content : ''
     parentTitle.value = nextParentTitle
@@ -176,10 +176,10 @@ export function useDraftSession() {
     drafts.recordParentChange(sessionId.value, change)
   }
 
-  /** Mirrors the dates a form holds into the session, so a reload keeps them too. */
-  function handleDatesChange(next: EntryDates): void {
-    dates.value = next
-    if (sessionId.value) drafts.recordDates(sessionId.value, next)
+  /** Mirrors the details a form holds into the session, so a reload keeps them too. */
+  function handleDetailsChange(next: EntryDetails): void {
+    details.value = next
+    if (sessionId.value) drafts.recordDetails(sessionId.value, next)
   }
 
   /**
@@ -248,7 +248,7 @@ export function useDraftSession() {
     parentContent.value = ''
     parentTitle.value = null
     parentBaseContent.value = ''
-    dates.value = emptyEntryDates()
+    details.value = emptyEntryDetails()
     saving.value = false
     kind.value = null
     stale.value = false
@@ -263,7 +263,7 @@ export function useDraftSession() {
     parentContent,
     parentTitle,
     parentBaseContent,
-    dates,
+    details,
     saving,
     kind,
     staleNotice,
@@ -276,7 +276,7 @@ export function useDraftSession() {
     resume,
     handleChange,
     handleParentChange,
-    handleDatesChange,
+    handleDetailsChange,
     save,
     abandon,
     discard,

@@ -15,7 +15,7 @@ import { versionsRevisedBy, type DraftSnapshot } from '@/types/draft'
 import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import { entryLabel, entryWhenLines, formatDate, toErrorMessage } from '@/utils/format'
+import { entryDetailLines, entryLabel, formatDate, toErrorMessage } from '@/utils/format'
 
 const props = defineProps<{
   id: string
@@ -106,8 +106,8 @@ const metaLine = computed(() => {
   ].join(' · ')
 })
 
-/** The user's own dates, one line each. Empty when they gave none, so nothing is shown. */
-const whenLines = computed(() => (aggregated.value ? entryWhenLines(aggregated.value.dates) : []))
+/** The writer's own details, one line each. Empty when they gave none, so nothing is shown. */
+const detailLines = computed(() => (aggregated.value ? entryDetailLines(aggregated.value) : []))
 
 const versionLabel = computed(() => {
   const version = aggregated.value?.version
@@ -441,7 +441,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
         >
           <div>
             <h1 class="text-xl font-semibold">{{ heading }}</h1>
-            <p v-for="line in whenLines" :key="line" class="mt-1 text-sm">{{ line }}</p>
+            <p v-for="line in detailLines" :key="line" class="mt-1 text-sm">{{ line }}</p>
             <p v-if="metaLine" class="mt-1 text-sm text-[var(--color-text-muted)]">
               {{ metaLine }}
             </p>

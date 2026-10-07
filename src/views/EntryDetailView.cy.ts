@@ -286,7 +286,7 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('will not save a related entry that says nothing', () => {
+  it('says why a related entry that says nothing can’t be added', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
@@ -296,7 +296,11 @@ describe('EntryDetailView', () => {
       // with, but it still holds nothing worth keeping.
       cy.findByRole('textbox', { name: 'Related entry' }).type('x{backspace}')
 
-      cy.findByRole('button', { name: 'Add entry' }).should('be.disabled')
+      cy.findByRole('button', { name: 'Add entry' }).click()
+      cy.findByRole('alert').should(
+        'have.text',
+        'Nothing to save yet. Give it a title or write something first.',
+      )
       cy.findByRole('button', { name: 'Discard' }).click()
     })
   })

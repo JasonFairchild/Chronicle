@@ -5,7 +5,7 @@ import EntryComposer from '@/components/EntryComposer.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
-import { docToPlainText, isEmptyEntry, previewText } from '@/domain/entryDocument'
+import { docToPlainText, previewText } from '@/domain/entryDocument'
 import { DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { DraftSnapshot } from '@/types/draft'
@@ -107,8 +107,6 @@ async function resume(draft: DraftSnapshot): Promise<void> {
 }
 
 async function seal(): Promise<void> {
-  if (isEmptyEntry(session.content, session.title)) return
-
   error.value = null
 
   try {

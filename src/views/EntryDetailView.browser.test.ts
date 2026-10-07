@@ -284,7 +284,7 @@ describe('EntryDetailView (browser)', () => {
     expect(children[0]?.relation_type).toBe('annotation')
   })
 
-  it('will not save a related entry that says nothing', async () => {
+  it('says why a related entry that says nothing can’t be added', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
@@ -295,7 +295,16 @@ describe('EntryDetailView (browser)', () => {
     await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('x{Backspace}')
 
-    await expect.element(screen.getByRole('button', { name: 'Add entry' })).toBeDisabled()
+    await screen.getByRole('button', { name: 'Add entry' }).click()
+    await expect
+      .element(
+        screen.getByRole('alert').and(
+          screen.getByText('Nothing to save yet. Give it a title or write something first.', {
+            exact: true,
+          }),
+        ),
+      )
+      .toBeVisible()
 
     await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {

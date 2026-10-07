@@ -76,7 +76,7 @@ describe('EntryForm (browser)', () => {
       expect(await entries.listRootEntries()).toHaveLength(1)
     })
 
-    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeDisabled()
+    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('')
     await vi.waitFor(() => {
       expect(screen.getByText('First entry').query()).toBeNull()
     })
@@ -147,14 +147,28 @@ describe('EntryForm (browser)', () => {
     expect(await draftRepository.list()).toEqual([])
   })
 
-  it('will not save an empty document', async () => {
+  it('says why an empty entry can’t be saved', async () => {
     const screen = renderComponent(EntryForm)
+    const sealDraft = vi.spyOn(useDraftsStore(), 'sealDraft')
 
-    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeDisabled()
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+    await expect
+      .element(
+        screen.getByRole('alert').and(
+          screen.getByText('Nothing to save yet. Give it a title or write something first.', {
+            exact: true,
+          }),
+        ),
+      )
+      .toBeVisible()
 
+    // Any change answers it, even one that still leaves nothing worth keeping.
     await screen.getByRole('textbox', { name: 'New entry' }).fill('   ')
+    await expect.element(screen.getByRole('alert')).not.toBeInTheDocument()
 
-    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeDisabled()
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+    await expect.element(screen.getByRole('alert')).toBeVisible()
+    expect(sealDraft).not.toHaveBeenCalled()
   })
 
   it('saves an entry that was never given a title', async () => {
@@ -164,7 +178,6 @@ describe('EntryForm (browser)', () => {
     // and a required title there produces filler rather than better names.
     await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
 
-    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeEnabled()
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
     await vi.waitFor(async () => {

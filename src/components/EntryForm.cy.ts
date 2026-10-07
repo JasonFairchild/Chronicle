@@ -71,7 +71,6 @@ describe('EntryForm', () => {
     cy.findByRole('textbox', { name: 'New entry' }).type('First entry')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
-    cy.findByRole('button', { name: 'Save entry' }).should('be.disabled')
     cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
     cy.findByText('First entry').should('not.exist')
   })
@@ -154,14 +153,25 @@ describe('EntryForm', () => {
     })
   })
 
-  it('will not save an empty document', () => {
+  it('says why an empty entry can’t be saved', () => {
     cy.mount(EntryForm)
+    cy.then(() => {
+      cy.spy(useDraftsStore(), 'sealDraft').as('sealDraft')
+    })
 
-    cy.findByRole('button', { name: 'Save entry' }).should('be.disabled')
+    cy.findByRole('button', { name: 'Save entry' }).click()
+    cy.findByRole('alert').should(
+      'have.text',
+      'Nothing to save yet. Give it a title or write something first.',
+    )
 
+    // Any change answers it, even one that still leaves nothing worth keeping.
     cy.findByRole('textbox', { name: 'New entry' }).type('   ')
+    cy.findByRole('alert').should('not.exist')
 
-    cy.findByRole('button', { name: 'Save entry' }).should('be.disabled')
+    cy.findByRole('button', { name: 'Save entry' }).click()
+    cy.findByRole('alert').should('be.visible')
+    cy.get('@sealDraft').should('not.have.been.called')
   })
 
   it('saves an entry that was never given a title', () => {
@@ -171,7 +181,7 @@ describe('EntryForm', () => {
     // and a required title there produces filler rather than better names.
     cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
 
-    cy.findByRole('button', { name: 'Save entry' }).should('be.enabled').click()
+    cy.findByRole('button', { name: 'Save entry' }).click()
 
     // The composer empties only once the save has landed.
     cy.findByRole('textbox', { name: 'New entry' }).should('not.contain.text', 'We drove up')

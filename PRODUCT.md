@@ -62,9 +62,10 @@ either — they name what a related entry turned out to be, not a choice made be
   the body. **A title is optional** — much journal writing has no name worth giving, and a required
   field produces "Tuesday". Where only one line can be shown, an entry is named by its title, else
   its opening words. Related entries (§4.4) get the same optional field.
-- Two optional dates sit above the writing area: when the thing **happened**, and when it was
+- Two optional dates sit below the writing area: when the thing **happened**, and when it was
   **originally written** somewhere else. Each is a day plus a free line for the time ("morning",
-  "3:30 pm"), the way a paper journal says it. Related entries offer them too.
+  "3:30 pm"), the way a paper journal says it. Every place an entry is written offers them,
+  revising included.
 - The toolbar offers undo/redo, two heading levels, bold, italic, underline, strikethrough, bulleted
   and numbered lists, quotes, links, clear formatting, and adding an image. All of it works from the
   keyboard too, including markdown shortcuts such as `## ` and `- `.
@@ -73,8 +74,9 @@ either — they name what a related entry turned out to be, not a choice made be
 - **Everything typed is saved as a draft continuously**, within a fraction of a second.
 - Nothing appears on the timeline until **Save entry** is pressed. No autosave into history, no idle
   timeout.
-- After saving, the writing area is empty and ready for a new entry.
-- An empty entry cannot be saved.
+- After saving, the writing area is empty and ready for a new entry. **Discard** empties it too,
+  throwing the draft away.
+- An empty entry cannot be saved. Save stays pressable and says why, rather than greying out.
 
 ### 4.2 The timeline
 

@@ -20,8 +20,6 @@ session.begin({ kind: 'new_root' })
 const error = ref<string | null>(null)
 
 async function handleSave(): Promise<void> {
-  if (!session.canSave) return
-
   error.value = null
 
   try {

@@ -84,7 +84,7 @@ describe('NewConnectionView (browser)', () => {
     expect(connection?.target_id).toBe(destination.id)
   })
 
-  it('will not add a connection with no content', async () => {
+  it('says why a connection with no content can’t be added', async () => {
     const source = await repository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
@@ -94,8 +94,17 @@ describe('NewConnectionView (browser)', () => {
 
     const { screen } = await mountNewConnection(source.id)
     await screen.getByLabelText('Connect to').selectOptions(destination.id)
+    await screen.getByRole('button', { name: 'Add connection' }).click()
 
-    await expect.element(screen.getByRole('button', { name: 'Add connection' })).toBeDisabled()
+    await expect
+      .element(
+        screen.getByRole('alert').and(
+          screen.getByText('Nothing to save yet. Give it a title or write something first.', {
+            exact: true,
+          }),
+        ),
+      )
+      .toBeVisible()
   })
 
   it('keeps a half-written connection when the screen is left without discarding it', async () => {

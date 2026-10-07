@@ -75,7 +75,7 @@ describe('NewConnectionView', () => {
     })
   })
 
-  it('will not add a connection with no content', () => {
+  it('says why a connection with no content can’t be added', () => {
     cy.then(async () => ({
       source: await repository.create(createEntryInput({ content: textContent('Left my job') })),
       destination: await repository.create(
@@ -85,7 +85,12 @@ describe('NewConnectionView', () => {
       mountNewConnection(source.id)
 
       cy.findByLabelText('Connect to').select(destination.id)
-      cy.findByRole('button', { name: 'Add connection' }).should('be.disabled')
+      cy.findByRole('button', { name: 'Add connection' }).click()
+
+      cy.findByRole('alert').should(
+        'have.text',
+        'Nothing to save yet. Give it a title or write something first.',
+      )
     })
   })
 

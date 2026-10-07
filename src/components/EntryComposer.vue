@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import EntryDatesFields from '@/components/EntryDatesFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
@@ -24,9 +25,21 @@ const emit = defineEmits<{
   change: [change: EditorChange] // After the session has it, for an owner that reads more of it.
 }>()
 
+const saveNotice = ref<string | null>(null) // Why the last Save did nothing; gone on the next change.
+
 function handleChange(change: EditorChange): void {
+  saveNotice.value = null
   props.session.handleChange(change)
   emit('change', change)
+}
+
+/** Asks the same question the seal will, so the owner is never handed a save bound to fail. */
+function handleSave(): void {
+  if (!props.session.canSave) {
+    saveNotice.value = 'Nothing to save yet. Give it a title or write something first.'
+    return
+  }
+  emit('save')
 }
 </script>
 
@@ -42,6 +55,10 @@ function handleChange(change: EditorChange): void {
         :disabled="session.saving"
         @change="handleChange"
       />
+
+      <p v-if="saveNotice" class="mt-2 text-sm text-[var(--color-error)]" role="alert">
+        {{ saveNotice }}
+      </p>
 
       <p v-if="session.staleNotice" class="mt-2 text-sm text-[var(--color-error)]" role="status">
         {{ session.staleNotice }}
@@ -70,14 +87,14 @@ function handleChange(change: EditorChange): void {
         Discard
       </button>
       <!--
-        `canSave` rather than a check of its own: asking the same question the seal will ask keeps
-        the button from offering a save the store is bound to refuse.
+        Disabled only while saving. With nothing written it stays enabled and says why when
+        pressed: a disabled button explains nothing and can't be reached by Tab.
       -->
       <button
         type="button"
         class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="session.saving || !session.canSave"
-        @click="emit('save')"
+        :disabled="session.saving"
+        @click="handleSave"
       >
         {{ saveLabel }}
       </button>

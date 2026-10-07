@@ -3,7 +3,8 @@ import { computed, ref, shallowRef } from 'vue'
 import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
 import {
   collectMediaRefs,
-  isEmptyEntry,
+  isBlankDraft,
+  isEmptyDocument,
   sameContent,
   sameDocument,
   textContent,
@@ -179,6 +180,7 @@ export const useEntriesStore = defineStore('entries', () => {
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null = null,
   ): Promise<CreateEntryInput[]> {
+    requireContent(draft.entry.content)
     const fields = fieldsFromDraft(draft.entry)
 
     switch (draft.kind) {
@@ -241,7 +243,7 @@ export const useEntriesStore = defineStore('entries', () => {
     const anchored =
       draft.kind === 'new_related' &&
       anchorsPlacedSince(draft.parent.base_content, draft.parent.content).length > 0
-    if (isEmptyEntry(draft.entry.content, draft.entry.title)) return anchored
+    if (isBlankDraft(draft.entry.content, draft.entry.title)) return anchored
     if (draft.kind !== 'revision') return true
 
     const current = await getAggregatedEntry(draft.parent_id)
@@ -418,10 +420,11 @@ export const useEntriesStore = defineStore('entries', () => {
 
   /**
    * The version a draft seals into: the fields the writer set beside the document, and the media
-   * the document references. `requireContent` guards it, as it does every write.
+   * the document references. Unguarded, so `draftHoldsWork` can compare a revision whose body was
+   * emptied; sealing calls `requireContent` first.
    */
   function fieldsFromDraft(entry: DraftSnapshot['entry']): VersionedFields {
-    const content = requireContent(entry.content, entry.title)
+    const content = entry.content.trim()
 
     return versionedFieldsOf({
       ...entry,
@@ -437,15 +440,13 @@ export const useEntriesStore = defineStore('entries', () => {
   }
 
   /**
-   * The one thing that must be true of any document about to become an entry: it has to say
-   * something, in its body or its title. `title` is optional here because the store's simple
-   * non-session creation methods never offer one at all — an entry may be saved unnamed, and
-   * `entryLabel` names it by its opening words wherever one line is all there is room for.
+   * The one thing that must be true of any document about to become an entry: its body has to say
+   * something, in words or an image. A title doesn't count — it names an entry without being one.
    */
-  function requireContent(content: string, title: string | null = null): string {
+  function requireContent(content: string): string {
     error.value = null
     const trimmed = content.trim()
-    if (isEmptyEntry(trimmed, title)) {
+    if (isEmptyDocument(trimmed)) {
       throw new Error('Entry content cannot be empty')
     }
     return trimmed

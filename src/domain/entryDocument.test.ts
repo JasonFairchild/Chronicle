@@ -4,8 +4,8 @@ import {
   collectMediaRefs,
   contentDelta,
   docToPlainText,
+  isBlankDraft,
   isEmptyDocument,
-  isEmptyEntry,
   parseDocument,
   plainTextDocument,
   previewText,
@@ -132,13 +132,13 @@ describe('isEmptyDocument', () => {
   })
 })
 
-describe('isEmptyEntry', () => {
+describe('isBlankDraft', () => {
   it('is rescued from an empty document by a real title, but not by a blank one', () => {
     const blank = plainTextDocument('   \n  ')
 
-    expect(isEmptyEntry(blank, null)).toBe(true)
-    expect(isEmptyEntry(blank, '   ')).toBe(true)
-    expect(isEmptyEntry(blank, 'Just a title')).toBe(false)
+    expect(isBlankDraft(blank, null)).toBe(true)
+    expect(isBlankDraft(blank, '   ')).toBe(true)
+    expect(isBlankDraft(blank, 'Just a title')).toBe(false)
   })
 })
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import NewConnectionView from '@/views/NewConnectionView.vue'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
-import { textContent } from '@/domain/entryDocument'
+import { docToPlainText, textContent } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
@@ -44,6 +44,9 @@ describe('NewConnectionView (browser)', () => {
     await screen.getByLabelText('Connect to').selectOptions(destination.id)
     await screen.getByLabelText('Happened', { exact: true }).fill('2020-01-01')
     await screen.getByRole('textbox', { name: 'Title' }).fill('Led to it')
+    await screen
+      .getByRole('textbox', { name: 'New connection' })
+      .fill('The layoff made room for it.')
     await screen.getByRole('button', { name: 'Add connection' }).click()
 
     await vi.waitFor(() => {
@@ -52,6 +55,7 @@ describe('NewConnectionView (browser)', () => {
 
     const [connection] = await repository.listConnectionsFor(source.id)
     expect(connection?.title).toBe('Led to it')
+    expect(docToPlainText(connection!.content)).toBe('The layoff made room for it.')
     expect(connection?.dates.occurred_at).toBe('2020-01-01')
     expect(connection?.parent_id).toBe(source.id)
     expect(connection?.target_id).toBe(destination.id)
@@ -99,7 +103,7 @@ describe('NewConnectionView (browser)', () => {
     await expect
       .element(
         screen.getByRole('alert').and(
-          screen.getByText('Nothing to save yet. Give it a title or write something first.', {
+          screen.getByText('Write something in the entry first. A title alone can’t be saved.', {
             exact: true,
           }),
         ),

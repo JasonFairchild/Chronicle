@@ -147,7 +147,7 @@ describe('EntryForm (browser)', () => {
     expect(await draftRepository.list()).toEqual([])
   })
 
-  it('says why an empty entry can’t be saved', async () => {
+  it('says why an entry with nothing written can’t be saved, even with a title', async () => {
     const screen = renderComponent(EntryForm)
     const sealDraft = vi.spyOn(useDraftsStore(), 'sealDraft')
 
@@ -155,14 +155,16 @@ describe('EntryForm (browser)', () => {
     await expect
       .element(
         screen.getByRole('alert').and(
-          screen.getByText('Nothing to save yet. Give it a title or write something first.', {
+          screen.getByText('Write something in the entry first. A title alone can’t be saved.', {
             exact: true,
           }),
         ),
       )
       .toBeVisible()
 
-    // Any change answers it, even one that still leaves nothing worth keeping.
+    // Any change answers it, even one that still leaves nothing written: a title names an entry
+    // without being one, and spaces say nothing.
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await screen.getByRole('textbox', { name: 'New entry' }).fill('   ')
     await expect.element(screen.getByRole('alert')).not.toBeInTheDocument()
 

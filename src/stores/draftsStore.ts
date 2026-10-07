@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
-import { isEmptyEntry } from '@/domain/entryDocument'
+import { isBlankDraft, isEmptyDocument } from '@/domain/entryDocument'
 import { currentVersionId } from '@/domain/reconstructEntryState'
 import { TraceRecorder } from '@/domain/traceRecorder'
 import { draftRepository } from '@/repositories'
@@ -331,7 +331,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       if (active.get(sessionId) !== entry) return
       const draft = materialize(entry)
 
-      if (!claimsEntry(draft) && isEmptyEntry(draft.entry.content, draft.entry.title)) {
+      if (!claimsEntry(draft) && isBlankDraft(draft.entry.content, draft.entry.title)) {
         if (entry.persisted) {
           await draftRepository.delete(sessionId)
           entry.persisted = false
@@ -389,7 +389,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     // resolution could land after and resurrect a draft for content that is already an entry.
     await entry.flushing?.catch(() => {})
 
-    if (isEmptyEntry(entry.draft.entry.content, entry.draft.entry.title)) {
+    if (isEmptyDocument(entry.draft.entry.content)) {
       throw new Error('Entry content cannot be empty')
     }
 

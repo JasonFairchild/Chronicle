@@ -36,7 +36,7 @@ function handleChange(change: EditorChange): void {
 /** Asks the same question the seal will, so the owner is never handed a save bound to fail. */
 function handleSave(): void {
   if (!props.session.canSave) {
-    saveNotice.value = 'Nothing to save yet. Give it a title or write something first.'
+    saveNotice.value = 'Write something in the entry first. A title alone can’t be saved.'
     return
   }
   emit('save')

@@ -1,6 +1,6 @@
 import { computed, reactive, ref, watch } from 'vue'
 import type { EditorChange } from '@/components/DocumentEditor.vue'
-import { docToPlainText, isEmptyEntry } from '@/domain/entryDocument'
+import { docToPlainText, isEmptyDocument } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
 import { useDraftsStore, type DraftStart } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
@@ -67,8 +67,8 @@ export function useDraftSession() {
           'version. Copy what you need, then discard it.'
   })
 
-  /** The same condition `entriesStore.requireContent` enforces, asked before the button is offered. */
-  const canSave = computed(() => !isEmptyEntry(content.value, title.value))
+  /** The same condition `entriesStore.requireContent` enforces, asked before a save is attempted. */
+  const canSave = computed(() => !isEmptyDocument(content.value))
 
   /**
    * What an editor showing this session is keyed on. It changes when the draft is reloaded from

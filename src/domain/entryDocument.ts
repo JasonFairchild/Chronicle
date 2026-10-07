@@ -133,7 +133,10 @@ export function collectMediaRefs(content: string | EntryDocument): string[] {
   return [...refs]
 }
 
-/** True when there is nothing worth saving in the document itself: no body text and no media. */
+/**
+ * True when the document says nothing: no body text and no media. Such a document can't be saved
+ * as an entry, whatever title it carries — a title names an entry without being one.
+ */
 export function isEmptyDocument(content: string | EntryDocument): boolean {
   const doc = parseDocument(content)
 
@@ -141,11 +144,11 @@ export function isEmptyDocument(content: string | EntryDocument): boolean {
 }
 
 /**
- * True when there is nothing worth saving anywhere an entry keeps text — the document plus the
- * title beside it. `title` is trimmed the same way a stored one would be, so whitespace typed and
- * abandoned in the field doesn't count as a name any more than it would count as body text.
+ * True when a draft holds nothing worth keeping: an empty document and no title. Laxer than saving
+ * on purpose, so a title typed before anything else survives as a draft. `title` is trimmed the
+ * way a stored one would be: whitespace left in the field is no more a name than it is body text.
  */
-export function isEmptyEntry(content: string | EntryDocument, title: string | null): boolean {
+export function isBlankDraft(content: string | EntryDocument, title: string | null): boolean {
   return isEmptyDocument(content) && !title?.trim()
 }
 

@@ -76,7 +76,8 @@ either — they name what a related entry turned out to be, not a choice made be
   timeout.
 - After saving, the writing area is empty and ready for a new entry. **Discard** empties it too,
   throwing the draft away.
-- An empty entry cannot be saved. Save stays pressable and says why, rather than greying out.
+- An entry needs a body, words or an image; a title alone can't be saved. Save stays pressable and
+  says why, rather than greying out. A title typed on its own is still kept as a draft.
 
 ### 4.2 The timeline
 

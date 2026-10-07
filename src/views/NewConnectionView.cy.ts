@@ -1,5 +1,5 @@
 import NewConnectionView from '@/views/NewConnectionView.vue'
-import { textContent } from '@/domain/entryDocument'
+import { docToPlainText, textContent } from '@/domain/entryDocument'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
 import { useDraftsStore } from '@/stores/draftsStore'
@@ -33,6 +33,7 @@ describe('NewConnectionView', () => {
       cy.findByLabelText('Connect to').select(destination.id)
       cy.findByLabelText('Happened').type('2020-01-01')
       cy.findByRole('textbox', { name: 'Title' }).type('Led to it')
+      cy.findByRole('textbox', { name: 'New connection' }).type('The layoff made room for it.')
       cy.findByRole('button', { name: 'Add connection' }).click()
 
       // Not checking the resulting route here: `cy.mount`'s router runs on in-memory history,
@@ -43,6 +44,7 @@ describe('NewConnectionView', () => {
       cy.findByRole('textbox', { name: 'New connection' }).should('not.exist')
       cy.then(() => repository.listConnectionsFor(source.id)).then((connections) => {
         expect(connections[0]?.title).to.equal('Led to it')
+        expect(docToPlainText(connections[0]!.content)).to.equal('The layoff made room for it.')
         expect(connections[0]?.dates.occurred_at).to.equal('2020-01-01')
         expect(connections[0]?.parent_id).to.equal(source.id)
         expect(connections[0]?.target_id).to.equal(destination.id)
@@ -89,7 +91,7 @@ describe('NewConnectionView', () => {
 
       cy.findByRole('alert').should(
         'have.text',
-        'Nothing to save yet. Give it a title or write something first.',
+        'Write something in the entry first. A title alone can’t be saved.',
       )
     })
   })

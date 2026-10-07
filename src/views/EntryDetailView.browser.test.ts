@@ -299,7 +299,7 @@ describe('EntryDetailView (browser)', () => {
     await expect
       .element(
         screen.getByRole('alert').and(
-          screen.getByText('Nothing to save yet. Give it a title or write something first.', {
+          screen.getByText('Write something in the entry first. A title alone can’t be saved.', {
             exact: true,
           }),
         ),

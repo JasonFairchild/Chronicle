@@ -299,7 +299,7 @@ describe('EntryDetailView', () => {
       cy.findByRole('button', { name: 'Add entry' }).click()
       cy.findByRole('alert').should(
         'have.text',
-        'Nothing to save yet. Give it a title or write something first.',
+        'Write something in the entry first. A title alone can’t be saved.',
       )
       cy.findByRole('button', { name: 'Discard' }).click()
     })

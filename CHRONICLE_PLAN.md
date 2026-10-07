@@ -53,11 +53,6 @@ Further out, with no order yet: everything else in PRODUCT.md §5.
   `content`. A step that fails ends a mark set early, and a missed step can replay silently to the
   wrong document. A built set should compare its last document to `content` and record whether it
   is complete.
-- **A unified entry editor.** Every composer (a new entry, a revision, a related entry, a
-  connection) shows every versioned field a writer sets: title, dates and their notes, location,
-  original medium. Today each shows a different subset, and revising shows no dates. Drafts already
-  carry every field, so this is UI. A shared shell is the likely form; the
-  primary and secondary button classes already repeat across the composers.
 - **SQLite WASM + OPFS** is the preferred long-term backend, deferred until the Dexie path has been
   used in anger. The composition root (`src/repositories/index.ts`) makes it a one-line swap. It
   doesn't change durability: OPFS is the same site storage as IndexedDB, evicted and cleared by the

@@ -220,9 +220,7 @@ a view.
 
 ### 5.3 Known gaps
 
-- **Dates can't be corrected from the screen**, and nothing offers to fill in where an entry
-  happened or what it was first written in. The model already supports both as ordinary revisions.
-  The creation date stays untouchable.
+- None open.
 
 ### 5.4 Revising a related entry, and locking anchored text
 
@@ -262,6 +260,8 @@ text").
 
 ### 5.6 Timeline views
 
+- **What the timeline becomes:** visual rather than a list, likely horizontal, showing entries as
+  cards under the writer's own filters and search (§5.5). Today it's a plain list (§4.2).
 - Ordering by when entries were added or by when things happened.
 - Choosing what the timeline contains: titled related entries as cards of their own, and revisions
   as their own cards (how often was this reworked?) or hidden.
@@ -271,6 +271,14 @@ text").
 - A graph view: entries as nodes, connections as labeled arrows.
 - A connection that points at several entries, so "these three circle the same thing" is one record.
   Open: the shape for several targets, and whether the graph draws it as a node or a hyperedge.
+- Open: **lines drawn between any entries at any time**, with an explanation optional. An explained
+  line keeps being a full entry: it can be revised and have related entries.
+- Open: **related entries and connections overlap**, since both are an entry about other entries.
+  Either they become one kind of child entry, with a parent, optional anchors and optional targets
+  (a connection is one with targets, and a bare line is one with no content), or lines become bare
+  edges with an optional entry explaining them.
+- Open: **removing a line.** Today a connection can't be removed, and its ends can't be revised. A
+  withdrawn line should still show when the timeline is viewed as it stood before the withdrawal.
 
 ### 5.8 Getting things in and out
 
@@ -371,6 +379,7 @@ The anchor menu (§4.4) is contextual so these have somewhere to land:
 ### The app itself
 
 - Onboarding for a new, empty archive.
+- Choosing which page the app opens on, rather than always New entry (§4.1).
 - An honest account in the interface that nothing is ever deleted, so the promise is discoverable.
 
 ### Bigger, later, maybe

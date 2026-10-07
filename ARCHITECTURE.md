@@ -13,7 +13,8 @@ id, or a link to something planned, which has a dashed box.
 
 - **Write** — a session lives in `draftsStore` as a snapshot plus one `TraceRecorder` per
   document, flushed to two tables as it goes. Sealing turns it into entries in one transaction
-  that also deletes the draft. [AUTHORING.md](./AUTHORING.md), "Drafts".
+  that also deletes the draft, and the screen then opens the saved entry's page.
+  [AUTHORING.md](./AUTHORING.md), "Drafts".
 - **Stored** — `entries` is never rewritten; `drafts` and `draftEvents` are working space, and
   `markSets` a deletable cache. Media blobs sit in OPFS. Each repository has an in-memory twin for
   tests, held to the same `.contract.ts`. The panel dotted to `entries` is one entry's rows:
@@ -33,6 +34,7 @@ flowchart TB
   subgraph WRITE["WRITE · a session, until it's sealed"]
     direction LR
     DE["<b>DocumentEditor.vue</b><br/>TipTap · extensions.ts · anchorCommands.ts<br/>anchor-mode guard · affected-anchor tracking"]
+    EC["<b>EntryComposer.vue</b><br/>DocumentEditor · EntryDetailsFields<br/>Discard · Save, or why it can't"]
     SES["<b>useDraftSession</b><br/>one per composer on a screen below:<br/>begin · resume · save · discard<br/>stale / elsewhere notices"]
     TAB["<b>App.vue · useTabReturn</b>"]
     DS["<b>draftsStore</b><br/>ActiveSession = DraftSnapshot<br/>+ TraceRecorder · entry<br/>+ TraceRecorder · parent"]
@@ -69,9 +71,10 @@ flowchart TB
     MSS["<b>markSetsStore</b><br/>Default set built on first open"]
     SCRUB["<b>Scrubbable history view</b><br/>documentsFromFrames · planned"]
 
-    subgraph SCREENS["screens · each composer mounts DocumentEditor"]
+    subgraph SCREENS["screens · each composer is an EntryComposer"]
     direction LR
-      TL["<b>TimelineView</b><br/>EntryList · EntryCard · EntryForm"]
+      NEV["<b>NewEntryView</b><br/>where the app opens"]
+      TL["<b>TimelineView</b><br/>EntryList · EntryCard"]
       DV["<b>EntryDetailView</b><br/>revise · RelatedEntryComposer"]
       NCV["<b>NewConnectionView</b>"]
       DV2["<b>DraftsView</b><br/>resume any draft"]
@@ -79,7 +82,9 @@ flowchart TB
   end
 
   %% write path
-  DE ==>|"@change: EditorChange<br/>content · title · steps · signals"| SES
+  DE ==>|"@change: EditorChange<br/>content · title · steps · signals"| EC
+  EC ==>|"handleChange<br/>handleDetailsChange"| SES
+  DE -->|"anchor mode, the parent:<br/>handleParentChange"| SES
   SES ==>|"recordChange · recordParentChange<br/>recordDetails"| DS
   TAB -->|"tab hidden: flushAll<br/>tab back: adoptChangesElsewhere"| DS
   DS <-->|"save, throttled 300ms: upsert<br/>getById: resume · another tab's"| T_DRAFTS

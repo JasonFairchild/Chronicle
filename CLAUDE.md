@@ -46,6 +46,8 @@ run is two calls. Prefer Read, Grep and Glob to the shell — they never prompt.
 - No hard-coded colors that block dark mode.
 - **Semantics first.** Native elements before ARIA; reach for a role or `aria-*` only where no
   element does the job (the editor's `contenteditable` body is the standing example).
+- **Disable a control only while its action is in flight.** Otherwise leave it enabled and say why
+  it can't proceed.
 - Small, focused changes I can read and explain.
 - **Comments cite nothing that outlives the session** — no plan, chat, or "Piece N"; cite a
   checked-in doc or nothing. The non-obvious why, stated once, proportional to the code it sits

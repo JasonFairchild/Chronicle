@@ -8,8 +8,8 @@ Rules live in TESTING.md ("Layers" especially) and are linked here, not repeated
 
 Drafts first; lessons are then applied to later tests. In scope:
 
-- The draft-related tests in the `EntryForm`, `EntryDetailView`, `NewConnectionView` and
-  `DraftsView` specs, in both runners
+- The draft-related tests in the `NewEntryView` (once `EntryForm`), `EntryDetailView`,
+  `NewConnectionView` and `DraftsView` specs, in both runners
 - `src/stores/draftsStore.test.ts`, and the draft cases in `src/stores/entriesStore.test.ts`
 - `src/repositories/draftRepository.contract.ts` and `dexieDraftRepository.browser.test.ts`
 
@@ -41,21 +41,21 @@ check found is under the tables. "EDV" is `EntryDetailView`.
 
 | #   | Behavior                                                                     | Covered now                                                | Target      |
 | --- | ---------------------------------------------------------------------------- | ---------------------------------------------------------- | ----------- |
-| U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | EntryForm, both runners                                    | component ✓ |
-| U2  | A composer opened and left writes nothing                                    | EntryForm, both runners                                    | component ✓ |
-| U3  | Leaving mid-draft keeps it                                                   | EntryForm, EDV, NewConnectionView                          | component ✓ |
+| U1  | Typing is kept as a draft; nothing reaches the timeline until saved          | NewEntryView, both runners                                 | component ✓ |
+| U2  | A composer opened and left writes nothing                                    | NewEntryView, both runners                                 | component ✓ |
+| U3  | Leaving mid-draft keeps it                                                   | NewEntryView, EDV, NewConnectionView                       | component ✓ |
 | U4  | Drafts page: what each would become, when touched, preview, newest first     | DraftsView                                                 | component ✓ |
 | U5  | Resume where it left off: words, title, dates; anchor mode on both halves    | DraftsView; EDV resumes a revision's words                 | component ✓ |
 | U6  | Saving a resumed draft makes one entry and removes the draft                 | DraftsView                                                 | component ✓ |
 | U7  | Discard removes it — the only thing that does — for any listed draft         | DraftsView, EDV (revision), NewConnectionView              | component ✓ |
-| U8  | A draft emptied of its words disappears                                      | EntryForm                                                  | component ✓ |
+| U8  | A draft emptied of its words disappears                                      | NewEntryView                                               | component ✓ |
 | U9  | One draft per entry: **Resume draft** replaces Revise and Create related     | EDV, both runners                                          | component ✓ |
 | U10 | Leaving an untouched claim frees the entry                                   | EDV (entry change, page left), DraftsView; store (related) | component ✓ |
 | U11 | A stale version refuses the save, says why, and the draft stays              | DraftsView (a revision; not the anchor-mode wording)       | component ✓ |
 | U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView                                                 | component ✓ |
 | U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | App; EDV (the entry refresh); store (the drafts list)      | component ✓ |
 | U14 | Two tabs save at once: the first wins, the other shows its text to copy      | DraftsView                                                 | component ✓ |
-| U15 | After saving, the composer is empty; an empty entry can't be saved           | EntryForm and the other composers                          | component ✓ |
+| U15 | Saving lands on what was saved; an entry with no body can't be saved         | Each composer's view, mounted in App to land               | component ✓ |
 | U16 | A revision saves formatting alone; one that changes nothing is refused       | EDV                                                        | component ✓ |
 
 ### Durability the user can't see
@@ -328,14 +328,21 @@ During or after the review, move up the store cases a page can reach, each a new
 runners, red first, and then delete the unit case. That leaves the store with timing, fault
 injection, the trace, and a claim's multi-tab edges.
 
+The review pivoted at its first question. `EntryForm.cy.ts` read the repository for a saved title
+and body because nothing on its screen showed them, and the fix was in the source: one
+`EntryComposer` for every composer, a new-entry page in place of `EntryForm`, and every save landing
+on the saved entry's page, where the specs now assert it. The placement rules that came out of it
+are under the candidates in "Lessons log".
+
 - [ ] A related-entry claim taken and released: Create related entry, leave, and both ways in
       are offered again (EDV, as Revise's already is).
 - [ ] A resumed draft holding work survives the page being left (DraftsView, beside "lets go of an
       untouched claim when the page is left").
 - [ ] The drafts list refreshes on tab return, showing a claim another tab made (`App` at
       `/drafts`).
-- [ ] Typed dates reach the draft (a date in EntryForm's "keeps what was typed when the composer
-      is left without saving").
+- [x] ~~Typed dates reach the draft (a date in EntryForm's "keeps what was typed when the composer
+      is left without saving").~~ Superseded: NewEntryView's specs type every detail, kept as a
+      draft when the page is left and shown on the entry once saved.
 - [ ] A revision changed back to its version is released on leaving (EDV).
 
 ### Later — a real E2E layer
@@ -365,7 +372,7 @@ Decided:
   runners, and for absence as well as presence. No retrying-read helper unless a case comes up
   that isn't a let-go; one would be named for the repository, not the database.
 - **D5 — the sealed trace in component specs.** Assert only that one exists, through the
-  repository, as `EntryForm.cy.ts` does; its details stay in unit tests.
+  repository, as `NewEntryView.cy.ts` does; its details stay in unit tests.
 
 - **D1 — fixture shape.** `makeDraft(sessionId, { entry, kind, updatedAt })`: the id stays first,
   the rest named, so no call passes placeholders to reach a later argument. A

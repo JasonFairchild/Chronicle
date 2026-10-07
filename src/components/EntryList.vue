@@ -14,7 +14,7 @@ defineProps<{
       v-if="entries.length === 0"
       class="rounded-xl border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]"
     >
-      {{ emptyMessage ?? 'No entries yet. Create your first one above.' }}
+      {{ emptyMessage ?? 'No entries yet. Write one from New entry.' }}
     </p>
 
     <ul v-else class="space-y-3">

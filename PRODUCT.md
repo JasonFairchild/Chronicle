@@ -57,7 +57,7 @@ either — they name what a related entry turned out to be, not a choice made be
 
 ### 4.1 Writing a new entry
 
-- The timeline page has a writing area at the top, always ready. No "new entry" step first.
+- The app opens on the **New entry** page, ready to write. No "new entry" step first.
 - A title field sits above the toolbar: one line, plain text, no formatting. Enter or Tab moves into
   the body. **A title is optional** — much journal writing has no name worth giving, and a required
   field produces "Tuesday". Where only one line can be shown, an entry is named by its title, else
@@ -76,8 +76,8 @@ either — they name what a related entry turned out to be, not a choice made be
 - **Everything typed is saved as a draft continuously**, within a fraction of a second.
 - Nothing appears on the timeline until **Save entry** is pressed. No autosave into history, no idle
   timeout.
-- After saving, the writing area is empty and ready for a new entry. **Discard** empties it too,
-  throwing the draft away.
+- Saving opens the new entry's own page (§4.3). **Discard** empties the page instead, throwing the
+  draft away.
 - An entry needs a body, words or an image; a title alone can't be saved. Save stays pressable and
   says why, rather than greying out. A title typed on its own is still kept as a draft.
 
@@ -88,6 +88,7 @@ either — they name what a related entry turned out to be, not a choice made be
   originally written, if given, and how many times the entry has been revised, if it has been.
 - Clicking a card opens that entry.
 - Related entries, connections, and revisions are not separate cards; they belong to their entry.
+- It has no writing area; entries are written on the New entry page (§4.1).
 
 ### 4.3 Reading an entry
 
@@ -119,7 +120,8 @@ either — they name what a related entry turned out to be, not a choice made be
   above the line, a caret on the baseline) exists but is dormant (`ANCHOR_MARKUP_MODE`): long
   wording overlapped trailing text on a packed line.
 - Saving anchors the passages and the related entry together in one action. The entry gains the anchors and
-  nothing else; its previous version stays as it stood.
+  nothing else; its previous version stays as it stood. Saving opens the related entry's own page,
+  whose breadcrumb leads back.
 - Annotation or update follows from what was marked, never asked: striking or proposing wording is
   an **update**; highlighting only, or marking nothing, is an **annotation**.
 - Related entries can themselves be annotated, to any depth.
@@ -149,6 +151,7 @@ either — they name what a related entry turned out to be, not a choice made be
 
 - **Add connection** opens a full screen with the same tools as any entry (title, details, rich text)
   plus a choice of which entry it points to. A connection is an entry that also names a destination.
+  Saving opens the connection's own page.
 - It has no separate label for how two entries relate: its title is its name on both ends, and like
   any title it is optional — untitled, it's named by its opening words.
 - It is visible from both ends, marked outgoing or incoming, and can be annotated and revised like
@@ -165,8 +168,8 @@ either — they name what a related entry turned out to be, not a choice made be
 - Each draft says what it would become — a new entry, a related entry on a named entry, or a
   revision of a named entry — with when it was last touched and a preview. It never says annotation
   or update, since an unsaved draft hasn't settled that (§4.4).
-- A draft can be resumed where it left off, saved, or discarded. Drafts never appear on the
-  timeline.
+- A draft can be resumed where it left off, saved, or discarded. Saving opens the entry it became,
+  or for a revision, the entry it revised. Drafts never appear on the timeline.
 - **One outstanding draft per entry, so versions never branch.** Opening a revision or a related
   entry (whose anchors revise the parent) starts a draft on that entry at once, and until it's saved
   or discarded the entry offers **Resume draft** in place of Revise and Create related entry, in

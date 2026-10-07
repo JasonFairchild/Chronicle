@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import App from '@/App.vue'
 import NewConnectionView from '@/views/NewConnectionView.vue'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
-import { docToPlainText, textContent } from '@/domain/entryDocument'
+import { textContent } from '@/domain/entryDocument'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
@@ -21,6 +22,14 @@ async function mountNewConnection(id: string) {
   return { screen, router }
 }
 
+async function mountApp(path: string) {
+  const router = createTestRouter()
+  await router.push(path)
+  await router.isReady()
+
+  return renderComponent(App, { global: { plugins: [router] } })
+}
+
 describe('NewConnectionView (browser)', () => {
   let repository: EntryRepository
   let drafts: DraftRepository
@@ -30,7 +39,7 @@ describe('NewConnectionView (browser)', () => {
     drafts = freshDraftRepository()
   })
 
-  it('creates a connection with a title, dates, and rich content, then returns to the source entry', async () => {
+  it('creates a connection with a title, dates, and rich content, then lands on its own page', async () => {
     const source = await repository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
@@ -38,7 +47,7 @@ describe('NewConnectionView (browser)', () => {
       createEntryInput({ content: textContent('Started the degree') }),
     )
 
-    const { screen, router } = await mountNewConnection(source.id)
+    const screen = await mountApp(`/entries/${source.id}/connect`)
     await expect.element(screen.getByText(/New connection from/)).toBeVisible()
 
     await screen.getByLabelText('Connect to').selectOptions(destination.id)
@@ -49,16 +58,18 @@ describe('NewConnectionView (browser)', () => {
       .fill('The layoff made room for it.')
     await screen.getByRole('button', { name: 'Add connection' }).click()
 
-    await vi.waitFor(() => {
-      expect(router.currentRoute.value.name).toBe('entry-detail')
-    })
-
-    const [connection] = await repository.listConnectionsFor(source.id)
-    expect(connection?.title).toBe('Led to it')
-    expect(docToPlainText(connection!.content)).toBe('The layoff made room for it.')
-    expect(connection?.dates.occurred_at).toBe('2020-01-01')
-    expect(connection?.parent_id).toBe(source.id)
-    expect(connection?.target_id).toBe(destination.id)
+    await expect.element(screen.getByRole('heading', { name: 'Led to it' })).toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Entry content' }))
+      .toHaveTextContent('The layoff made room for it.')
+    await expect.element(screen.getByText(/Happened .*2020/)).toBeVisible()
+    await expect.element(screen.getByText('Connects', { exact: true })).toBeVisible()
+    await expect
+      .element(screen.getByRole('link', { name: 'Left my job' }))
+      .toHaveAttribute('href', `/entries/${source.id}`)
+    await expect
+      .element(screen.getByRole('link', { name: 'Started the degree' }))
+      .toHaveAttribute('href', `/entries/${destination.id}`)
   })
 
   it('adds an untitled connection', async () => {

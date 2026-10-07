@@ -62,12 +62,13 @@ function pickTarget(): void {
   session.begin({ kind: 'new_connection', parent_id: props.id, target_id: targetId.value })
 }
 
+/** Lands on the connection's own page, whose breadcrumb leads to both ends. */
 async function save(): Promise<void> {
   actionError.value = null
 
   try {
     const saved = await session.save()
-    if (saved) void router.push({ name: 'entry-detail', params: { id: props.id } })
+    if (saved) void router.push({ name: 'entry-detail', params: { id: saved.id } })
   } catch (err) {
     actionError.value = toErrorMessage(err, 'Failed to add connection')
   }

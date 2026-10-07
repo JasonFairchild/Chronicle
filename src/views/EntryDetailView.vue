@@ -352,12 +352,13 @@ async function startRelatedEntry(): Promise<void> {
   relatedSession.begin({ kind: 'new_related', parent: current })
 }
 
+/** Lands on the new related entry, whose breadcrumb leads back here. */
 async function saveRelatedEntry(): Promise<void> {
   actionError.value = null
 
   try {
     const saved = await relatedSession.save()
-    if (saved) await loadEntry(props.id)
+    if (saved) void router.push({ name: 'entry-detail', params: { id: saved.id } })
   } catch (err) {
     actionError.value = toErrorMessage(err, 'Failed to add entry')
   }
@@ -399,7 +400,10 @@ function describeAnchor(resolved: ResolvedAnchor): string {
 
 <template>
   <div class="space-y-6">
-    <RouterLink to="/" class="inline-flex text-sm text-[var(--color-accent)] hover:underline">
+    <RouterLink
+      to="/timeline"
+      class="inline-flex text-sm text-[var(--color-accent)] hover:underline"
+    >
       ← Back to timeline
     </RouterLink>
 

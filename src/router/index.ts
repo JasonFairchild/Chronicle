@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import NewEntryView from '@/views/NewEntryView.vue'
 import TimelineView from '@/views/TimelineView.vue'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 import NewConnectionView from '@/views/NewConnectionView.vue'
@@ -12,6 +13,16 @@ import DraftsView from '@/views/DraftsView.vue'
 export const routes: RouteRecordRaw[] = [
   {
     path: '/',
+    redirect: { name: 'new-entry' }, // Where the app opens.
+  },
+  {
+    // A static segment outranks `:id`, so this never reads as an entry called "new".
+    path: '/entries/new',
+    name: 'new-entry',
+    component: NewEntryView,
+  },
+  {
+    path: '/timeline',
     name: 'timeline',
     component: TimelineView,
   },

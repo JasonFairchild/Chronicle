@@ -13,7 +13,10 @@ const storage = useStoragePersistence()
       <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
         <RouterLink to="/" class="text-lg font-semibold tracking-tight"> Chronicle </RouterLink>
         <nav class="flex items-center gap-4 text-sm">
-          <RouterLink to="/" class="hover:text-[var(--color-accent)]">Timeline</RouterLink>
+          <RouterLink to="/entries/new" class="hover:text-[var(--color-accent)]">
+            New entry
+          </RouterLink>
+          <RouterLink to="/timeline" class="hover:text-[var(--color-accent)]">Timeline</RouterLink>
           <RouterLink to="/drafts" class="hover:text-[var(--color-accent)]">Drafts</RouterLink>
         </nav>
       </div>

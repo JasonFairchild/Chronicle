@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { createPinia, setActivePinia } from 'pinia'
+import App from '@/App.vue'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
@@ -32,6 +33,14 @@ async function mountDetail(id: string) {
     props: { id },
     global: { plugins: [router] },
   })
+}
+
+async function mountApp(path: string) {
+  const router = createTestRouter()
+  await router.push(path)
+  await router.isReady()
+
+  return renderComponent(App, { global: { plugins: [router] } })
 }
 
 describe('EntryDetailView (browser)', () => {
@@ -273,17 +282,23 @@ describe('EntryDetailView (browser)', () => {
       .toBeVisible()
   })
 
-  it('adds a related entry about the whole entry when the session marks nothing', async () => {
+  it('adds a related entry about the whole entry when nothing is marked, and lands on it', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 
-    const screen = await mountDetail(parent.id)
+    const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
 
     await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Still think about this trip')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
-    await expect.element(screen.getByText('Still think about this trip')).toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Entry content' }))
+      .toHaveTextContent('Still think about this trip')
+    await expect.element(screen.getByText('About', { exact: true })).toBeVisible()
+    await expect
+      .element(screen.getByRole('link', { name: PARENT_TEXT }))
+      .toHaveAttribute('href', `/entries/${parent.id}`)
 
     const children = await repository.listChildren(parent.id)
     expect(children[0]?.anchors).toEqual([])
@@ -482,7 +497,7 @@ describe('EntryDetailView (browser)', () => {
   it('anchors a strike to the passage the user selects, in one atomic seal', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 
-    const screen = await mountDetail(parent.id)
+    const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
 
     const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
@@ -502,6 +517,8 @@ describe('EntryDetailView (browser)', () => {
     await userEvent.keyboard('Wrong lake')
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
+    // Saving lands on the related entry; what it marked shows on the entry it's about.
+    await screen.getByRole('link', { name: PARENT_TEXT }).click()
     await expect
       .element(screen.getByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”'))
       .toBeVisible()
@@ -520,7 +537,7 @@ describe('EntryDetailView (browser)', () => {
   it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', async () => {
     const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
 
-    const screen = await mountDetail(parent.id)
+    const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
 
     const parentEditor = screen.getByRole('textbox', { name: 'Entry being annotated' })
@@ -536,6 +553,7 @@ describe('EntryDetailView (browser)', () => {
     await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Actually')
     await screen.getByRole('button', { name: 'Add entry' }).click()
+    await screen.getByRole('link', { name: PARENT_TEXT }).click()
 
     // A highlight is a mark on existing text, same as a strike, and wording rides along with it the
     // same way — so `relationTypeForAnchors` reads it as an `update`, and `describeAnchor`'s

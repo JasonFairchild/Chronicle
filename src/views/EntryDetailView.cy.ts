@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
+import App from '@/App.vue'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
@@ -273,16 +274,25 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('adds a related entry about the whole entry when the session marks nothing', () => {
+  it('adds a related entry about the whole entry when nothing is marked, and lands on it', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
-      mountDetail(parent.id)
+      cy.mount(App, { routePath: `/entries/${parent.id}` })
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
 
       cy.findByRole('textbox', { name: 'Related entry' }).type('Still think about this trip')
       cy.findByRole('button', { name: 'Add entry' }).click()
 
-      cy.findByText('Still think about this trip').should('be.visible')
+      cy.findByRole('textbox', { name: 'Entry content' }).should(
+        'contain.text',
+        'Still think about this trip',
+      )
+      cy.findByText('About').should('be.visible')
+      cy.findByRole('link', { name: PARENT_TEXT }).should(
+        'have.attr',
+        'href',
+        `/entries/${parent.id}`,
+      )
       cy.then(() => repository.listChildren(parent.id)).then((children) => {
         expect(children[0]?.anchors).to.deep.equal([])
         // Nothing was marked, so the note claims nothing changed about the entry.
@@ -477,7 +487,7 @@ describe('EntryDetailView', () => {
 
   it('anchors a strike to the passage the user selects, in one atomic seal', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
-      mountDetail(parent.id)
+      cy.mount(App, { routePath: `/entries/${parent.id}` })
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
 
@@ -491,6 +501,8 @@ describe('EntryDetailView', () => {
       cy.findByRole('textbox', { name: 'Related entry' }).type('Wrong lake')
       cy.findByRole('button', { name: 'Add entry' }).click()
 
+      // Saving lands on the related entry; what it marked shows on the entry it's about.
+      cy.findByRole('link', { name: PARENT_TEXT }).click()
       cy.findByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”').should('be.visible')
 
       cy.then(() => repository.listRevisions(parent.id)).then((revisions) => {
@@ -508,7 +520,7 @@ describe('EntryDetailView', () => {
 
   it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
-      mountDetail(parent.id)
+      cy.mount(App, { routePath: `/entries/${parent.id}` })
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
 
@@ -521,6 +533,7 @@ describe('EntryDetailView', () => {
 
       cy.findByRole('textbox', { name: 'Related entry' }).type('Actually')
       cy.findByRole('button', { name: 'Add entry' }).click()
+      cy.findByRole('link', { name: PARENT_TEXT }).click()
 
       // A highlight is a mark on existing text, same as a strike — wording rides along with it the
       // same way, which is what `describeAnchor`'s `comment` case needed its own branch for.

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import EntryForm from '@/components/EntryForm.vue'
 import EntryList from '@/components/EntryList.vue'
 import { useEntriesStore } from '@/stores/entriesStore'
 
+/** A plain list for now; what the timeline is meant to become is PRODUCT.md §5.6. */
 const store = useEntriesStore()
 
 onMounted(() => {
@@ -19,7 +19,6 @@ onMounted(() => {
         Root entries appear here, newest first. Each record is immutable: edits append a new version
         and notes become related entries.
       </p>
-      <EntryForm />
     </section>
 
     <section>

@@ -1,11 +1,12 @@
-import EntryForm from '@/components/EntryForm.vue'
+import App from '@/App.vue'
+import NewEntryView from '@/views/NewEntryView.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import type { EntryRepository } from '@/repositories/entryRepository'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
-describe('EntryForm', () => {
+describe('NewEntryView', () => {
   let entries: EntryRepository
 
   beforeEach(() => {
@@ -13,12 +14,18 @@ describe('EntryForm', () => {
     freshDraftRepository()
   })
 
-  it('holds a session as a draft and commits one entry only when it is saved', () => {
-    cy.mount(EntryForm)
+  it('holds what is written as a draft until it is saved, then lands on the entry, details and all', () => {
+    cy.mount(App, { routePath: '/entries/new' })
     cy.spy(draftRepository, 'save').as('saveDraft')
 
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
     cy.focused().type('We drove up on Friday.')
+    cy.findByLabelText('Happened').type('1994-06-11')
+    cy.findByLabelText('Time it happened').type('late morning')
+    cy.findByLabelText('Where').type('home')
+    cy.findByLabelText('Originally written').type('1994-06-12')
+    cy.findByLabelText('Written in').type('paper journal')
+    cy.findByLabelText('More about what it was written in').type('blue Moleskine')
 
     // Still a draft: nothing a person has not finished belongs in the timeline.
     cy.get('@saveDraft')
@@ -30,59 +37,44 @@ describe('EntryForm', () => {
 
     cy.findByRole('button', { name: 'Save entry' }).click()
 
-    // The composer empties only once the save has landed.
-    cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
+    cy.findByRole('heading', { name: 'Lake Tahoe' }).should('be.visible')
+    cy.findByRole('textbox', { name: 'Entry content' }).should(
+      'contain.text',
+      'We drove up on Friday.',
+    )
+    cy.findByText(/Happened .*1994 · late morning/).should('be.visible')
+    cy.findByText('Where: home').should('be.visible')
+    // Not asked for, so not invented.
+    cy.findByText(/^Originally written .*1994$/).should('be.visible')
+    cy.findByText('Written in paper journal · blue Moleskine').should('be.visible')
     cy.then(async () => {
       const [saved] = await entries.listRootEntries()
-      expect(saved?.title).to.equal('Lake Tahoe')
-      expect(docToPlainText(saved!.content)).to.equal('We drove up on Friday.')
       expect(saved?.authoring_trace?.events.length).to.be.greaterThan(0)
       // The buffer is working space, so sealing discards it rather than leaving a duplicate.
       expect(await draftRepository.list()).to.have.length(0)
     })
   })
 
-  it('saves every detail with the entry', () => {
-    cy.mount(EntryForm)
+  it('saves an entry that was never given a title', () => {
+    cy.mount(App, { routePath: '/entries/new' })
 
-    cy.findByLabelText('Happened').type('1994-06-11')
-    cy.findByLabelText('Time it happened').type('late morning')
-    cy.findByLabelText('Where').type('home')
-    cy.findByLabelText('Originally written').type('1994-06-12')
-    cy.findByLabelText('Written in').type('paper journal')
-    cy.findByLabelText('More about what it was written in').type('blue Moleskine')
-    cy.findByRole('textbox', { name: 'Title' }).type('The green notebook')
-    cy.findByRole('textbox', { name: 'New entry' }).type('From the green notebook')
+    // The title field is offered and skipped. A daily journal is mostly entries nobody would name,
+    // and a required title there produces filler rather than better names.
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
-    // The composer empties only once the save has landed.
-    cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
+    cy.findByRole('textbox', { name: 'Entry content' }).should(
+      'contain.text',
+      'We drove up on Friday.',
+    )
     cy.then(async () => {
       const [saved] = await entries.listRootEntries()
-      expect(saved?.dates.occurred_at).to.equal('1994-06-11')
-      expect(saved?.dates.occurred_time_note).to.equal('late morning')
-      expect(saved?.location).to.equal('home')
-      expect(saved?.dates.recorded_at).to.equal('1994-06-12')
-      // Not asked for, so not invented.
-      expect(saved?.dates.recorded_time_note).to.equal(null)
-      expect(saved?.original_medium).to.equal('paper journal')
-      expect(saved?.original_medium_note).to.equal('blue Moleskine')
+      expect(saved?.title).to.equal(null)
     })
   })
 
-  it('starts a fresh empty session after a save rather than reopening the last one', () => {
-    cy.mount(EntryForm)
-
-    cy.findByRole('textbox', { name: 'Title' }).type('The first one')
-    cy.findByRole('textbox', { name: 'New entry' }).type('First entry')
-    cy.findByRole('button', { name: 'Save entry' }).click()
-
-    cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
-    cy.findByText('First entry').should('not.exist')
-  })
-
   it('throws a draft away on Discard and starts over empty', () => {
-    cy.mount(EntryForm)
+    cy.mount(NewEntryView, { routePath: '/entries/new' })
     cy.spy(draftRepository, 'save').as('saveDraft')
 
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
@@ -107,8 +99,8 @@ describe('EntryForm', () => {
     })
   })
 
-  it('leaves no draft behind for a composer that was only opened', () => {
-    cy.mount(EntryForm).then(async ({ wrapper }) => {
+  it('leaves no draft behind for a page that was only opened', () => {
+    cy.mount(NewEntryView, { routePath: '/entries/new' }).then(async ({ wrapper }) => {
       const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
       wrapper.unmount()
 
@@ -119,8 +111,8 @@ describe('EntryForm', () => {
     })
   })
 
-  it('keeps what was typed, details and all, when the composer is left without saving', () => {
-    cy.mount(EntryForm).then(({ wrapper }) => {
+  it('keeps what was typed, details and all, when the page is left without saving', () => {
+    cy.mount(NewEntryView, { routePath: '/entries/new' }).then(({ wrapper }) => {
       cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
       cy.focused().type('We drove up on Friday.')
       cy.findByLabelText('Happened').type('1994-06-11')
@@ -155,7 +147,7 @@ describe('EntryForm', () => {
   })
 
   it('drops a draft whose words are all deleted', () => {
-    cy.mount(EntryForm).then(({ wrapper }) => {
+    cy.mount(NewEntryView, { routePath: '/entries/new' }).then(({ wrapper }) => {
       cy.spy(draftRepository, 'save').as('saveDraft')
       cy.findByRole('textbox', { name: 'New entry' }).type('Lake Tahoe')
       // On disk with its words first, so there is a row for deleting them to remove.
@@ -176,7 +168,7 @@ describe('EntryForm', () => {
   })
 
   it('says why an entry with nothing written can’t be saved, even with a title', () => {
-    cy.mount(EntryForm)
+    cy.mount(NewEntryView, { routePath: '/entries/new' })
     cy.then(() => {
       cy.spy(useDraftsStore(), 'sealDraft').as('sealDraft')
     })
@@ -196,23 +188,5 @@ describe('EntryForm', () => {
     cy.findByRole('button', { name: 'Save entry' }).click()
     cy.findByRole('alert').should('be.visible')
     cy.get('@sealDraft').should('not.have.been.called')
-  })
-
-  it('saves an entry that was never given a title', () => {
-    cy.mount(EntryForm)
-
-    // The title field is offered and skipped. A daily journal is mostly entries nobody would name,
-    // and a required title there produces filler rather than better names.
-    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
-
-    cy.findByRole('button', { name: 'Save entry' }).click()
-
-    // The composer empties only once the save has landed.
-    cy.findByRole('textbox', { name: 'New entry' }).should('not.contain.text', 'We drove up')
-    cy.then(async () => {
-      const [saved] = await entries.listRootEntries()
-      expect(saved?.title).to.equal(null)
-      expect(docToPlainText(saved!.content)).to.equal('We drove up on Friday.')
-    })
   })
 })

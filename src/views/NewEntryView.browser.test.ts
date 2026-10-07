@@ -1,14 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
-import EntryForm from '@/components/EntryForm.vue'
+import App from '@/App.vue'
+import NewEntryView from '@/views/NewEntryView.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import type { EntryRepository } from '@/repositories/entryRepository'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
+import { createTestRouter } from '@/testing/testRouter'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
-describe('EntryForm (browser)', () => {
+/** Mounts `component` behind a real router already at the new-entry page. */
+async function mountAt(component: typeof App | typeof NewEntryView) {
+  const router = createTestRouter()
+  await router.push('/entries/new')
+  await router.isReady()
+
+  return renderComponent(component, { global: { plugins: [router] } })
+}
+
+describe('NewEntryView (browser)', () => {
   let entries: EntryRepository
 
   beforeEach(() => {
@@ -16,11 +27,18 @@ describe('EntryForm (browser)', () => {
     freshDraftRepository()
   })
 
-  it('holds a session as a draft and commits one entry only when it is saved', async () => {
-    const screen = renderComponent(EntryForm)
+  it('holds what is written as a draft until it is saved, then lands on the entry, details and all', async () => {
+    const screen = await mountAt(App)
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await userEvent.keyboard('{Enter}We drove up on Friday.')
+    // Exact, or a label would also match the note beside it ("Time it happened").
+    await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
+    await screen.getByLabelText('Time it happened').fill('late morning')
+    await screen.getByLabelText('Where', { exact: true }).fill('home')
+    await screen.getByLabelText('Originally written', { exact: true }).fill('1994-06-12')
+    await screen.getByLabelText('Written in', { exact: true }).fill('paper journal')
+    await screen.getByLabelText('More about what it was written in').fill('blue Moleskine')
 
     // Still a draft: nothing a person has not finished belongs in the timeline.
     await vi.waitFor(async () => {
@@ -30,66 +48,41 @@ describe('EntryForm (browser)', () => {
 
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
-    await vi.waitFor(async () => {
-      expect(await entries.listRootEntries()).toHaveLength(1)
-    })
+    await expect.element(screen.getByRole('heading', { name: 'Lake Tahoe' })).toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Entry content' }))
+      .toHaveTextContent('We drove up on Friday.')
+    await expect.element(screen.getByText(/Happened .*1994 · late morning/)).toBeVisible()
+    await expect.element(screen.getByText('Where: home', { exact: true })).toBeVisible()
+    // Not asked for, so not invented.
+    await expect.element(screen.getByText(/^Originally written .*1994$/)).toBeVisible()
+    await expect
+      .element(screen.getByText('Written in paper journal · blue Moleskine', { exact: true }))
+      .toBeVisible()
 
     const [saved] = await entries.listRootEntries()
-    expect(saved?.title).toBe('Lake Tahoe')
-    expect(docToPlainText(saved!.content)).toBe('We drove up on Friday.')
     expect(saved?.authoring_trace?.events.length).toBeGreaterThan(0)
     // The buffer is working space, so sealing discards it rather than leaving a duplicate behind.
     expect(await draftRepository.list()).toEqual([])
   })
 
-  it('saves every detail with the entry', async () => {
-    const screen = renderComponent(EntryForm)
+  it('saves an entry that was never given a title', async () => {
+    const screen = await mountAt(App)
 
-    // Exact, or a label would also match the note beside it ("Time it happened").
-    await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
-    await screen.getByLabelText('Time it happened').fill('late morning')
-    await screen.getByLabelText('Where', { exact: true }).fill('home')
-    await screen.getByLabelText('Originally written', { exact: true }).fill('1994-06-12')
-    await screen.getByLabelText('Written in', { exact: true }).fill('paper journal')
-    await screen.getByLabelText('More about what it was written in').fill('blue Moleskine')
-    await screen.getByRole('textbox', { name: 'Title' }).fill('The green notebook')
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('From the green notebook')
+    // The title field is offered and skipped. A daily journal is mostly entries nobody would name,
+    // and a required title there produces filler rather than better names.
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
-    await vi.waitFor(async () => {
-      expect(await entries.listRootEntries()).toHaveLength(1)
-    })
-
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Entry content' }))
+      .toHaveTextContent('We drove up on Friday.')
     const [saved] = await entries.listRootEntries()
-    expect(saved?.dates.occurred_at).toBe('1994-06-11')
-    expect(saved?.dates.occurred_time_note).toBe('late morning')
-    expect(saved?.location).toBe('home')
-    expect(saved?.dates.recorded_at).toBe('1994-06-12')
-    // Not asked for, so not invented.
-    expect(saved?.dates.recorded_time_note).toBeNull()
-    expect(saved?.original_medium).toBe('paper journal')
-    expect(saved?.original_medium_note).toBe('blue Moleskine')
-  })
-
-  it('starts a fresh empty session after a save rather than reopening the last one', async () => {
-    const screen = renderComponent(EntryForm)
-
-    await screen.getByRole('textbox', { name: 'Title' }).fill('The first one')
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('First entry')
-    await screen.getByRole('button', { name: 'Save entry' }).click()
-
-    await vi.waitFor(async () => {
-      expect(await entries.listRootEntries()).toHaveLength(1)
-    })
-
-    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('')
-    await vi.waitFor(() => {
-      expect(screen.getByText('First entry').query()).toBeNull()
-    })
+    expect(saved?.title).toBeNull()
   })
 
   it('throws a draft away on Discard and starts over empty', async () => {
-    const screen = renderComponent(EntryForm)
+    const screen = await mountAt(NewEntryView)
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await userEvent.keyboard('{Enter}We drove up on Friday.')
@@ -108,8 +101,8 @@ describe('EntryForm (browser)', () => {
     expect(await draftRepository.list()).toEqual([])
   })
 
-  it('leaves no draft behind for a composer that was only opened', async () => {
-    const screen = renderComponent(EntryForm)
+  it('leaves no draft behind for a page that was only opened', async () => {
+    const screen = await mountAt(NewEntryView)
     const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
     screen.unmount()
 
@@ -119,8 +112,8 @@ describe('EntryForm (browser)', () => {
     expect(await draftRepository.list()).toEqual([])
   })
 
-  it('keeps what was typed, details and all, when the composer is left without saving', async () => {
-    const screen = renderComponent(EntryForm)
+  it('keeps what was typed, details and all, when the page is left without saving', async () => {
+    const screen = await mountAt(NewEntryView)
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await userEvent.keyboard('{Enter}We drove up on Friday.')
     await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
@@ -152,7 +145,7 @@ describe('EntryForm (browser)', () => {
   })
 
   it('drops a draft whose words are all deleted', async () => {
-    const screen = renderComponent(EntryForm)
+    const screen = await mountAt(NewEntryView)
     await screen.getByRole('textbox', { name: 'New entry' }).fill('Lake Tahoe')
     // On disk with its words first, so there is a row for deleting them to remove.
     await vi.waitFor(async () => {
@@ -170,7 +163,7 @@ describe('EntryForm (browser)', () => {
   })
 
   it('says why an entry with nothing written can’t be saved, even with a title', async () => {
-    const screen = renderComponent(EntryForm)
+    const screen = await mountAt(NewEntryView)
     const sealDraft = vi.spyOn(useDraftsStore(), 'sealDraft')
 
     await screen.getByRole('button', { name: 'Save entry' }).click()
@@ -193,21 +186,5 @@ describe('EntryForm (browser)', () => {
     await screen.getByRole('button', { name: 'Save entry' }).click()
     await expect.element(screen.getByRole('alert')).toBeVisible()
     expect(sealDraft).not.toHaveBeenCalled()
-  })
-
-  it('saves an entry that was never given a title', async () => {
-    const screen = renderComponent(EntryForm)
-
-    // The title field is offered and skipped. A daily journal is mostly entries nobody would name,
-    // and a required title there produces filler rather than better names.
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
-
-    await screen.getByRole('button', { name: 'Save entry' }).click()
-
-    await vi.waitFor(async () => {
-      const [saved] = await entries.listRootEntries()
-      expect(saved?.title).toBeNull()
-      expect(docToPlainText(saved!.content)).toBe('We drove up on Friday.')
-    })
   })
 })

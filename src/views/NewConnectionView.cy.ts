@@ -1,5 +1,6 @@
+import App from '@/App.vue'
 import NewConnectionView from '@/views/NewConnectionView.vue'
-import { docToPlainText, textContent } from '@/domain/entryDocument'
+import { textContent } from '@/domain/entryDocument'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
 import { useDraftsStore } from '@/stores/draftsStore'
@@ -19,14 +20,14 @@ describe('NewConnectionView', () => {
     drafts = freshDraftRepository()
   })
 
-  it('creates a connection with a title, dates, and rich content, then returns to the source entry', () => {
+  it('creates a connection with a title, dates, and rich content, then lands on its own page', () => {
     cy.then(async () => ({
       source: await repository.create(createEntryInput({ content: textContent('Left my job') })),
       destination: await repository.create(
         createEntryInput({ content: textContent('Started the degree') }),
       ),
     })).then(({ source, destination }) => {
-      mountNewConnection(source.id)
+      cy.mount(App, { routePath: `/entries/${source.id}/connect` })
 
       cy.findByText(/New connection from/).should('be.visible')
 
@@ -36,19 +37,23 @@ describe('NewConnectionView', () => {
       cy.findByRole('textbox', { name: 'New connection' }).type('The layoff made room for it.')
       cy.findByRole('button', { name: 'Add connection' }).click()
 
-      // Not checking the resulting route here: `cy.mount`'s router runs on in-memory history,
-      // which never touches the real address bar `cy.location()` reads — see
-      // EntryDetailView.cy.ts for the same limitation. The Vitest browser spec checks the
-      // post-save route directly against the router instance it built itself. The composer
-      // closes only once the save has landed.
-      cy.findByRole('textbox', { name: 'New connection' }).should('not.exist')
-      cy.then(() => repository.listConnectionsFor(source.id)).then((connections) => {
-        expect(connections[0]?.title).to.equal('Led to it')
-        expect(docToPlainText(connections[0]!.content)).to.equal('The layoff made room for it.')
-        expect(connections[0]?.dates.occurred_at).to.equal('2020-01-01')
-        expect(connections[0]?.parent_id).to.equal(source.id)
-        expect(connections[0]?.target_id).to.equal(destination.id)
-      })
+      cy.findByRole('heading', { name: 'Led to it' }).should('be.visible')
+      cy.findByRole('textbox', { name: 'Entry content' }).should(
+        'contain.text',
+        'The layoff made room for it.',
+      )
+      cy.findByText(/Happened .*2020/).should('be.visible')
+      cy.findByText('Connects').should('be.visible')
+      cy.findByRole('link', { name: 'Left my job' }).should(
+        'have.attr',
+        'href',
+        `/entries/${source.id}`,
+      )
+      cy.findByRole('link', { name: 'Started the degree' }).should(
+        'have.attr',
+        'href',
+        `/entries/${destination.id}`,
+      )
     })
   })
 

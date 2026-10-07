@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
+import App from '@/App.vue'
 import DraftsView from '@/views/DraftsView.vue'
-import { docToPlainText, textContent } from '@/domain/entryDocument'
+import { textContent } from '@/domain/entryDocument'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
 import { useDraftsStore } from '@/stores/draftsStore'
@@ -21,7 +22,7 @@ describe('DraftsView', () => {
     entries = freshEntryRepository()
   })
 
-  it('resumes a draft with its words, title and dates, and finishes it as one entry', () => {
+  it('resumes a draft with its words, title and dates, and lands on the entry it becomes', () => {
     cy.then(() =>
       seedDraft(
         drafts,
@@ -35,7 +36,7 @@ describe('DraftsView', () => {
         }),
       ),
     )
-    cy.mount(DraftsView)
+    cy.mount(App, { routePath: '/drafts' })
 
     cy.findByText('Half a thought').should('be.visible')
     cy.findByRole('button', { name: 'Resume' }).click()
@@ -43,17 +44,47 @@ describe('DraftsView', () => {
     cy.findByRole('textbox', { name: 'Draft' }).type('{ctrl+end}, finished at last.')
     cy.findByRole('button', { name: 'Save as entry' }).click()
 
-    cy.findByText('No drafts in progress.').should('be.visible')
-
+    cy.findByRole('heading', { name: 'Lake Tahoe' }).should('be.visible')
+    cy.findByRole('textbox', { name: 'Entry content' }).should(
+      'contain.text',
+      'Half a thought, finished at last.',
+    )
+    cy.findByText(/Happened .*1994/).should('be.visible')
     cy.then(async () => {
-      const roots = await entries.listRootEntries()
-      expect(roots).to.have.length(1)
-      expect(roots[0]?.title).to.equal('Lake Tahoe')
-      expect(roots[0]?.dates.occurred_at).to.equal('1994-06-11')
-      expect(docToPlainText(roots[0]!.content)).to.equal('Half a thought, finished at last.')
       // Sealing discards the buffer, so the same words cannot exist twice.
       expect(await drafts.list()).to.have.length(0)
     })
+  })
+
+  it('saves a revision from its draft and lands on the entry it revised', () => {
+    cy.then(async () => {
+      const parent = await entries.create(
+        createEntryInput({ content: textContent('The first go') }),
+      )
+      await seedDraft(
+        drafts,
+        makeDraft('session-1', {
+          entry: {
+            base_version_id: parent.id,
+            base_content: parent.content,
+            content: textContent('The first go, reworded'),
+            events: TYPED,
+          },
+          kind: { kind: 'revision', parent_id: parent.id },
+        }),
+      )
+    })
+    cy.mount(App, { routePath: '/drafts' })
+
+    cy.findByRole('button', { name: 'Resume' }).click()
+    cy.findByRole('button', { name: 'Save as entry' }).click()
+
+    // A revision is a version of the entry, not a page of its own.
+    cy.findByText('Version 2 of 2').should('be.visible')
+    cy.findByRole('textbox', { name: 'Entry content' }).should(
+      'contain.text',
+      'The first go, reworded',
+    )
   })
 
   it('lists drafts newest first, each with what it would become, when, and how it begins', () => {
@@ -102,7 +133,7 @@ describe('DraftsView', () => {
         }),
       )
     })
-    cy.mount(DraftsView)
+    cy.mount(DraftsView, { routePath: '/drafts' })
 
     const rows = [
       ['New entry', '2026-09-05T10:04:00.000Z', 'A thought of its own'],
@@ -149,7 +180,7 @@ describe('DraftsView', () => {
         }),
       )
     })
-    cy.mount(DraftsView)
+    cy.mount(App, { routePath: '/drafts' })
 
     cy.findByRole('button', { name: 'Resume' }).click()
 
@@ -161,9 +192,9 @@ describe('DraftsView', () => {
 
     cy.findByRole('button', { name: 'Add entry' }).click()
 
-    // The list empties only once the save has landed. The anchor placed before the reload is
-    // still the one the sealed related entry refers to.
-    cy.findByText('No drafts in progress.').should('be.visible')
+    // Lands on the related entry once the save has landed. The anchor placed before the reload is
+    // still the one it refers to.
+    cy.findByRole('link', { name: 'I went to Lake Tahoe with Dad' }).should('be.visible')
     cy.then(() => entries.listChildren(parentId)).then((children) => {
       expect(children).to.have.length(1)
       expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')
@@ -178,7 +209,7 @@ describe('DraftsView', () => {
         makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
       ),
     )
-    cy.mount(DraftsView)
+    cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByText('Never mind').should('be.visible')
     cy.findByRole('button', { name: 'Discard' }).click()
@@ -206,7 +237,7 @@ describe('DraftsView', () => {
         }),
       )
     })
-    cy.mount(DraftsView)
+    cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findAllByRole('listitem').eq(0).findByRole('button', { name: 'Resume' }).click()
     cy.findByText('Never mind').should('be.visible')
@@ -249,7 +280,7 @@ describe('DraftsView', () => {
         }),
       )
     })
-    cy.mount(DraftsView)
+    cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByRole('button', { name: 'Resume' }).click()
     cy.findByRole('button', { name: 'Save as entry' }).click()
@@ -283,7 +314,7 @@ describe('DraftsView', () => {
         }),
       )
     })
-    cy.mount(DraftsView).then(({ wrapper }) => {
+    cy.mount(DraftsView, { routePath: '/drafts' }).then(({ wrapper }) => {
       cy.findByRole('button', { name: 'Resume' }).click()
       cy.findByRole('textbox', { name: 'Draft' }).should('be.visible')
 
@@ -294,7 +325,7 @@ describe('DraftsView', () => {
         await abandonDraft.firstCall.returnValue
       })
     })
-    cy.mount(DraftsView)
+    cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByText('No drafts in progress.').should('be.visible')
   })
@@ -308,7 +339,7 @@ describe('DraftsView', () => {
         }),
       ),
     )
-    cy.mount(DraftsView)
+    cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByRole('button', { name: 'Resume' }).click()
     cy.findByRole('textbox', { name: 'Draft' }).should('be.visible')
@@ -351,7 +382,7 @@ describe('DraftsView', () => {
         started_at: 'not a timestamp',
       }),
     )
-    cy.mount(DraftsView)
+    cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByRole('button', { name: 'Resume' }).click()
     cy.findByRole('alert').should(
@@ -366,7 +397,7 @@ describe('DraftsView', () => {
   })
 
   it('says so plainly when there is nothing in progress', () => {
-    cy.mount(DraftsView)
+    cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByText('No drafts in progress.').should('be.visible')
   })

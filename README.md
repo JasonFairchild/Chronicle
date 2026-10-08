@@ -4,25 +4,13 @@ Local-first Progressive Web App for personal life mapping and journaling. Every 
 
 ## Architecture
 
-[ARCHITECTURE.md](./ARCHITECTURE.md) is the whole app on one page: each layer, and how data moves
-between them.
+[ARCHITECTURE.md](./ARCHITECTURE.md) is the whole app on one page: each layer, and how data moves between them.
 
-Storage sits behind four repository interfaces — entries, drafts, mark sets, media — and a single
-composition root (`src/repositories/index.ts`) decides which adapter implements each. Nothing in the
-stores, views, or domain layer names a concrete adapter, so changing a backend is a one-line change.
-Each interface has an in-memory adapter for tests and a persistent one for the app (Dexie, or OPFS
-for media), and both run the same behavioral suite from its `.contract.ts`, which is what makes that
-swap trustworthy rather than merely claimed.
+Storage sits behind four repository interfaces — entries, drafts, mark sets, media — and a single composition root (`src/repositories/index.ts`) decides which adapter implements each. Nothing in the stores, views, or domain layer names a concrete adapter, so changing a backend is a one-line change. Each interface has an in-memory adapter for tests and a persistent one for the app (Dexie, or OPFS for media), and both run the same behavioral suite from its `.contract.ts`, which is what makes that swap trustworthy rather than merely claimed.
 
-Nothing is stored in the form it's viewed in. Entries are append-only, and `reconstructEntryState`
-folds an entry's revisions into its state now or at any earlier moment, alongside the entries
-related to it. A writing session is recorded as ProseMirror steps — an event log that replays to
-the saved content exactly — and the points worth stopping at in its history are derived from that
-log under a tunable policy, cached as deletable mark sets rather than stored with it. The domain
-layer reads documents as plain JSON, so this logic is pure and testable in node.
+Nothing is stored in the form it's viewed in. Entries are append-only, and `reconstructEntryState` folds an entry's revisions into its state now or at any earlier moment, alongside the entries related to it. A writing session is recorded as ProseMirror steps — an event log that replays to the saved content exactly — and the points worth stopping at in its history are derived from that log under a tunable policy, cached as deletable mark sets rather than stored with it. The domain layer reads documents as plain JSON, so this logic is pure and testable in node.
 
-[ENTRY_MODEL.md](./ENTRY_MODEL.md) covers the data model and the reasoning behind it;
-[AUTHORING.md](./AUTHORING.md) covers how writing is captured, drafted, and read back.
+[ENTRY_MODEL.md](./ENTRY_MODEL.md) covers the data model and the reasoning behind it; [AUTHORING.md](./AUTHORING.md) covers how writing is captured, drafted, and read back.
 
 ## Tech stack
 
@@ -36,14 +24,9 @@ layer reads documents as plain JSON, so this logic is pure and testable in node.
 
 ## Testing
 
-Tests are written from the user's perspective: component specs simulate real interaction and assert
-what a user can see. They run real stores over real repositories on an isolated database, so each is
-a narrow end-to-end test from the click down to what's stored. Unit tests cover only what the UI
-can't reach — many-case pure logic, timing and races, fault injection — and each repository's
-contract suite holds every adapter to the same behavior.
+Tests are written from the user's perspective: component specs simulate real interaction and assert what a user can see. They run real stores over real repositories on an isolated database, so each is a narrow end-to-end test from the click down to what's stored. Unit tests cover only what the UI can't reach — many-case pure logic, timing and races, fault injection — and each repository's contract suite holds every adapter to the same behavior.
 
-Component specs run in both Vitest Browser Mode and Cypress, deliberately duplicated to compare the
-two runners on the same cases.
+Component specs run in both Vitest Browser Mode and Cypress, deliberately duplicated to compare the two runners on the same cases.
 
 [TESTING.md](./TESTING.md) has the full guidelines.
 
@@ -80,14 +63,8 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ## Git hooks
 
-[Lefthook](https://lefthook.dev) is installed via the `prepare` script. On **pre-commit** it
-auto-formats staged files with Prettier (and re-stages them), lint-checks and type-checks, and
-runs the unit tests, and aborts the commit on any failure. ESLint runs **check-only** here — fix
-findings with `npm run lint:fix` and review the changes yourself. On **pre-push** it runs the Vitest
-browser tests and then Cypress.
-Skip with `LEFTHOOK=0 git commit …` when needed.
+[Lefthook](https://lefthook.dev) is installed via the `prepare` script. On **pre-commit** it auto-formats staged files with Prettier (and re-stages them), lint-checks and type-checks, and runs the unit tests, and aborts the commit on any failure. ESLint runs **check-only** here — fix findings with `npm run lint:fix` and review the changes yourself. On **pre-push** it runs the Vitest browser tests and then Cypress. Skip with `LEFTHOOK=0 git commit …` when needed.
 
 ## Roadmap
 
-See [PRODUCT.md](./PRODUCT.md) for how the app behaves and what's decided next, and
-[CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for priorities.
+See [PRODUCT.md](./PRODUCT.md) for how the app behaves and what's decided next, and [CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for priorities.

@@ -1,38 +1,51 @@
 # Chronicle
 
-Local-first Progressive Web App for personal life mapping and journaling. Every record is an immutable **Entry**; updates, annotations, and connections are modeled as related entries rather than in-place edits.
+Local-first Progressive Web App for personal life mapping and journaling. Every record is an immutable **Entry**; revisions, updates, annotations, and connections are modeled as related entries rather than in-place edits.
 
 ## Architecture
 
-```
-Views / Components → Pinia store → EntryRepository (interface)
-                                          ↑
-                            src/repositories/index.ts  ← the only file naming a concrete adapter
-                                          ↓
-                      DexieEntryRepository (active) | InMemoryEntryRepository (tests)
-                                          ↳ SQLite WASM + OPFS (planned)
-```
+[ARCHITECTURE.md](./ARCHITECTURE.md) is the whole app on one page: each layer, and how data moves
+between them.
 
-Storage sits behind one interface, and a single composition root decides which adapter implements
-it. Nothing in the store, views, or domain layer names a concrete adapter, so changing backends is
-a one-line change. Both adapters run the same behavioral suite from `entryRepository.contract.ts`,
-which is what makes that swap trustworthy rather than merely claimed.
+Storage sits behind four repository interfaces — entries, drafts, mark sets, media — and a single
+composition root (`src/repositories/index.ts`) decides which adapter implements each. Nothing in the
+stores, views, or domain layer names a concrete adapter, so changing a backend is a one-line change.
+Each interface has an in-memory adapter for tests and a persistent one for the app (Dexie, or OPFS
+for media), and both run the same behavioral suite from its `.contract.ts`, which is what makes that
+swap trustworthy rather than merely claimed.
 
-Core domain logic lives in `reconstructEntryState`, which folds an entry's version chain to get its
-state at any moment and returns its related entries and connections as separate collections rather
-than splicing them into the text. Anchor resolution is a second pure module: it locates a related
-entry's references as marks and nodes inside the parent's current document, reading it as `present` or
-`orphaned` rather than vanishing when an edit removes one.
+Nothing is stored in the form it's viewed in. Entries are append-only, and `reconstructEntryState`
+folds an entry's revisions into its state now or at any earlier moment, alongside the entries
+related to it. A writing session is recorded as ProseMirror steps — an event log that replays to
+the saved content exactly — and the points worth stopping at in its history are derived from that
+log under a tunable policy, cached as deletable mark sets rather than stored with it. The domain
+layer reads documents as plain JSON, so this logic is pure and testable in node.
 
-See [ENTRY_MODEL.md](./ENTRY_MODEL.md) for the data model and the reasoning behind it.
+[ENTRY_MODEL.md](./ENTRY_MODEL.md) covers the data model and the reasoning behind it;
+[AUTHORING.md](./AUTHORING.md) covers how writing is captured, drafted, and read back.
 
 ## Tech stack
 
 - Vue 3 + TypeScript + Vite
+- TipTap 3 on ProseMirror (the editor; its steps are the authoring trace)
 - Tailwind CSS (class-based dark mode ready via CSS variables)
 - Pinia + Vue Router
+- Dexie over IndexedDB, and OPFS for media (SQLite WASM + OPFS planned)
 - vite-plugin-pwa (offline shell)
-- Vitest (unit + browser mode) and Cypress component testing
+- Vitest (unit + Browser Mode on Playwright) and Cypress component testing (with Testing Library)
+
+## Testing
+
+Tests are written from the user's perspective: component specs simulate real interaction and assert
+what a user can see. They run real stores over real repositories on an isolated database, so each is
+a narrow end-to-end test from the click down to what's stored. Unit tests cover only what the UI
+can't reach — many-case pure logic, timing and races, fault injection — and each repository's
+contract suite holds every adapter to the same behavior.
+
+Component specs run in both Vitest Browser Mode and Cypress, deliberately duplicated to compare the
+two runners on the same cases.
+
+[TESTING.md](./TESTING.md) has the full guidelines.
 
 ## Getting started
 
@@ -76,7 +89,5 @@ Skip with `LEFTHOOK=0 git commit …` when needed.
 
 ## Roadmap
 
-See [PRODUCT.md](./PRODUCT.md) for how the app behaves and what's decided next,
-[CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for priorities, [ENTRY_MODEL.md](./ENTRY_MODEL.md) for the
-entry model, [AUTHORING.md](./AUTHORING.md) for how writing sessions are captured, and
-[TESTING.md](./TESTING.md) for how tests are written.
+See [PRODUCT.md](./PRODUCT.md) for how the app behaves and what's decided next, and
+[CHRONICLE_PLAN.md](./CHRONICLE_PLAN.md) for priorities.

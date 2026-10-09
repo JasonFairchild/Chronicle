@@ -7,7 +7,7 @@ description: Writing, changing, or reviewing any test in Chronicle — unit, Vit
 
 TESTING.md is the authority; this is the order of work. Read TESTING.md's headings, then the sections your change touches.
 
-1. **Pick the layer.** A component spec, unless TESTING.md "Layers" lists the reason for a unit test. Check what already covers the behavior at the other layer before adding overlap.
+1. **Pick the layer.** Checking what was stored, or reaching another screen, makes it a flow spec; otherwise a component spec, unless TESTING.md "Layers" lists the reason for a unit test. Check what already covers the behavior at the other layers before adding overlap.
 2. **See every new test fail before it passes.** Write it before the fix or feature; for code that already exists, break the code under test, run, and restore. It must fail on its assertion, for the reason the test names — not on setup, a wrong query, or a timeout.
 3. **Write both runners.** A `.browser.test.ts` gets a `.cy.ts` mirror with the same cases, unless TESTING.md names a real obstacle.
 4. **Check every absence waits on a baseline** (TESTING.md, Don'ts).

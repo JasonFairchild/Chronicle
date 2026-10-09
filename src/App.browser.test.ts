@@ -1,13 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import type { DraftRepository } from '@/repositories/draftRepository'
+import { draftRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -39,20 +38,13 @@ function setVisibility(state: DocumentVisibilityState): void {
 }
 
 describe('App (browser)', () => {
-  let drafts: DraftRepository
-
-  beforeEach(() => {
-    freshEntryRepository()
-    drafts = freshDraftRepository()
-  })
-
   afterEach(() => {
     Reflect.deleteProperty(document, 'visibilityState')
   })
 
   it('shows what another tab wrote to the open draft once this tab is returned to', async () => {
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
     const screen = await mountApp('/drafts')
@@ -78,7 +70,7 @@ describe('App (browser)', () => {
 
   it('shows what another tab wrote to the open draft once this tab is shown again', async () => {
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
     const screen = await mountApp('/drafts')
@@ -105,7 +97,7 @@ describe('App (browser)', () => {
 
   it('closes the open draft and says so once another tab has saved it', async () => {
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
     const screen = await mountApp('/drafts')
@@ -134,7 +126,7 @@ describe('App (browser)', () => {
 
     expect(flushAll).toHaveBeenCalledOnce()
     await flushAll.mock.results[0]!.value
-    const [draft] = await drafts.list()
+    const [draft] = await draftRepository.list()
     expect(docToPlainText(draft!.entry.content)).toBe('We drove up on Friday.')
   })
 
@@ -149,7 +141,7 @@ describe('App (browser)', () => {
 
     expect(flushAll).toHaveBeenCalledOnce()
     await flushAll.mock.results[0]!.value
-    const [draft] = await drafts.list()
+    const [draft] = await draftRepository.list()
     expect(docToPlainText(draft!.entry.content)).toBe('We drove up on Friday.')
   })
 })

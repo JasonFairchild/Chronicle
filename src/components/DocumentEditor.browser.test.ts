@@ -15,7 +15,6 @@ import {
 } from '@/domain/entryDocument'
 import { mediaRepository } from '@/repositories'
 import { renderComponent } from '@/testing/renderComponent'
-import { freshMediaRepository } from '@/testing/realRepositories'
 import { selectTextRange } from '@/testing/selectTextRange'
 
 function pngFile(): File {
@@ -27,7 +26,6 @@ describe('DocumentEditor (browser)', () => {
 
   beforeEach(() => {
     changes = []
-    freshMediaRepository()
   })
 
   function mountEditor(props: Record<string, unknown> = {}) {

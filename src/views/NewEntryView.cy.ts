@@ -1,19 +1,10 @@
 import App from '@/App.vue'
 import NewEntryView from '@/views/NewEntryView.vue'
 import { docToPlainText } from '@/domain/entryDocument'
-import { draftRepository } from '@/repositories'
-import type { EntryRepository } from '@/repositories/entryRepository'
+import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
 describe('NewEntryView', () => {
-  let entries: EntryRepository
-
-  beforeEach(() => {
-    entries = freshEntryRepository()
-    freshDraftRepository()
-  })
-
   it('holds what is written as a draft until it is saved, then lands on the entry, details and all', () => {
     cy.mount(App, { routePath: '/entries/new' })
     cy.spy(draftRepository, 'save').as('saveDraft')
@@ -32,7 +23,7 @@ describe('NewEntryView', () => {
       .should('have.been.called')
       .then((saveDraft) => saveDraft.firstCall.returnValue)
     cy.then(async () => {
-      expect(await entries.listRootEntries()).to.have.length(0)
+      expect(await entryRepository.listRootEntries()).to.have.length(0)
     })
 
     cy.findByRole('button', { name: 'Save entry' }).click()
@@ -45,7 +36,7 @@ describe('NewEntryView', () => {
     cy.findByText(/^Originally written .*1994$/).should('be.visible')
     cy.findByText('Written in paper journal · blue Moleskine').should('be.visible')
     cy.then(async () => {
-      const [saved] = await entries.listRootEntries()
+      const [saved] = await entryRepository.listRootEntries()
       expect(saved?.authoring_trace?.events.length).to.be.greaterThan(0)
       // The buffer is working space, so sealing discards it rather than leaving a duplicate.
       expect(await draftRepository.list()).to.have.length(0)
@@ -62,7 +53,7 @@ describe('NewEntryView', () => {
 
     cy.findByRole('article').should('contain.text', 'We drove up on Friday.')
     cy.then(async () => {
-      const [saved] = await entries.listRootEntries()
+      const [saved] = await entryRepository.listRootEntries()
       expect(saved?.title).to.equal(null)
     })
   })

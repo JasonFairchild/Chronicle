@@ -1,22 +1,28 @@
-import { setDraftRepository, setEntryRepository, setMediaRepository } from '@/repositories'
+import {
+  setDraftRepository,
+  setEntryRepository,
+  setMarkSetRepository,
+  setMediaRepository,
+} from '@/repositories'
 import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
 import { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
+import { DexieMarkSetRepository } from '@/repositories/dexieMarkSetRepository'
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { EntryRepository } from '@/repositories/entryRepository'
+import type { MarkSetRepository } from '@/repositories/markSetRepository'
 import type { MediaRepository } from '@/repositories/mediaRepository'
 import { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
 
 /**
- * Real, isolated storage for a component/view test — a fresh Dexie database or OPFS directory per
- * call, pointed at by the composition root, exactly like production. Isolation comes from a unique
- * name per call, the same approach `dexieEntryRepository.browser.test.ts` and its siblings already
- * use to prove the adapters themselves. Call only the repositories a given spec actually needs —
- * this does not decide that for you.
+ * Real, isolated storage for a test — a fresh Dexie database or OPFS directory per call, pointed at
+ * by the composition root, exactly like production. Isolation comes from a unique name per call,
+ * the same approach `dexieEntryRepository.browser.test.ts` and its siblings already use to prove
+ * the adapters themselves.
  *
- * Cleanup is global rather than per-file: `cypress/support/component.ts` and
- * `src/testing/browserSetup.ts` each call `disposeTestRepositories()` in one `afterEach`, so specs
- * that never call any `freshXRepository()` pay nothing and need no cleanup of their own.
+ * Setup and cleanup are global: `cypress/support/component.ts` and `src/testing/browserSetup.ts`
+ * each call `freshRepositories()` in a `beforeEach` and `disposeTestRepositories()` in an
+ * `afterEach`, so specs reach storage through `@/repositories` and never set it up themselves.
  */
 
 let counter = 0
@@ -62,11 +68,25 @@ export function freshDraftRepository(): DraftRepository {
   return repository
 }
 
+export function freshMarkSetRepository(): MarkSetRepository {
+  const repository = new DexieMarkSetRepository(sharedDatabase())
+  setMarkSetRepository(repository)
+  return repository
+}
+
 export function freshMediaRepository(): MediaRepository {
   const repository = new OpfsMediaRepository(uniqueName('media'))
   setMediaRepository(repository)
   disposers.push(() => repository.dispose())
   return repository
+}
+
+/** Points every repository at fresh storage. Constructing opens nothing; first use does. */
+export function freshRepositories(): void {
+  freshEntryRepository()
+  freshDraftRepository()
+  freshMarkSetRepository()
+  freshMediaRepository()
 }
 
 /** Test-only: disposes everything created since the last call. Safe to call even if nothing was. */

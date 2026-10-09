@@ -1,6 +1,5 @@
 import { effectScope } from 'vue'
 import { useMedia } from '@/composables/useMedia'
-import { freshMediaRepository } from '@/testing/realRepositories'
 
 /**
  * The Cypress half of the duplicated pair, mirroring `useMedia.browser.test.ts`. Nothing is mounted:
@@ -14,7 +13,6 @@ describe('useMedia', () => {
   let media: ReturnType<typeof useMedia>
 
   beforeEach(() => {
-    freshMediaRepository()
     scope = effectScope()
     media = scope.run(() => useMedia())!
   })

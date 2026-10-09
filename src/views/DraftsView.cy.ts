@@ -2,10 +2,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import DraftsView from '@/views/DraftsView.vue'
 import { textContent } from '@/domain/entryDocument'
-import type { DraftRepository } from '@/repositories/draftRepository'
-import type { EntryRepository } from '@/repositories/entryRepository'
+import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput, emptyEntryDates } from '@/types/entry'
@@ -14,18 +12,10 @@ import { formatDate } from '@/utils/format'
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('DraftsView', () => {
-  let drafts: DraftRepository
-  let entries: EntryRepository
-
-  beforeEach(() => {
-    drafts = freshDraftRepository()
-    entries = freshEntryRepository()
-  })
-
   it('resumes a draft with its words, title and dates, and lands on the entry it becomes', () => {
     cy.then(() =>
       seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: {
             content: textContent('Half a thought'),
@@ -49,17 +39,17 @@ describe('DraftsView', () => {
     cy.findByText(/Happened .*1994/).should('be.visible')
     cy.then(async () => {
       // Sealing discards the buffer, so the same words cannot exist twice.
-      expect(await drafts.list()).to.have.length(0)
+      expect(await draftRepository.list()).to.have.length(0)
     })
   })
 
   it('saves a revision from its draft and lands on the entry it revised', () => {
     cy.then(async () => {
-      const parent = await entries.create(
+      const parent = await entryRepository.create(
         createEntryInput({ content: textContent('The first go') }),
       )
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: {
             base_version_id: parent.id,
@@ -83,15 +73,15 @@ describe('DraftsView', () => {
 
   it('lists drafts newest first, each with what it would become, when, and how it begins', () => {
     cy.then(async () => {
-      const parent = await entries.create(
+      const parent = await entryRepository.create(
         createEntryInput({ content: textContent('The meeting went badly') }),
       )
-      const other = await entries.create(
+      const other = await entryRepository.create(
         createEntryInput({ content: textContent('Started the degree') }),
       )
       // Seeded out of order, so the order shown is the list's own.
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('related', {
           entry: { content: textContent('It was salvaged later'), events: TYPED },
           kind: relatedTo(parent),
@@ -99,14 +89,14 @@ describe('DraftsView', () => {
         }),
       )
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('root', {
           entry: { content: textContent('A thought of its own'), events: TYPED },
           updatedAt: '2026-09-05T10:04:00.000Z',
         }),
       )
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('connection', {
           entry: { content: textContent('One led to the other'), events: TYPED },
           kind: { kind: 'new_connection', parent_id: parent.id, target_id: other.id },
@@ -114,7 +104,7 @@ describe('DraftsView', () => {
         }),
       )
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('revision', {
           entry: {
             base_version_id: parent.id,
@@ -158,12 +148,12 @@ describe('DraftsView', () => {
     let parentId = ''
 
     cy.then(async () => {
-      const parent = await entries.create(
+      const parent = await entryRepository.create(
         createEntryInput({ content: textContent('I went to Lake Tahoe with Dad') }),
       )
       parentId = parent.id
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: { content: textContent('Wrong lake'), events: TYPED },
           // The parent as this session found it, against which "anchor-1 is ours" still reads
@@ -189,7 +179,7 @@ describe('DraftsView', () => {
     // Lands on the related entry once the save has landed. The anchor placed before the reload is
     // still the one it refers to.
     cy.findByRole('link', { name: 'I went to Lake Tahoe with Dad' }).should('be.visible')
-    cy.then(() => entries.listChildren(parentId)).then((children) => {
+    cy.then(() => entryRepository.listChildren(parentId)).then((children) => {
       expect(children).to.have.length(1)
       expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')
       expect(children[0]?.relation_type).to.equal('update')
@@ -199,7 +189,7 @@ describe('DraftsView', () => {
   it('discards a draft on request, the one thing that removes work', () => {
     cy.then(() =>
       seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
       ),
     )
@@ -210,21 +200,21 @@ describe('DraftsView', () => {
 
     cy.findByText('No drafts in progress.').should('be.visible')
     cy.then(async () => {
-      expect(await entries.listRootEntries()).to.have.length(0)
+      expect(await entryRepository.listRootEntries()).to.have.length(0)
     })
   })
 
   it('discards a listed draft while another is open, leaving the open one as it was', () => {
     cy.then(async () => {
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('open', {
           entry: { content: textContent('Keep writing this'), events: TYPED },
           updatedAt: '2026-09-05T10:02:00.000Z',
         }),
       )
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('listed', {
           entry: { content: textContent('Never mind'), events: TYPED },
           updatedAt: '2026-09-05T10:01:00.000Z',
@@ -247,12 +237,12 @@ describe('DraftsView', () => {
     let parentId = ''
 
     cy.then(async () => {
-      const parent = await entries.create(
+      const parent = await entryRepository.create(
         createEntryInput({ content: textContent('The first go') }),
       )
       parentId = parent.id
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: {
             base_version_id: parent.id,
@@ -264,7 +254,7 @@ describe('DraftsView', () => {
         }),
       )
       // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
-      await entries.create(
+      await entryRepository.create(
         createEntryInput({
           content: textContent('The second go'),
           parent_id: parent.id,
@@ -285,19 +275,19 @@ describe('DraftsView', () => {
         'version. Copy what you need, then discard it.',
     )
     cy.then(async () => {
-      expect(await entries.listRevisions(parentId)).to.have.length(1)
-      expect(await drafts.list()).to.have.length(1)
+      expect(await entryRepository.listRevisions(parentId)).to.have.length(1)
+      expect(await draftRepository.list()).to.have.length(1)
     })
   })
 
   it('lets go of an untouched claim when the page is left', () => {
     cy.then(async () => {
-      const parent = await entries.create(
+      const parent = await entryRepository.create(
         createEntryInput({ content: textContent('The first go') }),
       )
       // A revision nobody has typed in yet: its words are still the entry's own.
       await seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: {
             base_version_id: parent.id,
@@ -327,7 +317,7 @@ describe('DraftsView', () => {
   it('keeps the version another tab saved first, and shows what this one had to copy', () => {
     cy.then(() =>
       seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
@@ -369,7 +359,7 @@ describe('DraftsView', () => {
       'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
       'home, and why none of it went the way we planned.'
     cy.then(() =>
-      seedDraft(drafts, {
+      seedDraft(draftRepository, {
         ...makeDraft('session-1', {
           entry: { content: textContent(text), title: 'Lake Tahoe', events: TYPED },
         }),

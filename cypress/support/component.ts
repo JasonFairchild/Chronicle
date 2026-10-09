@@ -8,7 +8,7 @@ import { type CyMountOptions, mount } from 'cypress/vue'
 import { createPinia } from 'pinia'
 import '@testing-library/cypress/add-commands'
 import '@/assets/main.css'
-import { disposeTestRepositories } from '@/testing/realRepositories'
+import { disposeTestRepositories, freshRepositories } from '@/testing/realRepositories'
 import { createTestRouter } from '@/testing/testRouter'
 
 type MountOptions = CyMountOptions<unknown> & {
@@ -19,9 +19,7 @@ type MountOptions = CyMountOptions<unknown> & {
 /**
  * The one way component specs mount something: always a fresh Pinia (every store-backed spec
  * needs it; it's an inert no-op for the ones that don't), and — only when `routePath` is given — a
- * real router on the app's real route table. Repositories are a separate, opt-in concern: call
- * `freshEntryRepository()` / `freshDraftRepository()` / `freshMediaRepository()` from
- * `@/testing/realRepositories` in a spec's own `beforeEach` for whichever it needs.
+ * real router on the app's real route table. Storage is set up by the hooks below, not here.
  */
 function mountWithRealStack(
   // `cypress/vue`'s `mount` is a large overload set keyed on the component's exact shape, with no
@@ -46,8 +44,12 @@ function mountWithRealStack(
 
 Cypress.Commands.add('mount', mountWithRealStack)
 
-// Real storage needs real cleanup. Global rather than per-file so a spec that never creates one
-// pays nothing — see `src/testing/realRepositories.ts`.
+// Fresh real storage for every test, so none can fall through to the app's own database — see
+// `src/testing/realRepositories.ts`.
+beforeEach(() => {
+  freshRepositories()
+})
+
 afterEach(async () => {
   await disposeTestRepositories()
 })

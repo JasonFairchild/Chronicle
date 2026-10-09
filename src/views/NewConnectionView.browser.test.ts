@@ -1,13 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import App from '@/App.vue'
 import NewConnectionView from '@/views/NewConnectionView.vue'
-import type { DraftRepository } from '@/repositories/draftRepository'
-import type { EntryRepository } from '@/repositories/entryRepository'
 import { textContent } from '@/domain/entryDocument'
+import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { createEntryInput } from '@/types/entry'
 
 async function mountNewConnection(id: string) {
@@ -31,19 +29,11 @@ async function mountApp(path: string) {
 }
 
 describe('NewConnectionView (browser)', () => {
-  let repository: EntryRepository
-  let drafts: DraftRepository
-
-  beforeEach(() => {
-    repository = freshEntryRepository()
-    drafts = freshDraftRepository()
-  })
-
   it('creates a connection with a title, dates, and rich content, then lands on its own page', async () => {
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
-    const destination = await repository.create(
+    const destination = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
 
@@ -73,10 +63,10 @@ describe('NewConnectionView (browser)', () => {
   })
 
   it('adds an untitled connection', async () => {
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
-    const destination = await repository.create(
+    const destination = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
 
@@ -94,16 +84,16 @@ describe('NewConnectionView (browser)', () => {
       expect(router.currentRoute.value.name).toBe('entry-detail')
     })
 
-    const [connection] = await repository.listConnectionsFor(source.id)
+    const [connection] = await entryRepository.listConnectionsFor(source.id)
     expect(connection?.title).toBeNull()
     expect(connection?.target_id).toBe(destination.id)
   })
 
   it('says why a connection with no content can’t be added', async () => {
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
-    const destination = await repository.create(
+    const destination = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
 
@@ -123,10 +113,10 @@ describe('NewConnectionView (browser)', () => {
   })
 
   it('keeps a half-written connection when the screen is left without discarding it', async () => {
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
-    const destination = await repository.create(
+    const destination = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
 
@@ -141,7 +131,7 @@ describe('NewConnectionView (browser)', () => {
     // `reset()` abandons the session fire-and-forget; this resolves once its flush lands.
     expect(abandonDraft).toHaveBeenCalledOnce()
     await abandonDraft.mock.results[0]!.value
-    const [draft] = await drafts.list()
+    const [draft] = await draftRepository.list()
     expect(draft).toMatchObject({
       kind: 'new_connection',
       parent_id: source.id,
@@ -150,10 +140,10 @@ describe('NewConnectionView (browser)', () => {
   })
 
   it('discards a half-written connection on request', async () => {
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
-    const destination = await repository.create(
+    const destination = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
 
@@ -162,7 +152,7 @@ describe('NewConnectionView (browser)', () => {
     await screen.getByRole('textbox', { name: 'New connection' }).fill('These rhyme, somehow')
     // A connection claims nothing, so only typing puts a row on disk for Discard to remove.
     await vi.waitFor(async () => {
-      expect(await drafts.list()).toHaveLength(1)
+      expect(await draftRepository.list()).toHaveLength(1)
     })
 
     const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
@@ -171,11 +161,11 @@ describe('NewConnectionView (browser)', () => {
     // Resolves once the delete has landed.
     expect(discardDraft).toHaveBeenCalledOnce()
     await discardDraft.mock.results[0]!.value
-    expect(await drafts.list()).toEqual([])
+    expect(await draftRepository.list()).toEqual([])
   })
 
   it('says there is nothing to connect to rather than showing an empty picker', async () => {
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
 

@@ -10,7 +10,6 @@ import {
   serializeDocument,
 } from '@/domain/entryDocument'
 import { documentsAt } from '@/editor/replay'
-import { freshMediaRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 
@@ -29,10 +28,6 @@ function replayAll(base: string, stub: unknown) {
 }
 
 describe('DocumentEditor', () => {
-  beforeEach(() => {
-    freshMediaRepository()
-  })
-
   it('reports the document it holds along with the steps that produced it', () => {
     const onChange = cy.stub().as('change')
 

@@ -12,7 +12,7 @@ Drafts first; lessons are then applied to later tests. In scope:
 
 ## Current state
 
-- **Component specs are already narrow end-to-end tests.** `src/testing/realRepositories.ts` points the composition root at a real Dexie database, unique per test and shared by entries and drafts as in production. Nothing below the component is mocked. What they lack: the app shell (`App.vue`, which owns flush-on-leave and the drafts' tab-return check), real reloads, a second tab.
+- **Component specs are already narrow end-to-end tests.** `src/testing/realRepositories.ts` points the composition root at a real Dexie database, unique per test and shared by entries and drafts as in production. Nothing below the component is mocked. What they lack: the app shell (`App.vue`, which owns flush-on-leave and the drafts' tab-return check), real reloads, a second tab. Pass 5 split them into component and flow specs (D6).
 - **Specs couple to the backend more than they need to.** They type storage as `DexieDraftRepository` / `DexieEntryRepository`, and several assert through the repository where the UI could show it. The types were fixed in Pass 1.
 - **Unit and component levels overlap.** Of `draftsStore.test.ts`'s ~34 cases, roughly a quarter duplicate component coverage, roughly a third are user-visible behavior tested only in the store, and the durability and race cases are the store's real reason for unit tests. Pruned in Pass 3.
 - **Runner parity has drifted.** `EntryDetailView.browser.test.ts` has four tests with no Cypress mirror: "offers the draft already in progress on an entry rather than a second one", "shows the version another tab saved once this tab is returned to", "offers the draft another tab has only just opened on an entry, before a word is typed", "saves a revision that only changes formatting". Mirrored in Pass 1.
@@ -207,26 +207,61 @@ The review pivoted at its first question. `EntryForm.cy.ts` read the repository 
 - [x] ~~Typed dates reach the draft (a date in EntryForm's "keeps what was typed when the composer is left without saving").~~ Superseded: NewEntryView's specs type every detail, kept as a draft when the page is left and shown on the entry once saved.
 - [ ] A revision changed back to its version is released on leaving (EDV).
 
+The four open items above are flows, written after commit 2 below, in `.flow.` files.
+
+**The component / flow split** (D6)
+
+The review's second turn. Component specs had grown into narrow end-to-end tests by default, so whether a spec was about one screen or a path down to storage was settled file by file. TESTING.md now has three levels and one question between them ("Layers"). The specs follow in three commits, each green on its own.
+
+**Commit 1 — the docs, and storage for every spec**
+
+- [x] TESTING.md: "Where tests live", "Philosophy", "Layers", "Swap the repository", "Known gaps"; the write-tests skill's "Pick the layer".
+- [x] This plan.
+- [x] A global `beforeEach` in each runner's setup file points the composition root at fresh real storage for every repository, so no spec sets it up and none can fall through to the app's own `chronicle` database. Needs a `freshMarkSetRepository()`, which Pass 4's "one cleanup path" wanted too. It turned up a bug: `browserSetup.ts` imported `realRepositories.ts` by relative path and the specs by alias, so Vitest loaded two copies, and the global `afterEach` disposed a list no spec had added to. No Browser Mode database had been deleted since the hook went in.
+- [x] Specs drop their own `freshXRepository()` calls and reach storage through the `@/repositories` bindings. The adapter specs keep theirs.
+
+**Commit 2 — the move**
+
+One commit for every view and `App` spec in both runners: it is one idea, and a half-split suite reads worse than a large diff. Review it with `git diff --color-moved`.
+
+- [ ] Sort every test by the question in "Layers".
+- [ ] Each flow moves to a `.flow.` file beside the view its route starts on and mounts `App` at that route; `App`'s own go to `App.flow.*`. With `App` mounted, leaving a page is navigating away rather than unmounting, waited on through the same `abandonDraft` signal. No other change to a moved test's body.
+- [ ] What stays in a component spec reads no storage back; a test that can't do without it is a flow.
+- [ ] The README's testing paragraph and TESTING.md "Known gaps" catch up.
+
+**Commit 3 — what component specs now own**
+
+New cases in the existing component specs, red first, in both runners. Spec files for components that have none are out of the overhaul.
+
+- [ ] Failure states. The views catch a failed load, save, discard or resume and show it ("Failed to save entry", "Failed to load drafts"…), as `DocumentEditor` does a failed attach; no spec reaches any of the sixteen today. Force one by stubbing a repository method to reject. Not every one needs a case; choose by what a writer would actually meet.
+- [ ] Navigation as an output, wherever a view's own code navigates, even where a flow lands there too: the route the router is at after the action, read from `currentRoute` (D8). The test router's memory history leaves the browser's URL alone, so `cy.location()` can't see it.
+- [ ] Anything else a view's own code produces that only a flow reaches today gets its case in the view's spec; the flow keeps walking through it.
+
 ### Later — a real E2E layer
 
 Pages in one Playwright browser context share IndexedDB: true two-tab, reload and `pagehide` tests. U13, U14 and I2 are covered at component level (D4), so what's left for E2E is what a component can't fake: a real reload, a real second tab, the browser's own events. Cypress runs inside a single tab and has historically not supported several; check its current state when this starts. Several tools side by side is a plus for a portfolio piece, not a liability.
 
 ## Decisions
 
-Open: none.
+Open:
+
+- **D7 — a unit whose job is storage.** `useMedia`'s spec and `DocumentEditor`'s "stores an attached image in the media store…" read storage back, but neither has a route for a flow to start from. Storage is in their scope ("Philosophy"), so they may stay component specs. Settle in commit 2, and say so in "Layers" if it holds.
+- **D8 — seeing where a component spec navigated.** Vitest specs build their router and can read its `currentRoute`; `cy.mount` never hands back the one it builds (runner notes). The wrapper it yields may, through `wrapper.vm.$router`; otherwise `cy.mount` yields the router too. A spy on `push` only where the call itself matters. Settle in commit 3. Decided already: navigation a component's own code makes is asserted in its component spec, while a flow passing through leans on it unasserted ("Layers").
 
 Decided:
+
+- **D6 — the component / flow split.** Component specs are the screen alone: storage seeded, stubbed to fail when the failure is the point, never read back. Flow specs mount `App` at a route and check what was stored or what another screen shows. Every spec runs on fresh real storage put in place for it. An in-memory backend for component specs was considered and dropped: a second backend in the browser runners, to enforce structurally what review already catches. Rules in TESTING.md "Layers".
 
 - **D4 — multi-tab at component level.** The Pass 2 spike worked in both runners: a second Pinia over the same database is the other tab, `App` mounted through the test router supplies the listeners, and events dispatched on `window` stand in for leaving or returning. It fakes the browser's side (no real second tab, no real reload), which stays for the E2E layer.
 - **D2 — fake steps.** Fixtures may record `{ stepType: 'replace' }` / `{ n: 1 }` where nothing replays them; tests moved up to component level get real steps from the editor. Revisit when the history view replays traces.
 - **D3 — waiting on a write no UI shows.** Every such case is a session let go (an unmount, a change of entry), and `drafts.abandonDraft` resolves only once that session's flush has landed. Spy on it after mounting, wait for its promise, then read the repository plainly — in both runners, and for absence as well as presence. No retrying-read helper unless a case comes up that isn't a let-go; one would be named for the repository, not the database.
-- **D5 — the sealed trace in component specs.** Assert only that one exists, through the repository, as `NewEntryView.cy.ts` does; its details stay in unit tests.
+- **D5 — the sealed trace in flow specs.** Assert only that one exists, through the repository, as NewEntryView's save flow does; its details stay in unit tests.
 
 - **D1 — fixture shape.** `makeDraft(sessionId, { entry, kind, updatedAt })`: the id stays first, the rest named, so no call passes placeholders to reach a later argument. A `relatedTo(parent, since)` builder derives a related draft's `kind`, `parent_id` and `parent` from the parent's `id` and `content`; `since` carries anchor marks and their events, and a plain `{ id, content }` stands in for a parent that isn't stored. It replaced `parentDocument`. A `seedDraft(drafts, draft)` saves with nothing persisted, for component specs and store tests; the contract keeps `NOTHING_PERSISTED` explicit, since the persisted counts are what it tests.
 - This plan lives here, checked in, until folded into TESTING.md.
-- Component specs arrange through the repository interface, act and assert through the UI (TESTING.md, "Layers").
+- Flow specs arrange through the repository interface, act and assert through the UI; component specs seed it and never read it back (TESTING.md, "Layers").
 - Specs stay backend-agnostic, so a desktop shell with storage behind IPC changes `realRepositories.ts` alone.
-- Cypress ↔ Browser Mode duplication stays. Unit ↔ component overlap is minimized.
+- Cypress ↔ Browser Mode duplication stays. Overlap between unit, component and flow specs is minimized.
 
 ## Runner comparison notes
 
@@ -249,6 +284,7 @@ What went into TESTING.md, and when.
 - 2026-09-29 — Don'ts: an absence needs a baseline that could have failed it. Philosophy: a parent that only configures a child asserts the prop, not the styling it produces.
 - 2026-09-30 — "Layers": with no UI to wait on, spy on a call that already awaits the write rather than polling; a let-go session's `abandonDraft` is the example (D3).
 - 2026-09-30 — "Known gaps": multi-tab behavior is now component-tested with the other tab simulated (D4); what that fakes is named there.
+- 2026-10-09 — The component / flow split (D6): flow specs in "Where tests live"; "Philosophy" never mocks what's in scope; "Layers" rewritten for three levels; storage for every spec in "Swap the repository".
 
 Candidates, not yet in TESTING.md:
 
@@ -257,5 +293,3 @@ Candidates, not yet in TESTING.md:
 - Test placement, from Pass 5:
   - A spec tests what its own file adds. The real stack beneath it is how the spec acts and observes, not what it's about.
   - A shell that holds no state of its own (`EntryComposer`, `RelatedEntryComposer`) is proven once, through its simplest owner. Every other owner proves only its own wiring.
-  - A flow that ends on another page mounts App at the starting route, so the landing page renders and is asserted in the UI. The spec still lives with the view whose code does the navigating. This replaces the repository reads after a save that a view mounted alone forces.
-  - The repository is read only for what no screen shows: a draft gone from disk, a trace.

@@ -1,14 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import App from '@/App.vue'
 import NewEntryView from '@/views/NewEntryView.vue'
 import { docToPlainText } from '@/domain/entryDocument'
-import { draftRepository } from '@/repositories'
-import type { EntryRepository } from '@/repositories/entryRepository'
+import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
 /** Mounts `component` behind a real router already at the new-entry page. */
 async function mountAt(component: typeof App | typeof NewEntryView) {
@@ -20,13 +18,6 @@ async function mountAt(component: typeof App | typeof NewEntryView) {
 }
 
 describe('NewEntryView (browser)', () => {
-  let entries: EntryRepository
-
-  beforeEach(() => {
-    entries = freshEntryRepository()
-    freshDraftRepository()
-  })
-
   it('holds what is written as a draft until it is saved, then lands on the entry, details and all', async () => {
     const screen = await mountAt(App)
 
@@ -44,7 +35,7 @@ describe('NewEntryView (browser)', () => {
     await vi.waitFor(async () => {
       expect(await draftRepository.list()).toHaveLength(1)
     })
-    expect(await entries.listRootEntries()).toEqual([])
+    expect(await entryRepository.listRootEntries()).toEqual([])
 
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
@@ -58,7 +49,7 @@ describe('NewEntryView (browser)', () => {
       .element(screen.getByText('Written in paper journal · blue Moleskine', { exact: true }))
       .toBeVisible()
 
-    const [saved] = await entries.listRootEntries()
+    const [saved] = await entryRepository.listRootEntries()
     expect(saved?.authoring_trace?.events.length).toBeGreaterThan(0)
     // The buffer is working space, so sealing discards it rather than leaving a duplicate behind.
     expect(await draftRepository.list()).toEqual([])
@@ -73,7 +64,7 @@ describe('NewEntryView (browser)', () => {
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
     await expect.element(screen.getByRole('article')).toHaveTextContent('We drove up on Friday.')
-    const [saved] = await entries.listRootEntries()
+    const [saved] = await entryRepository.listRootEntries()
     expect(saved?.title).toBeNull()
   })
 

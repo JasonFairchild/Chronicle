@@ -1,15 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import DraftsView from '@/views/DraftsView.vue'
 import { textContent } from '@/domain/entryDocument'
-import type { DraftRepository } from '@/repositories/draftRepository'
-import type { EntryRepository } from '@/repositories/entryRepository'
+import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput, emptyEntryDates } from '@/types/entry'
@@ -27,17 +25,9 @@ async function mountAt(component: typeof App | typeof DraftsView) {
 }
 
 describe('DraftsView (browser)', () => {
-  let drafts: DraftRepository
-  let entries: EntryRepository
-
-  beforeEach(() => {
-    drafts = freshDraftRepository()
-    entries = freshEntryRepository()
-  })
-
   it('resumes a draft with its words, title and dates, and lands on the entry it becomes', async () => {
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', {
         entry: {
           content: textContent('Half a thought'),
@@ -66,13 +56,15 @@ describe('DraftsView (browser)', () => {
       .toHaveTextContent('Half a thought, finished at last.')
     await expect.element(screen.getByText(/Happened .*1994/)).toBeVisible()
     // Sealing writes the entry and deletes the draft in one transaction, so both have landed.
-    expect(await drafts.list()).toEqual([])
+    expect(await draftRepository.list()).toEqual([])
   })
 
   it('saves a revision from its draft and lands on the entry it revised', async () => {
-    const parent = await entries.create(createEntryInput({ content: textContent('The first go') }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('The first go') }),
+    )
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', {
         entry: {
           base_version_id: parent.id,
@@ -94,15 +86,15 @@ describe('DraftsView (browser)', () => {
   })
 
   it('lists drafts newest first, each with what it would become, when, and how it begins', async () => {
-    const parent = await entries.create(
+    const parent = await entryRepository.create(
       createEntryInput({ content: textContent('The meeting went badly') }),
     )
-    const other = await entries.create(
+    const other = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
     // Seeded out of order, so the order shown is the list's own.
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('related', {
         entry: { content: textContent('It was salvaged later'), events: TYPED },
         kind: relatedTo(parent),
@@ -110,14 +102,14 @@ describe('DraftsView (browser)', () => {
       }),
     )
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('root', {
         entry: { content: textContent('A thought of its own'), events: TYPED },
         updatedAt: '2026-09-05T10:04:00.000Z',
       }),
     )
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('connection', {
         entry: { content: textContent('One led to the other'), events: TYPED },
         kind: { kind: 'new_connection', parent_id: parent.id, target_id: other.id },
@@ -125,7 +117,7 @@ describe('DraftsView (browser)', () => {
       }),
     )
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('revision', {
         entry: {
           base_version_id: parent.id,
@@ -163,11 +155,11 @@ describe('DraftsView (browser)', () => {
   })
 
   it('reopens a related-entry draft on both halves, not the related entry alone', async () => {
-    const parent = await entries.create(
+    const parent = await entryRepository.create(
       createEntryInput({ content: textContent('I went to Lake Tahoe with Dad') }),
     )
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', {
         entry: { content: textContent('Wrong lake'), events: TYPED },
         // The parent as this session found it, against which "anchor-1 is ours" still reads after
@@ -196,7 +188,7 @@ describe('DraftsView (browser)', () => {
     await expect
       .element(screen.getByRole('link', { name: 'I went to Lake Tahoe with Dad' }))
       .toBeVisible()
-    const children = await entries.listChildren(parent.id)
+    const children = await entryRepository.listChildren(parent.id)
     expect(children).toHaveLength(1)
     const [related] = children
     expect(related?.anchors[0]?.quote).toBe('Lake Tahoe')
@@ -205,7 +197,7 @@ describe('DraftsView (browser)', () => {
 
   it('discards a draft on request, the one thing that removes work', async () => {
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
     )
 
@@ -215,19 +207,19 @@ describe('DraftsView (browser)', () => {
     await screen.getByRole('button', { name: 'Discard' }).click()
 
     await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
-    expect(await entries.listRootEntries()).toEqual([])
+    expect(await entryRepository.listRootEntries()).toEqual([])
   })
 
   it('discards a listed draft while another is open, leaving the open one as it was', async () => {
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('open', {
         entry: { content: textContent('Keep writing this'), events: TYPED },
         updatedAt: '2026-09-05T10:02:00.000Z',
       }),
     )
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('listed', {
         entry: { content: textContent('Never mind'), events: TYPED },
         updatedAt: '2026-09-05T10:01:00.000Z',
@@ -248,9 +240,11 @@ describe('DraftsView (browser)', () => {
   })
 
   it('refuses a draft on a version since replaced, says why, and keeps it', async () => {
-    const parent = await entries.create(createEntryInput({ content: textContent('The first go') }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('The first go') }),
+    )
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', {
         entry: {
           base_version_id: parent.id,
@@ -262,7 +256,7 @@ describe('DraftsView (browser)', () => {
       }),
     )
     // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
-    await entries.create(
+    await entryRepository.create(
       createEntryInput({
         content: textContent('The second go'),
         parent_id: parent.id,
@@ -289,15 +283,17 @@ describe('DraftsView (browser)', () => {
           ),
       )
       .toBeVisible()
-    expect(await entries.listRevisions(parent.id)).toHaveLength(1)
-    expect(await drafts.list()).toHaveLength(1)
+    expect(await entryRepository.listRevisions(parent.id)).toHaveLength(1)
+    expect(await draftRepository.list()).toHaveLength(1)
   })
 
   it('lets go of an untouched claim when the page is left', async () => {
-    const parent = await entries.create(createEntryInput({ content: textContent('The first go') }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('The first go') }),
+    )
     // A revision nobody has typed in yet: its words are still the entry's own.
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', {
         entry: {
           base_version_id: parent.id,
@@ -324,7 +320,7 @@ describe('DraftsView (browser)', () => {
 
   it('keeps the version another tab saved first, and shows what this one had to copy', async () => {
     await seedDraft(
-      drafts,
+      draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
     const screen = await mountAt(DraftsView)
@@ -363,7 +359,7 @@ describe('DraftsView (browser)', () => {
     const text =
       'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
       'home, and why none of it went the way we planned.'
-    await seedDraft(drafts, {
+    await seedDraft(draftRepository, {
       ...makeDraft('session-1', {
         entry: { content: textContent(text), title: 'Lake Tahoe', events: TYPED },
       }),

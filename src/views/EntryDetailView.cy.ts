@@ -1,16 +1,9 @@
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import EntryDetailView from '@/views/EntryDetailView.vue'
-import type { DraftRepository } from '@/repositories/draftRepository'
-import type { EntryRepository } from '@/repositories/entryRepository'
-import type { MediaRepository } from '@/repositories/mediaRepository'
+import { draftRepository, entryRepository, mediaRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import {
-  freshDraftRepository,
-  freshEntryRepository,
-  freshMediaRepository,
-} from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
@@ -24,12 +17,6 @@ function mountDetail(id: string): Cypress.Chainable {
   return cy.mount(EntryDetailView, { props: { id }, routePath: '/' })
 }
 
-// A fresh, isolated real repository per test, pointed at by the composition root, so the mounted
-// component's own useEntriesStore() call reaches the same instance this file seeds into.
-let repository: EntryRepository
-let media: MediaRepository
-let drafts: DraftRepository
-
 /**
  * Creates one entry in the active repository. Plain async rather than a command, so a test that
  * needs several — a parent, a related entry anchored to it, a revision over both — seeds them in one
@@ -37,16 +24,10 @@ let drafts: DraftRepository
  * pyramid one level deeper per entry.
  */
 function seed(input: Parameters<typeof createEntryInput>[0]): Promise<Entry> {
-  return repository.create(createEntryInput(input))
+  return entryRepository.create(createEntryInput(input))
 }
 
 describe('EntryDetailView', () => {
-  beforeEach(() => {
-    repository = freshEntryRepository()
-    media = freshMediaRepository()
-    drafts = freshDraftRepository()
-  })
-
   it('renders the entry’s own text', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
@@ -308,7 +289,7 @@ describe('EntryDetailView', () => {
         'href',
         `/entries/${parent.id}`,
       )
-      cy.then(() => repository.listChildren(parent.id)).then((children) => {
+      cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
         expect(children[0]?.anchors).to.deep.equal([])
         // Nothing was marked, so the note claims nothing changed about the entry.
         expect(children[0]?.relation_type).to.equal('annotation')
@@ -354,7 +335,7 @@ describe('EntryDetailView', () => {
           // Resolves once the session's flush has landed.
           expect(abandonDraft).to.have.callCount(1)
           await abandonDraft.firstCall.returnValue
-          const [saved] = await drafts.list()
+          const [saved] = await draftRepository.list()
           expect(saved).to.deep.include({ kind: 'new_related', parent_id: parent.id })
           expect(docToPlainText(saved!.entry.content)).to.equal('Half a thought about this')
         })
@@ -471,7 +452,7 @@ describe('EntryDetailView', () => {
       // typed yet.
       setActivePinia(createPinia())
       const aggregated = await useEntriesStore().getAggregatedEntry(parent.id)
-      cy.spy(drafts, 'save').as('saveDraft')
+      cy.spy(draftRepository, 'save').as('saveDraft')
       useDraftsStore().beginDraft({ kind: 'revision', parent: aggregated! })
       return parent
     }).then((parent) => {
@@ -520,11 +501,11 @@ describe('EntryDetailView', () => {
       cy.findByRole('link', { name: PARENT_TEXT }).click()
       cy.findByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”').should('be.visible')
 
-      cy.then(() => repository.listRevisions(parent.id)).then((revisions) => {
+      cy.then(() => entryRepository.listRevisions(parent.id)).then((revisions) => {
         expect(revisions).to.have.length(1)
         expect(revisions[0]?.revision_mode).to.equal('anchor')
       })
-      cy.then(() => repository.listChildren(parent.id)).then((children) => {
+      cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
         expect(children[0]?.anchors).to.have.length(1)
         expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')
         // Striking reports a correction, so the note reads as an update without anyone being asked.
@@ -554,7 +535,7 @@ describe('EntryDetailView', () => {
       // same way, which is what `describeAnchor`'s `comment` case needed its own branch for.
       cy.findByText('On “Lake Tahoe”, adds “Donner Lake”').should('be.visible')
 
-      cy.then(() => repository.listChildren(parent.id)).then((children) => {
+      cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
         expect(children[0]?.relation_type).to.equal('update')
       })
     })
@@ -695,7 +676,7 @@ describe('EntryDetailView', () => {
 
       cy.findByText(/Version 2 of 2/).should('be.visible')
 
-      cy.then(() => repository.listRevisions(parent.id)).then((revisions) => {
+      cy.then(() => entryRepository.listRevisions(parent.id)).then((revisions) => {
         expect(docToPlainText(revisions[0]!.content)).to.equal(
           `${PARENT_TEXT}, or so I remembered it.`,
         )
@@ -703,7 +684,7 @@ describe('EntryDetailView', () => {
         expect(revisions[0]?.authoring_trace?.events.length).to.be.greaterThan(0)
       })
       // The entry itself is never rewritten; the version chain is what carries the change.
-      cy.then(() => repository.getById(parent.id)).then((stored) => {
+      cy.then(() => entryRepository.getById(parent.id)).then((stored) => {
         expect(docToPlainText(stored!.content)).to.equal(PARENT_TEXT)
       })
     })
@@ -719,7 +700,7 @@ describe('EntryDetailView', () => {
       cy.findByRole('button', { name: 'Save revision' }).click()
 
       cy.findByText(/Version 2 of 2/).should('be.visible')
-      cy.then(() => repository.listRevisions(parent.id)).then(([revision]) => {
+      cy.then(() => entryRepository.listRevisions(parent.id)).then(([revision]) => {
         expect(docToPlainText(revision!.content)).to.equal(PARENT_TEXT)
         expect(revision!.content).to.contain('"bold"')
       })
@@ -757,7 +738,7 @@ describe('EntryDetailView', () => {
       cy.findByRole('button', { name: 'Save revision' }).click()
 
       cy.findByRole('alert').should('have.text', 'No changes to save')
-      cy.then(() => repository.listRevisions(parent.id)).then((revisions) => {
+      cy.then(() => entryRepository.listRevisions(parent.id)).then((revisions) => {
         expect(revisions).to.have.length(0)
       })
     })
@@ -782,8 +763,8 @@ describe('EntryDetailView', () => {
         .should('have.been.calledOnce')
         .then((discardDraft) => discardDraft.firstCall.returnValue)
       cy.then(async () => {
-        expect(await drafts.list()).to.have.length(0)
-        expect(await repository.listRevisions(parent.id)).to.have.length(0)
+        expect(await draftRepository.list()).to.have.length(0)
+        expect(await entryRepository.listRevisions(parent.id)).to.have.length(0)
       })
     })
   })
@@ -795,7 +776,7 @@ describe('EntryDetailView', () => {
 
   it('renders an entry’s attachments from the media store', () => {
     cy.then(async () => {
-      const mediaRef = await media.put(
+      const mediaRef = await mediaRepository.put(
         new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }),
       )
       return seed({ content: PARENT_CONTENT, media_refs: [mediaRef] })

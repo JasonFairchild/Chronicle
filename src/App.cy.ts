@@ -1,9 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import type { DraftRepository } from '@/repositories/draftRepository'
+import { draftRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -29,13 +28,6 @@ function setVisibility(state: DocumentVisibilityState): void {
 }
 
 describe('App', () => {
-  let drafts: DraftRepository
-
-  beforeEach(() => {
-    freshEntryRepository()
-    drafts = freshDraftRepository()
-  })
-
   afterEach(() => {
     cy.document().then((doc) => Reflect.deleteProperty(doc, 'visibilityState'))
   })
@@ -43,7 +35,7 @@ describe('App', () => {
   it('shows what another tab wrote to the open draft once this tab is returned to', () => {
     cy.then(() =>
       seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
@@ -75,7 +67,7 @@ describe('App', () => {
   it('shows what another tab wrote to the open draft once this tab is shown again', () => {
     cy.then(() =>
       seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
@@ -108,7 +100,7 @@ describe('App', () => {
   it('closes the open draft and says so once another tab has saved it', () => {
     cy.then(() =>
       seedDraft(
-        drafts,
+        draftRepository,
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
@@ -142,7 +134,7 @@ describe('App', () => {
 
       expect(flushAll).to.have.callCount(1)
       await flushAll.firstCall.returnValue
-      const [draft] = await drafts.list()
+      const [draft] = await draftRepository.list()
       expect(docToPlainText(draft!.entry.content)).to.equal('We drove up on Friday.')
     })
   })
@@ -162,7 +154,7 @@ describe('App', () => {
       .should('have.been.calledOnce')
       .then((flushAll) => flushAll.firstCall.returnValue)
     cy.then(async () => {
-      const [draft] = await drafts.list()
+      const [draft] = await draftRepository.list()
       expect(docToPlainText(draft!.entry.content)).to.equal('We drove up on Friday.')
     })
   })

@@ -1,7 +1,6 @@
 import { effectScope } from 'vue'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useMedia } from '@/composables/useMedia'
-import { freshMediaRepository } from '@/testing/realRepositories'
 
 /**
  * Mirrored by `useMedia.cy.ts`, the ordinary duplicated pair. Nothing is mounted in either: this is
@@ -14,7 +13,6 @@ describe('useMedia (browser)', () => {
   let media: ReturnType<typeof useMedia>
 
   beforeEach(() => {
-    freshMediaRepository()
     scope = effectScope()
     media = scope.run(() => useMedia())!
   })

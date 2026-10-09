@@ -1,29 +1,21 @@
 import App from '@/App.vue'
 import NewConnectionView from '@/views/NewConnectionView.vue'
 import { textContent } from '@/domain/entryDocument'
-import type { DraftRepository } from '@/repositories/draftRepository'
-import type { EntryRepository } from '@/repositories/entryRepository'
+import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 import { createEntryInput } from '@/types/entry'
 
 function mountNewConnection(id: string): Cypress.Chainable {
   return cy.mount(NewConnectionView, { props: { id }, routePath: `/entries/${id}/connect` })
 }
 
-let repository: EntryRepository
-let drafts: DraftRepository
-
 describe('NewConnectionView', () => {
-  beforeEach(() => {
-    repository = freshEntryRepository()
-    drafts = freshDraftRepository()
-  })
-
   it('creates a connection with a title, dates, and rich content, then lands on its own page', () => {
     cy.then(async () => ({
-      source: await repository.create(createEntryInput({ content: textContent('Left my job') })),
-      destination: await repository.create(
+      source: await entryRepository.create(
+        createEntryInput({ content: textContent('Left my job') }),
+      ),
+      destination: await entryRepository.create(
         createEntryInput({ content: textContent('Started the degree') }),
       ),
     })).then(({ source, destination }) => {
@@ -56,8 +48,10 @@ describe('NewConnectionView', () => {
 
   it('adds an untitled connection', () => {
     cy.then(async () => ({
-      source: await repository.create(createEntryInput({ content: textContent('Left my job') })),
-      destination: await repository.create(
+      source: await entryRepository.create(
+        createEntryInput({ content: textContent('Left my job') }),
+      ),
+      destination: await entryRepository.create(
         createEntryInput({ content: textContent('Started the degree') }),
       ),
     })).then(({ source, destination }) => {
@@ -72,7 +66,7 @@ describe('NewConnectionView', () => {
 
       // The composer closes only once the save has landed.
       cy.findByRole('textbox', { name: 'New connection' }).should('not.exist')
-      cy.then(() => repository.listConnectionsFor(source.id)).then((connections) => {
+      cy.then(() => entryRepository.listConnectionsFor(source.id)).then((connections) => {
         expect(connections[0]?.title).to.equal(null)
         expect(connections[0]?.target_id).to.equal(destination.id)
       })
@@ -81,8 +75,10 @@ describe('NewConnectionView', () => {
 
   it('says why a connection with no content can’t be added', () => {
     cy.then(async () => ({
-      source: await repository.create(createEntryInput({ content: textContent('Left my job') })),
-      destination: await repository.create(
+      source: await entryRepository.create(
+        createEntryInput({ content: textContent('Left my job') }),
+      ),
+      destination: await entryRepository.create(
         createEntryInput({ content: textContent('Started the degree') }),
       ),
     })).then(({ source, destination }) => {
@@ -100,8 +96,10 @@ describe('NewConnectionView', () => {
 
   it('keeps a half-written connection when the screen is left without discarding it', () => {
     cy.then(async () => ({
-      source: await repository.create(createEntryInput({ content: textContent('Left my job') })),
-      destination: await repository.create(
+      source: await entryRepository.create(
+        createEntryInput({ content: textContent('Left my job') }),
+      ),
+      destination: await entryRepository.create(
         createEntryInput({ content: textContent('Started the degree') }),
       ),
     })).then(({ source, destination }) => {
@@ -117,7 +115,7 @@ describe('NewConnectionView', () => {
           // `reset()` abandons the session fire-and-forget; this resolves once its flush lands.
           expect(abandonDraft).to.have.callCount(1)
           await abandonDraft.firstCall.returnValue
-          const [saved] = await drafts.list()
+          const [saved] = await draftRepository.list()
           expect(saved).to.deep.include({
             kind: 'new_connection',
             parent_id: source.id,
@@ -130,13 +128,15 @@ describe('NewConnectionView', () => {
 
   it('discards a half-written connection on request', () => {
     cy.then(async () => ({
-      source: await repository.create(createEntryInput({ content: textContent('Left my job') })),
-      destination: await repository.create(
+      source: await entryRepository.create(
+        createEntryInput({ content: textContent('Left my job') }),
+      ),
+      destination: await entryRepository.create(
         createEntryInput({ content: textContent('Started the degree') }),
       ),
     })).then(({ source, destination }) => {
       mountNewConnection(source.id)
-      cy.spy(drafts, 'save').as('saveDraft')
+      cy.spy(draftRepository, 'save').as('saveDraft')
 
       cy.findByLabelText('Connect to').select(destination.id)
       cy.findByRole('textbox', { name: 'New connection' }).type('These rhyme, somehow')
@@ -155,14 +155,14 @@ describe('NewConnectionView', () => {
         .should('have.been.calledOnce')
         .then((discardDraft) => discardDraft.firstCall.returnValue)
       cy.then(async () => {
-        expect(await drafts.list()).to.have.length(0)
+        expect(await draftRepository.list()).to.have.length(0)
       })
     })
   })
 
   it('says there is nothing to connect to rather than showing an empty picker', () => {
     cy.then(() =>
-      repository.create(createEntryInput({ content: textContent('Left my job') })),
+      entryRepository.create(createEntryInput({ content: textContent('Left my job') })),
     ).then((source) => {
       mountNewConnection(source.id)
 

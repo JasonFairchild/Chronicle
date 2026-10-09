@@ -1,20 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import EntryDetailView from '@/views/EntryDetailView.vue'
+import { draftRepository, entryRepository, mediaRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import type { DraftRepository } from '@/repositories/draftRepository'
-import type { EntryRepository } from '@/repositories/entryRepository'
-import type { MediaRepository } from '@/repositories/mediaRepository'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
-import {
-  freshDraftRepository,
-  freshEntryRepository,
-  freshMediaRepository,
-} from '@/testing/realRepositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
@@ -44,20 +37,8 @@ async function mountApp(path: string) {
 }
 
 describe('EntryDetailView (browser)', () => {
-  // A fresh, isolated real repository per test, pointed at by the composition root, so the
-  // mounted component's own useEntriesStore() call reaches the same instance this file seeds.
-  let repository: EntryRepository
-  let media: MediaRepository
-  let drafts: DraftRepository
-
-  beforeEach(() => {
-    repository = freshEntryRepository()
-    media = freshMediaRepository()
-    drafts = freshDraftRepository()
-  })
-
   it('renders the entry’s own text', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
 
@@ -65,7 +46,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('heads an untitled entry with the day it was written, and its time below', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
 
@@ -78,7 +59,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows the title once, as the page’s heading', async () => {
-    const parent = await repository.create(
+    const parent = await entryRepository.create(
       createEntryInput({ content: PARENT_CONTENT, title: 'The Tahoe trip' }),
     )
 
@@ -89,8 +70,8 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows a related entry separately rather than spliced into the parent', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
-    await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    await entryRepository.create(
       createEntryInput({
         content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
@@ -106,8 +87,8 @@ describe('EntryDetailView (browser)', () => {
 
   it('describes which passage an anchored related entry is about', async () => {
     const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
-    const parent = await repository.create(createEntryInput({ content: marked }))
-    await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: marked }))
+    await entryRepository.create(
       createEntryInput({
         content: textContent('Wrong lake'),
         parent_id: parent.id,
@@ -123,8 +104,8 @@ describe('EntryDetailView (browser)', () => {
 
   it('keeps the original wording visible when a revision orphans an anchor', async () => {
     const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
-    const parent = await repository.create(createEntryInput({ content: marked }))
-    await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: marked }))
+    await entryRepository.create(
       createEntryInput({
         content: textContent('Wrong lake'),
         parent_id: parent.id,
@@ -132,7 +113,7 @@ describe('EntryDetailView (browser)', () => {
         anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
       }),
     )
-    await repository.create(
+    await entryRepository.create(
       createEntryInput({
         content: textContent('I stayed home that summer'),
         parent_id: parent.id,
@@ -148,8 +129,8 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('reports the version position once an entry has been revised', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
-    await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    await entryRepository.create(
       createEntryInput({
         content: textContent('I went to Donner Lake with Dad'),
         parent_id: parent.id,
@@ -166,13 +147,13 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows an incoming connection on the entry it points at', async () => {
-    const target = await repository.create(
+    const target = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
-    await repository.create(
+    await entryRepository.create(
       createEntryInput({
         content: textContent('One made the other possible'),
         title: 'led_to',
@@ -188,8 +169,8 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows a related entry card’s created date', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
-    const related = await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const related = await entryRepository.create(
       createEntryInput({
         content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
@@ -203,13 +184,13 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('opens the connection’s own page, not the far endpoint, when its card is clicked', async () => {
-    const target = await repository.create(
+    const target = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
-    const connection = await repository.create(
+    const connection = await entryRepository.create(
       createEntryInput({
         content: textContent('One made the other possible'),
         title: 'led_to',
@@ -227,10 +208,10 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows a breadcrumb back to the parent on a related entry’s own detail page', async () => {
-    const parent = await repository.create(
+    const parent = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job'), title: 'Career change' }),
     )
-    const related = await repository.create(
+    const related = await entryRepository.create(
       createEntryInput({
         content: textContent('Started the degree'),
         parent_id: parent.id,
@@ -247,13 +228,13 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows a breadcrumb linking both sides on a connection’s own detail page', async () => {
-    const target = await repository.create(
+    const target = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
-    const connection = await repository.create(
+    const connection = await entryRepository.create(
       createEntryInput({
         content: textContent('One made the other possible'),
         title: 'led_to',
@@ -281,7 +262,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows the details the writer gave, alongside when the entry was created', async () => {
-    const parent = await repository.create(
+    const parent = await entryRepository.create(
       createEntryInput({
         content: PARENT_CONTENT,
         dates: {
@@ -307,7 +288,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('adds a related entry about the whole entry when nothing is marked, and lands on it', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -324,14 +305,14 @@ describe('EntryDetailView (browser)', () => {
       .element(screen.getByRole('link', { name: PARENT_TEXT }))
       .toHaveAttribute('href', `/entries/${parent.id}`)
 
-    const children = await repository.listChildren(parent.id)
+    const children = await entryRepository.listChildren(parent.id)
     expect(children[0]?.anchors).toEqual([])
     // Nothing was marked, so the note claims nothing changed about the entry.
     expect(children[0]?.relation_type).toBe('annotation')
   })
 
   it('says why a related entry that says nothing can’t be added', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -354,13 +335,13 @@ describe('EntryDetailView (browser)', () => {
 
     await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
-      expect(await drafts.list()).toEqual([])
+      expect(await draftRepository.list()).toEqual([])
     })
   })
 
   it('keeps a related entry in progress when the reader moves to another entry', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
-    const other = await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const other = await entryRepository.create(
       createEntryInput({ content: textContent('A different day entirely') }),
     )
 
@@ -378,14 +359,14 @@ describe('EntryDetailView (browser)', () => {
     // Resolves once the session's flush has landed.
     expect(abandonDraft).toHaveBeenCalledOnce()
     await abandonDraft.mock.results[0]!.value
-    const [draft] = await drafts.list()
+    const [draft] = await draftRepository.list()
     expect(draft).toMatchObject({ kind: 'new_related', parent_id: parent.id })
     expect(docToPlainText(draft!.entry.content)).toBe('Half a thought about this')
   })
 
   it('offers the draft already in progress on an entry rather than a second one', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
-    const other = await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const other = await entryRepository.create(
       createEntryInput({ content: textContent('A different day entirely') }),
     )
 
@@ -417,8 +398,8 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('frees the entry when a revision is opened and left untouched', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
-    const other = await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const other = await entryRepository.create(
       createEntryInput({ content: textContent('A different day entirely') }),
     )
 
@@ -440,7 +421,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('frees the entry when the page is left with a revision opened and untouched', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -461,12 +442,12 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows the version another tab saved once this tab is returned to', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
     const screen = await mountDetail(parent.id)
     await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
 
     // Saved in another tab while this one sat in the background.
-    await repository.create(
+    await entryRepository.create(
       createEntryInput({
         content: textContent('I went to Donner Lake with Dad'),
         parent_id: parent.id,
@@ -482,13 +463,13 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('offers the draft another tab has only just opened on an entry, before a word is typed', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     // Another tab: its own stores over the same database, where Revise was clicked and nothing
     // typed yet.
     setActivePinia(createPinia())
     const aggregated = await useEntriesStore().getAggregatedEntry(parent.id)
-    const save = vi.spyOn(drafts, 'save')
+    const save = vi.spyOn(draftRepository, 'save')
     useDraftsStore().beginDraft({ kind: 'revision', parent: aggregated! })
 
     // Beginning alone writes the claim; waiting on that write, not a flush of our own, proves it.
@@ -504,7 +485,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('shows the parent’s own title in the anchor-mode composer, not just its body', async () => {
-    const parent = await repository.create(
+    const parent = await entryRepository.create(
       createEntryInput({ content: PARENT_CONTENT, title: 'The Tahoe trip' }),
     )
 
@@ -519,7 +500,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -547,11 +528,11 @@ describe('EntryDetailView (browser)', () => {
       .element(screen.getByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”'))
       .toBeVisible()
 
-    const revisions = await repository.listRevisions(parent.id)
+    const revisions = await entryRepository.listRevisions(parent.id)
     expect(revisions).toHaveLength(1)
     expect(revisions[0]?.revision_mode).toBe('anchor')
 
-    const children = await repository.listChildren(parent.id)
+    const children = await entryRepository.listChildren(parent.id)
     expect(children[0]?.anchors).toHaveLength(1)
     expect(children[0]?.anchors[0]?.quote).toBe('Lake Tahoe')
     // Striking reports a correction, so the note reads as an update without anyone being asked.
@@ -559,7 +540,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -584,14 +565,14 @@ describe('EntryDetailView (browser)', () => {
     // `comment` case has to report the insertion rather than only the passage.
     await expect.element(screen.getByText('On “Lake Tahoe”, adds “Donner Lake”')).toBeVisible()
 
-    const children = await repository.listChildren(parent.id)
+    const children = await entryRepository.listChildren(parent.id)
     expect(children[0]?.relation_type).toBe('update')
   })
 
   it('warns before saving a revision that changes the text under an anchor', async () => {
     const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-    const parent = await repository.create(createEntryInput({ content: marked }))
-    await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: marked }))
+    await entryRepository.create(
       createEntryInput({
         content: textContent('Wonderful trip'),
         parent_id: parent.id,
@@ -622,14 +603,14 @@ describe('EntryDetailView (browser)', () => {
     // the time a stray timer fires.
     await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
-      expect(await drafts.list()).toEqual([])
+      expect(await draftRepository.list()).toEqual([])
     })
   })
 
   it('stays quiet when a revision only moves an anchor, not the text it covers', async () => {
     const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-    const parent = await repository.create(createEntryInput({ content: marked }))
-    await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: marked }))
+    await entryRepository.create(
       createEntryInput({
         content: textContent('Wonderful trip'),
         parent_id: parent.id,
@@ -648,14 +629,14 @@ describe('EntryDetailView (browser)', () => {
 
     await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
-      expect(await drafts.list()).toEqual([])
+      expect(await draftRepository.list()).toEqual([])
     })
   })
 
   it('stays quiet when a revision types right up against either edge of an anchor', async () => {
     const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-    const parent = await repository.create(createEntryInput({ content: marked }))
-    await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: marked }))
+    await entryRepository.create(
       createEntryInput({
         content: textContent('Wonderful trip'),
         parent_id: parent.id,
@@ -681,14 +662,14 @@ describe('EntryDetailView (browser)', () => {
 
     await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
-      expect(await drafts.list()).toEqual([])
+      expect(await draftRepository.list()).toEqual([])
     })
   })
 
   it('warns when a paste swaps text under an anchor for text of the same length', async () => {
     const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-    const parent = await repository.create(createEntryInput({ content: marked }))
-    await repository.create(
+    const parent = await entryRepository.create(createEntryInput({ content: marked }))
+    await entryRepository.create(
       createEntryInput({
         content: textContent('Wonderful trip'),
         parent_id: parent.id,
@@ -719,12 +700,12 @@ describe('EntryDetailView (browser)', () => {
 
     await screen.getByRole('button', { name: 'Discard' }).click()
     await vi.waitFor(async () => {
-      expect(await drafts.list()).toEqual([])
+      expect(await draftRepository.list()).toEqual([])
     })
   })
 
   it('revises an entry by appending a version, leaving the original row untouched', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -735,16 +716,16 @@ describe('EntryDetailView (browser)', () => {
 
     await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
 
-    const revisions = await repository.listRevisions(parent.id)
+    const revisions = await entryRepository.listRevisions(parent.id)
     expect(docToPlainText(revisions[0]!.content)).toBe(`${PARENT_TEXT}, or so I remembered it.`)
     expect(revisions[0]?.revision_mode).toBe('direct')
     expect(revisions[0]?.authoring_trace?.events.length).toBeGreaterThan(0)
     // The entry itself is never rewritten; the version chain is what carries the change.
-    expect(docToPlainText((await repository.getById(parent.id))!.content)).toBe(PARENT_TEXT)
+    expect(docToPlainText((await entryRepository.getById(parent.id))!.content)).toBe(PARENT_TEXT)
   })
 
   it('saves a revision that only changes formatting', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -755,13 +736,13 @@ describe('EntryDetailView (browser)', () => {
     await screen.getByRole('button', { name: 'Save revision' }).click()
 
     await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
-    const [revision] = await repository.listRevisions(parent.id)
+    const [revision] = await entryRepository.listRevisions(parent.id)
     expect(docToPlainText(revision!.content)).toBe(PARENT_TEXT)
     expect(revision!.content).toContain('"bold"')
   })
 
   it('revises one detail, leaving the others and the text as they were', async () => {
-    const parent = await repository.create(
+    const parent = await entryRepository.create(
       createEntryInput({
         content: PARENT_CONTENT,
         dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
@@ -786,7 +767,7 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('refuses a revision that changes nothing, and says so', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -797,11 +778,11 @@ describe('EntryDetailView (browser)', () => {
         screen.getByRole('alert').and(screen.getByText('No changes to save', { exact: true })),
       )
       .toBeVisible()
-    expect(await repository.listRevisions(parent.id)).toEqual([])
+    expect(await entryRepository.listRevisions(parent.id)).toEqual([])
   })
 
   it('discards a revision on request, leaving the entry untouched', async () => {
-    const parent = await repository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -817,12 +798,12 @@ describe('EntryDetailView (browser)', () => {
     // Resolves once the delete has landed.
     expect(discardDraft).toHaveBeenCalledOnce()
     await discardDraft.mock.results[0]!.value
-    expect(await drafts.list()).toEqual([])
-    expect(await repository.listRevisions(parent.id)).toEqual([])
+    expect(await draftRepository.list()).toEqual([])
+    expect(await entryRepository.listRevisions(parent.id)).toEqual([])
   })
 
   it('navigates to a dedicated screen to add a connection', async () => {
-    const source = await repository.create(
+    const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),
     )
 
@@ -846,10 +827,10 @@ describe('EntryDetailView (browser)', () => {
   })
 
   it('renders an entry’s attachments from the media store', async () => {
-    const mediaRef = await media.put(
+    const mediaRef = await mediaRepository.put(
       new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }),
     )
-    const parent = await repository.create(
+    const parent = await entryRepository.create(
       createEntryInput({ content: PARENT_CONTENT, media_refs: [mediaRef] }),
     )
 

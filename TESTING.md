@@ -1,6 +1,6 @@
 # Chronicle Testing Guidelines
 
-How tests are written here and why. These apply to component tests in **both** runners: anything said about Cypress applies to Vitest Browser Mode unless noted, since the two run deliberately duplicated specs for tool comparison.
+How tests are written here and why. These apply to component and flow specs in **both** runners: anything said about Cypress applies to Vitest Browser Mode unless noted, since the two run deliberately duplicated specs for tool comparison.
 
 ## Where tests live
 
@@ -9,9 +9,13 @@ How tests are written here and why. These apply to component tests in **both** r
 | `*.test.ts` | Vitest, `unit` | node | Pure logic; timing, races and faults the UI can't drive |
 | `*.browser.test.ts` | Vitest, `browser` | real Chromium | Components, and anything needing real browser APIs |
 | `*.cy.ts` | Cypress | real browser | Components, mirroring the `.browser.test.ts` spec |
+| `*.flow.browser.test.ts` | Vitest, `browser` | real Chromium | Flows: the app from a route, down to what's stored |
+| `*.flow.cy.ts` | Cypress | real browser | Flows, mirroring the `.flow.browser.test.ts` spec |
 | `*.contract.ts` | imported, never run | either | A shared suite run against multiple implementations |
 
-**Duplicate component specs are intentional.** `EntryCard.browser.test.ts` and `EntryCard.cy.ts` cover the same cases on purpose, to compare the two runners. Don't consolidate them.
+**A flow spec sits beside the view its route starts on**, whatever screens it passes through: a flow from `/entries/new` lives in `NewEntryView.flow.cy.ts`. `App`'s own flows — tab return, flushing on leave — sit beside `App.vue`. The runners' existing globs already match the `.flow.` names; to run only flows, pass `--spec "src/**/*.flow.cy.ts"` to Cypress or `.flow.` to Vitest as a filter.
+
+**Duplicate specs are intentional.** `EntryCard.browser.test.ts` and `EntryCard.cy.ts` cover the same cases on purpose, to compare the two runners, and flow specs pair the same way. Don't consolidate them.
 
 **Cypress should keep up with Vitest Browser Mode.** Default to mirroring every `.browser.test.ts` into a `.cy.ts`, the same as any other duplicated pair. Skip the mirror only when there is a real obstacle, not merely because the thing under test isn't a `.vue` file — a composable can still be driven through a small host component. `DexieEntryRepository` is the genuine case: a plain data-layer class with nothing to mount, so it is proven in the Vitest browser project alone.
 
@@ -23,30 +27,38 @@ The persistent halves run in the browser project only — Dexie needs real Index
 
 - **Test from the user's perspective.** Simulate real interaction and assert what a user can see. Don't assert internal state, private methods, or DOM structure nobody interacts with.
 - **Don't test child components.** They get their own specs, or are treated as third party. Selecting or interacting with a child's elements as a means to an end is fine; asserting on behavior that belongs to the child is not. Where a parent only configures a child and the one visible result is styling — a table's `striped` prop, say — assert the prop it passes (`findComponent(Table).props('striped')`), not the computed CSS; the child's spec already proves what the prop does.
-- **Prefer whole flows.** One test covering a complete scenario beats several granular ones. Longer tests are fine when they represent one coherent idea, such as select a passage, strike it, propose wording, save, and see it rendered.
-- **Prefer spying over mocking.** Use real logic wherever possible so tests exercise real code paths. Minimize mocking, especially at first.
+- **Prefer whole scenarios.** One test covering a complete scenario beats several granular ones. Longer tests are fine when they represent one coherent idea, such as select a passage, strike it, propose wording, save, and see it rendered.
+- **Never mock what's in scope.** Everything a spec is about runs for real, watched with a spy where the screen can't show it. For a component spec, that is the component's own script, the children it renders, what it emits, where it navigates, and the stores and composables it runs on. What's outside the scope still runs, but the spec doesn't check it. For a component spec that's storage: seeded the way an intercept seeds a page, stubbed to fail when the failure is the point, and never read back.
 - **Use a fail first approach.** Every new test should be proven to fail as expected before being made to pass. For already working code, it can be broken, tested then restored.
 
 ## Layers
 
-Tests are one design, judged together rather than file by file. Component specs come first and carry what a user would care about; unit specs cover what's left. Overlap between those two levels is kept to a minimum — unlike the Cypress ↔ Browser Mode duplication, which is deliberate.
+Tests are one design, judged together rather than file by file. There are three levels — component, flow and unit — and overlap between them is kept to a minimum, unlike the Cypress ↔ Browser Mode duplication, which is deliberate. One question places a test: **does it check what was stored, or reach another screen?** Yes makes it a flow spec. No makes it a component spec, unless it has one of the reasons for a unit test below.
 
-**Component specs are narrow end-to-end tests.** They run real stores over real repositories on a real, isolated database (see "Swap the repository" below), so they prove a flow from the click down to what's stored. Keep them independent of which backend that is:
+**Component specs are the screen alone.** They mount the component under test. Storage runs real and isolated beneath it, as for every spec (see "Swap the repository" below), but it's the backend, out of scope, and is handled the way a request intercept handles one:
+
+- **Seed it** through the repository interface before mounting, with whatever the screen shows.
+- **Fail it** by stubbing one repository method to reject, when what the screen shows for a failure is the point.
+- **Never read it back.** Assert through the UI and the component's own outputs — what it emits, where it navigates. What reached storage is a flow's to check.
+
+A component spec owns everything its own code produces: every state its screen can show, how it responds — empty and error states, validation, what each control does there — and where it sends the writer next. It owns them even when a flow walks through them.
+
+**Flow specs are narrow end-to-end tests.** They mount `App` at a route and prove a path from the click down to what's stored, across as many screens as it takes. A flow walks one path per user goal and checks where it ends — the saved entry on its page, a draft kept when the page is left. What each screen does along the way, such as where it navigates, the flow leans on without asserting: it fails if that breaks, but the screen's own spec is where it's checked. Keep them independent of which backend is real:
 
 - **Arrange through the repository interface, act through the UI, assert through the UI.** Read the repository only for what no screen can show: nothing left on disk, the original row untouched, a trace that has no view yet.
-- **Type storage handles as the interfaces** (`DraftRepository`, `EntryRepository`), never an adapter class. Changing what backs component specs — in-memory adapters under a desktop shell, say — should then touch `src/testing/realRepositories.ts` alone. The contract suites are what make that swap safe.
+- **Type storage handles as the interfaces** (`DraftRepository`, `EntryRepository`), never an adapter class. Changing what backs the specs — storage behind IPC under a desktop shell, say — should then touch `src/testing/realRepositories.ts` alone. The contract suites are what make that swap safe.
 - **A repository read doesn't retry.** In Cypress, place it after a UI assertion that waits on the same write; in Vitest, wrap it in `vi.waitFor`. Retrying only helps presence: an absence ("no draft was written") passes on the first try (see Don'ts).
 - **When no UI marks the moment, wait on a signal the code already gives** rather than writing a polling helper: spy on the call that awaits the write, await its promise, then read plainly — for absence as well as presence, in both runners. For example, a draft session let go (an unmount, a change of entry) calls `drafts.abandonDraft`, which resolves once its flush has landed.
 
-**A unit test is warranted on top of component coverage for:**
+**A unit test is warranted on top of component and flow coverage for:**
 
-1. Pure logic with many cases, where a table of inputs beats a UI flow per case.
+1. Pure logic with many cases, where a table of inputs beats a UI scenario per case.
 2. Timing, ordering and races the UI can't drive deterministically.
-3. Fault injection — a failed write, a conflict — where forcing it through the UI would mean mocking under a real stack.
+3. How a store handles a fault — a failed write, a conflict. What a screen shows for one is a component spec's.
 4. Contracts: one interface, several implementations.
 5. Definitions whose value is the point: the schema, the route table, a constant.
 
-Not for re-walking a flow a component spec already walks, or re-proving a child's behavior. When a component spec comes to cover the reason a unit test exists, delete the unit test.
+Not for re-walking a path a component or flow spec already walks, or re-proving a child's behavior. When a component or flow spec comes to cover the reason a unit test exists, delete the unit test.
 
 ## Don'ts
 
@@ -107,15 +119,13 @@ Someone should understand a test without leaving the file. Abstraction is justif
   render(RelatedEntryForm, { props: { quote }, attrs: { onSubmit } })
   ```
 
-- **Swap the repository, don't mock it.** In a `*.cy.ts` or `*.browser.test.ts` spec, point the composition root at a fresh **real** adapter — real IndexedDB via Dexie, real OPFS — using the helpers in `src/testing/realRepositories.ts`:
+- **Swap the repository, don't mock it.** Every spec in either runner starts on fresh, isolated, **real** storage — real IndexedDB via Dexie, real OPFS — which a global `beforeEach` in `cypress/support/component.ts` and `src/testing/browserSetup.ts` points the composition root at, using the helpers in `src/testing/realRepositories.ts`. A spec seeds it, stubs it and, in a flow, reads it through the composition root's own bindings, which point at that test's instances. Read them inside a test, never captured at module scope, where they'd hold a stale instance:
 
   ```ts
-  entries = freshEntryRepository() // DexieEntryRepository, real IndexedDB
-  freshDraftRepository()
-  freshMediaRepository()
+  import { draftRepository, entryRepository } from '@/repositories'
   ```
 
-  Call only the ones a given spec actually needs; a component that never touches storage directly needs none of them. Entries and drafts share one uniquely-named database per test, exactly as `src/repositories/index.ts` shares one in production — a transaction cannot span two connections, so a spec covering the anchor-mode atomic seal has to be given the shape it will actually run against. Media gets its own OPFS directory. Everything created registers itself for cleanup; `cypress/support/component.ts` and `src/testing/browserSetup.ts` each dispose everything created in one global `afterEach`, so a spec that creates nothing pays nothing. Plain-Node `*.test.ts` unit tests are the exception: IndexedDB/OPFS don't exist in Node, so those swap in `InMemoryEntryRepository` / `InMemoryDraftRepository` / `InMemoryMediaRepository` directly.
+  Entries, drafts and mark sets share one uniquely-named database per test, exactly as `src/repositories/index.ts` shares one in production — a transaction cannot span two connections, so a spec covering the anchor-mode atomic seal has to be given the shape it will actually run against. Media gets its own OPFS directory. Neither is opened until first used, so a spec that never touches storage pays almost nothing, and everything created is disposed in one global `afterEach` per runner. The adapter specs call `freshXRepository()` themselves, since a contract wants an instance per factory call. Plain-Node `*.test.ts` unit tests construct `InMemoryEntryRepository` / `InMemoryDraftRepository` / `InMemoryMediaRepository` directly.
 
 - **Fresh instance per test**, not a shared singleton that gets cleared. Isolation by construction.
 
@@ -153,9 +163,9 @@ req.onsuccess = () => {
 }
 ```
 
-Swap `'drafts'` for `'entries'` to clear those instead, or delete the whole database from DevTools → Application → IndexedDB. Browser specs gets a uniquely-named DB, disposed in the global `afterEach`.
+Swap `'drafts'` for `'entries'` to clear those instead, or delete the whole database from DevTools → Application → IndexedDB. Every spec gets a uniquely-named database, disposed in the global `afterEach`.
 
 ## Known gaps
 
-- A draft's multi-tab behavior (tab return, two tabs saving at once, leaving a tab) is tested at component level with the other tab simulated: a second Pinia over the same database, driven through its store rather than a UI, and the browser's own events dispatched in place of switching, hiding or closing a tab: `focus` and `pagehide` on `window`, and `visibilitychange` on `document` with `visibilityState` shadowed by an own property, deleted after each test. A real second tab and a real reload wait for an end-to-end layer, which doesn't exist yet.
-- The drafts tests are mid-overhaul toward "Layers": [TEST_OVERHAUL.md](./TEST_OVERHAUL.md).
+- A draft's multi-tab behavior (tab return, two tabs saving at once, leaving a tab) is tested in flow specs with the other tab simulated: a second Pinia over the same database, driven through its store rather than a UI, and the browser's own events dispatched in place of switching, hiding or closing a tab: `focus` and `pagehide` on `window`, and `visibilitychange` on `document` with `visibilityState` shadowed by an own property, deleted after each test. A real second tab and a real reload wait for an end-to-end layer, which doesn't exist yet.
+- The specs haven't caught up with the component / flow split in "Layers": the view specs are still named and mounted as component specs, and read storage back. Catching up is part of [TEST_OVERHAUL.md](./TEST_OVERHAUL.md), Pass 5.

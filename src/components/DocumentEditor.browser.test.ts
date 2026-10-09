@@ -277,6 +277,8 @@ describe('DocumentEditor (browser)', () => {
     // An attachment adds no words, but it is content all the same.
     expect(latest.is_formatting).toBe(false)
     expect(latest.media_changed).toBe(true)
+    // Read back because storing is this editor's own output (TESTING.md, "Layers"). Once media is a
+    // real part of the UI, a flow that attaches and then shows the image likely takes this over.
     expect(await mediaRepository.get(mediaRef!)).not.toBeNull()
     // The bytes never enter the document: an object URL is minted per page load and would be a
     // broken reference the moment this entry was read again.

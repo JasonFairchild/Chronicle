@@ -24,9 +24,9 @@ Nothing is stored in the form it's viewed in. Entries are append-only, and `reco
 
 ## Testing
 
-Tests are written from the user's perspective: component specs simulate real interaction and assert what a user can see. They run real stores over real repositories on an isolated database, so each is a narrow end-to-end test from the click down to what's stored. Unit tests cover only what the UI can't reach — many-case pure logic, timing and races, fault injection — and each repository's contract suite holds every adapter to the same behavior.
+Tests are written from the user's perspective: they simulate real interaction and assert what a user can see. Every spec runs real stores over real repositories on an isolated database. A component spec is one screen: storage is seeded beneath it and never read back. A flow spec (`.flow.`) mounts the app at a route and follows one path from the click down to what's stored, across as many screens as it takes. Unit tests cover only what the UI can't reach — many-case pure logic, timing and races, fault injection — and each repository's contract suite holds every adapter to the same behavior.
 
-Component specs run in both Vitest Browser Mode and Cypress, deliberately duplicated to compare the two runners on the same cases.
+Component and flow specs run in both Vitest Browser Mode and Cypress, deliberately duplicated to compare the two runners on the same cases.
 
 [TESTING.md](./TESTING.md) has the full guidelines.
 

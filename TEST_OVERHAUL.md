@@ -224,10 +224,10 @@ The review's second turn. Component specs had grown into narrow end-to-end tests
 
 One commit for every view and `App` spec in both runners: it is one idea, and a half-split suite reads worse than a large diff. Review it with `git diff --color-moved`.
 
-- [ ] Sort every test by the question in "Layers".
-- [ ] Each flow moves to a `.flow.` file beside the view its route starts on and mounts `App` at that route; `App`'s own go to `App.flow.*`. With `App` mounted, leaving a page is navigating away rather than unmounting, waited on through the same `abandonDraft` signal. No other change to a moved test's body.
-- [ ] What stays in a component spec reads no storage back; a test that can't do without it is a flow.
-- [ ] The README's testing paragraph and TESTING.md "Known gaps" catch up.
+- [x] Sort every test by the question in "Layers". Of 64 view and `App` tests per runner, 29 are flows and 35 stay component specs: 5 of 11 in DraftsView, 27 of 35 in EntryDetailView, 2 of 6 in NewConnectionView, 1 of 7 in NewEntryView.
+- [x] Each flow moves to a `.flow.` file beside the view its route starts on and mounts `App` at that route; `App`'s own go to `App.flow.*`. With `App` mounted, leaving a page is navigating away rather than unmounting, waited on through the same `abandonDraft` signal. No other change to a moved test's body. Leaving is a click on the header's Timeline link; coming back is the Drafts link or the entry's Timeline card. EntryDetailView's move to another entry keeps the view mounted, so it pushes the router: Vitest builds its own, and Cypress reaches it through the mounted wrapper's `vm.$router` (D8). NewConnectionView's untitled save, which waited on the route, waits on the composer closing, as Cypress already did.
+- [x] What stays in a component spec reads no storage back; a test that can't do without it is a flow. EntryDetailView's "refuses a revision that changes nothing" dropped its read; its alert is the refusal. The Vitest teardown waits after Discard read the draft list; they wait on `discardDraft` instead.
+- [x] The README's testing paragraph and TESTING.md "Known gaps" catch up.
 
 **Commit 3 — what component specs now own**
 
@@ -237,6 +237,14 @@ New cases in the existing component specs, red first, in both runners. Spec file
 - [ ] Navigation as an output, wherever a view's own code navigates, even where a flow lands there too: the route the router is at after the action, read from `currentRoute` (D8). The test router's memory history leaves the browser's URL alone, so `cy.location()` can't see it.
 - [ ] Anything else a view's own code produces that only a flow reaches today gets its case in the view's spec; the flow keeps walking through it.
 
+Notes for picking this up:
+
+- Where each view navigates: NewEntryView's save, DraftsView's "Save as entry", NewConnectionView's "Add connection", and EntryDetailView's "Add entry" each land on the saved entry's page; EntryDetailView's "Add connection" goes to `new-connection`, proven in Vitest only, since Cypress had no router to read before `vm.$router`.
+- What only a flow reaches since commit 2, as candidates for the third item: NewEntryView's Discard emptying the page; DraftsView's notice for a draft on a replaced version, and Resume filling in the draft's details; NewConnectionView's composer closing after a save.
+- To fail a write, stub the method on the `@/repositories` binding (`cy.stub(entryRepository, 'create').rejects(…)`, `vi.spyOn(…).mockRejectedValue(…)`). The global `beforeEach` has already put that test's instance there, so stub before mounting.
+- Kept as component specs though storage sits underneath, since each asserts only its screen: EntryDetailView's cases that move to another entry with `setProps` and back, and the other-tab cases in DraftsView and EntryDetailView, which seed through a second store and assert what this screen shows.
+- `DocumentEditor`'s attach case reads media storage in Vitest but not in Cypress; a parity gap, not a layer question (D7).
+
 ### Later — a real E2E layer
 
 Pages in one Playwright browser context share IndexedDB: true two-tab, reload and `pagehide` tests. U13, U14 and I2 are covered at component level (D4), so what's left for E2E is what a component can't fake: a real reload, a real second tab, the browser's own events. Cypress runs inside a single tab and has historically not supported several; check its current state when this starts. Several tools side by side is a plus for a portfolio piece, not a liability.
@@ -245,11 +253,11 @@ Pages in one Playwright browser context share IndexedDB: true two-tab, reload an
 
 Open:
 
-- **D7 — a unit whose job is storage.** `useMedia`'s spec and `DocumentEditor`'s "stores an attached image in the media store…" read storage back, but neither has a route for a flow to start from. Storage is in their scope ("Philosophy"), so they may stay component specs. Settle in commit 2, and say so in "Layers" if it holds.
-- **D8 — seeing where a component spec navigated.** Vitest specs build their router and can read its `currentRoute`; `cy.mount` never hands back the one it builds (runner notes). The wrapper it yields may, through `wrapper.vm.$router`; otherwise `cy.mount` yields the router too. A spy on `push` only where the call itself matters. Settle in commit 3. Decided already: navigation a component's own code makes is asserted in its component spec, while a flow passing through leans on it unasserted ("Layers").
+- **D8 — seeing where a component spec navigated.** Vitest specs build their router and can read its `currentRoute`; `cy.mount` never hands back the one it builds (runner notes), but the wrapper it yields reaches it through `wrapper.vm.$router`, which EntryDetailView's flow already pushes. Whether that holds for a component mounted alone, or `cy.mount` should yield the router too, is commit 3's. A spy on `push` only where the call itself matters. Settle in commit 3. Decided already: navigation a component's own code makes is asserted in its component spec, while a flow passing through leans on it unasserted ("Layers").
 
 Decided:
 
+- **D7 — a unit whose job is storage.** `useMedia`'s spec and `DocumentEditor`'s "stores an attached image in the media store…" read storage back, and neither has a route for a flow to start from. What they store is their output, so they stay component specs ("Layers" says so).
 - **D6 — the component / flow split.** Component specs are the screen alone: storage seeded, stubbed to fail when the failure is the point, never read back. Flow specs mount `App` at a route and check what was stored or what another screen shows. Every spec runs on fresh real storage put in place for it. An in-memory backend for component specs was considered and dropped: a second backend in the browser runners, to enforce structurally what review already catches. Rules in TESTING.md "Layers".
 
 - **D4 — multi-tab at component level.** The Pass 2 spike worked in both runners: a second Pinia over the same database is the other tab, `App` mounted through the test router supplies the listeners, and events dispatched on `window` stand in for leaving or returning. It fakes the browser's side (no real second tab, no real reload), which stays for the E2E layer.
@@ -267,7 +275,7 @@ Decided:
 
 A running list for the Vitest Browser Mode vs Cypress write-up.
 
-- **Router.** `cy.mount` builds its router inside the command and never hands it back, so a spec can't inspect the route after navigating; Vitest builds its own with `createTestRouter()`.
+- **Router.** `cy.mount` builds its router inside the command and never hands it back; the mounted wrapper's `vm.$router` reaches it. Vitest builds its own with `createTestRouter()`.
 - **Retrying.** `vi.waitFor` retries an async block, repository reads included; Cypress retries queries and `.should`, but not a `cy.then` callback. So to wait for a write no UI shows outside a let-go, Vitest retries the read, and Cypress aliases a spy on the repository method, waits on `should('have.been.called')`, then on the call's returned promise.
 - **Spies.** `vi.spyOn` and `cy.spy` both work on a Pinia store's actions after mounting; each exposes the call's returned promise (`mock.results[0].value` / `firstCall.returnValue`).
 - **Seeding.** Inline `await` in Vitest; `cy.then(async …)` chains in Cypress.

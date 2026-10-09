@@ -41,6 +41,8 @@ Tests are one design, judged together rather than file by file. There are three 
 - **Fail it** by stubbing one repository method to reject, when what the screen shows for a failure is the point.
 - **Never read it back.** Assert through the UI and the component's own outputs — what it emits, where it navigates. What reached storage is a flow's to check.
 
+The exception is a unit whose job is storage, such as `useMedia`, or `DocumentEditor` storing an attached image: what it stores is its output, so its spec reads it back.
+
 A component spec owns everything its own code produces: every state its screen can show, how it responds — empty and error states, validation, what each control does there — and where it sends the writer next. It owns them even when a flow walks through them.
 
 **Flow specs are narrow end-to-end tests.** They mount `App` at a route and prove a path from the click down to what's stored, across as many screens as it takes. A flow walks one path per user goal and checks where it ends — the saved entry on its page, a draft kept when the page is left. What each screen does along the way, such as where it navigates, the flow leans on without asserting: it fails if that breaks, but the screen's own spec is where it's checked. Keep them independent of which backend is real:
@@ -48,7 +50,8 @@ A component spec owns everything its own code produces: every state its screen c
 - **Arrange through the repository interface, act through the UI, assert through the UI.** Read the repository only for what no screen can show: nothing left on disk, the original row untouched, a trace that has no view yet.
 - **Type storage handles as the interfaces** (`DraftRepository`, `EntryRepository`), never an adapter class. Changing what backs the specs — storage behind IPC under a desktop shell, say — should then touch `src/testing/realRepositories.ts` alone. The contract suites are what make that swap safe.
 - **A repository read doesn't retry.** In Cypress, place it after a UI assertion that waits on the same write; in Vitest, wrap it in `vi.waitFor`. Retrying only helps presence: an absence ("no draft was written") passes on the first try (see Don'ts).
-- **When no UI marks the moment, wait on a signal the code already gives** rather than writing a polling helper: spy on the call that awaits the write, await its promise, then read plainly — for absence as well as presence, in both runners. For example, a draft session let go (an unmount, a change of entry) calls `drafts.abandonDraft`, which resolves once its flush has landed.
+- **When no UI marks the moment, wait on a signal the code already gives** rather than writing a polling helper: spy on the call that awaits the write, await its promise, then read plainly — for absence as well as presence, in both runners. For example, a draft session let go (the page left, a change of entry) calls `drafts.abandonDraft`, which resolves once its flush has landed.
+- **Leave a page the way the writer would:** the header's links, and back through the page you left for (a Timeline card, the Drafts link). Where the same view stays mounted for another entry, push the router there; in Cypress, the mounted wrapper's `vm.$router`.
 
 **A unit test is warranted on top of component and flow coverage for:**
 
@@ -167,5 +170,4 @@ Swap `'drafts'` for `'entries'` to clear those instead, or delete the whole data
 
 ## Known gaps
 
-- A draft's multi-tab behavior (tab return, two tabs saving at once, leaving a tab) is tested in flow specs with the other tab simulated: a second Pinia over the same database, driven through its store rather than a UI, and the browser's own events dispatched in place of switching, hiding or closing a tab: `focus` and `pagehide` on `window`, and `visibilitychange` on `document` with `visibilityState` shadowed by an own property, deleted after each test. A real second tab and a real reload wait for an end-to-end layer, which doesn't exist yet.
-- The specs haven't caught up with the component / flow split in "Layers": the view specs are still named and mounted as component specs, and read storage back. Catching up is part of [TEST_OVERHAUL.md](./TEST_OVERHAUL.md), Pass 5.
+- A draft's multi-tab behavior (tab return, two tabs saving at once, leaving a tab) is tested with the other tab simulated: a second Pinia over the same database, driven through its store rather than a UI, and the browser's own events dispatched in place of switching, hiding or closing a tab: `focus` and `pagehide` on `window`, and `visibilitychange` on `document` with `visibilityState` shadowed by an own property, deleted after each test. A real second tab and a real reload wait for an end-to-end layer, which doesn't exist yet.

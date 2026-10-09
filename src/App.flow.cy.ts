@@ -27,7 +27,7 @@ function setVisibility(state: DocumentVisibilityState): void {
   })
 }
 
-describe('App', () => {
+describe('App flows', () => {
   afterEach(() => {
     cy.document().then((doc) => Reflect.deleteProperty(doc, 'visibilityState'))
   })

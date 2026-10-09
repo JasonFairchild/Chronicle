@@ -37,7 +37,7 @@ function setVisibility(state: DocumentVisibilityState): void {
   document.dispatchEvent(new Event('visibilitychange'))
 }
 
-describe('App (browser)', () => {
+describe('App flows (browser)', () => {
   afterEach(() => {
     Reflect.deleteProperty(document, 'visibilityState')
   })

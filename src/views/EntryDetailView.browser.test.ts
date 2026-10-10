@@ -16,8 +16,7 @@ import { formatDate, formatDateline, formatTime } from '@/utils/format'
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
 
-async function mountDetail(id: string) {
-  const router = createTestRouter()
+async function mountDetail(id: string, router = createTestRouter()) {
   await router.push('/')
   await router.isReady()
 
@@ -600,22 +599,50 @@ describe('EntryDetailView (browser)', () => {
     )
 
     const router = createTestRouter()
-    await router.push('/')
-    await router.isReady()
-    const screen = renderComponent(EntryDetailView, {
-      props: { id: source.id },
-      global: { plugins: [router] },
-    })
-
-    await expect.element(screen.getByText('Left my job')).toBeVisible()
+    const screen = await mountDetail(source.id, router)
     await screen.getByRole('button', { name: 'Add connection' }).click()
 
-    // The composer itself is its own routed view (NewConnectionView.flow.browser.test.ts covers
-    // creating one); this only proves the button gets you there.
     await vi.waitFor(() => {
-      expect(router.currentRoute.value.name).toBe('new-connection')
-      expect(router.currentRoute.value.params.id).toBe(source.id)
+      expect(router.currentRoute.value).toMatchObject({
+        name: 'new-connection',
+        params: { id: source.id },
+      })
     })
+  })
+
+  it('says why an entry can’t be shown when it fails to load', async () => {
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    vi.spyOn(entryRepository, 'listDescendants').mockRejectedValue(
+      new Error('Storage is unavailable'),
+    )
+
+    const screen = await mountDetail(parent.id)
+
+    await expect
+      .element(
+        screen.getByRole('alert').and(screen.getByText('Storage is unavailable', { exact: true })),
+      )
+      .toBeVisible()
+  })
+
+  it('keeps a revision open, and says why, when its save fails', async () => {
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    vi.spyOn(draftRepository, 'seal').mockRejectedValue(new Error('Storage is unavailable'))
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+    await screen.getByRole('textbox', { name: 'Revised entry' }).click()
+    await userEvent.keyboard('{Control>}{End}{/Control}, and Mom')
+    await screen.getByRole('button', { name: 'Save revision' }).click()
+
+    await expect
+      .element(
+        screen.getByRole('alert').and(screen.getByText('Storage is unavailable', { exact: true })),
+      )
+      .toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Revised entry' }))
+      .toHaveTextContent(`${PARENT_TEXT}, and Mom`)
   })
 
   it('renders an entry’s attachments from the media store', async () => {

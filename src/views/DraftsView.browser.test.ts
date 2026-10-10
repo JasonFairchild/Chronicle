@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { createPinia, setActivePinia } from 'pinia'
 import DraftsView from '@/views/DraftsView.vue'
@@ -8,14 +8,13 @@ import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
-import { createEntryInput } from '@/types/entry'
+import { createEntryInput, emptyEntryDates } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 /** Mounts the view behind a real router already at the Drafts page. */
-async function mountDrafts() {
-  const router = createTestRouter()
+async function mountDrafts(router = createTestRouter()) {
   await router.push('/drafts')
   await router.isReady()
 
@@ -196,5 +195,119 @@ describe('DraftsView (browser)', () => {
     const screen = await mountDrafts()
 
     await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
+  })
+
+  it('says why when the drafts can’t be read', async () => {
+    vi.spyOn(draftRepository, 'list').mockRejectedValue(new Error('Storage is unavailable'))
+
+    const screen = await mountDrafts()
+
+    await expect
+      .element(
+        screen.getByRole('alert').and(screen.getByText('Storage is unavailable', { exact: true })),
+      )
+      .toBeVisible()
+  })
+
+  it('reopens a draft with its words, title and dates', async () => {
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', {
+        entry: {
+          content: textContent('Half a thought'),
+          title: 'Lake Tahoe',
+          dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
+          events: TYPED,
+        },
+      }),
+    )
+
+    const screen = await mountDrafts()
+    await screen.getByRole('button', { name: 'Resume' }).click()
+
+    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Draft' }))
+      .toHaveTextContent('Half a thought')
+    // Exact, or "Happened" would also match the "Time it happened" beside it.
+    await expect
+      .element(screen.getByLabelText('Happened', { exact: true }))
+      .toHaveValue('1994-06-11')
+  })
+
+  it('lands on the entry a revision revised, not a page of its own', async () => {
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('The first go') }),
+    )
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', {
+        entry: {
+          base_version_id: parent.id,
+          base_content: parent.content,
+          content: textContent('The first go, reworded'),
+          events: TYPED,
+        },
+        kind: { kind: 'revision', parent_id: parent.id },
+      }),
+    )
+    const router = createTestRouter()
+    const screen = await mountDrafts(router)
+
+    await screen.getByRole('button', { name: 'Resume' }).click()
+    await screen.getByRole('button', { name: 'Save as entry' }).click()
+
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value).toMatchObject({
+        name: 'entry-detail',
+        params: { id: parent.id },
+      })
+    })
+  })
+
+  it('refuses a draft on a version since replaced, and says why', async () => {
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('The first go') }),
+    )
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', {
+        entry: {
+          base_version_id: parent.id,
+          base_content: parent.content,
+          content: textContent('The first go, reworded'),
+          events: TYPED,
+        },
+        kind: { kind: 'revision', parent_id: parent.id },
+      }),
+    )
+    // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
+    await entryRepository.create(
+      createEntryInput({
+        content: textContent('The second go'),
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: parent.id,
+      }),
+    )
+
+    const screen = await mountDrafts()
+    await screen.getByRole('button', { name: 'Resume' }).click()
+    await screen.getByRole('button', { name: 'Save as entry' }).click()
+
+    await expect
+      .element(
+        screen
+          .getByRole('status')
+          .and(
+            screen.getByText(
+              'This entry was revised after this draft began, so saving this would overwrite ' +
+                'that version. Copy what you need, then discard it.',
+              { exact: true },
+            ),
+          ),
+      )
+      .toBeVisible()
   })
 })

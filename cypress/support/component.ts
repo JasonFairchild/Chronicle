@@ -6,6 +6,7 @@
 
 import { type CyMountOptions, mount } from 'cypress/vue'
 import { createPinia } from 'pinia'
+import type { Router } from 'vue-router'
 import '@testing-library/cypress/add-commands'
 import '@/assets/main.css'
 import { disposeTestRepositories, freshRepositories } from '@/testing/realRepositories'
@@ -14,12 +15,15 @@ import { createTestRouter } from '@/testing/testRouter'
 type MountOptions = CyMountOptions<unknown> & {
   /** When given, mounts behind a real router (real routes, in-memory history) already at this path. */
   routePath?: string
+  /** With `routePath`, the router to use, for a spec that reads where the component navigated. */
+  router?: Router
 }
 
 /**
  * The one way component specs mount something: always a fresh Pinia (every store-backed spec
  * needs it; it's an inert no-op for the ones that don't), and — only when `routePath` is given — a
- * real router on the app's real route table. Storage is set up by the hooks below, not here.
+ * real router on the app's real route table, the spec's own if it passes one. Storage is set up by
+ * the hooks below, not here.
  */
 function mountWithRealStack(
   // `cypress/vue`'s `mount` is a large overload set keyed on the component's exact shape, with no
@@ -29,14 +33,13 @@ function mountWithRealStack(
   component: any,
   options: MountOptions = {},
 ): Cypress.Chainable {
-  const { routePath, global, ...rest } = options
+  const { routePath, router = createTestRouter(), global, ...rest } = options
   const plugins = [createPinia(), ...(global?.plugins ?? [])]
 
   if (routePath === undefined) {
     return mount(component, { ...rest, global: { ...global, plugins } })
   }
 
-  const router = createTestRouter()
   return cy
     .wrap(router.push(routePath).then(() => router.isReady()))
     .then(() => mount(component, { ...rest, global: { ...global, plugins: [...plugins, router] } }))

@@ -1,15 +1,17 @@
+import type { Router } from 'vue-router'
 import App from '@/App.vue'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { selectTextRange } from '@/testing/selectTextRange'
+import { createTestRouter } from '@/testing/testRouter'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
 import { createEntryInput, type Entry } from '@/types/entry'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
 
-function mountApp(id: string): Cypress.Chainable {
-  return cy.mount(App, { routePath: `/entries/${id}` })
+function mountApp(id: string, router?: Router): Cypress.Chainable {
+  return cy.mount(App, { routePath: `/entries/${id}`, router })
 }
 
 /** Creates one entry in the active repository; see `EntryDetailView.cy.ts`. */
@@ -48,27 +50,27 @@ describe('EntryDetailView flows', () => {
       const other = await seed({ content: textContent('A different day entirely') })
       return { parent, other }
     }).then(({ parent, other }) => {
-      mountApp(parent.id).then(({ wrapper }) => {
-        cy.findByRole('button', { name: 'Create related entry' }).click()
-        cy.findByRole('textbox', { name: 'Related entry' }).type('Half a thought about this')
+      const router = createTestRouter()
+      mountApp(parent.id, router)
+      cy.findByRole('button', { name: 'Create related entry' }).click()
+      cy.findByRole('textbox', { name: 'Related entry' }).type('Half a thought about this')
 
-        // The session has to close — saving after this would seal against the wrong entry — but
-        // closing it is not the same as throwing it away.
-        cy.then(() => {
-          cy.spy(useDraftsStore(), 'abandonDraft').as('abandonDraft')
-        })
-        // The same page for another entry, as a link or a typed address reaches it.
-        cy.then(() => wrapper.vm.$router.push(`/entries/${other.id}`))
+      // The session has to close — saving after this would seal against the wrong entry — but
+      // closing it is not the same as throwing it away.
+      cy.then(() => {
+        cy.spy(useDraftsStore(), 'abandonDraft').as('abandonDraft')
+      })
+      // The same page for another entry, as a link or a typed address reaches it.
+      cy.then(() => router.push(`/entries/${other.id}`))
 
-        // Resolves once the session's flush has landed.
-        cy.get('@abandonDraft')
-          .should('have.been.calledOnce')
-          .then((abandonDraft) => abandonDraft.firstCall.returnValue)
-        cy.then(async () => {
-          const [saved] = await draftRepository.list()
-          expect(saved).to.deep.include({ kind: 'new_related', parent_id: parent.id })
-          expect(docToPlainText(saved!.entry.content)).to.equal('Half a thought about this')
-        })
+      // Resolves once the session's flush has landed.
+      cy.get('@abandonDraft')
+        .should('have.been.calledOnce')
+        .then((abandonDraft) => abandonDraft.firstCall.returnValue)
+      cy.then(async () => {
+        const [saved] = await draftRepository.list()
+        expect(saved).to.deep.include({ kind: 'new_related', parent_id: parent.id })
+        expect(docToPlainText(saved!.entry.content)).to.equal('Half a thought about this')
       })
     })
   })

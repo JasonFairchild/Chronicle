@@ -4,7 +4,8 @@ import { textContent } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
-import { createEntryInput } from '@/types/entry'
+import { createTestRouter } from '@/testing/testRouter'
+import { createEntryInput, emptyEntryDates } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -182,5 +183,106 @@ describe('DraftsView', () => {
     cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByText('No drafts in progress.').should('be.visible')
+  })
+
+  it('says why when the drafts can’t be read', () => {
+    cy.stub(draftRepository, 'list').rejects(new Error('Storage is unavailable'))
+    cy.mount(DraftsView, { routePath: '/drafts' })
+
+    cy.findByRole('alert').should('have.text', 'Storage is unavailable')
+  })
+
+  it('reopens a draft with its words, title and dates', () => {
+    cy.then(() =>
+      seedDraft(
+        draftRepository,
+        makeDraft('session-1', {
+          entry: {
+            content: textContent('Half a thought'),
+            title: 'Lake Tahoe',
+            dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
+            events: TYPED,
+          },
+        }),
+      ),
+    )
+    cy.mount(DraftsView, { routePath: '/drafts' })
+
+    cy.findByRole('button', { name: 'Resume' }).click()
+
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
+    cy.findByRole('textbox', { name: 'Draft' }).should('contain.text', 'Half a thought')
+    cy.findByLabelText('Happened').should('have.value', '1994-06-11')
+  })
+
+  it('lands on the entry a revision revised, not a page of its own', () => {
+    cy.then(async () => {
+      const parent = await entryRepository.create(
+        createEntryInput({ content: textContent('The first go') }),
+      )
+      await seedDraft(
+        draftRepository,
+        makeDraft('session-1', {
+          entry: {
+            base_version_id: parent.id,
+            base_content: parent.content,
+            content: textContent('The first go, reworded'),
+            events: TYPED,
+          },
+          kind: { kind: 'revision', parent_id: parent.id },
+        }),
+      )
+      return parent
+    }).then((parent) => {
+      const router = createTestRouter()
+      cy.mount(DraftsView, { routePath: '/drafts', router })
+
+      cy.findByRole('button', { name: 'Resume' }).click()
+      cy.findByRole('button', { name: 'Save as entry' }).click()
+
+      cy.wrap(router)
+        .its('currentRoute.value')
+        .should('deep.include', { name: 'entry-detail', params: { id: parent.id } })
+    })
+  })
+
+  it('refuses a draft on a version since replaced, and says why', () => {
+    cy.then(async () => {
+      const parent = await entryRepository.create(
+        createEntryInput({ content: textContent('The first go') }),
+      )
+      await seedDraft(
+        draftRepository,
+        makeDraft('session-1', {
+          entry: {
+            base_version_id: parent.id,
+            base_content: parent.content,
+            content: textContent('The first go, reworded'),
+            events: TYPED,
+          },
+          kind: { kind: 'revision', parent_id: parent.id },
+        }),
+      )
+      // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
+      await entryRepository.create(
+        createEntryInput({
+          content: textContent('The second go'),
+          parent_id: parent.id,
+          relation_type: 'revision',
+          revision_mode: 'direct',
+          base_version_id: parent.id,
+        }),
+      )
+    })
+    cy.mount(DraftsView, { routePath: '/drafts' })
+
+    cy.findByRole('button', { name: 'Resume' }).click()
+    cy.findByRole('button', { name: 'Save as entry' }).click()
+
+    cy.findByRole('status').should(
+      'have.text',
+      'This entry was revised after this draft began, so saving this would overwrite that ' +
+        'version. Copy what you need, then discard it.',
+    )
   })
 })

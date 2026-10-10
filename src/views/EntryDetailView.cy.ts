@@ -1,10 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
+import type { Router } from 'vue-router'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 import { draftRepository, entryRepository, mediaRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
+import { createTestRouter } from '@/testing/testRouter'
 import { textContent } from '@/domain/entryDocument'
 import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
 import { formatDate, formatDateline, formatTime } from '@/utils/format'
@@ -12,8 +14,8 @@ import { formatDate, formatDateline, formatTime } from '@/utils/format'
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
 
-function mountDetail(id: string): Cypress.Chainable {
-  return cy.mount(EntryDetailView, { props: { id }, routePath: '/' })
+function mountDetail(id: string, router?: Router): Cypress.Chainable {
+  return cy.mount(EntryDetailView, { props: { id }, routePath: '/', router })
 }
 
 /**
@@ -567,10 +569,45 @@ describe('EntryDetailView', () => {
     })
   })
 
-  // "Navigates to a dedicated screen to add a connection" is proven in the Vitest browser spec
-  // only: `cy.mount`'s router is created inside the command and never handed back, so there's
-  // nothing here to inspect the post-navigation route on, unlike `createTestRouter()` called
-  // directly in a Vitest spec. Creating a connection itself is NewConnectionView.flow.cy.ts's.
+  it('navigates to a dedicated screen to add a connection', () => {
+    cy.then(() => seed({ content: textContent('Left my job') })).then((source) => {
+      const router = createTestRouter()
+      mountDetail(source.id, router)
+
+      cy.findByRole('button', { name: 'Add connection' }).click()
+
+      cy.wrap(router)
+        .its('currentRoute.value')
+        .should('deep.include', { name: 'new-connection', params: { id: source.id } })
+    })
+  })
+
+  it('says why an entry can’t be shown when it fails to load', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      cy.stub(entryRepository, 'listDescendants').rejects(new Error('Storage is unavailable'))
+      mountDetail(parent.id)
+
+      cy.findByRole('alert').should('have.text', 'Storage is unavailable')
+    })
+  })
+
+  it('keeps a revision open, and says why, when its save fails', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      cy.stub(draftRepository, 'seal').rejects(new Error('Storage is unavailable'))
+      mountDetail(parent.id)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}, and Mom')
+      cy.findByRole('button', { name: 'Save revision' }).click()
+
+      cy.findByRole('alert').should('have.text', 'Storage is unavailable')
+      cy.findByRole('textbox', { name: 'Revised entry' }).should(
+        'contain.text',
+        `${PARENT_TEXT}, and Mom`,
+      )
+      cy.findByRole('button', { name: 'Discard' }).click()
+    })
+  })
 
   it('renders an entry’s attachments from the media store', () => {
     cy.then(async () => {

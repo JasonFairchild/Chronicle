@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
+import { useSealDraft } from '@/composables/useSealDraft'
 import { toErrorMessage } from '@/utils/format'
 
 /**
@@ -16,23 +16,11 @@ import { toErrorMessage } from '@/utils/format'
  * can report into it, and an untouched one costs nothing — nothing is written until something is
  * typed, and `abandon` below drops a session nobody used.
  */
-const router = useRouter()
 const session = useDraftSession()
 session.begin({ kind: 'new_root' })
 
 const error = ref<string | null>(null)
-
-/** Lands on what was saved, so the writer sees it as it will be read. */
-async function handleSave(): Promise<void> {
-  error.value = null
-
-  try {
-    const saved = await session.save()
-    if (saved) void router.push({ name: 'entry-detail', params: { id: saved.id } })
-  } catch (err) {
-    error.value = toErrorMessage(err, 'Failed to save entry')
-  }
-}
+const handleSave = useSealDraft(session, error)
 
 /** Throws the draft away and starts over. Re-keying the editor gives it a genuinely empty document. */
 async function handleDiscard(): Promise<void> {

@@ -9,6 +9,7 @@ import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useMedia } from '@/composables/useMedia'
+import { useSealDraft } from '@/composables/useSealDraft'
 import { useTabReturn } from '@/composables/useTabReturn'
 import { currentVersionId } from '@/domain/reconstructEntryState'
 import { versionsRevisedBy, type DraftSnapshot } from '@/types/draft'
@@ -356,16 +357,7 @@ async function startRelatedEntry(): Promise<void> {
 }
 
 /** Lands on the new related entry, whose breadcrumb leads back here. */
-async function saveRelatedEntry(): Promise<void> {
-  actionError.value = null
-
-  try {
-    const saved = await relatedSession.save()
-    if (saved) void router.push({ name: 'entry-detail', params: { id: saved.id } })
-  } catch (err) {
-    actionError.value = toErrorMessage(err, 'Failed to add entry')
-  }
-}
+const saveRelatedEntry = useSealDraft(relatedSession, actionError)
 
 async function cancelRelatedEntry(): Promise<void> {
   await relatedSession.discard()

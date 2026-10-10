@@ -1,27 +1,26 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
+import { useSealDraft } from '@/composables/useSealDraft'
 import { docToPlainText, previewText } from '@/domain/entryDocument'
 import { DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { DraftSnapshot } from '@/types/draft'
-import type { Entry } from '@/types/entry'
 import { entryLabel, formatDate, toErrorMessage } from '@/utils/format'
 
 /** A draft's own text is shown at full width here, so it gets more room than a picker label would. */
 const PREVIEW_LIMIT = 120
 
-const router = useRouter()
 const drafts = useDraftsStore()
 const store = useEntriesStore()
 
 const session = useDraftSession()
 const error = ref<string | null>(null)
+const seal = useSealDraft(session, error)
 const unreadableId = ref<string | null>(null) // Shown whole, so its words can be copied before discarding.
 
 /** What each draft is attached to, so the list can name it rather than just describe its kind. */
@@ -107,23 +106,6 @@ async function resume(draft: DraftSnapshot): Promise<void> {
     if (err instanceof DraftUnreadableError) unreadableId.value = draft.session_id
     error.value = toErrorMessage(err, 'Failed to resume draft')
   }
-}
-
-/** Lands on what was saved: the entry itself, or for a revision, the entry it revised. */
-async function seal(): Promise<void> {
-  error.value = null
-
-  try {
-    const saved = await session.save()
-    if (saved) void router.push({ name: 'entry-detail', params: { id: pageOf(saved) } })
-  } catch (err) {
-    error.value = toErrorMessage(err, 'Failed to save entry')
-  }
-}
-
-/** A revision is a version of its parent, not an entry with a page of its own. */
-function pageOf(saved: Entry): string {
-  return saved.relation_type === 'revision' && saved.parent_id ? saved.parent_id : saved.id
 }
 
 /**

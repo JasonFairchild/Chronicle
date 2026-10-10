@@ -233,13 +233,13 @@ One commit for every view and `App` spec in both runners: it is one idea, and a 
 
 New cases in the existing component specs, red first, in both runners. Spec files for components that have none are out of the overhaul.
 
-- [ ] Failure states. The views catch a failed load, save, discard or resume and show it ("Failed to save entry", "Failed to load drafts"…), as `DocumentEditor` does a failed attach; no spec reaches any of the sixteen today. Force one by stubbing a repository method to reject. Not every one needs a case; choose by what a writer would actually meet.
-- [ ] Navigation as an output, wherever a view's own code navigates, even where a flow lands there too: the route the router is at after the action, read from `currentRoute` (D8). The test router's memory history leaves the browser's URL alone, so `cy.location()` can't see it.
-- [ ] Anything else a view's own code produces that only a flow reaches today gets its case in the view's spec; the flow keeps walking through it.
+- [x] Failure states. The views catch a failed load, save, discard or resume and show it ("Failed to save entry", "Failed to load drafts"…), as `DocumentEditor` does a failed attach; no spec reaches any of the sixteen today. Force one by stubbing a repository method to reject. Not every one needs a case; choose by what a writer would actually meet. Four: NewEntryView's save and EntryDetailView's revision, each keeping the words; EntryDetailView's load and DraftsView's list. A real `Error` shows its own message, so the alert reads the stub's, not the fallback.
+- [x] Navigation as an output, wherever a view's own code navigates, even where a flow lands there too: the route the router is at after the action, read from `currentRoute` (D8). The test router's memory history leaves the browser's URL alone, so `cy.location()` can't see it. Where the saved entry's id is the destination, a spy on `sealDraft` gives it. Saving and landing on what was saved is one composable, `useSealDraft`, so it is proven once through NewEntryView, plus the revision branch through DraftsView; the other views' saves are wiring their flows already walk.
+- [x] Anything else a view's own code produces that only a flow reaches today gets its case in the view's spec; the flow keeps walking through it.
 
 Notes for picking this up:
 
-- Where each view navigates: NewEntryView's save, DraftsView's "Save as entry", NewConnectionView's "Add connection", and EntryDetailView's "Add entry" each land on the saved entry's page; EntryDetailView's "Add connection" goes to `new-connection`, proven in Vitest only, since Cypress had no router to read before `vm.$router`.
+- Where each view navigates: NewEntryView's save, DraftsView's "Save as entry", NewConnectionView's "Add connection", and EntryDetailView's "Add entry" each land on the saved entry's page, all through `useSealDraft`; NewConnectionView's Discard goes back to its source, and EntryDetailView's "Add connection" to `new-connection`.
 - What only a flow reaches since commit 2, as candidates for the third item: NewEntryView's Discard emptying the page; DraftsView's notice for a draft on a replaced version, and Resume filling in the draft's details; NewConnectionView's composer closing after a save.
 - To fail a write, stub the method on the `@/repositories` binding (`cy.stub(entryRepository, 'create').rejects(…)`, `vi.spyOn(…).mockRejectedValue(…)`). The global `beforeEach` has already put that test's instance there, so stub before mounting.
 - Kept as component specs though storage sits underneath, since each asserts only its screen: EntryDetailView's cases that move to another entry with `setProps` and back, and the other-tab cases in DraftsView and EntryDetailView, which seed through a second store and assert what this screen shows.
@@ -251,12 +251,11 @@ Pages in one Playwright browser context share IndexedDB: true two-tab, reload an
 
 ## Decisions
 
-Open:
-
-- **D8 — seeing where a component spec navigated.** Vitest specs build their router and can read its `currentRoute`; `cy.mount` never hands back the one it builds (runner notes), but the wrapper it yields reaches it through `wrapper.vm.$router`, which EntryDetailView's flow already pushes. Whether that holds for a component mounted alone, or `cy.mount` should yield the router too, is commit 3's. A spy on `push` only where the call itself matters. Settle in commit 3. Decided already: navigation a component's own code makes is asserted in its component spec, while a flow passing through leans on it unasserted ("Layers").
+Open: none.
 
 Decided:
 
+- **D8 — seeing where a component spec navigated.** Read the router's `currentRoute`, on a router the spec builds and passes in: to its mount helper in Vitest, to `cy.mount`'s `router` option in Cypress. Reaching the router `cy.mount` built through `wrapper.vm.$router` worked too, but went through test-utils internals, cost a `.then` level per test, and read differently from Vitest. A spy on `push` only where the call itself matters. Navigation a component's own code makes is asserted in its component spec, while a flow passing through leans on it unasserted ("Layers").
 - **D7 — a unit whose job is storage.** `useMedia`'s spec and `DocumentEditor`'s "stores an attached image in the media store…" read storage back, and neither has a route for a flow to start from. What they store is their output, so they stay component specs ("Layers" says so).
 - **D6 — the component / flow split.** Component specs are the screen alone: storage seeded, stubbed to fail when the failure is the point, never read back. Flow specs mount `App` at a route and check what was stored or what another screen shows. Every spec runs on fresh real storage put in place for it. An in-memory backend for component specs was considered and dropped: a second backend in the browser runners, to enforce structurally what review already catches. Rules in TESTING.md "Layers".
 
@@ -275,7 +274,7 @@ Decided:
 
 A running list for the Vitest Browser Mode vs Cypress write-up.
 
-- **Router.** `cy.mount` builds its router inside the command and never hands it back; the mounted wrapper's `vm.$router` reaches it. Vitest builds its own with `createTestRouter()`.
+- **Router.** Both build the router in the spec with `createTestRouter()` when it needs to read where the component went: Vitest hands it to its mount helper, Cypress to `cy.mount`'s `router` option, alongside `routePath`. Cypress reads it with `cy.wrap(router).its('currentRoute.value')`, which retries; Vitest wraps the read in `vi.waitFor`. Before the option, Cypress reached the router it built through the mounted wrapper's `vm.$router`.
 - **Retrying.** `vi.waitFor` retries an async block, repository reads included; Cypress retries queries and `.should`, but not a `cy.then` callback. So to wait for a write no UI shows outside a let-go, Vitest retries the read, and Cypress aliases a spy on the repository method, waits on `should('have.been.called')`, then on the call's returned promise.
 - **Spies.** `vi.spyOn` and `cy.spy` both work on a Pinia store's actions after mounting; each exposes the call's returned promise (`mock.results[0].value` / `firstCall.returnValue`).
 - **Seeding.** Inline `await` in Vitest; `cy.then(async …)` chains in Cypress.

@@ -4,6 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
+import { useSealDraft } from '@/composables/useSealDraft'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { AggregatedEntry } from '@/types/entry'
 import { entryLabel, toErrorMessage } from '@/utils/format'
@@ -63,16 +64,7 @@ function pickTarget(): void {
 }
 
 /** Lands on the connection's own page, whose breadcrumb leads to both ends. */
-async function save(): Promise<void> {
-  actionError.value = null
-
-  try {
-    const saved = await session.save()
-    if (saved) void router.push({ name: 'entry-detail', params: { id: saved.id } })
-  } catch (err) {
-    actionError.value = toErrorMessage(err, 'Failed to add connection')
-  }
-}
+const save = useSealDraft(session, actionError)
 
 async function discard(): Promise<void> {
   await session.discard()

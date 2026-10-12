@@ -198,14 +198,12 @@ describe('DraftsView (browser)', () => {
   })
 
   it('says why when the drafts can’t be read', async () => {
-    vi.spyOn(draftRepository, 'list').mockRejectedValue(new Error('Storage is unavailable'))
+    vi.spyOn(draftRepository, 'list').mockRejectedValue(new Error('list rejected'))
 
     const screen = await mountDrafts()
 
     await expect
-      .element(
-        screen.getByRole('alert').and(screen.getByText('Storage is unavailable', { exact: true })),
-      )
+      .element(screen.getByRole('alert').and(screen.getByText('list rejected', { exact: true })))
       .toBeVisible()
   })
 

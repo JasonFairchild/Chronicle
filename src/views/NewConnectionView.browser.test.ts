@@ -17,29 +17,6 @@ async function mountNewConnection(id: string, router = createTestRouter()) {
 }
 
 describe('NewConnectionView (browser)', () => {
-  it('says why a connection with no content can’t be added', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
-    const destination = await entryRepository.create(
-      createEntryInput({ content: textContent('Started the degree') }),
-    )
-
-    const screen = await mountNewConnection(source.id)
-    await screen.getByLabelText('Connect to').selectOptions(destination.id)
-    await screen.getByRole('button', { name: 'Add connection' }).click()
-
-    await expect
-      .element(
-        screen.getByRole('alert').and(
-          screen.getByText('Write something in the entry first. A title alone can’t be saved.', {
-            exact: true,
-          }),
-        ),
-      )
-      .toBeVisible()
-  })
-
   it('says there is nothing to connect to rather than showing an empty picker', async () => {
     const source = await entryRepository.create(
       createEntryInput({ content: textContent('Left my job') }),

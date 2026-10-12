@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import EntryDetailsFields from '@/components/EntryDetailsFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
+import { toErrorMessage } from '@/utils/format'
 
 /**
  * The one way an entry is written: its document, then its detail fields, then Discard and Save.
@@ -17,29 +18,41 @@ const props = defineProps<{
   session: DraftSession
   label: string // The editor's accessible name.
   saveLabel: string
+  // Props rather than emits, so they can be awaited: a failure is said here, beside the buttons,
+  // and goes when this composer does. Bound as `@save` and `@discard` all the same.
+  onSave: () => Promise<void> | void
+  onDiscard: () => Promise<void> | void
 }>()
 
 const emit = defineEmits<{
-  save: []
-  discard: []
   change: [change: EditorChange] // After the session has it, for an owner that reads more of it.
 }>()
 
-const saveNotice = ref<string | null>(null) // Why the last Save did nothing; gone on the next change.
+const error = ref<string | null>(null) // Why Save or Discard did nothing; cleared by any change.
 
 function handleChange(change: EditorChange): void {
-  saveNotice.value = null
+  error.value = null
   props.session.handleChange(change)
   emit('change', change)
 }
 
 /** Asks the same question the seal will, so the owner is never handed a save bound to fail. */
-function handleSave(): void {
+async function handleSave(): Promise<void> {
   if (!props.session.canSave) {
-    saveNotice.value = 'Write something in the entry first. A title alone can’t be saved.'
+    error.value = 'Write something in the entry first. A title alone can’t be saved.'
     return
   }
-  emit('save')
+  await run(props.onSave, 'Failed to save entry')
+}
+
+/** Runs the owner's handler for one button, saying why if it fails. */
+async function run(action: () => Promise<void> | void, fallback: string): Promise<void> {
+  error.value = null
+  try {
+    await action()
+  } catch (err) {
+    error.value = toErrorMessage(err, fallback)
+  }
 }
 </script>
 
@@ -56,8 +69,8 @@ function handleSave(): void {
         @change="handleChange"
       />
 
-      <p v-if="saveNotice" class="mt-2 text-sm text-[var(--color-error)]" role="alert">
-        {{ saveNotice }}
+      <p v-if="error" class="mt-2 text-sm text-[var(--color-error)]" role="alert">
+        {{ error }}
       </p>
 
       <p v-if="session.staleNotice" class="mt-2 text-sm text-[var(--color-error)]" role="status">
@@ -82,7 +95,7 @@ function handleSave(): void {
         type="button"
         class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
         :disabled="session.saving"
-        @click="emit('discard')"
+        @click="run(onDiscard, 'Failed to discard draft')"
       >
         Discard
       </button>

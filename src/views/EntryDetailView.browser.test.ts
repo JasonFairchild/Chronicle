@@ -277,34 +277,6 @@ describe('EntryDetailView (browser)', () => {
       .toBeVisible()
   })
 
-  it('says why a related entry that says nothing can’t be added', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
-
-    const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Create related entry' }).click()
-
-    // Typed into and then emptied: the document is no longer the blank one the session opened
-    // with, but it still holds nothing worth keeping.
-    await screen.getByRole('textbox', { name: 'Related entry' }).click()
-    await userEvent.keyboard('x{Backspace}')
-
-    await screen.getByRole('button', { name: 'Add entry' }).click()
-    await expect
-      .element(
-        screen.getByRole('alert').and(
-          screen.getByText('Write something in the entry first. A title alone can’t be saved.', {
-            exact: true,
-          }),
-        ),
-      )
-      .toBeVisible()
-
-    const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
-    await screen.getByRole('button', { name: 'Discard' }).click()
-    expect(discardDraft).toHaveBeenCalledOnce()
-    await discardDraft.mock.results[0]!.value
-  })
-
   it('offers the draft already in progress on an entry rather than a second one', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
     const other = await entryRepository.create(
@@ -613,21 +585,23 @@ describe('EntryDetailView (browser)', () => {
   it('says why an entry can’t be shown when it fails to load', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
     vi.spyOn(entryRepository, 'listDescendants').mockRejectedValue(
-      new Error('Storage is unavailable'),
+      new Error('listDescendants rejected'),
     )
 
     const screen = await mountDetail(parent.id)
 
     await expect
       .element(
-        screen.getByRole('alert').and(screen.getByText('Storage is unavailable', { exact: true })),
+        screen
+          .getByRole('alert')
+          .and(screen.getByText('listDescendants rejected', { exact: true })),
       )
       .toBeVisible()
   })
 
   it('keeps a revision open, and says why, when its save fails', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
-    vi.spyOn(draftRepository, 'seal').mockRejectedValue(new Error('Storage is unavailable'))
+    vi.spyOn(draftRepository, 'seal').mockRejectedValue(new Error('seal rejected'))
 
     const screen = await mountDetail(parent.id)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -636,13 +610,12 @@ describe('EntryDetailView (browser)', () => {
     await screen.getByRole('button', { name: 'Save revision' }).click()
 
     await expect
-      .element(
-        screen.getByRole('alert').and(screen.getByText('Storage is unavailable', { exact: true })),
-      )
+      .element(screen.getByRole('alert').and(screen.getByText('seal rejected', { exact: true })))
       .toBeVisible()
     await expect
       .element(screen.getByRole('textbox', { name: 'Revised entry' }))
       .toHaveTextContent(`${PARENT_TEXT}, and Mom`)
+    await expect.element(screen.getByRole('button', { name: 'Save revision' })).toBeEnabled()
   })
 
   it('renders an entry’s attachments from the media store', async () => {

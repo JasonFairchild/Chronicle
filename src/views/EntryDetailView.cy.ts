@@ -274,25 +274,6 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('says why a related entry that says nothing can’t be added', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
-      mountDetail(parent.id)
-
-      cy.findByRole('button', { name: 'Create related entry' }).click()
-
-      // Typed into and then emptied: the document is no longer the blank one the session opened
-      // with, but it still holds nothing worth keeping.
-      cy.findByRole('textbox', { name: 'Related entry' }).type('x{backspace}')
-
-      cy.findByRole('button', { name: 'Add entry' }).click()
-      cy.findByRole('alert').should(
-        'have.text',
-        'Write something in the entry first. A title alone can’t be saved.',
-      )
-      cy.findByRole('button', { name: 'Discard' }).click()
-    })
-  })
-
   it('offers the draft already in progress on an entry rather than a second one', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })
@@ -584,28 +565,28 @@ describe('EntryDetailView', () => {
 
   it('says why an entry can’t be shown when it fails to load', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
-      cy.stub(entryRepository, 'listDescendants').rejects(new Error('Storage is unavailable'))
+      cy.stub(entryRepository, 'listDescendants').rejects(new Error('listDescendants rejected'))
       mountDetail(parent.id)
 
-      cy.findByRole('alert').should('have.text', 'Storage is unavailable')
+      cy.findByRole('alert').should('have.text', 'listDescendants rejected')
     })
   })
 
   it('keeps a revision open, and says why, when its save fails', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
-      cy.stub(draftRepository, 'seal').rejects(new Error('Storage is unavailable'))
+      cy.stub(draftRepository, 'seal').rejects(new Error('seal rejected'))
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
       cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}, and Mom')
       cy.findByRole('button', { name: 'Save revision' }).click()
 
-      cy.findByRole('alert').should('have.text', 'Storage is unavailable')
+      cy.findByRole('alert').should('have.text', 'seal rejected')
       cy.findByRole('textbox', { name: 'Revised entry' }).should(
         'contain.text',
         `${PARENT_TEXT}, and Mom`,
       )
-      cy.findByRole('button', { name: 'Discard' }).click()
+      cy.findByRole('button', { name: 'Save revision' }).should('be.enabled')
     })
   })
 

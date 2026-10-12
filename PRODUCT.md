@@ -181,6 +181,7 @@ Builds on anchor wording becoming ordinary text (CHRONICLE_PLAN.md, "Anchor word
 - A polished install experience, on a phone home screen or a desktop.
 - **Designed for phone width**, not only fitted to it. Today no page scrolls sideways on a phone, but none was laid out with one in mind.
 - **No failure is silent.** An error the screen in use doesn't handle itself still reaches the writer, as a plain app-wide notice, never only the console. Failures with a known way forward (a draft changed in another tab, one that can't be reopened) stay where the writer can act on them.
+- **An error says it's an error, not only in red.** Each one gets an icon, and a screen reader hears "Error:" before the message, from text hidden on screen, so the kind comes first for everyone. One shared message replaces the hand-written ones. Anything shown in red is announced as an error; today the notice for a draft on a replaced version is red but announced as a polite status. Polite notices stay on the page and change only their words, since one added with its words already in it may not be read out.
 
 ---
 

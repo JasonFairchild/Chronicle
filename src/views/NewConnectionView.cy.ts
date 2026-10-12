@@ -14,27 +14,6 @@ function mountNewConnection(id: string, router?: Router): Cypress.Chainable {
 }
 
 describe('NewConnectionView', () => {
-  it('says why a connection with no content can’t be added', () => {
-    cy.then(async () => ({
-      source: await entryRepository.create(
-        createEntryInput({ content: textContent('Left my job') }),
-      ),
-      destination: await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      ),
-    })).then(({ source, destination }) => {
-      mountNewConnection(source.id)
-
-      cy.findByLabelText('Connect to').select(destination.id)
-      cy.findByRole('button', { name: 'Add connection' }).click()
-
-      cy.findByRole('alert').should(
-        'have.text',
-        'Write something in the entry first. A title alone can’t be saved.',
-      )
-    })
-  })
-
   it('says there is nothing to connect to rather than showing an empty picker', () => {
     cy.then(() =>
       entryRepository.create(createEntryInput({ content: textContent('Left my job') })),

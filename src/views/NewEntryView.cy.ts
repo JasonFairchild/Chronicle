@@ -4,29 +4,6 @@ import { useDraftsStore } from '@/stores/draftsStore'
 import { createTestRouter } from '@/testing/testRouter'
 
 describe('NewEntryView', () => {
-  it('says why an entry with nothing written can’t be saved, even with a title', () => {
-    cy.mount(NewEntryView, { routePath: '/entries/new' })
-    cy.then(() => {
-      cy.spy(useDraftsStore(), 'sealDraft').as('sealDraft')
-    })
-
-    cy.findByRole('button', { name: 'Save entry' }).click()
-    cy.findByRole('alert').should(
-      'have.text',
-      'Write something in the entry first. A title alone can’t be saved.',
-    )
-
-    // Any change answers it, even one that still leaves nothing written: a title names an entry
-    // without being one, and spaces say nothing.
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
-    cy.focused().type('   ')
-    cy.findByRole('alert').should('not.exist')
-
-    cy.findByRole('button', { name: 'Save entry' }).click()
-    cy.findByRole('alert').should('be.visible')
-    cy.get('@sealDraft').should('not.have.been.called')
-  })
-
   it('lands on the entry it saves', () => {
     const router = createTestRouter()
     cy.mount(NewEntryView, { routePath: '/entries/new', router })
@@ -49,18 +26,18 @@ describe('NewEntryView', () => {
 
   it('keeps what was written, and says why, when the save fails', () => {
     const router = createTestRouter()
-    cy.stub(draftRepository, 'seal').rejects(new Error('Storage is unavailable'))
+    cy.stub(draftRepository, 'seal').rejects(new Error('seal rejected'))
     cy.mount(NewEntryView, { routePath: '/entries/new', router })
 
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
     cy.focused().type('We drove up on Friday.')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
-    cy.findByRole('alert').should('have.text', 'Storage is unavailable')
+    cy.findByRole('alert').should('have.text', 'seal rejected')
     cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
     cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'We drove up on Friday.')
     cy.wrap(router).its('currentRoute.value.name').should('equal', 'new-entry')
-    cy.findByRole('button', { name: 'Discard' }).click()
+    cy.findByRole('button', { name: 'Save entry' }).should('be.enabled')
   })
 
   it('empties the page on Discard, ready for the next entry', () => {

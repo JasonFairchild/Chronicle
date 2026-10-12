@@ -355,13 +355,13 @@ describe('useEntriesStore', () => {
 
     it('surfaces why the timeline could not be loaded, rather than failing blank', async () => {
       const repository = new InMemoryEntryRepository()
-      repository.listRootEntries = () => Promise.reject(new Error('Storage is unavailable'))
+      repository.listRootEntries = () => Promise.reject(new Error('listRootEntries rejected'))
       setEntryRepository(repository)
       const store = useEntriesStore()
 
-      await expect(store.loadRootEntries()).rejects.toThrow('Storage is unavailable')
+      await expect(store.loadRootEntries()).rejects.toThrow('listRootEntries rejected')
 
-      expect(store.error).toBe('Storage is unavailable')
+      expect(store.error).toBe('listRootEntries rejected')
       expect(store.loading).toBe(false)
     })
   })

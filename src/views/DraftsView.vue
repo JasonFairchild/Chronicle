@@ -20,7 +20,7 @@ const store = useEntriesStore()
 
 const session = useDraftSession()
 const error = ref<string | null>(null)
-const seal = useSealDraft(session, error)
+const seal = useSealDraft(session)
 const unreadableId = ref<string | null>(null) // Shown whole, so its words can be copied before discarding.
 
 /** What each draft is attached to, so the list can name it rather than just describe its kind. */

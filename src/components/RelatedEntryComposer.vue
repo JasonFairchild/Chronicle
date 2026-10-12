@@ -18,11 +18,8 @@ import type { DraftSession } from '@/composables/useDraftSession'
  */
 defineProps<{
   session: DraftSession
-}>()
-
-defineEmits<{
-  save: []
-  discard: []
+  onSave: () => Promise<void> | void // Awaited by `EntryComposer`, which says why one fails.
+  onDiscard: () => Promise<void> | void
 }>()
 </script>
 
@@ -62,8 +59,8 @@ defineEmits<{
         :session="session"
         label="Related entry"
         save-label="Add entry"
-        @save="$emit('save')"
-        @discard="$emit('discard')"
+        @save="onSave"
+        @discard="onDiscard"
       />
     </section>
   </div>

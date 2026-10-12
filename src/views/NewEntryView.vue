@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount } from 'vue'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useSealDraft } from '@/composables/useSealDraft'
-import { toErrorMessage } from '@/utils/format'
 
 /**
  * Where a new entry is written, and where the app opens. Typing here is a draft session, not an
@@ -19,19 +18,12 @@ import { toErrorMessage } from '@/utils/format'
 const session = useDraftSession()
 session.begin({ kind: 'new_root' })
 
-const error = ref<string | null>(null)
-const handleSave = useSealDraft(session, error)
+const handleSave = useSealDraft(session)
 
 /** Throws the draft away and starts over. Re-keying the editor gives it a genuinely empty document. */
 async function handleDiscard(): Promise<void> {
-  error.value = null
-
-  try {
-    await session.discard()
-    session.begin({ kind: 'new_root' })
-  } catch (err) {
-    error.value = toErrorMessage(err, 'Failed to discard draft')
-  }
+  await session.discard()
+  session.begin({ kind: 'new_root' })
 }
 
 // Whatever is pending has to reach disk before this page goes away — and if it was opened and
@@ -53,10 +45,6 @@ onBeforeUnmount(() => {
       save-label="Save entry"
       @save="handleSave"
       @discard="handleDiscard"
-    >
-      <template #notices>
-        <p v-if="error" class="text-sm text-[var(--color-error)]" role="alert">{{ error }}</p>
-      </template>
-    </EntryComposer>
+    />
   </div>
 </template>

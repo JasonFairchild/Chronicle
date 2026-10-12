@@ -20,7 +20,6 @@ const store = useEntriesStore()
 const source = ref<AggregatedEntry | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
-const actionError = ref<string | null>(null)
 
 /** Everything on the timeline except the source entry. Direction is fixed by which end you start from. */
 const candidates = computed(() =>
@@ -64,7 +63,7 @@ function pickTarget(): void {
 }
 
 /** Lands on the connection's own page, whose breadcrumb leads to both ends. */
-const save = useSealDraft(session, actionError)
+const save = useSealDraft(session)
 
 async function discard(): Promise<void> {
   await session.discard()
@@ -91,10 +90,6 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <h1 class="text-xl font-semibold">{{ heading }}</h1>
-
-      <p v-if="actionError" class="text-sm text-[var(--color-error)]" role="alert">
-        {{ actionError }}
-      </p>
 
       <DraftElsewhereNotice :session="session" />
 

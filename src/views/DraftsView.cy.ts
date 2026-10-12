@@ -186,10 +186,10 @@ describe('DraftsView', () => {
   })
 
   it('says why when the drafts can’t be read', () => {
-    cy.stub(draftRepository, 'list').rejects(new Error('Storage is unavailable'))
+    cy.stub(draftRepository, 'list').rejects(new Error('list rejected'))
     cy.mount(DraftsView, { routePath: '/drafts' })
 
-    cy.findByRole('alert').should('have.text', 'Storage is unavailable')
+    cy.findByRole('alert').should('have.text', 'list rejected')
   })
 
   it('reopens a draft with its words, title and dates', () => {

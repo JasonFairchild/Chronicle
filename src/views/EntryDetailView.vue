@@ -328,14 +328,8 @@ function trackAffectedAnchors(change: EditorChange): void {
 }
 
 async function saveRevision(): Promise<void> {
-  actionError.value = null
-
-  try {
-    const saved = await revisionSession.save()
-    if (saved) await loadEntry(props.id)
-  } catch (err) {
-    actionError.value = toErrorMessage(err, 'Failed to save revision')
-  }
+  const saved = await revisionSession.save()
+  if (saved) await loadEntry(props.id)
 }
 
 async function cancelRevision(): Promise<void> {
@@ -357,7 +351,7 @@ async function startRelatedEntry(): Promise<void> {
 }
 
 /** Lands on the new related entry, whose breadcrumb leads back here. */
-const saveRelatedEntry = useSealDraft(relatedSession, actionError)
+const saveRelatedEntry = useSealDraft(relatedSession)
 
 async function cancelRelatedEntry(): Promise<void> {
   await relatedSession.discard()

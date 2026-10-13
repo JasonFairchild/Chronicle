@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useSealDraft } from '@/composables/useSealDraft'
+import { useDraftToResume } from '@/router/draftQuery'
+import { toErrorMessage } from '@/utils/format'
 
 /**
  * Where a new entry is written, and where the app opens. Typing here is a draft session, not an
@@ -16,7 +18,24 @@ import { useSealDraft } from '@/composables/useSealDraft'
  * typed, and `abandon` below drops a session nobody used.
  */
 const session = useDraftSession()
-session.begin({ kind: 'new_root' })
+const resumeError = ref<string | null>(null)
+
+const resumeDraftId = useDraftToResume().value
+if (resumeDraftId) void reopen(resumeDraftId)
+else session.begin({ kind: 'new_root' })
+
+/**
+ * Reopens the draft this page was linked to. One that's gone, or failed to reopen, gives way to a
+ * fresh draft, as on an unlinked visit; one that can't be reopened shows read-only instead.
+ */
+async function reopen(id: string): Promise<void> {
+  try {
+    if (await session.resume(id)) return
+  } catch (err) {
+    resumeError.value = toErrorMessage(err, 'Failed to resume draft')
+  }
+  if (!session.readOnly) session.begin({ kind: 'new_root' })
+}
 
 const handleSave = useSealDraft(session)
 
@@ -37,9 +56,15 @@ onBeforeUnmount(() => {
   <div class="space-y-6">
     <h1 class="text-2xl font-semibold tracking-tight">New entry</h1>
 
+    <p v-if="resumeError" class="text-sm text-[var(--color-error)]" role="alert">
+      {{ resumeError }}
+    </p>
+
     <DraftElsewhereNotice :session="session" />
 
+    <!-- Only once there's a draft: an editor shown before a resume lands drops what's typed. -->
     <EntryComposer
+      v-if="session.hasDraft"
       :session="session"
       label="New entry"
       save-label="Save entry"

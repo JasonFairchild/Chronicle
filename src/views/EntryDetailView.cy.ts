@@ -5,7 +5,7 @@ import { draftRepository, entryRepository, mediaRepository } from '@/repositorie
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
 import { textContent } from '@/domain/entryDocument'
@@ -16,8 +16,15 @@ const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
-function mountDetail(id: string, router?: Router): Cypress.Chainable {
-  return cy.mount(EntryDetailView, { props: { id }, routePath: '/', router })
+function mountDetail(
+  id: string,
+  { router, draft }: { router?: Router; draft?: string } = {},
+): Cypress.Chainable {
+  return cy.mount(EntryDetailView, {
+    props: { id },
+    routePath: `/entries/${id}${draft ? `?draft=${draft}` : ''}`,
+    router,
+  })
 }
 
 /**
@@ -391,6 +398,65 @@ describe('EntryDetailView', () => {
     })
   })
 
+  it('reopens the related-entry draft it was linked to on both halves', () => {
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      await seedDraft(
+        draftRepository,
+        makeDraft('session-1', {
+          entry: { content: textContent('Wrong lake'), events: TYPED },
+          kind: relatedTo(parent),
+        }),
+      )
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id, { draft: 'session-1' })
+
+      cy.findByRole('textbox', { name: 'Related entry' }).should('contain.text', 'Wrong lake')
+      cy.findByRole('textbox', { name: 'Entry being annotated' }).should(
+        'contain.text',
+        PARENT_TEXT,
+      )
+    })
+  })
+
+  it('opens a revision it was linked to read-only, and says why, when the entry was revised since', () => {
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      await seedDraft(
+        draftRepository,
+        makeDraft('session-1', {
+          entry: {
+            base_version_id: parent.id,
+            base_content: parent.content,
+            content: textContent(`${PARENT_TEXT}, and Mom`),
+            events: TYPED,
+          },
+          kind: { kind: 'revision', parent_id: parent.id },
+        }),
+      )
+      // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
+      await seed({
+        content: textContent('I went to Donner Lake with Dad'),
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: parent.id,
+      })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id, { draft: 'session-1' })
+
+      cy.findByRole('alert').should(
+        'have.text',
+        'This entry was revised after this draft began, so saving this would overwrite that ' +
+          'version.',
+      )
+      cy.findByText(`${PARENT_TEXT}, and Mom`).should('be.visible')
+      cy.findByRole('button', { name: 'Save revision' }).should('not.exist')
+    })
+  })
+
   it('shows the version another tab saved once this tab is returned to', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
@@ -612,7 +678,7 @@ describe('EntryDetailView', () => {
   it('navigates to a dedicated screen to add a connection', () => {
     cy.then(() => seed({ content: textContent('Left my job') })).then((source) => {
       const router = createTestRouter()
-      mountDetail(source.id, router)
+      mountDetail(source.id, { router })
 
       cy.findByRole('button', { name: 'Add connection' }).click()
 

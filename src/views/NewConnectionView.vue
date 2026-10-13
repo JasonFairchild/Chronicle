@@ -5,6 +5,7 @@ import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useSealDraft } from '@/composables/useSealDraft'
+import { useDraftToResume } from '@/router/draftQuery'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { AggregatedEntry } from '@/types/entry'
 import { entryLabel, toErrorMessage } from '@/utils/format'
@@ -30,6 +31,7 @@ const candidates = computed(() =>
 
 const targetId = ref('')
 const session = useDraftSession()
+const resumeDraftId = useDraftToResume()
 
 const heading = computed(() =>
   source.value ? `New connection from “${entryLabel(source.value)}”` : 'New connection',
@@ -44,6 +46,8 @@ onMounted(async () => {
       store.getAggregatedEntry(props.id),
       store.loadRootEntries(),
     ])
+    // While still loading, so the picker can't begin another draft before this one is back.
+    if (resumeDraftId.value) await reopen(resumeDraftId.value)
   } catch (err) {
     error.value = toErrorMessage(err, 'Failed to load entry')
   } finally {
@@ -51,13 +55,19 @@ onMounted(async () => {
   }
 })
 
+/** Reopens the draft this page was linked to, showing the entry it connects to in the picker. */
+async function reopen(id: string): Promise<void> {
+  const draft = (await session.resume(id)) ?? session.unreadable?.draft
+  if (draft?.kind === 'new_connection') targetId.value = draft.target_id
+}
+
 /**
  * A connection structurally cannot exist without a destination (`target_id`), so the session only
  * begins once one is picked — the same gate "Create related entry" and "Revise entry" already put
  * in front of their own sessions before calling `begin`.
  */
 function pickTarget(): void {
-  if (!targetId.value || session.isOpen) return
+  if (!targetId.value || session.hasDraft) return
 
   session.begin({ kind: 'new_connection', parent_id: props.id, target_id: targetId.value })
 }
@@ -106,7 +116,7 @@ onBeforeUnmount(() => {
           id="connection-target"
           v-model="targetId"
           class="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)] px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="session.isOpen"
+          :disabled="session.hasDraft"
           @change="pickTarget"
         >
           <option value="">Choose an entry</option>
@@ -116,7 +126,7 @@ onBeforeUnmount(() => {
         </select>
 
         <EntryComposer
-          v-if="session.isOpen"
+          v-if="session.hasDraft"
           :session="session"
           label="New connection"
           save-label="Add connection"

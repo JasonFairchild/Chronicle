@@ -1,11 +1,9 @@
-import { createPinia, setActivePinia } from 'pinia'
 import DraftsView from '@/views/DraftsView.vue'
 import { textContent } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
-import { useDraftsStore } from '@/stores/draftsStore'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createTestRouter } from '@/testing/testRouter'
-import { createEntryInput, emptyEntryDates } from '@/types/entry'
+import { createEntryInput } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -144,46 +142,6 @@ describe('DraftsView', () => {
     cy.findByRole('textbox', { name: 'Draft' }).should('contain.text', 'Keep writing this')
   })
 
-  it('keeps the version another tab saved first, and shows what this one had to copy', () => {
-    cy.then(() =>
-      seedDraft(
-        draftRepository,
-        makeDraft('session-1', {
-          entry: { content: textContent('Half a thought'), events: TYPED },
-        }),
-      ),
-    )
-    cy.mount(DraftsView, { routePath: '/drafts' })
-
-    cy.findByRole('button', { name: 'Resume' }).click()
-    cy.findByRole('textbox', { name: 'Draft' }).should('be.visible')
-
-    // Another tab, with its own stores over the same database, writes the draft first.
-    cy.then(async () => {
-      setActivePinia(createPinia())
-      const otherTab = useDraftsStore()
-      await otherTab.resumeDraft('session-1')
-      otherTab.recordChange('session-1', {
-        content: textContent('Half a thought, finished elsewhere'),
-        steps: [{ stepType: 'replace' }],
-      })
-      await otherTab.flush('session-1')
-    })
-
-    // This tab hasn't caught up, so its next write lands on a draft that has moved on.
-    cy.findByRole('textbox', { name: 'Draft' }).type('{ctrl+end} here')
-
-    cy.findByText(
-      'This draft was changed elsewhere at the same time, and now shows what was saved there. ' +
-        'What you had here is below.',
-    ).should('be.visible')
-    cy.findByText('Half a thought here').should('be.visible')
-    cy.findByRole('textbox', { name: 'Draft' }).should(
-      'contain.text',
-      'Half a thought, finished elsewhere',
-    )
-  })
-
   it('shows all of a draft that will not reopen for copying, and still discards it', () => {
     const text =
       'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
@@ -223,29 +181,6 @@ describe('DraftsView', () => {
     cy.findByRole('alert').should('have.text', 'list rejected')
   })
 
-  it('reopens a draft with its words, title and dates', () => {
-    cy.then(() =>
-      seedDraft(
-        draftRepository,
-        makeDraft('session-1', {
-          entry: {
-            content: textContent('Half a thought'),
-            title: 'Lake Tahoe',
-            dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
-            events: TYPED,
-          },
-        }),
-      ),
-    )
-    cy.mount(DraftsView, { routePath: '/drafts' })
-
-    cy.findByRole('button', { name: 'Resume' }).click()
-
-    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
-    cy.findByRole('textbox', { name: 'Draft' }).should('contain.text', 'Half a thought')
-    cy.findByLabelText('Happened').should('have.value', '1994-06-11')
-  })
-
   it('lands on the entry a revision revised, not a page of its own', () => {
     cy.then(async () => {
       const parent = await entryRepository.create(
@@ -275,46 +210,5 @@ describe('DraftsView', () => {
         .its('currentRoute.value')
         .should('deep.include', { name: 'entry-detail', params: { id: parent.id } })
     })
-  })
-
-  it('opens a draft on a version since replaced read-only, and says why', () => {
-    cy.then(async () => {
-      const parent = await entryRepository.create(
-        createEntryInput({ content: textContent('The first go') }),
-      )
-      await seedDraft(
-        draftRepository,
-        makeDraft('session-1', {
-          entry: {
-            base_version_id: parent.id,
-            base_content: parent.content,
-            content: textContent('The first go, reworded'),
-            events: TYPED,
-          },
-          kind: { kind: 'revision', parent_id: parent.id },
-        }),
-      )
-      // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
-      await entryRepository.create(
-        createEntryInput({
-          content: textContent('The second go'),
-          parent_id: parent.id,
-          relation_type: 'revision',
-          revision_mode: 'direct',
-          base_version_id: parent.id,
-        }),
-      )
-    })
-    cy.mount(DraftsView, { routePath: '/drafts' })
-
-    cy.findByRole('button', { name: 'Resume' }).click()
-
-    cy.findByRole('alert').should(
-      'have.text',
-      'This entry was revised after this draft began, so saving this would overwrite that ' +
-        'version.',
-    )
-    cy.findByText('The first go, reworded').should('be.visible')
-    cy.findByRole('button', { name: 'Save as entry' }).should('not.exist')
   })
 })

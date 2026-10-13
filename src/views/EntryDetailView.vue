@@ -12,6 +12,7 @@ import { useMedia } from '@/composables/useMedia'
 import { useSealDraft } from '@/composables/useSealDraft'
 import { useTabReturn } from '@/composables/useTabReturn'
 import { currentVersionId } from '@/domain/reconstructEntryState'
+import { useDraftToResume } from '@/router/draftQuery'
 import { versionsRevisedBy, type DraftSnapshot } from '@/types/draft'
 import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import { useDraftsStore } from '@/stores/draftsStore'
@@ -29,6 +30,7 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+const resumeDraftId = useDraftToResume()
 const store = useEntriesStore()
 const drafts = useDraftsStore()
 const media = useMedia()
@@ -158,9 +160,13 @@ async function loadEntry(entryId: string): Promise<void> {
   }
 
   // Apart from the entry: failing to read drafts shouldn't blank a page that loaded.
-  await findOutstandingDraft().catch((err) => {
+  const outstanding = await findOutstandingDraft().catch((err) => {
     actionError.value = toErrorMessage(err, 'Failed to load drafts')
+    return null
   })
+  // Linked here to reopen it, as Resume draft would. A link to a draft since saved or discarded
+  // names one that's no longer outstanding, and is ignored.
+  if (outstanding && outstanding.session_id === resumeDraftId.value) await resumeOutstandingDraft()
 }
 
 /**

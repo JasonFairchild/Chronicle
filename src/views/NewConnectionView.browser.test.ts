@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { Router } from 'vue-router'
 import NewConnectionView from '@/views/NewConnectionView.vue'
 import { textContent } from '@/domain/entryDocument'
-import { entryRepository } from '@/repositories'
+import { draftRepository, entryRepository } from '@/repositories'
+import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput } from '@/types/entry'
 
-async function mountNewConnection(id: string, router = createTestRouter()) {
-  await router.push({ name: 'new-connection', params: { id } })
+const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
+
+async function mountNewConnection(
+  id: string,
+  { router = createTestRouter(), draft }: { router?: Router; draft?: string } = {},
+) {
+  await router.push({ name: 'new-connection', params: { id }, query: { draft } })
   await router.isReady()
 
   return renderComponent(NewConnectionView, {
@@ -39,7 +46,7 @@ describe('NewConnectionView (browser)', () => {
       createEntryInput({ content: textContent('Started the degree') }),
     )
     const router = createTestRouter()
-    const screen = await mountNewConnection(source.id, router)
+    const screen = await mountNewConnection(source.id, { router })
 
     await screen.getByLabelText('Connect to').selectOptions(destination.id)
     await screen.getByRole('button', { name: 'Discard' }).click()
@@ -50,5 +57,28 @@ describe('NewConnectionView (browser)', () => {
         params: { id: source.id },
       })
     })
+  })
+
+  it('reopens the connection it was linked to, with the entry it connects to', async () => {
+    const source = await entryRepository.create(
+      createEntryInput({ content: textContent('Left my job') }),
+    )
+    const destination = await entryRepository.create(
+      createEntryInput({ content: textContent('Started the degree') }),
+    )
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', {
+        entry: { content: textContent('One led to the other'), events: TYPED },
+        kind: { kind: 'new_connection', parent_id: source.id, target_id: destination.id },
+      }),
+    )
+
+    const screen = await mountNewConnection(source.id, { draft: 'session-1' })
+
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New connection' }))
+      .toHaveTextContent('One led to the other')
+    await expect.element(screen.getByLabelText('Connect to')).toHaveValue(destination.id)
   })
 })

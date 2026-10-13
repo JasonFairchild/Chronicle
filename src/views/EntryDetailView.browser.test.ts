@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { createPinia, setActivePinia } from 'pinia'
+import type { Router } from 'vue-router'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 import { draftRepository, entryRepository, mediaRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
@@ -8,7 +9,7 @@ import { useEntriesStore } from '@/stores/entriesStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { textContent } from '@/domain/entryDocument'
 import { createEntryInput, emptyEntryDates } from '@/types/entry'
@@ -18,8 +19,11 @@ const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
-async function mountDetail(id: string, router = createTestRouter()) {
-  await router.push('/')
+async function mountDetail(
+  id: string,
+  { router = createTestRouter(), draft }: { router?: Router; draft?: string } = {},
+) {
+  await router.push({ name: 'entry-detail', params: { id }, query: { draft } })
   await router.isReady()
 
   return renderComponent(EntryDetailView, {
@@ -401,6 +405,72 @@ describe('EntryDetailView (browser)', () => {
       .not.toBeInTheDocument()
   })
 
+  it('reopens the related-entry draft it was linked to on both halves', async () => {
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', {
+        entry: { content: textContent('Wrong lake'), events: TYPED },
+        kind: relatedTo(parent),
+      }),
+    )
+
+    const screen = await mountDetail(parent.id, { draft: 'session-1' })
+
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Related entry' }))
+      .toHaveTextContent('Wrong lake')
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Entry being annotated' }))
+      .toHaveTextContent(PARENT_TEXT)
+  })
+
+  it('opens a revision it was linked to read-only, and says why, when the entry was revised since', async () => {
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', {
+        entry: {
+          base_version_id: parent.id,
+          base_content: parent.content,
+          content: textContent(`${PARENT_TEXT}, and Mom`),
+          events: TYPED,
+        },
+        kind: { kind: 'revision', parent_id: parent.id },
+      }),
+    )
+    // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
+    await entryRepository.create(
+      createEntryInput({
+        content: textContent('I went to Donner Lake with Dad'),
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: parent.id,
+      }),
+    )
+
+    const screen = await mountDetail(parent.id, { draft: 'session-1' })
+
+    await expect
+      .element(
+        screen
+          .getByRole('alert')
+          .and(
+            screen.getByText(
+              'This entry was revised after this draft began, so saving this would overwrite ' +
+                'that version.',
+              { exact: true },
+            ),
+          ),
+      )
+      .toBeVisible()
+    await expect.element(screen.getByText(`${PARENT_TEXT}, and Mom`)).toBeVisible()
+    await expect
+      .element(screen.getByRole('button', { name: 'Save revision' }))
+      .not.toBeInTheDocument()
+  })
+
   it('shows the version another tab saved once this tab is returned to', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
     const screen = await mountDetail(parent.id)
@@ -639,7 +709,7 @@ describe('EntryDetailView (browser)', () => {
     )
 
     const router = createTestRouter()
-    const screen = await mountDetail(source.id, router)
+    const screen = await mountDetail(source.id, { router })
     await screen.getByRole('button', { name: 'Add connection' }).click()
 
     await vi.waitFor(() => {

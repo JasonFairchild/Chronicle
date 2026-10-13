@@ -29,16 +29,16 @@ The inventory every pass is measured against. Sources: PRODUCT.md §4.1, §4.5, 
 | U2 | A composer opened and left writes nothing | NewEntryView, both runners | component ✓ |
 | U3 | Leaving mid-draft keeps it | NewEntryView, EDV, NewConnectionView | component ✓ |
 | U4 | Drafts page: what each would become, when touched, preview, newest first | DraftsView | component ✓ |
-| U5 | Resume where it left off: words, title, dates; anchor mode on both halves | DraftsView; EDV resumes a revision's words | component ✓ |
+| U5 | Resume where it left off: words, title, dates; anchor mode on both halves | NewEntryView (words, title, dates); EDV (anchor mode on both halves, a revision's words); each from a `?draft=` link | component ✓ |
 | U6 | Saving a resumed draft makes one entry and removes the draft | DraftsView | component ✓ |
 | U7 | Discard removes it — the only thing that does — for any listed draft | DraftsView, EDV (revision), NewConnectionView | component ✓ |
 | U8 | A draft emptied of its words disappears | NewEntryView | component ✓ |
 | U9 | One draft per entry: **Resume draft** replaces Revise and Create related | EDV, both runners | component ✓ |
 | U10 | Leaving an untouched claim frees the entry | EDV (entry change, page left), DraftsView; store (related) | component ✓ |
-| U11 | A stale version refuses the save, says why, and the draft stays | DraftsView (a revision opened stale shows read-only); EDV (one refused at Save turns read-only); not the anchor-mode wording | component ✓ |
+| U11 | A stale version refuses the save, says why, and the draft stays | EDV (a revision reopened stale shows read-only; one refused at Save turns read-only); not the anchor-mode wording | component ✓ |
 | U12 | An unreadable draft says why, shows all its text, and can still be discarded | EntryComposer; DraftsView; EDV (shown in place of the entry, and Discard frees it) | component ✓ |
 | U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | App; EDV (the entry refresh); store (the drafts list) | component ✓ |
-| U14 | Two tabs save at once: the first wins, the other shows its text to copy | DraftsView | component ✓ |
+| U14 | Two tabs save at once: the first wins, the other shows its text to copy | NewEntryView | component ✓ |
 | U15 | Saving lands on what was saved; an entry with no body can't be saved | Each composer's view, mounted in App to land | component ✓ |
 | U16 | A revision saves formatting alone; one that changes nothing is refused | EDV | component ✓ |
 
@@ -202,12 +202,12 @@ During or after the review, move up the store cases a page can reach, each a new
 The review pivoted at its first question. `EntryForm.cy.ts` read the repository for a saved title and body because nothing on its screen showed them, and the fix was in the source: one `EntryComposer` for every composer, a new-entry page in place of `EntryForm`, and every save landing on the saved entry's page, where the specs now assert it. The placement rules that came out of it are under the candidates in "Lessons log".
 
 - [ ] A related-entry claim taken and released: Create related entry, leave, and both ways in are offered again (EDV, as Revise's already is).
-- [ ] A resumed draft holding work survives the page being left (DraftsView, beside "lets go of an untouched claim when the page is left").
+- [x] ~~A resumed draft holding work survives the page being left.~~ Covered: leaving runs the same `abandon` whether the draft was begun or resumed, and releasing is judged on what's stored (NewEntryView's "keeps what was typed…" flow; EDV's "offers the draft already in progress…").
 - [x] The drafts list refreshes on tab return, showing a claim another tab made (`App` at `/drafts`). It found a bug: the list named entries only on its own load, so the new row read "another entry". The names also came from the stored row, stale once a revision renamed the entry.
 - [x] ~~Typed dates reach the draft (a date in EntryForm's "keeps what was typed when the composer is left without saving").~~ Superseded: NewEntryView's specs type every detail, kept as a draft when the page is left and shown on the entry once saved.
 - [ ] A revision changed back to its version is released on leaving (EDV).
 
-The four open items above are flows, written after commit 2 below, in `.flow.` files.
+The two open items above are flows, written after commit 2 below, in `.flow.` files.
 
 **The component / flow split** (D6)
 

@@ -171,3 +171,4 @@ Swap `'drafts'` for `'entries'` to clear those instead, or delete the whole data
 ## Known gaps
 
 - A draft's multi-tab behavior (tab return, two tabs saving at once, leaving a tab) is tested with the other tab simulated: a second Pinia over the same database, driven through its store rather than a UI, and the browser's own events dispatched in place of switching, hiding or closing a tab: `focus` and `pagehide` on `window`, and `visibilitychange` on `document` with `visibilityState` shadowed by an own property, deleted after each test. A real second tab and a real reload wait for an end-to-end layer, which doesn't exist yet.
+- A related-entry draft that can't be reopened shows both halves read-only, the parent with the anchors it placed (`RelatedEntryComposer`, reached through `EntryDetailView`). No spec covers that view yet; the read-only state is covered through `EntryComposer` alone.

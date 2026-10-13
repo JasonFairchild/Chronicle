@@ -138,7 +138,7 @@ describe('DraftsView flows (browser)', () => {
     expect(await entryRepository.listRootEntries()).toEqual([])
   })
 
-  it('refuses a draft on a version since replaced, says why, and keeps it', async () => {
+  it('opens a draft on a version since replaced read-only, says why, and keeps it', async () => {
     const parent = await entryRepository.create(
       createEntryInput({ content: textContent('The first go') }),
     )
@@ -167,16 +167,15 @@ describe('DraftsView flows (browser)', () => {
 
     const screen = await mountApp()
     await screen.getByRole('button', { name: 'Resume' }).click()
-    await screen.getByRole('button', { name: 'Save as entry' }).click()
 
     await expect
       .element(
         screen
-          .getByRole('status')
+          .getByRole('alert')
           .and(
             screen.getByText(
               'This entry was revised after this draft began, so saving this would overwrite ' +
-                'that version. Copy what you need, then discard it.',
+                'that version.',
               { exact: true },
             ),
           ),

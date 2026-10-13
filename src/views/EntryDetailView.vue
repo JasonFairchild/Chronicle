@@ -274,12 +274,12 @@ watch(
   { flush: 'post' },
 )
 
-// Raised only while the side-by-side session is open, and lowered again however it ends — saved,
+// Raised only while the side-by-side session is shown, and lowered again however it ends — saved,
 // discarded, or navigated away from.
 watch(
-  () => relatedSession.isOpen,
-  (open) => {
-    layoutWidth.value = open ? 'wide' : 'normal'
+  () => relatedSession.hasDraft,
+  (shown) => {
+    layoutWidth.value = shown ? 'wide' : 'normal'
   },
 )
 
@@ -435,7 +435,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             </h1>
 
             <div
-              v-if="!revisionSession.isOpen && !relatedSession.isOpen"
+              v-if="!revisionSession.hasDraft && !relatedSession.hasDraft"
               class="flex flex-wrap gap-2"
             >
               <button
@@ -475,8 +475,8 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           <p v-if="metaLine" class="mt-1 text-sm text-[var(--color-text-muted)]">{{ metaLine }}</p>
         </header>
 
-        <template v-if="revisionSession.isOpen">
-          <p class="mb-2 text-sm text-[var(--color-text-muted)]">
+        <template v-if="revisionSession.hasDraft">
+          <p v-if="!revisionSession.readOnly" class="mb-2 text-sm text-[var(--color-text-muted)]">
             Editing appends a new version. The current text stays in the entry's history either way.
           </p>
 
@@ -501,7 +501,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           </EntryComposer>
         </template>
 
-        <template v-else-if="relatedSession.isOpen">
+        <template v-else-if="relatedSession.hasDraft">
           <RelatedEntryComposer
             :session="relatedSession"
             @save="saveRelatedEntry"

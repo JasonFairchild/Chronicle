@@ -27,30 +27,36 @@ defineProps<{
   <div class="grid gap-6 lg:grid-cols-2">
     <section aria-labelledby="anchor-mode-parent-heading">
       <h2 id="anchor-mode-parent-heading" class="mb-2 text-sm font-medium">This entry</h2>
-      <p id="anchor-mode-instructions" class="mb-2 text-sm text-[var(--color-text-muted)]">
+      <p
+        v-if="!session.readOnly"
+        id="anchor-mode-instructions"
+        class="mb-2 text-sm text-[var(--color-text-muted)]"
+      >
         Select a passage, then Highlight or Strike it (Ctrl+Alt+H / Ctrl+Alt+S) — or place the
         cursor and type to propose wording. Click an anchor you've placed to change its wording,
         switch it between highlight and strike, or remove it. Surrounding text cannot otherwise be
         changed from here.
       </p>
 
+      <!-- A read-only draft shows the anchors it placed, for reading alongside its related entry. -->
       <DocumentEditor
         :key="session.editorKey"
         label="Entry being annotated"
-        anchor-mode
+        :anchor-mode="!session.readOnly"
+        :display-only="session.readOnly"
         with-title
         :title="session.parentTitle"
         :content="session.parentContent"
         :anchor-base-content="session.parentBaseContent"
         :disabled="session.saving"
-        described-by="anchor-mode-instructions"
+        :described-by="session.readOnly ? undefined : 'anchor-mode-instructions'"
         @change="session.handleParentChange"
       />
     </section>
 
     <section aria-labelledby="anchor-mode-related-heading">
       <h2 id="anchor-mode-related-heading" class="mb-2 text-sm font-medium">The related entry</h2>
-      <p class="mb-2 text-sm text-[var(--color-text-muted)]">
+      <p v-if="!session.readOnly" class="mb-2 text-sm text-[var(--color-text-muted)]">
         Marking a passage is optional — with nothing marked this becomes a note about the entry as a
         whole.
       </p>

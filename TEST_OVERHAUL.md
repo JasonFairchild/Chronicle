@@ -35,8 +35,8 @@ The inventory every pass is measured against. Sources: PRODUCT.md §4.1, §4.5, 
 | U8 | A draft emptied of its words disappears | NewEntryView | component ✓ |
 | U9 | One draft per entry: **Resume draft** replaces Revise and Create related | EDV, both runners | component ✓ |
 | U10 | Leaving an untouched claim frees the entry | EDV (entry change, page left), DraftsView; store (related) | component ✓ |
-| U11 | A stale version refuses the save, says why, and the draft stays | DraftsView (a revision; not the anchor-mode wording) | component ✓ |
-| U12 | An unreadable draft says why, shows all its text, and can still be discarded | DraftsView | component ✓ |
+| U11 | A stale version refuses the save, says why, and the draft stays | DraftsView (a revision opened stale shows read-only); EDV (one refused at Save turns read-only); not the anchor-mode wording | component ✓ |
+| U12 | An unreadable draft says why, shows all its text, and can still be discarded | EntryComposer; DraftsView; EDV (shown in place of the entry, and Discard frees it) | component ✓ |
 | U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | App; EDV (the entry refresh); store (the drafts list) | component ✓ |
 | U14 | Two tabs save at once: the first wins, the other shows its text to copy | DraftsView | component ✓ |
 | U15 | Saving lands on what was saved; an entry with no body can't be saved | Each composer's view, mounted in App to land | component ✓ |

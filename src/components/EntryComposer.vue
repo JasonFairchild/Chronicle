@@ -58,6 +58,16 @@ async function run(action: () => Promise<void> | void, fallback: string): Promis
 
 <template>
   <div class="space-y-3">
+    <div
+      v-if="session.readOnlyReason"
+      class="rounded-lg border border-[var(--color-error)] px-3 py-2 text-sm"
+    >
+      <p class="font-medium text-[var(--color-error)]" role="alert">
+        {{ session.readOnlyReason }}
+      </p>
+      <p class="mt-1">Everything it holds is below, to copy before you discard it.</p>
+    </div>
+
     <div>
       <DocumentEditor
         :key="session.editorKey"
@@ -66,6 +76,7 @@ async function run(action: () => Promise<void> | void, fallback: string): Promis
         :title="session.title"
         :content="session.content"
         :disabled="session.saving"
+        :display-only="session.readOnly"
         @change="handleChange"
       />
 
@@ -78,15 +89,16 @@ async function run(action: () => Promise<void> | void, fallback: string): Promis
       </p>
     </div>
 
-    <p class="text-xs text-[var(--color-text-muted)]">
+    <p v-if="!session.readOnly" class="text-xs text-[var(--color-text-muted)]">
       Saved as a draft while you write. Nothing is added to your record until you save it.
     </p>
 
-    <slot name="notices" />
+    <slot v-if="!session.readOnly" name="notices" />
 
     <EntryDetailsFields
       :model-value="session.details"
       :disabled="session.saving"
+      :readonly="session.readOnly"
       @update:model-value="session.handleDetailsChange"
     />
 
@@ -101,9 +113,11 @@ async function run(action: () => Promise<void> | void, fallback: string): Promis
       </button>
       <!--
         Disabled only while saving. With nothing written it stays enabled and says why when
-        pressed: a disabled button explains nothing and can't be reached by Tab.
+        pressed: a disabled button explains nothing and can't be reached by Tab. Absent for a
+        read-only draft, which no press could ever save.
       -->
       <button
+        v-if="!session.readOnly"
         type="button"
         class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="session.saving"

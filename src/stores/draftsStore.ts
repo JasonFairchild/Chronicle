@@ -74,10 +74,10 @@ export interface ChangedElsewhere {
 
 /**
  * A stored draft no trace can carry on from, because its start time won't parse. Its words are on
- * disk but out of reach, so discarding is the only way forward.
+ * disk but out of reach, so discarding is the only way forward; `draft` holds them for copying first.
  */
 export class DraftUnreadableError extends Error {
-  constructor() {
+  constructor(readonly draft: DraftSnapshot) {
     super(
       'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
     )
@@ -177,7 +177,7 @@ export const useDraftsStore = defineStore('drafts', () => {
           document.events,
         )
       } catch {
-        throw new DraftUnreadableError()
+        throw new DraftUnreadableError(toSnapshot(draft))
       }
     }
 

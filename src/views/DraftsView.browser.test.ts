@@ -293,7 +293,7 @@ describe('DraftsView (browser)', () => {
     })
   })
 
-  it('refuses a draft on a version since replaced, and says why', async () => {
+  it('opens a draft on a version since replaced read-only, and says why', async () => {
     const parent = await entryRepository.create(
       createEntryInput({ content: textContent('The first go') }),
     )
@@ -322,20 +322,23 @@ describe('DraftsView (browser)', () => {
 
     const screen = await mountDrafts()
     await screen.getByRole('button', { name: 'Resume' }).click()
-    await screen.getByRole('button', { name: 'Save as entry' }).click()
 
     await expect
       .element(
         screen
-          .getByRole('status')
+          .getByRole('alert')
           .and(
             screen.getByText(
               'This entry was revised after this draft began, so saving this would overwrite ' +
-                'that version. Copy what you need, then discard it.',
+                'that version.',
               { exact: true },
             ),
           ),
       )
       .toBeVisible()
+    await expect.element(screen.getByText('The first go, reworded')).toBeVisible()
+    await expect
+      .element(screen.getByRole('button', { name: 'Save as entry' }))
+      .not.toBeInTheDocument()
   })
 })

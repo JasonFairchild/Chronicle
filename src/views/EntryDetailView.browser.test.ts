@@ -8,6 +8,7 @@ import { useEntriesStore } from '@/stores/entriesStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { withAnchorMark } from '@/testing/anchorFixtures'
+import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { textContent } from '@/domain/entryDocument'
 import { createEntryInput, emptyEntryDates } from '@/types/entry'
@@ -15,6 +16,7 @@ import { formatDate, formatDateline, formatTime } from '@/utils/format'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
+const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 async function mountDetail(id: string, router = createTestRouter()) {
   await router.push('/')
@@ -330,6 +332,72 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByRole('button', { name: 'Revise entry' })).toBeVisible()
     await expect
       .element(screen.getByRole('button', { name: 'Resume draft' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('shows a draft on the entry that will not reopen, and frees the entry once it is discarded', async () => {
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    await seedDraft(draftRepository, {
+      ...makeDraft('session-1', {
+        entry: {
+          base_version_id: parent.id,
+          base_content: parent.content,
+          content: textContent(`${PARENT_TEXT}, and Mom`),
+          events: TYPED,
+        },
+        kind: { kind: 'revision', parent_id: parent.id },
+      }),
+      started_at: 'not a timestamp',
+    })
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Resume draft' }).click()
+    await expect.element(screen.getByText(`${PARENT_TEXT}, and Mom`)).toBeVisible()
+
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    await expect.element(screen.getByRole('button', { name: 'Revise entry' })).toBeVisible()
+    await expect.element(screen.getByText(`${PARENT_TEXT}, and Mom`)).not.toBeInTheDocument()
+  })
+
+  it('turns a revision read-only, and says why, once its save is refused for a version saved since', async () => {
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+    await screen.getByRole('textbox', { name: 'Revised entry' }).click()
+    await userEvent.keyboard('{Control>}{End}{/Control}, and Mom')
+
+    // Only a race gets a second revision past the claim; saving one directly stands in for it.
+    await entryRepository.create(
+      createEntryInput({
+        content: textContent('I went to Donner Lake with Dad'),
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: parent.id,
+      }),
+    )
+    await screen.getByRole('button', { name: 'Save revision' }).click()
+
+    await expect
+      .element(
+        screen
+          .getByRole('alert')
+          .and(
+            screen.getByText(
+              'This entry was revised after this draft began, so saving this would overwrite ' +
+                'that version.',
+              { exact: true },
+            ),
+          ),
+      )
+      .toBeVisible()
+    await expect.element(screen.getByText(`${PARENT_TEXT}, and Mom`)).toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Revised entry' }))
+      .not.toBeInTheDocument()
+    await expect
+      .element(screen.getByRole('button', { name: 'Save revision' }))
       .not.toBeInTheDocument()
   })
 

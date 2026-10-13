@@ -6,8 +6,8 @@ import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useSealDraft } from '@/composables/useSealDraft'
-import { docToPlainText, previewText } from '@/domain/entryDocument'
-import { DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
+import { previewText } from '@/domain/entryDocument'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { DraftSnapshot } from '@/types/draft'
 import { entryLabel, formatDate, toErrorMessage } from '@/utils/format'
@@ -21,7 +21,8 @@ const store = useEntriesStore()
 const session = useDraftSession()
 const error = ref<string | null>(null)
 const seal = useSealDraft(session)
-const unreadableId = ref<string | null>(null) // Shown whole, so its words can be copied before discarding.
+/** The draft whose row shows the composer: the one open, or the one that couldn't be reopened. */
+const heldId = computed(() => session.sessionId ?? session.unreadable?.draft.session_id ?? null)
 
 /** What each draft is attached to, so the list can name it rather than just describe its kind. */
 const parentLabels = ref<Record<string, string>>({})
@@ -105,6 +106,9 @@ function describe(draft: DraftSnapshot): string {
 
 async function resume(draft: DraftSnapshot): Promise<void> {
   error.value = null
+  // Lets go of the open draft first, as leaving does: the session holds one draft at a time, open
+  // or read-only, and one that can't be reopened would otherwise leave it holding two.
+  session.reset()
 
   // Reopening rebuilds the authoring session from what was flushed, so the event log continues
   // rather than restarting at the reload. This has to finish before the editor mounts — otherwise
@@ -112,21 +116,20 @@ async function resume(draft: DraftSnapshot): Promise<void> {
   try {
     await session.resume(draft.session_id)
   } catch (err) {
-    if (err instanceof DraftUnreadableError) unreadableId.value = draft.session_id
     error.value = toErrorMessage(err, 'Failed to resume draft')
   }
 }
 
 /**
  * Discards any draft in the list, not only the one open for editing — every row offers this, so
- * the session composable (which only ever tracks the one currently open) is used when this is
- * that draft, and the store directly otherwise.
+ * the session composable (which only ever holds one) is used when this is that draft, and the
+ * store directly otherwise.
  */
 async function discard(sessionId: string): Promise<void> {
   error.value = null
 
   try {
-    if (session.sessionId === sessionId) {
+    if (heldId.value === sessionId) {
       await session.discard()
     } else {
       await drafts.discardDraft(sessionId)
@@ -174,14 +177,14 @@ async function discard(sessionId: string): Promise<void> {
         </div>
 
         <RelatedEntryComposer
-          v-if="session.sessionId === draft.session_id && anchorModeOpen"
+          v-if="heldId === draft.session_id && anchorModeOpen"
           :session="session"
           @save="seal"
           @discard="discard(draft.session_id)"
         />
 
         <EntryComposer
-          v-else-if="session.sessionId === draft.session_id"
+          v-else-if="heldId === draft.session_id"
           :session="session"
           label="Draft"
           save-label="Save as entry"
@@ -190,16 +193,7 @@ async function discard(sessionId: string): Promise<void> {
         />
 
         <template v-else>
-          <template v-if="draft.session_id === unreadableId">
-            <p class="mb-2 text-xs text-[var(--color-text-muted)]">
-              Everything it holds, to copy before you discard it:
-            </p>
-            <p v-if="draft.entry.title" class="font-medium">{{ draft.entry.title }}</p>
-            <p class="whitespace-pre-wrap text-sm leading-relaxed">
-              {{ docToPlainText(draft.entry.content) }}
-            </p>
-          </template>
-          <p v-else class="whitespace-pre-wrap text-sm leading-relaxed">
+          <p class="whitespace-pre-wrap text-sm leading-relaxed">
             {{ previewText(draft.entry.content, PREVIEW_LIMIT) }}
           </p>
 

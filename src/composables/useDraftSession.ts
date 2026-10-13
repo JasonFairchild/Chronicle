@@ -1,10 +1,11 @@
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import type { EditorChange } from '@/components/DocumentEditor.vue'
 import { docToPlainText, isEmptyDocument } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
-import { useDraftsStore, type DraftStart } from '@/stores/draftsStore'
+import { currentVersionId } from '@/domain/reconstructEntryState'
+import { DraftUnreadableError, useDraftsStore, type DraftStart } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import type { Draft, DraftSnapshot } from '@/types/draft'
+import { versionsRevisedBy, type Draft, type DraftSnapshot } from '@/types/draft'
 import { emptyEntryDetails, entryDetailsOf, type Entry, type EntryDetails } from '@/types/entry'
 
 /**
@@ -49,39 +50,66 @@ export function useDraftSession() {
   const parentBaseContent = ref('')
   /**
    * What the open draft is, and whether the entry it could revise has moved past the version it
-   * started from. A claim keeps that from happening on one device (PRODUCT.md §4.8), so it is only
-   * learned when a save is refused for it.
+   * started from. A claim keeps that from happening (PRODUCT.md §4.8) all but in a race, so it is
+   * learned when the draft is reopened, or when a save is refused for it.
    */
   const kind = ref<DraftSnapshot['kind'] | null>(null)
   const stale = ref(false)
 
   const isOpen = computed(() => sessionId.value !== null)
 
-  /** Why a stale draft can't be saved as it is, in the writer's terms; null while it can. */
-  const staleNotice = computed(() => {
-    if (!stale.value) return null
-    return kind.value === 'new_related'
+  /**
+   * Why a stale related entry's marks can't be saved. The entry itself still can, once they're
+   * removed, so unlike a stale revision it stays open for editing (`readOnlyReason`).
+   */
+  const staleNotice = computed(() =>
+    stale.value && kind.value === 'new_related'
       ? 'This entry was revised after this draft began, so passages marked here can’t be saved. ' +
-          'The related entry itself still can, with nothing marked.'
-      : 'This entry was revised after this draft began, so saving this would overwrite that ' +
-          'version. Copy what you need, then discard it.'
-  })
+        'The related entry itself still can, with nothing marked.'
+      : null,
+  )
 
   /** The same condition `entriesStore.requireContent` enforces, asked before a save is attempted. */
   const canSave = computed(() => !isEmptyDocument(content.value))
 
   /**
    * What an editor showing this session is keyed on. It changes when the draft is reloaded from
-   * disk under it: `DocumentEditor` reads its content once, on mount, so a remount is the swap.
+   * disk under it, or turns read-only: `DocumentEditor` reads its content and whether it can be
+   * typed in once, on mount, so a remount is the swap.
    */
   const reloads = ref(0)
-  const editorKey = computed(() => `${sessionId.value ?? ''}:${reloads.value}`)
+  const editorKey = computed(
+    () => `${sessionId.value ?? ''}:${reloads.value}:${readOnly.value ? 'read' : 'write'}`,
+  )
   /** How many of another tab's changes to this draft are caught up on (`drafts.elsewhere`). */
   let changesSeen = 0
   /** Said when another tab changed this draft in a way the writer should know about. */
   const elsewhereNotice = ref<string | null>(null)
   /** What this tab held when another tab's version replaced it, for the writer to copy from. */
   const unsavedText = ref<string | null>(null)
+  /**
+   * The draft `resume` found but couldn't reopen, held here so every composer says so the same way,
+   * and so `discard` can still throw it away.
+   */
+  const unreadable = shallowRef<DraftUnreadableError | null>(null)
+  /**
+   * Why the draft is shown only to copy from, with nothing that could change it; null while it can
+   * be written. Its words are all there either way, but a change would have nowhere to go: one that
+   * can't be reopened has no trace to carry on, and a stale revision could never be saved.
+   */
+  const readOnlyReason = computed(() => {
+    if (unreadable.value) return unreadable.value.message
+    if (isOpen.value && stale.value && kind.value === 'revision') {
+      return (
+        'This entry was revised after this draft began, so saving this would overwrite ' +
+        'that version.'
+      )
+    }
+    return null
+  })
+  const readOnly = computed(() => readOnlyReason.value !== null)
+  /** What a host mounts its composer on: a draft open for editing, or one shown read-only. */
+  const hasDraft = computed(() => isOpen.value || readOnly.value)
 
   /**
    * Catches up when another tab changed this draft: a reload shows its version, and a draft sealed
@@ -124,26 +152,49 @@ export function useDraftSession() {
     changesSeen = drafts.elsewhere[id]?.count ?? 0
     elsewhereNotice.value = null
     unsavedText.value = null
+    unreadable.value = null
     sessionId.value = id
   }
 
-  /** Reopens a draft left behind by a reload, with its event log intact. Null if it no longer exists. */
+  /**
+   * Reopens a draft left behind by a reload, with its event log intact. Null if it no longer exists,
+   * or if it can't be reopened: then `unreadable` holds it, and its words are mirrored all the same,
+   * since only its trace is out of reach, for a composer to show them read-only.
+   */
   async function resume(existingSessionId: string): Promise<Draft | null> {
-    const resumed = await drafts.resumeDraft(existingSessionId)
+    unreadable.value = null
+    stale.value = false
+
+    let resumed: Draft | null
+    try {
+      resumed = await drafts.resumeDraft(existingSessionId)
+    } catch (err) {
+      if (!(err instanceof DraftUnreadableError)) throw err
+      await mirrorReopened(err.draft)
+      unreadable.value = err
+      return null
+    }
     if (!resumed) return null
 
-    // Anchor mode never changes the parent's title, so it is read off the entry, not the draft.
-    const parent =
-      resumed.kind === 'new_related' ? await entries.getAggregatedEntry(resumed.parent_id) : null
-
-    mirror(resumed, parent?.title ?? null)
-    stale.value = false
+    await mirrorReopened(resumed)
     openAs(existingSessionId)
     return resumed
   }
 
+  /**
+   * Mirrors a stored draft, reading the entry it could revise: for its title, which anchor mode
+   * never changes, and to say at once if it has moved on, rather than only when Save is refused.
+   */
+  async function mirrorReopened(draft: DraftSnapshot): Promise<void> {
+    const [revises] = versionsRevisedBy(draft)
+    const parent = revises ? await entries.getAggregatedEntry(revises.entry_id) : null
+
+    mirror(draft, draft.kind === 'new_related' ? (parent?.title ?? null) : null)
+    stale.value = parent !== null && currentVersionId(parent) !== revises?.base_version_id
+  }
+
   /** Mirrors a draft into the refs an editor binds to, whether it is beginning or resuming. */
-  function mirror(draft: Draft, nextParentTitle: string | null): void {
+  function mirror(draft: DraftSnapshot, nextParentTitle: string | null): void {
     kind.value = draft.kind
     content.value = draft.entry.content
     title.value = draft.entry.title
@@ -186,8 +237,8 @@ export function useDraftSession() {
    * Seals the session. Resolves to `null` — rather than running at all — when there is nothing
    * open or a save is already in flight, so a caller can guard a button's click handler with
    * `if (!(await session.save())) return` the same way it would have guarded on a local flag. A
-   * stale version also resolves to `null`: `staleNotice` is what explains it, per kind, so a
-   * caller's own error message would only repeat it less precisely. Any other sealing failure
+   * stale version also resolves to `null`: `readOnlyReason` or `staleNotice` explains it, per kind,
+   * so a caller's own error message would only repeat it less precisely. Any other sealing failure
    * (empty content, "no changes to save") still throws, for the caller's try/catch to report.
    */
   async function save(): Promise<Entry | null> {
@@ -221,13 +272,17 @@ export function useDraftSession() {
     await drafts.abandonDraft(id)
   }
 
-  /** Throws the session away on request — an explicit "Discard" click. */
+  /**
+   * Throws the session away on request — an explicit "Discard" click — or the draft it couldn't
+   * reopen. That one is let go only once it's gone, so a failure is said where it was clicked.
+   */
   async function discard(): Promise<void> {
-    const id = sessionId.value
+    const id = sessionId.value ?? unreadable.value?.draft.session_id
     if (!id) return
 
     sessionId.value = null
     await drafts.discardDraft(id)
+    unreadable.value = null
   }
 
   /**
@@ -254,6 +309,7 @@ export function useDraftSession() {
     stale.value = false
     elsewhereNotice.value = null
     unsavedText.value = null
+    unreadable.value = null
   }
 
   return reactive({
@@ -270,7 +326,11 @@ export function useDraftSession() {
     editorKey,
     elsewhereNotice,
     unsavedText,
+    unreadable,
     isOpen,
+    readOnlyReason,
+    readOnly,
+    hasDraft,
     canSave,
     begin,
     resume,

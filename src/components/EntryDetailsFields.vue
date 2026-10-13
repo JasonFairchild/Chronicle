@@ -4,6 +4,7 @@ import type { EntryDates, EntryDetails } from '@/types/entry'
 
 defineProps<{
   disabled?: boolean
+  readonly?: boolean // Shown to copy, not change: unlike disabled, legible and selectable.
 }>()
 
 const details = defineModel<EntryDetails>({ required: true })
@@ -78,6 +79,7 @@ const inputClass =
           v-model="occurredAt"
           type="date"
           :disabled="disabled"
+          :readonly="readonly"
           :class="inputClass"
         />
         <input
@@ -86,6 +88,7 @@ const inputClass =
           aria-label="Time it happened"
           placeholder="morning, 3:30 pm"
           :disabled="disabled"
+          :readonly="readonly"
           :class="inputClass"
         />
 
@@ -96,6 +99,7 @@ const inputClass =
           type="text"
           placeholder="home, grandma’s"
           :disabled="disabled"
+          :readonly="readonly"
           :class="[inputClass, 'sm:col-span-2']"
         />
       </div>
@@ -113,6 +117,7 @@ const inputClass =
             v-model="recordedAt"
             type="date"
             :disabled="disabled"
+            :readonly="readonly"
             :class="inputClass"
           />
           <input
@@ -121,6 +126,7 @@ const inputClass =
             aria-label="Time it was originally written"
             placeholder="evening, after dinner"
             :disabled="disabled"
+            :readonly="readonly"
             :class="inputClass"
           />
 
@@ -131,6 +137,7 @@ const inputClass =
             type="text"
             placeholder="paper journal"
             :disabled="disabled"
+            :readonly="readonly"
             :class="inputClass"
           />
           <input
@@ -139,6 +146,7 @@ const inputClass =
             aria-label="More about what it was written in"
             placeholder="blue Moleskine, 2014–2016"
             :disabled="disabled"
+            :readonly="readonly"
             :class="inputClass"
           />
         </div>

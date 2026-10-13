@@ -128,7 +128,7 @@ describe('DraftsView flows', () => {
     })
   })
 
-  it('refuses a draft on a version since replaced, says why, and keeps it', () => {
+  it('opens a draft on a version since replaced read-only, says why, and keeps it', () => {
     let parentId = ''
 
     cy.then(async () => {
@@ -162,12 +162,11 @@ describe('DraftsView flows', () => {
     cy.mount(App, { routePath: '/drafts' })
 
     cy.findByRole('button', { name: 'Resume' }).click()
-    cy.findByRole('button', { name: 'Save as entry' }).click()
 
-    cy.findByRole('status').should(
+    cy.findByRole('alert').should(
       'have.text',
       'This entry was revised after this draft began, so saving this would overwrite that ' +
-        'version. Copy what you need, then discard it.',
+        'version.',
     )
     cy.then(async () => {
       expect(await entryRepository.listRevisions(parentId)).to.have.length(1)

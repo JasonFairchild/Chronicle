@@ -277,7 +277,7 @@ describe('DraftsView', () => {
     })
   })
 
-  it('refuses a draft on a version since replaced, and says why', () => {
+  it('opens a draft on a version since replaced read-only, and says why', () => {
     cy.then(async () => {
       const parent = await entryRepository.create(
         createEntryInput({ content: textContent('The first go') }),
@@ -308,12 +308,13 @@ describe('DraftsView', () => {
     cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByRole('button', { name: 'Resume' }).click()
-    cy.findByRole('button', { name: 'Save as entry' }).click()
 
-    cy.findByRole('status').should(
+    cy.findByRole('alert').should(
       'have.text',
       'This entry was revised after this draft began, so saving this would overwrite that ' +
-        'version. Copy what you need, then discard it.',
+        'version.',
     )
+    cy.findByText('The first go, reworded').should('be.visible')
+    cy.findByRole('button', { name: 'Save as entry' }).should('not.exist')
   })
 })

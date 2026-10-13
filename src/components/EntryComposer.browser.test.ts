@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
+import { textContent } from '@/domain/entryDocument'
+import { draftRepository } from '@/repositories'
+import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
+import { emptyEntryDates } from '@/types/entry'
+
+const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 /** A new entry's session, begun the way a view begins one before mounting the composer. */
 function beginSession() {
@@ -13,6 +19,56 @@ function beginSession() {
 }
 
 describe('EntryComposer (browser)', () => {
+  it('shows all of a draft that will not reopen to copy from, with nothing to change and only Discard', async () => {
+    const text =
+      'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
+      'home, and why none of it went the way we planned.'
+    await seedDraft(draftRepository, {
+      ...makeDraft('session-1', {
+        entry: {
+          content: textContent(text),
+          title: 'Lake Tahoe',
+          dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
+          events: TYPED,
+        },
+      }),
+      started_at: 'not a timestamp',
+    })
+    setActivePinia(createPinia())
+    const session = useDraftSession()
+    await session.resume('session-1')
+    const onDiscard = vi.fn()
+
+    const screen = renderComponent(EntryComposer, {
+      props: { session, label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: vi.fn(), onDiscard },
+    })
+
+    await expect
+      .element(
+        screen
+          .getByRole('alert')
+          .and(
+            screen.getByText(
+              'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
+              { exact: true },
+            ),
+          ),
+      )
+      .toBeVisible()
+    await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
+    await expect.element(screen.getByText(text)).toBeVisible()
+    // Exact, or "Happened" would also match the "Time it happened" beside it.
+    const happened = screen.getByLabelText('Happened', { exact: true })
+    await expect.element(happened).toHaveValue('1994-06-11')
+    await expect.element(happened).toHaveAttribute('readonly')
+    await expect.element(screen.getByRole('textbox', { name: 'New entry' })).not.toBeInTheDocument()
+    await expect.element(screen.getByRole('button', { name: 'Save entry' })).not.toBeInTheDocument()
+
+    await screen.getByRole('button', { name: 'Discard' }).click()
+    expect(onDiscard).toHaveBeenCalledOnce()
+  })
+
   it('says why an entry with nothing written can’t be saved, even with a title', async () => {
     const onSave = vi.fn()
     const screen = renderComponent(EntryComposer, {

@@ -5,6 +5,7 @@ import { draftRepository, entryRepository, mediaRepository } from '@/repositorie
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
+import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
 import { textContent } from '@/domain/entryDocument'
@@ -13,6 +14,7 @@ import { formatDate, formatDateline, formatTime } from '@/utils/format'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)
+const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 function mountDetail(id: string, router?: Router): Cypress.Chainable {
   return cy.mount(EntryDetailView, { props: { id }, routePath: '/', router })
@@ -329,6 +331,63 @@ describe('EntryDetailView', () => {
         cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
         cy.findByRole('button', { name: 'Resume draft' }).should('not.exist')
       })
+    })
+  })
+
+  it('shows a draft on the entry that will not reopen, and frees the entry once it is discarded', () => {
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      await seedDraft(draftRepository, {
+        ...makeDraft('session-1', {
+          entry: {
+            base_version_id: parent.id,
+            base_content: parent.content,
+            content: textContent(`${PARENT_TEXT}, and Mom`),
+            events: TYPED,
+          },
+          kind: { kind: 'revision', parent_id: parent.id },
+        }),
+        started_at: 'not a timestamp',
+      })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id)
+      cy.findByRole('button', { name: 'Resume draft' }).click()
+      cy.findByText(`${PARENT_TEXT}, and Mom`).should('be.visible')
+
+      cy.findByRole('button', { name: 'Discard' }).click()
+
+      cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
+      cy.findByText(`${PARENT_TEXT}, and Mom`).should('not.exist')
+    })
+  })
+
+  it('turns a revision read-only, and says why, once its save is refused for a version saved since', () => {
+    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      mountDetail(parent.id)
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+      cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}, and Mom')
+
+      // Only a race gets a second revision past the claim; saving one directly stands in for it.
+      cy.then(() =>
+        seed({
+          content: textContent('I went to Donner Lake with Dad'),
+          parent_id: parent.id,
+          relation_type: 'revision',
+          revision_mode: 'direct',
+          base_version_id: parent.id,
+        }),
+      )
+      cy.findByRole('button', { name: 'Save revision' }).click()
+
+      cy.findByRole('alert').should(
+        'have.text',
+        'This entry was revised after this draft began, so saving this would overwrite that ' +
+          'version.',
+      )
+      cy.findByText(`${PARENT_TEXT}, and Mom`).should('be.visible')
+      cy.findByRole('textbox', { name: 'Revised entry' }).should('not.exist')
+      cy.findByRole('button', { name: 'Save revision' }).should('not.exist')
     })
   })
 

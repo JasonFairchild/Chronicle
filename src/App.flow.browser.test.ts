@@ -3,11 +3,12 @@ import { userEvent } from 'vitest/browser'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import { draftRepository } from '@/repositories'
+import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { createEntryInput } from '@/types/entry'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -113,6 +114,31 @@ describe('App flows (browser)', () => {
       .element(screen.getByText('This draft was saved or discarded elsewhere.'))
       .toBeVisible()
     await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
+  })
+
+  it('lists a draft another tab began once this tab is returned to, named for its entry', async () => {
+    const entry = await entryRepository.create(
+      createEntryInput({ content: textContent('The meeting went badly'), title: 'Monday' }),
+    )
+    const screen = await mountApp('/drafts')
+    await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
+
+    // Another tab opens a revision, which claims the entry before a word is typed.
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', {
+        entry: {
+          base_version_id: entry.id,
+          base_content: entry.content,
+          content: entry.content,
+          title: entry.title,
+        },
+        kind: { kind: 'revision', parent_id: entry.id },
+      }),
+    )
+    window.dispatchEvent(new Event('focus'))
+
+    await expect.element(screen.getByText('Revision of “Monday”')).toBeVisible()
   })
 
   it('writes what was typed at once when the tab is left', async () => {

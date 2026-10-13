@@ -55,18 +55,27 @@ async function refresh(): Promise<void> {
 
   try {
     await drafts.loadDrafts()
-    await loadParentLabels()
   } catch (err) {
     error.value = toErrorMessage(err, 'Failed to load drafts')
   }
 }
 
-async function loadParentLabels(): Promise<void> {
-  const parentIds = [...new Set(drafts.drafts.map(parentIdOf))].filter(
-    (id): id is string => id !== null,
-  )
+// Whatever reloaded the list — this page, a discard, a return to the tab — its names follow.
+watch(
+  () => drafts.drafts,
+  (list) => {
+    loadParentLabels(list).catch((err) => {
+      error.value = toErrorMessage(err, 'Failed to load drafts')
+    })
+  },
+  { immediate: true },
+)
 
-  const parents = await Promise.all(parentIds.map((id) => store.getEntry(id)))
+async function loadParentLabels(list: DraftSnapshot[]): Promise<void> {
+  const parentIds = [...new Set(list.map(parentIdOf))].filter((id): id is string => id !== null)
+
+  // Aggregated, not the stored row: a revision may have renamed the entry since.
+  const parents = await Promise.all(parentIds.map((id) => store.getAggregatedEntry(id)))
 
   const labels: Record<string, string> = {}
   parents.forEach((parent, index) => {
@@ -122,7 +131,6 @@ async function discard(sessionId: string): Promise<void> {
     } else {
       await drafts.discardDraft(sessionId)
     }
-    await refresh()
   } catch (err) {
     error.value = toErrorMessage(err, 'Failed to discard draft')
   }

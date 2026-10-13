@@ -1,9 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { docToPlainText, textContent } from '@/domain/entryDocument'
-import { draftRepository } from '@/repositories'
+import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { createEntryInput } from '@/types/entry'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -120,6 +121,36 @@ describe('App flows', () => {
 
     cy.findByText('This draft was saved or discarded elsewhere.').should('be.visible')
     cy.findByText('No drafts in progress.').should('be.visible')
+  })
+
+  it('lists a draft another tab began once this tab is returned to, named for its entry', () => {
+    cy.then(() =>
+      entryRepository.create(
+        createEntryInput({ content: textContent('The meeting went badly'), title: 'Monday' }),
+      ),
+    ).then((entry) => {
+      cy.mount(App, { routePath: '/drafts' })
+      cy.findByText('No drafts in progress.').should('be.visible')
+
+      // Another tab opens a revision, which claims the entry before a word is typed.
+      cy.then(() =>
+        seedDraft(
+          draftRepository,
+          makeDraft('session-1', {
+            entry: {
+              base_version_id: entry.id,
+              base_content: entry.content,
+              content: entry.content,
+              title: entry.title,
+            },
+            kind: { kind: 'revision', parent_id: entry.id },
+          }),
+        ),
+      )
+      cy.window().then((win) => win.dispatchEvent(new Event('focus')))
+
+      cy.findByText('Revision of “Monday”').should('be.visible')
+    })
   })
 
   it('writes what was typed at once when the tab is left', () => {

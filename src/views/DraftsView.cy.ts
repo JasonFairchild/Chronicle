@@ -84,6 +84,37 @@ describe('DraftsView', () => {
     })
   })
 
+  it('names the entry a draft is on as it is called now, after a revision renamed it', () => {
+    cy.then(async () => {
+      const parent = await entryRepository.create(
+        createEntryInput({ content: textContent('The meeting went badly'), title: 'Monday' }),
+      )
+      const other = await entryRepository.create(
+        createEntryInput({ content: textContent('Started the degree') }),
+      )
+      await entryRepository.create(
+        createEntryInput({
+          content: parent.content,
+          title: 'The Monday meeting',
+          parent_id: parent.id,
+          relation_type: 'revision',
+          revision_mode: 'direct',
+          base_version_id: parent.id,
+        }),
+      )
+      await seedDraft(
+        draftRepository,
+        makeDraft('connection', {
+          entry: { content: textContent('One led to the other'), events: TYPED },
+          kind: { kind: 'new_connection', parent_id: parent.id, target_id: other.id },
+        }),
+      )
+    })
+    cy.mount(DraftsView, { routePath: '/drafts' })
+
+    cy.findByText('Connection from “The Monday meeting”').should('be.visible')
+  })
+
   it('discards a listed draft while another is open, leaving the open one as it was', () => {
     cy.then(async () => {
       await seedDraft(

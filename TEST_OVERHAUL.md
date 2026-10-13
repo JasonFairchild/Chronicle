@@ -203,7 +203,7 @@ The review pivoted at its first question. `EntryForm.cy.ts` read the repository 
 
 - [ ] A related-entry claim taken and released: Create related entry, leave, and both ways in are offered again (EDV, as Revise's already is).
 - [ ] A resumed draft holding work survives the page being left (DraftsView, beside "lets go of an untouched claim when the page is left").
-- [ ] The drafts list refreshes on tab return, showing a claim another tab made (`App` at `/drafts`).
+- [x] The drafts list refreshes on tab return, showing a claim another tab made (`App` at `/drafts`). It found a bug: the list named entries only on its own load, so the new row read "another entry". The names also came from the stored row, stale once a revision renamed the entry.
 - [x] ~~Typed dates reach the draft (a date in EntryForm's "keeps what was typed when the composer is left without saving").~~ Superseded: NewEntryView's specs type every detail, kept as a draft when the page is left and shown on the entry once saved.
 - [ ] A revision changed back to its version is released on leaving (EDV).
 

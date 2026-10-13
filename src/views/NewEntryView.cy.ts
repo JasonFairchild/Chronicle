@@ -78,6 +78,61 @@ describe('NewEntryView', () => {
     cy.findByLabelText('Happened').should('have.value', '1994-06-11')
   })
 
+  it('shows a linked draft that will not reopen, and starts afresh once it is discarded', () => {
+    cy.then(() =>
+      seedDraft(draftRepository, {
+        ...makeDraft('session-1', {
+          entry: { content: textContent('Half a thought'), events: TYPED },
+        }),
+        started_at: 'not a timestamp',
+      }),
+    )
+    cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-1' })
+
+    cy.findByRole('alert').should(
+      'have.text',
+      'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
+    )
+    cy.findByText('Half a thought').should('be.visible')
+
+    cy.findByRole('button', { name: 'Discard' }).click()
+
+    // Shown read-only, it had no textbox; one appearing is the fresh draft.
+    cy.findByRole('textbox', { name: 'New entry' }).should('be.visible')
+    cy.findByText('Half a thought').should('not.exist')
+  })
+
+  it('offers a new entry once its draft is saved in another tab', () => {
+    cy.then(() =>
+      seedDraft(
+        draftRepository,
+        makeDraft('session-1', {
+          entry: { content: textContent('Half a thought'), events: TYPED },
+        }),
+      ),
+    )
+    cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-1' })
+
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
+
+    // Another tab saves the draft; returning here catches up with disk, as App does on focus.
+    cy.then(async () => {
+      const thisTab = useDraftsStore()
+      setActivePinia(createPinia())
+      const otherTab = useDraftsStore()
+      await otherTab.resumeDraft('session-1')
+      await otherTab.sealDraft('session-1')
+      await thisTab.adoptChangesElsewhere()
+    })
+
+    cy.findByText('This draft was saved or discarded elsewhere.').should('be.visible')
+    cy.findByRole('button', { name: 'Start a new entry' }).click()
+
+    cy.findByRole('textbox', { name: 'New entry' }).should('be.visible')
+    cy.findByText('Half a thought').should('not.exist')
+    cy.findByText('This draft was saved or discarded elsewhere.').should('not.exist')
+  })
+
   it('keeps the version another tab saved first, and shows what this one had to copy', () => {
     cy.then(() =>
       seedDraft(

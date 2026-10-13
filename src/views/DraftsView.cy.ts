@@ -2,14 +2,13 @@ import DraftsView from '@/views/DraftsView.vue'
 import { textContent } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
-import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('DraftsView', () => {
-  it('lists drafts newest first, each with what it would become, when, and how it begins', () => {
+  it('lists drafts newest first, each with what it would become, when, how it begins, and where it resumes', () => {
     cy.then(async () => {
       const parent = await entryRepository.create(
         createEntryInput({ content: textContent('The meeting went badly') }),
@@ -54,31 +53,47 @@ describe('DraftsView', () => {
           updatedAt: '2026-09-05T10:03:00.000Z',
         }),
       )
-    })
-    cy.mount(DraftsView, { routePath: '/drafts' })
+      return parent
+    }).then((parent) => {
+      cy.mount(DraftsView, { routePath: '/drafts' })
 
-    const rows = [
-      ['New entry', '2026-09-05T10:04:00.000Z', 'A thought of its own'],
-      ['Revision of “The meeting went badly”', '2026-09-05T10:03:00.000Z', 'The meeting went well'],
-      [
-        'Connection from “The meeting went badly”',
-        '2026-09-05T10:02:00.000Z',
-        'One led to the other',
-      ],
-      [
-        'Related entry on “The meeting went badly”',
-        '2026-09-05T10:01:00.000Z',
-        'It was salvaged later',
-      ],
-    ] as const
-    rows.forEach(([label, touched, preview], index) => {
-      cy.findAllByRole('listitem')
-        .eq(index)
-        .within(() => {
-          cy.findByText(label).should('be.visible')
-          cy.findByText(formatDate(touched)).should('be.visible')
-          cy.findByText(preview).should('be.visible')
-        })
+      // Where Resume goes is read off each link; landing there is the page's own to prove.
+      const rows = [
+        [
+          'New entry',
+          '2026-09-05T10:04:00.000Z',
+          'A thought of its own',
+          '/entries/new?draft=root',
+        ],
+        [
+          'Revision of “The meeting went badly”',
+          '2026-09-05T10:03:00.000Z',
+          'The meeting went well',
+          `/entries/${parent.id}?draft=revision`,
+        ],
+        [
+          'Connection from “The meeting went badly”',
+          '2026-09-05T10:02:00.000Z',
+          'One led to the other',
+          `/entries/${parent.id}/connect?draft=connection`,
+        ],
+        [
+          'Related entry on “The meeting went badly”',
+          '2026-09-05T10:01:00.000Z',
+          'It was salvaged later',
+          `/entries/${parent.id}?draft=related`,
+        ],
+      ] as const
+      rows.forEach(([label, touched, preview, resumesAt], index) => {
+        cy.findAllByRole('listitem')
+          .eq(index)
+          .within(() => {
+            cy.findByText(label).should('be.visible')
+            cy.findByText(formatDate(touched)).should('be.visible')
+            cy.findByText(preview).should('be.visible')
+            cy.findByRole('link', { name: 'Resume' }).should('have.attr', 'href', resumesAt)
+          })
+      })
     })
   })
 
@@ -113,18 +128,18 @@ describe('DraftsView', () => {
     cy.findByText('Connection from “The Monday meeting”').should('be.visible')
   })
 
-  it('discards a listed draft while another is open, leaving the open one as it was', () => {
+  it('discards the draft it is asked to, leaving the rest listed', () => {
     cy.then(async () => {
       await seedDraft(
         draftRepository,
-        makeDraft('open', {
+        makeDraft('kept', {
           entry: { content: textContent('Keep writing this'), events: TYPED },
           updatedAt: '2026-09-05T10:02:00.000Z',
         }),
       )
       await seedDraft(
         draftRepository,
-        makeDraft('listed', {
+        makeDraft('discarded', {
           entry: { content: textContent('Never mind'), events: TYPED },
           updatedAt: '2026-09-05T10:01:00.000Z',
         }),
@@ -132,40 +147,12 @@ describe('DraftsView', () => {
     })
     cy.mount(DraftsView, { routePath: '/drafts' })
 
-    cy.findAllByRole('listitem').eq(0).findByRole('button', { name: 'Resume' }).click()
     cy.findByText('Never mind').should('be.visible')
-
     cy.findAllByRole('listitem').eq(1).findByRole('button', { name: 'Discard' }).click()
 
     // The list is reread from disk after a discard, so the row going is the delete landing.
     cy.findByText('Never mind').should('not.exist')
-    cy.findByRole('textbox', { name: 'Draft' }).should('contain.text', 'Keep writing this')
-  })
-
-  it('shows all of a draft that will not reopen for copying, and still discards it', () => {
-    const text =
-      'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
-      'home, and why none of it went the way we planned.'
-    cy.then(() =>
-      seedDraft(draftRepository, {
-        ...makeDraft('session-1', {
-          entry: { content: textContent(text), title: 'Lake Tahoe', events: TYPED },
-        }),
-        started_at: 'not a timestamp',
-      }),
-    )
-    cy.mount(DraftsView, { routePath: '/drafts' })
-
-    cy.findByRole('button', { name: 'Resume' }).click()
-    cy.findByRole('alert').should(
-      'have.text',
-      'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
-    )
-    cy.findByText('Lake Tahoe').should('be.visible')
-    cy.findByText(text).should('be.visible')
-
-    cy.findByRole('button', { name: 'Discard' }).click()
-    cy.findByText('No drafts in progress.').should('be.visible')
+    cy.findByText('Keep writing this').should('be.visible')
   })
 
   it('says so plainly when there is nothing in progress', () => {
@@ -179,36 +166,5 @@ describe('DraftsView', () => {
     cy.mount(DraftsView, { routePath: '/drafts' })
 
     cy.findByRole('alert').should('have.text', 'list rejected')
-  })
-
-  it('lands on the entry a revision revised, not a page of its own', () => {
-    cy.then(async () => {
-      const parent = await entryRepository.create(
-        createEntryInput({ content: textContent('The first go') }),
-      )
-      await seedDraft(
-        draftRepository,
-        makeDraft('session-1', {
-          entry: {
-            base_version_id: parent.id,
-            base_content: parent.content,
-            content: textContent('The first go, reworded'),
-            events: TYPED,
-          },
-          kind: { kind: 'revision', parent_id: parent.id },
-        }),
-      )
-      return parent
-    }).then((parent) => {
-      const router = createTestRouter()
-      cy.mount(DraftsView, { routePath: '/drafts', router })
-
-      cy.findByRole('button', { name: 'Resume' }).click()
-      cy.findByRole('button', { name: 'Save as entry' }).click()
-
-      cy.wrap(router)
-        .its('currentRoute.value')
-        .should('deep.include', { name: 'entry-detail', params: { id: parent.id } })
-    })
   })
 })

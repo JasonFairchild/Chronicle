@@ -9,9 +9,8 @@ import type { DraftSession } from '@/composables/useDraftSession'
  * "Drafts"). The parent gets no fields: an anchor revision gains the anchors and nothing else
  * (PRODUCT.md §4.4).
  *
- * Shared rather than owned by `EntryDetailView`, because a session left as a draft has to come back
- * exactly as it was — and the only place to resume one from is `DraftsView`. Two copies of this
- * layout would be two chances for the halves to drift apart.
+ * Its own component though `EntryDetailView` is its only host: the two halves, and how each reads
+ * when the draft is read-only, are one unit apart from that page's choice of what to show.
  *
  * Deliberately holds no session of its own: whoever opens one decides whether it is beginning
  * (`session.begin`) or resuming (`session.resume`), and owns what happens after it is sealed.

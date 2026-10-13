@@ -48,10 +48,9 @@ describe('App flows (browser)', () => {
       draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
-    const screen = await mountApp('/drafts')
-    await screen.getByRole('button', { name: 'Resume' }).click()
+    const screen = await mountApp('/entries/new?draft=session-1')
     await expect
-      .element(screen.getByRole('textbox', { name: 'Draft' }))
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
       .toHaveTextContent('Half a thought')
 
     // Carried on in another tab while this one sat in the background.
@@ -65,7 +64,7 @@ describe('App flows (browser)', () => {
     window.dispatchEvent(new Event('focus'))
 
     await expect
-      .element(screen.getByRole('textbox', { name: 'Draft' }))
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
       .toHaveTextContent('Half a thought, carried on elsewhere')
   })
 
@@ -74,10 +73,9 @@ describe('App flows (browser)', () => {
       draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
-    const screen = await mountApp('/drafts')
-    await screen.getByRole('button', { name: 'Resume' }).click()
+    const screen = await mountApp('/entries/new?draft=session-1')
     await expect
-      .element(screen.getByRole('textbox', { name: 'Draft' }))
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
       .toHaveTextContent('Half a thought')
 
     // On a phone, switching back to an app can show the tab without focusing its window.
@@ -92,7 +90,7 @@ describe('App flows (browser)', () => {
     setVisibility('visible')
 
     await expect
-      .element(screen.getByRole('textbox', { name: 'Draft' }))
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
       .toHaveTextContent('Half a thought, carried on elsewhere')
   })
 
@@ -101,9 +99,10 @@ describe('App flows (browser)', () => {
       draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
-    const screen = await mountApp('/drafts')
-    await screen.getByRole('button', { name: 'Resume' }).click()
-    await expect.element(screen.getByRole('textbox', { name: 'Draft' })).toBeVisible()
+    const screen = await mountApp('/entries/new?draft=session-1')
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('Half a thought')
 
     const otherTab = openOtherTab()
     await otherTab.resumeDraft('session-1')
@@ -113,7 +112,7 @@ describe('App flows (browser)', () => {
     await expect
       .element(screen.getByText('This draft was saved or discarded elsewhere.'))
       .toBeVisible()
-    await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
+    expect(screen.getByText('Half a thought').query()).toBeNull()
   })
 
   it('lists a draft another tab began once this tab is returned to, named for its entry', async () => {

@@ -99,6 +99,65 @@ describe('NewEntryView (browser)', () => {
       .toHaveValue('1994-06-11')
   })
 
+  it('shows a linked draft that will not reopen, and starts afresh once it is discarded', async () => {
+    await seedDraft(draftRepository, {
+      ...makeDraft('session-1', {
+        entry: { content: textContent('Half a thought'), events: TYPED },
+      }),
+      started_at: 'not a timestamp',
+    })
+
+    const screen = await mountNewEntry({ draft: 'session-1' })
+
+    await expect
+      .element(
+        screen
+          .getByRole('alert')
+          .and(
+            screen.getByText(
+              'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
+              { exact: true },
+            ),
+          ),
+      )
+      .toBeVisible()
+    await expect.element(screen.getByText('Half a thought')).toBeVisible()
+
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    // Shown read-only, it had no textbox; one appearing is the fresh draft.
+    await expect.element(screen.getByRole('textbox', { name: 'New entry' })).toBeVisible()
+    expect(screen.getByText('Half a thought').query()).toBeNull()
+  })
+
+  it('offers a new entry once its draft is saved in another tab', async () => {
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
+    )
+    const screen = await mountNewEntry({ draft: 'session-1' })
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('Half a thought')
+    const thisTab = useDraftsStore()
+
+    // Another tab saves the draft; returning here catches up with disk, as App does on focus.
+    setActivePinia(createPinia())
+    const otherTab = useDraftsStore()
+    await otherTab.resumeDraft('session-1')
+    await otherTab.sealDraft('session-1')
+    await thisTab.adoptChangesElsewhere()
+
+    await expect
+      .element(screen.getByText('This draft was saved or discarded elsewhere.'))
+      .toBeVisible()
+    await screen.getByRole('button', { name: 'Start a new entry' }).click()
+
+    await expect.element(screen.getByRole('textbox', { name: 'New entry' })).toBeVisible()
+    expect(screen.getByText('Half a thought').query()).toBeNull()
+    expect(screen.getByText('This draft was saved or discarded elsewhere.').query()).toBeNull()
+  })
+
   it('keeps the version another tab saved first, and shows what this one had to copy', async () => {
     await seedDraft(
       draftRepository,

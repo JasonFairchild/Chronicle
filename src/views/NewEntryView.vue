@@ -62,6 +62,16 @@ onBeforeUnmount(() => {
 
     <DraftElsewhereNotice :session="session" />
 
+    <!-- A draft saved or discarded in another tab closes here once this tab is returned to. -->
+    <button
+      v-if="!session.hasDraft && session.elsewhereNotice"
+      type="button"
+      class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+      @click="session.begin({ kind: 'new_root' })"
+    >
+      Start a new entry
+    </button>
+
     <!-- Only once there's a draft: an editor shown before a resume lands drops what's typed. -->
     <EntryComposer
       v-if="session.hasDraft"

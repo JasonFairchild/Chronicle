@@ -65,7 +65,7 @@ flowchart TB
       TL["<b>TimelineView</b><br/>EntryList · EntryCard"]
       DV["<b>EntryDetailView</b><br/>revise · RelatedEntryComposer"]
       NCV["<b>NewConnectionView</b>"]
-      DV2["<b>DraftsView</b><br/>resume any draft"]
+      DV2["<b>DraftsView</b><br/>lists drafts · links each to its page"]
     end
   end
 
@@ -102,6 +102,9 @@ flowchart TB
   AGG --> NCV
   T_ENTRIES --> HIST
   T_DRAFTS -->|"list(): DraftSnapshot[]"| DV2
+  DV2 -->|"Resume: ?draft=session_id"| NEV
+  DV2 --> DV
+  DV2 --> NCV
   OPFS -->|"useMedia.applyTo"| DV
   T_ENTRIES -->|"authoring_trace"| DM
   DM --> BF

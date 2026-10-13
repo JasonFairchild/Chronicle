@@ -28,15 +28,15 @@ The inventory every pass is measured against. Sources: PRODUCT.md §4.1, §4.5, 
 | U1 | Typing is kept as a draft; nothing reaches the timeline until saved | NewEntryView, both runners | component ✓ |
 | U2 | A composer opened and left writes nothing | NewEntryView, both runners | component ✓ |
 | U3 | Leaving mid-draft keeps it | NewEntryView, EDV, NewConnectionView | component ✓ |
-| U4 | Drafts page: what each would become, when touched, preview, newest first | DraftsView | component ✓ |
+| U4 | Drafts page: what each would become, when touched, preview, newest first | DraftsView, with where each Resume link goes | component ✓ |
 | U5 | Resume where it left off: words, title, dates; anchor mode on both halves | NewEntryView (words, title, dates); EDV (anchor mode on both halves, a revision's words); each from a `?draft=` link | component ✓ |
-| U6 | Saving a resumed draft makes one entry and removes the draft | DraftsView | component ✓ |
+| U6 | Saving a resumed draft makes one entry and removes the draft | Not walked in the UI since the list stopped saving: a resumed session saves as a begun one does (NewEntryView's save flow), and store and `anchors.test` prove a resume keeps its logs and its anchors | component ✓ |
 | U7 | Discard removes it — the only thing that does — for any listed draft | DraftsView, EDV (revision), NewConnectionView | component ✓ |
 | U8 | A draft emptied of its words disappears | NewEntryView | component ✓ |
 | U9 | One draft per entry: **Resume draft** replaces Revise and Create related | EDV, both runners | component ✓ |
-| U10 | Leaving an untouched claim frees the entry | EDV (entry change, page left), DraftsView; store (related) | component ✓ |
+| U10 | Leaving an untouched claim frees the entry | EDV (entry change, page left); store (related) | component ✓ |
 | U11 | A stale version refuses the save, says why, and the draft stays | EDV (a revision reopened stale shows read-only; one refused at Save turns read-only); not the anchor-mode wording | component ✓ |
-| U12 | An unreadable draft says why, shows all its text, and can still be discarded | EntryComposer; DraftsView; EDV (shown in place of the entry, and Discard frees it) | component ✓ |
+| U12 | An unreadable draft says why, shows all its text, and can still be discarded | EntryComposer; NewEntryView (linked, and Discard starts afresh); EDV (shown in place of the entry, and Discard frees it) | component ✓ |
 | U13 | Tab return reloads a newer draft, or closes one sealed elsewhere and says so | App; EDV (the entry refresh); store (the drafts list) | component ✓ |
 | U14 | Two tabs save at once: the first wins, the other shows its text to copy | NewEntryView | component ✓ |
 | U15 | Saving lands on what was saved; an entry with no body can't be saved | Each composer's view, mounted in App to land | component ✓ |
@@ -234,7 +234,7 @@ One commit for every view and `App` spec in both runners: it is one idea, and a 
 New cases in the existing component specs, red first, in both runners. Spec files for components that have none are out of the overhaul.
 
 - [x] Failure states. The views catch a failed load, save, discard or resume and show it ("Failed to save entry", "Failed to load drafts"…), as `DocumentEditor` does a failed attach; no spec reaches any of the sixteen today. Force one by stubbing a repository method to reject. Not every one needs a case; choose by what a writer would actually meet. Four: NewEntryView's save and EntryDetailView's revision, each keeping the words; EntryDetailView's load and DraftsView's list. A real `Error` shows its own message, so the alert reads the stub's, not the fallback.
-- [x] Navigation as an output, wherever a view's own code navigates, even where a flow lands there too: the route the router is at after the action, read from `currentRoute` (D8). The test router's memory history leaves the browser's URL alone, so `cy.location()` can't see it. Where the saved entry's id is the destination, a spy on `sealDraft` gives it. Saving and landing on what was saved is one composable, `useSealDraft`, so it is proven once through NewEntryView, plus the revision branch through DraftsView; the other views' saves are wiring their flows already walk.
+- [x] Navigation as an output, wherever a view's own code navigates, even where a flow lands there too: the route the router is at after the action, read from `currentRoute` (D8). The test router's memory history leaves the browser's URL alone, so `cy.location()` can't see it. Where the saved entry's id is the destination, a spy on `sealDraft` gives it. Saving and landing on what was saved is one composable, `useSealDraft`, so it is proven once through NewEntryView; the other views' saves are wiring their flows already walk. (Its revision branch was reached only by the drafts list's own save, and went with it.)
 - [x] Anything else a view's own code produces that only a flow reaches today gets its case in the view's spec; the flow keeps walking through it.
 
 Notes for picking this up:
@@ -255,7 +255,7 @@ Open: none.
 
 Decided:
 
-- **D8 — seeing where a component spec navigated.** Read the router's `currentRoute`, on a router the spec builds and passes in: to its mount helper in Vitest, to `cy.mount`'s `router` option in Cypress. Reaching the router `cy.mount` built through `wrapper.vm.$router` worked too, but went through test-utils internals, cost a `.then` level per test, and read differently from Vitest. A spy on `push` only where the call itself matters. Navigation a component's own code makes is asserted in its component spec, while a flow passing through leans on it unasserted ("Layers").
+- **D8 — seeing where a component spec navigated.** Read the router's `currentRoute`, on a router the spec builds and passes in: to its mount helper in Vitest, to `cy.mount`'s `router` option in Cypress. Reaching the router `cy.mount` built through `wrapper.vm.$router` worked too, but went through test-utils internals, cost a `.then` level per test, and read differently from Vitest. A spy on `push` only where the call itself matters. Navigation a component's own code makes is asserted in its component spec, while a flow passing through leans on it unasserted ("Layers"). A link is checked by its `href`, without following it: where it goes is the component's output, and landing there is the destination's to prove (DraftsView's Resume links).
 - **D7 — a unit whose job is storage.** `useMedia`'s spec and `DocumentEditor`'s "stores an attached image in the media store…" read storage back, and neither has a route for a flow to start from. What they store is their output, so they stay component specs ("Layers" says so).
 - **D6 — the component / flow split.** Component specs are the screen alone: storage seeded, stubbed to fail when the failure is the point, never read back. Flow specs mount `App` at a route and check what was stored or what another screen shows. Every spec runs on fresh real storage put in place for it. An in-memory backend for component specs was considered and dropped: a second backend in the browser runners, to enforce structurally what review already catches. Rules in TESTING.md "Layers".
 
@@ -299,4 +299,4 @@ Candidates, not yet in TESTING.md:
 - Before deleting a unit test for overlap, check which lines only it reached. A test can reach a path without asserting it: the refused seal's reschedule in Pass 3.
 - Test placement, from Pass 5:
   - A spec tests what its own file adds. The real stack beneath it is how the spec acts and observes, not what it's about.
-  - A shell that holds no state of its own (`EntryComposer`, `RelatedEntryComposer`) is proven once, through its simplest owner. Every other owner proves only its own wiring.
+  - A shell that holds no state of its own (`EntryComposer`, `RelatedEntryComposer`) is proven once, through its simplest owner. Every other owner proves only its own wiring. `RelatedEntryComposer` now has one owner, `EntryDetailView`, since the drafts list stopped hosting composers.

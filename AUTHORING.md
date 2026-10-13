@@ -78,7 +78,7 @@ type Draft = {
 )
 ```
 
-`new_root`, `new_connection` and `revision` seal into one entry, the `entry` document becoming its trace. `new_related` seals into the related entry, plus a parent revision if anything was anchored, the `parent` document becoming that revision's trace. `kind` lets the drafts list say what each draft is attached to. A `DraftSnapshot` is a draft without its event logs: what the list reads and a draft row stores.
+`new_root`, `new_connection` and `revision` seal into one entry, the `entry` document becoming its trace. `new_related` seals into the related entry, plus a parent revision if anything was anchored, the `parent` document becoming that revision's trace. `kind` lets the drafts list say what each draft is attached to, and link it to the page it reopens on (`draftLocation`, `router/draftQuery.ts`), which reads `?draft=` back. A `DraftSnapshot` is a draft without its event logs: what the list reads and a draft row stores.
 
 **The draft carries every versioned field**, and its values are what gets sealed: unset for a new entry, copied from the current version for a revision, so whatever the writer leaves alone saves unchanged. `media_refs` is derived when sealing, and the parent's title isn't stored, since anchor mode never changes it.
 

@@ -42,10 +42,9 @@ describe('App flows', () => {
         }),
       ),
     )
-    cy.mount(App, { routePath: '/drafts' })
+    cy.mount(App, { routePath: '/entries/new?draft=session-1' })
 
-    cy.findByRole('button', { name: 'Resume' }).click()
-    cy.findByRole('textbox', { name: 'Draft' }).should('contain.text', 'Half a thought')
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
 
     // Carried on in another tab while this one sat in the background.
     cy.then(async () => {
@@ -59,7 +58,7 @@ describe('App flows', () => {
     })
     cy.window().then((win) => win.dispatchEvent(new Event('focus')))
 
-    cy.findByRole('textbox', { name: 'Draft' }).should(
+    cy.findByRole('textbox', { name: 'New entry' }).should(
       'contain.text',
       'Half a thought, carried on elsewhere',
     )
@@ -74,10 +73,9 @@ describe('App flows', () => {
         }),
       ),
     )
-    cy.mount(App, { routePath: '/drafts' })
+    cy.mount(App, { routePath: '/entries/new?draft=session-1' })
 
-    cy.findByRole('button', { name: 'Resume' }).click()
-    cy.findByRole('textbox', { name: 'Draft' }).should('contain.text', 'Half a thought')
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
 
     // On a phone, switching back to an app can show the tab without focusing its window.
     setVisibility('hidden')
@@ -92,7 +90,7 @@ describe('App flows', () => {
     })
     setVisibility('visible')
 
-    cy.findByRole('textbox', { name: 'Draft' }).should(
+    cy.findByRole('textbox', { name: 'New entry' }).should(
       'contain.text',
       'Half a thought, carried on elsewhere',
     )
@@ -107,10 +105,9 @@ describe('App flows', () => {
         }),
       ),
     )
-    cy.mount(App, { routePath: '/drafts' })
+    cy.mount(App, { routePath: '/entries/new?draft=session-1' })
 
-    cy.findByRole('button', { name: 'Resume' }).click()
-    cy.findByRole('textbox', { name: 'Draft' }).should('be.visible')
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
 
     cy.then(async () => {
       const otherTab = openOtherTab()
@@ -120,7 +117,7 @@ describe('App flows', () => {
     cy.window().then((win) => win.dispatchEvent(new Event('focus')))
 
     cy.findByText('This draft was saved or discarded elsewhere.').should('be.visible')
-    cy.findByText('No drafts in progress.').should('be.visible')
+    cy.findByText('Half a thought').should('not.exist')
   })
 
   it('lists a draft another tab began once this tab is returned to, named for its entry', () => {

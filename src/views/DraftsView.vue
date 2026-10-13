@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
-import EntryComposer from '@/components/EntryComposer.vue'
-import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
-import { useDraftSession } from '@/composables/useDraftSession'
-import { useLayoutWidth } from '@/composables/useLayoutWidth'
-import { useSealDraft } from '@/composables/useSealDraft'
+import { onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { previewText } from '@/domain/entryDocument'
+import { draftLocation } from '@/router/draftQuery'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import type { DraftSnapshot } from '@/types/draft'
 import { entryLabel, formatDate, toErrorMessage } from '@/utils/format'
+
+/**
+ * Every unsealed draft, each linked to the page it was started from, where it reopens just as it
+ * would from there. Discarding is the one thing done here.
+ */
 
 /** A draft's own text is shown at full width here, so it gets more room than a picker label would. */
 const PREVIEW_LIMIT = 120
@@ -18,34 +19,10 @@ const PREVIEW_LIMIT = 120
 const drafts = useDraftsStore()
 const store = useEntriesStore()
 
-const session = useDraftSession()
 const error = ref<string | null>(null)
-const seal = useSealDraft(session)
-/** The draft whose row shows the composer: the one open, or the one that couldn't be reopened. */
-const heldId = computed(() => session.sessionId ?? session.unreadable?.draft.session_id ?? null)
 
 /** What each draft is attached to, so the list can name it rather than just describe its kind. */
 const parentLabels = ref<Record<string, string>>({})
-
-/**
- * Whether the open session is an anchor-mode one. Resuming a draft has to reopen the experience it
- * was left in, and a `new_related` session is two documents side by side — reopening only the
- * related entry would strand the anchors already placed on the parent with no way back to them.
- */
-const anchorModeOpen = computed(() => session.kind === 'new_related')
-
-/** Two columns of readable width need more room than the page gives by default. */
-const layoutWidth = useLayoutWidth()
-
-watch(anchorModeOpen, (open) => {
-  layoutWidth.value = open ? 'wide' : 'normal'
-})
-
-onBeforeUnmount(() => {
-  layoutWidth.value = 'normal'
-  // Leaving keeps the open draft's work and releases an untouched claim, as every composer does.
-  session.reset()
-})
 
 onMounted(() => {
   void refresh()
@@ -104,36 +81,11 @@ function describe(draft: DraftSnapshot): string {
   return `Related entry on “${parent}”`
 }
 
-async function resume(draft: DraftSnapshot): Promise<void> {
-  error.value = null
-  // Lets go of the open draft first, as leaving does: the session holds one draft at a time, open
-  // or read-only, and one that can't be reopened would otherwise leave it holding two.
-  session.reset()
-
-  // Reopening rebuilds the authoring session from what was flushed, so the event log continues
-  // rather than restarting at the reload. This has to finish before the editor mounts — otherwise
-  // typing right after clicking "Resume" could record into a session that isn't open yet.
-  try {
-    await session.resume(draft.session_id)
-  } catch (err) {
-    error.value = toErrorMessage(err, 'Failed to resume draft')
-  }
-}
-
-/**
- * Discards any draft in the list, not only the one open for editing — every row offers this, so
- * the session composable (which only ever holds one) is used when this is that draft, and the
- * store directly otherwise.
- */
 async function discard(sessionId: string): Promise<void> {
   error.value = null
 
   try {
-    if (heldId.value === sessionId) {
-      await session.discard()
-    } else {
-      await drafts.discardDraft(sessionId)
-    }
+    await drafts.discardDraft(sessionId)
   } catch (err) {
     error.value = toErrorMessage(err, 'Failed to discard draft')
   }
@@ -151,8 +103,6 @@ async function discard(sessionId: string): Promise<void> {
     </section>
 
     <p v-if="error" class="text-sm text-[var(--color-error)]" role="alert">{{ error }}</p>
-
-    <DraftElsewhereNotice :session="session" />
 
     <p
       v-if="drafts.drafts.length === 0"
@@ -176,44 +126,25 @@ async function discard(sessionId: string): Promise<void> {
           </time>
         </div>
 
-        <RelatedEntryComposer
-          v-if="heldId === draft.session_id && anchorModeOpen"
-          :session="session"
-          @save="seal"
-          @discard="discard(draft.session_id)"
-        />
+        <p class="whitespace-pre-wrap text-sm leading-relaxed">
+          {{ previewText(draft.entry.content, PREVIEW_LIMIT) }}
+        </p>
 
-        <EntryComposer
-          v-else-if="heldId === draft.session_id"
-          :session="session"
-          label="Draft"
-          save-label="Save as entry"
-          @save="seal"
-          @discard="discard(draft.session_id)"
-        />
-
-        <template v-else>
-          <p class="whitespace-pre-wrap text-sm leading-relaxed">
-            {{ previewText(draft.entry.content, PREVIEW_LIMIT) }}
-          </p>
-
-          <div class="mt-3 flex justify-end gap-2">
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)]"
-              @click="discard(draft.session_id)"
-            >
-              Discard
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              @click="resume(draft)"
-            >
-              Resume
-            </button>
-          </div>
-        </template>
+        <div class="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)]"
+            @click="discard(draft.session_id)"
+          >
+            Discard
+          </button>
+          <RouterLink
+            :to="draftLocation(draft)"
+            class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            Resume
+          </RouterLink>
+        </div>
       </li>
     </ul>
   </div>

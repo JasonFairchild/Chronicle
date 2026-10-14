@@ -45,19 +45,29 @@ export function formatTime(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(iso))
 }
 
+/** Each date's labelled line, or null when it wasn't given — worded once for cards and pages alike. */
+function dateLines(dates: EntryDates): { happened: string | null; written: string | null } {
+  const happened = formatWhen(dates.occurred_at, dates.occurred_time_note)
+  const written = formatWhen(dates.recorded_at, dates.recorded_time_note)
+  return {
+    happened: happened && `Happened ${happened}`,
+    written: written && `Originally written ${written}`,
+  }
+}
+
+/** The lines that say something, in order. */
+function present(lines: (string | null | undefined)[]): string[] {
+  return lines.filter((line): line is string => !!line)
+}
+
 /**
  * An entry's user-supplied dates as labelled lines — "Happened Jun 11, 1994 · late morning". One
  * line per date given, so a caller renders what it gets and nothing when nothing was said, and the
  * two never have to be joined into one sentence where the separator would mean two different things.
  */
 export function entryWhenLines(dates: EntryDates): string[] {
-  const happened = formatWhen(dates.occurred_at, dates.occurred_time_note)
-  const written = formatWhen(dates.recorded_at, dates.recorded_time_note)
-
-  return [
-    ...(happened ? [`Happened ${happened}`] : []),
-    ...(written ? [`Originally written ${written}`] : []),
-  ]
+  const { happened, written } = dateLines(dates)
+  return present([happened, written])
 }
 
 /**
@@ -66,18 +76,11 @@ export function entryWhenLines(dates: EntryDates): string[] {
  * shows `entryWhenLines`. "Where" takes a colon because it asks rather than describes.
  */
 export function entryDetailLines(details: EntryDetails): string[] {
-  const { dates } = details
-  const happened = formatWhen(dates.occurred_at, dates.occurred_time_note)
+  const { happened, written } = dateLines(details.dates)
   const where = details.location?.trim()
-  const written = formatWhen(dates.recorded_at, dates.recorded_time_note)
   const medium = phrase(details.original_medium, details.original_medium_note)
 
-  return [
-    ...(happened ? [`Happened ${happened}`] : []),
-    ...(where ? [`Where: ${where}`] : []),
-    ...(written ? [`Originally written ${written}`] : []),
-    ...(medium ? [`Written in ${medium}`] : []),
-  ]
+  return present([happened, where && `Where: ${where}`, written, medium && `Written in ${medium}`])
 }
 
 /**

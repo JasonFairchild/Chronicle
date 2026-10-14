@@ -133,15 +133,12 @@ async function discard(sessionId: string): Promise<void> {
         <div class="mt-3 flex justify-end gap-2">
           <button
             type="button"
-            class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)]"
+            class="btn-secondary px-3 py-1.5"
             @click="discard(draft.session_id)"
           >
             Discard
           </button>
-          <RouterLink
-            :to="draftLocation(draft)"
-            class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-          >
+          <RouterLink :to="draftLocation(draft)" class="btn-primary px-3 py-1.5">
             Resume
           </RouterLink>
         </div>

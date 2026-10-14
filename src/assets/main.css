@@ -62,3 +62,12 @@ body {
 #app {
   min-height: 100vh;
 }
+
+/* How a button looks; how big it is (padding) is left to where it sits. */
+@utility btn-primary {
+  @apply rounded-lg bg-[var(--color-accent)] text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility btn-secondary {
+  @apply rounded-lg border border-[var(--color-border)] text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50;
+}

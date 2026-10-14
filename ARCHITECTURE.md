@@ -24,7 +24,7 @@ flowchart TB
     DE["<b>DocumentEditor.vue</b><br/>TipTap · extensions.ts · anchorCommands.ts<br/>anchor-mode guard · affected-anchor tracking"]
     EC["<b>EntryComposer.vue</b><br/>DocumentEditor · EntryDetailsFields<br/>Discard · Save, or why it can't"]
     SES["<b>useDraftSession</b><br/>one per composer on a screen below:<br/>begin · resume · save · discard<br/>stale / elsewhere notices"]
-    TAB["<b>App.vue · useTabReturn</b>"]
+    TAB["<b>App.vue · useTabLeave · useTabReturn</b>"]
     DS["<b>draftsStore</b><br/>ActiveSession = DraftSnapshot<br/>+ TraceRecorder · entry<br/>+ TraceRecorder · parent"]
     INPUTS["<b>entriesStore.inputsForDraft</b><br/>draft kind → CreateEntryInput[]<br/>anchorsPlacedSince · relationTypeForAnchors"]
   end

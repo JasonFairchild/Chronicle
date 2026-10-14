@@ -105,7 +105,7 @@ async function run(action: () => Promise<void> | void, fallback: string): Promis
     <div class="flex justify-end gap-2">
       <button
         type="button"
-        class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm transition hover:border-[var(--color-accent)]"
+        class="btn-secondary px-4 py-2"
         :disabled="session.saving"
         @click="run(onDiscard, 'Failed to discard draft')"
       >
@@ -119,7 +119,7 @@ async function run(action: () => Promise<void> | void, fallback: string): Promis
       <button
         v-if="!session.readOnly"
         type="button"
-        class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+        class="btn-primary px-4 py-2"
         :disabled="session.saving"
         @click="handleSave"
       >

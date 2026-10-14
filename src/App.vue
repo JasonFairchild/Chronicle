@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
-import { useTabReturn } from '@/composables/useTabReturn'
+import { useTabLeave, useTabReturn } from '@/composables/useTabVisibility'
 import { useDraftsStore } from '@/stores/draftsStore'
 
 /**
@@ -11,25 +10,8 @@ import { useDraftsStore } from '@/stores/draftsStore'
  */
 const drafts = useDraftsStore()
 
-function handleVisibility(): void {
-  if (document.visibilityState === 'hidden') void drafts.flushAll()
-}
-
-function handleLeave(): void {
-  void drafts.flushAll()
-}
-
+useTabLeave(() => void drafts.flushAll())
 useTabReturn(() => void drafts.adoptChangesElsewhere())
-
-onMounted(() => {
-  document.addEventListener('visibilitychange', handleVisibility)
-  window.addEventListener('pagehide', handleLeave)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('visibilitychange', handleVisibility)
-  window.removeEventListener('pagehide', handleLeave)
-})
 </script>
 
 <template>

@@ -887,12 +887,7 @@ async function handleFiles(event: Event): Promise<void> {
         :disabled="disabled"
         @keyup.enter="applyLink"
       />
-      <button
-        type="button"
-        class="rounded px-2 py-1 text-sm hover:bg-[var(--color-surface)]"
-        :disabled="disabled"
-        @click="applyLink"
-      >
+      <button type="button" class="btn-secondary px-2 py-1" :disabled="disabled" @click="applyLink">
         Apply link
       </button>
     </div>

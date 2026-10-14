@@ -10,7 +10,7 @@ import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
 import { useMedia } from '@/composables/useMedia'
 import { useSealDraft } from '@/composables/useSealDraft'
-import { useTabReturn } from '@/composables/useTabReturn'
+import { useTabReturn } from '@/composables/useTabVisibility'
 import { currentVersionId } from '@/domain/reconstructEntryState'
 import { useDraftToResume } from '@/router/draftQuery'
 import { versionsRevisedBy, type DraftSnapshot } from '@/types/draft'
@@ -434,32 +434,20 @@ function describeAnchor(resolved: ResolvedAnchor): string {
               <button
                 v-if="outstandingDraft"
                 type="button"
-                class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                class="btn-secondary px-3 py-1.5"
                 @click="resumeOutstandingDraft"
               >
                 Resume draft
               </button>
               <template v-else>
-                <button
-                  type="button"
-                  class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                  @click="startRelatedEntry"
-                >
+                <button type="button" class="btn-secondary px-3 py-1.5" @click="startRelatedEntry">
                   Create related entry
                 </button>
-                <button
-                  type="button"
-                  class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                  @click="startRevising"
-                >
+                <button type="button" class="btn-secondary px-3 py-1.5" @click="startRevising">
                   Revise entry
                 </button>
               </template>
-              <button
-                type="button"
-                class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                @click="goToNewConnection"
-              >
+              <button type="button" class="btn-secondary px-3 py-1.5" @click="goToNewConnection">
                 Add connection
               </button>
             </div>

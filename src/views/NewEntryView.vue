@@ -66,7 +66,7 @@ onBeforeUnmount(() => {
     <button
       v-if="!session.hasDraft && session.elsewhereNotice"
       type="button"
-      class="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+      class="btn-secondary px-3 py-1.5"
       @click="session.begin({ kind: 'new_root' })"
     >
       Start a new entry

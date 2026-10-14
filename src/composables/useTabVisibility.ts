@@ -21,3 +21,25 @@ export function useTabReturn(callback: () => void): void {
     window.removeEventListener('focus', callback)
   })
 }
+
+/**
+ * Runs `callback` whenever this tab is left, for as long as the calling component is mounted: when
+ * it's hidden, or when the page is unloading. A phone can kill a hidden tab without `pagehide`, so
+ * hiding is the signal that matters most; a page closed while showing fires both, so `callback`
+ * has to be safe to run twice.
+ */
+export function useTabLeave(callback: () => void): void {
+  function handleVisibility(): void {
+    if (document.visibilityState === 'hidden') callback()
+  }
+
+  onMounted(() => {
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('pagehide', callback)
+  })
+
+  onBeforeUnmount(() => {
+    document.removeEventListener('visibilitychange', handleVisibility)
+    window.removeEventListener('pagehide', callback)
+  })
+}

@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import type { Mark, Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { TextSelection, type Transaction } from '@tiptap/pm/state'
+import { TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import type { StepMap } from '@tiptap/pm/transform'
 import { ref, type Ref } from 'vue'
 import {
@@ -8,6 +8,7 @@ import {
   collectAnchors,
   newAnchorId,
   type AnchorRange,
+  type DocumentAnchor,
 } from '@/domain/anchors'
 import { changesInside } from '@/domain/anchorWarnings'
 import { ANCHOR_INSERT_NODE, ANCHOR_MARK, type EntryDocument } from '@/domain/entryDocument'
@@ -47,26 +48,28 @@ export function isAnchorEdit(transaction: Transaction): boolean {
   )
 }
 
-/** Whether a transaction was dispatched by one of this module's commands, via `dispatchAnchorEdit`. */
-export function isAnchorCommand(transaction: Transaction): boolean {
-  return transaction.getMeta(ANCHOR_EDIT_META) === true
-}
-
-/**
- * What the polite live region in `DocumentEditor` announces after an anchor command runs. Carried
- * on the transaction's own meta rather than returned from the command, so it reaches `onUpdate` —
- * the one place both a button click and a keyboard shortcut (`extensions.ts`) end up — however the
- * command was invoked.
- */
-export interface AnchorAnnouncement {
-  message: string
-}
-
 const ANCHOR_ANNOUNCE_META = 'chronicleAnchorAnnounce'
 
+/**
+ * Attaches what the polite live region in `DocumentEditor` announces after an anchor command runs.
+ * Carried on the transaction's own meta rather than returned from the command, so it reaches
+ * `onUpdate` — the one place both a button click and a keyboard shortcut (`extensions.ts`) end up —
+ * however the command was invoked.
+ */
+function announce(transaction: Transaction, message: string): void {
+  transaction.setMeta(ANCHOR_ANNOUNCE_META, message)
+}
+
 /** Reads the announcement an anchor command attached to its transaction, if any. */
-export function readAnchorAnnouncement(transaction: Transaction): AnchorAnnouncement | null {
-  return (transaction.getMeta(ANCHOR_ANNOUNCE_META) as AnchorAnnouncement | undefined) ?? null
+export function readAnchorAnnouncement(transaction: Transaction): string | null {
+  return (transaction.getMeta(ANCHOR_ANNOUNCE_META) as string | undefined) ?? null
+}
+
+/** The anchor with this id in the editor's current document, if it's there. */
+function findAnchor(state: EditorState, anchorId: string): DocumentAnchor | undefined {
+  return collectAnchors(state.doc.toJSON() as EntryDocument).find(
+    (anchor) => anchor.anchor_id === anchorId,
+  )
 }
 
 /**
@@ -254,9 +257,7 @@ export function addAnchorMark(
   const transaction = state.tr.addMark(from, to, markType.create({ anchorId, kind }))
   transaction.insert(to, insertNode)
   transaction.setSelection(TextSelection.create(transaction.doc, to + insertNode.nodeSize))
-  transaction.setMeta(ANCHOR_ANNOUNCE_META, {
-    message: `${kind === 'strike' ? 'Struck' : 'Highlighted'} "${quote}"`,
-  } satisfies AnchorAnnouncement)
+  announce(transaction, `${kind === 'strike' ? 'Struck' : 'Highlighted'} "${quote}"`)
 
   openWordingBox(editor, anchorId, '')
   dispatchAnchorEdit(editor, transaction)
@@ -311,10 +312,7 @@ export function setAnchorKind(editor: Editor, anchorId: string, kind: AnchorKind
   const pieces = anchorMarkRanges(state.doc, anchorId)
   if (pieces.length === 0) return false
 
-  const currentKind = collectAnchors(state.doc.toJSON() as EntryDocument).find(
-    (anchor) => anchor.anchor_id === anchorId,
-  )?.kind
-  if (currentKind === kind) return false
+  if (findAnchor(state, anchorId)?.kind === kind) return false
 
   let transaction = state.tr
   for (const { from, to, mark } of pieces) {
@@ -323,9 +321,7 @@ export function setAnchorKind(editor: Editor, anchorId: string, kind: AnchorKind
       .addMark(from, to, markType.create({ anchorId, kind }))
   }
 
-  transaction.setMeta(ANCHOR_ANNOUNCE_META, {
-    message: `Changed to ${kind === 'strike' ? 'strike' : 'highlight'}`,
-  } satisfies AnchorAnnouncement)
+  announce(transaction, `Changed to ${kind === 'strike' ? 'strike' : 'highlight'}`)
 
   dispatchAnchorEdit(editor, transaction)
   return true
@@ -340,9 +336,7 @@ export function setAnchorKind(editor: Editor, anchorId: string, kind: AnchorKind
 export function removeAnchor(editor: Editor, anchorId: string): void {
   const { state } = editor
 
-  const found = collectAnchors(state.doc.toJSON() as EntryDocument).find(
-    (anchor) => anchor.anchor_id === anchorId,
-  )
+  const found = findAnchor(state, anchorId)
   // A mark anchor announces its quote; a bare insertion has none, so its wording stands in instead —
   // and an insertion still empty when removed (opened, then immediately discarded this way rather
   // than via Escape) has neither, so this falls back to a description with nothing to quote at all.
@@ -362,9 +356,7 @@ export function removeAnchor(editor: Editor, anchorId: string): void {
     transaction = transaction.delete(existing.pos, existing.pos + existing.node.nodeSize)
   }
 
-  transaction.setMeta(ANCHOR_ANNOUNCE_META, {
-    message: description ? `Removed "${description}"` : 'Removed anchor',
-  } satisfies AnchorAnnouncement)
+  announce(transaction, description ? `Removed "${description}"` : 'Removed anchor')
 
   dispatchAnchorEdit(editor, transaction)
 }
@@ -490,15 +482,8 @@ export function commitAnchorInsert(editor: Editor, pos: number, text: string): v
     ? editor.state.tr.setNodeAttribute(pos, 'text', trimmed)
     : editor.state.tr.delete(pos, pos + 1)
 
-  if (trimmed) {
-    transaction.setMeta(ANCHOR_ANNOUNCE_META, {
-      message: `Added wording "${trimmed}"`,
-    } satisfies AnchorAnnouncement)
-  } else if (openedText) {
-    transaction.setMeta(ANCHOR_ANNOUNCE_META, {
-      message: 'Cleared wording',
-    } satisfies AnchorAnnouncement)
-  }
+  if (trimmed) announce(transaction, `Added wording "${trimmed}"`)
+  else if (openedText) announce(transaction, 'Cleared wording')
 
   dispatchAnchorEdit(editor, transaction)
 }

@@ -246,11 +246,6 @@ function resetRevisionState(): void {
   revisionAffectedAnchorIds.value = []
 }
 
-/** Lets go of the anchor-mode session, the same way. */
-function resetRelatedState(): void {
-  relatedSession.reset()
-}
-
 onMounted(() => {
   void loadEntry(props.id)
 })
@@ -261,7 +256,7 @@ watch(
     // Otherwise saving after navigating away would seal against whichever entry this session's
     // draft still points at, not the one now on screen.
     resetRevisionState()
-    resetRelatedState()
+    relatedSession.reset()
     void loadEntry(entryId)
   },
 )
@@ -293,7 +288,7 @@ onBeforeUnmount(() => {
   layoutWidth.value = 'normal'
   // Leaving the page ends its sessions as surely as changing entry does.
   resetRevisionState()
-  resetRelatedState()
+  relatedSession.reset()
 })
 
 /** Connections get the full entry model (title, dates, rich content), so they're a whole screen. */
@@ -338,10 +333,6 @@ async function saveRevision(): Promise<void> {
   if (saved) await loadEntry(props.id)
 }
 
-async function cancelRevision(): Promise<void> {
-  await revisionSession.discard()
-}
-
 /**
  * Opens an anchor-mode session: two documents, the parent gaining provisional anchors and the
  * related entry's own prose, sealing atomically together (AUTHORING.md, "Drafts").
@@ -359,10 +350,6 @@ async function startRelatedEntry(): Promise<void> {
 /** Lands on the new related entry, whose breadcrumb leads back here. */
 const saveRelatedEntry = useSealDraft(relatedSession)
 
-async function cancelRelatedEntry(): Promise<void> {
-  await relatedSession.discard()
-}
-
 /**
  * One line per anchor. A strike and its replacement wording are one anchor sharing one id, not two
  * things to guess into a pair, so there is exactly one case for a strike whether or not it carries
@@ -376,15 +363,15 @@ function describeAnchor(resolved: ResolvedAnchor): string {
       : 'Was attached to a removed passage'
   }
 
+  const where = resolved.quote ? `“${resolved.quote}”` : 'a point in the text'
+
   if (resolved.kind === 'strike') {
-    const where = resolved.quote ? `“${resolved.quote}”` : 'a point in the text'
     return resolved.insertion
       ? `Strikes ${where}, replaced with “${resolved.insertion}”`
       : `Strikes ${where}`
   }
 
   if (resolved.kind === 'comment') {
-    const where = resolved.quote ? `“${resolved.quote}”` : 'a point in the text'
     return resolved.insertion ? `On ${where}, adds “${resolved.insertion}”` : `On ${where}`
   }
 
@@ -492,7 +479,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
             save-label="Save revision"
             @change="trackAffectedAnchors"
             @save="saveRevision"
-            @discard="cancelRevision"
+            @discard="revisionSession.discard()"
           >
             <template #notices>
               <p
@@ -511,7 +498,7 @@ function describeAnchor(resolved: ResolvedAnchor): string {
           <RelatedEntryComposer
             :session="relatedSession"
             @save="saveRelatedEntry"
-            @discard="cancelRelatedEntry"
+            @discard="relatedSession.discard()"
           />
         </template>
 

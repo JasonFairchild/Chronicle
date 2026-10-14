@@ -305,7 +305,7 @@ const editor = useEditor({
 
     if (props.anchorMode) {
       const announcement = readAnchorAnnouncement(transaction)
-      if (announcement) liveRegionMessage.value = announcement.message
+      if (announcement) liveRegionMessage.value = announcement
     }
 
     // Judged by what the document says before and after, not by which steps produced it — no step
@@ -325,6 +325,7 @@ const editor = useEditor({
       content: JSON.stringify(document),
       title: emittedTitle(),
       steps: withHeldSteps(steps),
+      // The wording box's whole text serves: the punctuation check reads only its last character.
       inserted_text: wordingText ?? insertedTextOf(transaction),
       removed_chars: removedTextOf(transaction),
       is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors && wordingText === null,
@@ -407,16 +408,8 @@ function focusBody(): void {
 /**
  * The text a change added, for the mark policy's punctuation and pattern checks. The steps remain
  * the authoritative record of what happened.
- *
- * An anchor-mode wording keystroke (`updateAnchorInsertText`) carries its current text as meta
- * instead of a step slice — it's an attribute change on an atom, not a text-insertion step this
- * loop can read — so that's checked first. The punctuation check reads only the trailing
- * character, so the box's full current text serves as well as a true delta would.
  */
 function insertedTextOf(transaction: Transaction): string {
-  const wordingText = readAnchorWordingText(transaction)
-  if (wordingText !== null) return wordingText
-
   let inserted = ''
 
   for (const step of transaction.steps) {
@@ -690,11 +683,6 @@ async function handleFiles(event: Event): Promise<void> {
     attachError.value = toErrorMessage(error, 'Could not attach that image')
   }
 }
-
-defineExpose({
-  focus: () => editor.value?.commands.focus(),
-  clear: () => editor.value?.commands.clearContent(true),
-})
 </script>
 
 <template>

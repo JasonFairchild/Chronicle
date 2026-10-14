@@ -213,6 +213,13 @@ export const useDraftsStore = defineStore('drafts', () => {
     recorder.record({ ...change, steps: change.steps ?? [] })
   }
 
+  /** Swaps in a session's next snapshot, stamped now, and schedules the flush that writes it. */
+  function replaceSnapshot(sessionId: string, entry: ActiveSession, next: DraftSnapshot): void {
+    entry.draft = { ...next, updated_at: newEntryTimestamp() }
+    entry.dirty = true
+    scheduleFlush(sessionId)
+  }
+
   /**
    * Records a change and schedules a flush. The buffer is append-only while the session runs:
    * events accumulate and nothing already recorded is rewritten, so no authoring history is lost by
@@ -223,14 +230,10 @@ export const useDraftsStore = defineStore('drafts', () => {
     recordInto(entry.recorder, change)
 
     const { draft } = entry
-    entry.draft = {
+    replaceSnapshot(sessionId, entry, {
       ...draft,
-      updated_at: newEntryTimestamp(),
       entry: { ...draft.entry, content: change.content, title: change.title ?? null },
-    }
-    entry.dirty = true
-
-    scheduleFlush(sessionId)
+    })
   }
 
   /**
@@ -248,14 +251,10 @@ export const useDraftsStore = defineStore('drafts', () => {
 
     recordInto(parentRecorder, change)
 
-    entry.draft = {
+    replaceSnapshot(sessionId, entry, {
       ...draft,
-      updated_at: newEntryTimestamp(),
       parent: { ...draft.parent, content: change.content },
-    }
-    entry.dirty = true
-
-    scheduleFlush(sessionId)
+    })
   }
 
   /**
@@ -267,14 +266,10 @@ export const useDraftsStore = defineStore('drafts', () => {
     const entry = requireActive(sessionId)
     const { draft } = entry
 
-    entry.draft = {
+    replaceSnapshot(sessionId, entry, {
       ...draft,
-      updated_at: newEntryTimestamp(),
       entry: { ...draft.entry, ...entryDetailsOf(details) },
-    }
-    entry.dirty = true
-
-    scheduleFlush(sessionId)
+    })
   }
 
   /** A mark the writer asked for, rather than one a policy finds. */

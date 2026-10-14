@@ -1,19 +1,13 @@
 import { defineStore } from 'pinia'
-import { computed, ref, shallowRef } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
 import {
   collectMediaRefs,
   isBlankDraft,
   isEmptyDocument,
-  sameContent,
   sameDocument,
-  textContent,
 } from '@/domain/entryDocument'
-import {
-  buildEntryHistory,
-  currentVersionId,
-  reconstructEntryState,
-} from '@/domain/reconstructEntryState'
+import { reconstructEntryState } from '@/domain/reconstructEntryState'
 import { entryRepository } from '@/repositories'
 import type { DraftSnapshot } from '@/types/draft'
 import {
@@ -24,31 +18,11 @@ import {
   type CreateEntryInput,
   type Entry,
   type EntryDates,
-  type EntryVersion,
   type NarrativeRelation,
   type RevisionMode,
   type VersionedFields,
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
-
-export interface CreateRelatedEntryOptions {
-  parentId: string
-  relationType: NarrativeRelation
-  content: string
-}
-
-export interface CreateConnectionOptions {
-  fromId: string
-  toId: string
-  content?: string
-}
-
-export interface ReviseEntryOptions {
-  entryId: string
-  content: string
-  mediaRefs?: string[]
-  metadata?: Record<string, unknown>
-}
 
 export const useEntriesStore = defineStore('entries', () => {
   // Immutable snapshots, replaced wholesale and never mutated in place, so deep reactivity would
@@ -57,8 +31,6 @@ export const useEntriesStore = defineStore('entries', () => {
   const rootEntries = shallowRef<AggregatedEntry[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
-
-  const rootCount = computed(() => rootEntries.value.length)
 
   /**
    * Timeline rows are aggregated, not raw, so a revised entry shows its current text. Reading the
@@ -75,91 +47,6 @@ export const useEntriesStore = defineStore('entries', () => {
     } finally {
       loading.value = false
     }
-  }
-
-  /**
-   * A simple, non-session way to create a root entry from plain text — no draft, no title, no
-   * dates. The real UI always writes through a draft session (`inputsForDraft`); this exists for
-   * callers, chiefly tests, that just want an entry to exist.
-   */
-  async function createTextEntry(content: string): Promise<Entry> {
-    const entry = await entryRepository.create(
-      rootInput(plainFields(requireContent(textContent(content))), null),
-    )
-
-    await addRoot(entry.id)
-    return entry
-  }
-
-  /**
-   * An annotation or an update about the parent at large, with no anchors, from plain text — the
-   * simple counterpart to `createTextEntry` for related entries. One that points at a specific
-   * passage goes through an anchor-mode draft instead (`inputsForDraft`), since placing an anchor
-   * means revising the parent's own document.
-   */
-  async function createRelatedEntry(options: CreateRelatedEntryOptions): Promise<Entry> {
-    return entryRepository.create(
-      relatedInput(
-        plainFields(requireContent(textContent(options.content))),
-        options.parentId,
-        options.relationType,
-        { anchors: [] },
-      ),
-    )
-  }
-
-  /**
-   * A directional edge from plain text — the simple counterpart to `createTextEntry` for
-   * connections. The real UI always writes through `inputsForDraft`'s `new_connection` branch,
-   * which gets the full entry model (title, dates, rich content); this is for tests that just want
-   * a connection to exist.
-   */
-  async function createConnection(options: CreateConnectionOptions): Promise<Entry> {
-    error.value = null
-
-    return entryRepository.create(
-      createEntryInput({
-        content: textContent(options.content?.trim() ?? ''),
-        parent_id: options.fromId,
-        target_id: options.toId,
-        relation_type: 'connection',
-      }),
-    )
-  }
-
-  /**
-   * Appends a new version from plain text — the simple counterpart to `createTextEntry` for
-   * revisions. A revision is a full-state snapshot, so anything the caller is not changing is
-   * carried forward from the current aggregate rather than from the original row, which is what
-   * stops an edit from silently dropping the entry's media.
-   */
-  async function reviseEntry(options: ReviseEntryOptions): Promise<Entry> {
-    const content = requireContent(textContent(options.content))
-    const current = await getAggregatedEntry(options.entryId)
-    if (!current) {
-      throw new Error('Cannot revise an entry that does not exist')
-    }
-    if (sameContent(current.content, content)) {
-      throw new Error('No changes to save')
-    }
-
-    const entry = await entryRepository.create(
-      revisionInput(
-        current.id,
-        {
-          ...versionedFieldsOf(current),
-          content,
-          media_refs: options.mediaRefs ?? collectMediaRefs(content),
-          metadata: options.metadata ?? current.metadata,
-        },
-        'direct',
-        currentVersionId(current),
-        null,
-      ),
-    )
-
-    await refreshRoot(options.entryId)
-    return entry
   }
 
   /**
@@ -194,8 +81,8 @@ export const useEntriesStore = defineStore('entries', () => {
         }
 
         // Nothing was placed on the parent, so this is about the parent at large: one entry, no
-        // revision, exactly like `createRelatedEntry`. With nothing anchored there is nothing for
-        // `relationTypeForAnchors` to read, and its answer for that case is annotation.
+        // revision. With nothing anchored there is nothing for `relationTypeForAnchors` to read,
+        // and its answer for that case is annotation.
         return [
           relatedInput(fields, draft.parent_id, 'annotation', {
             anchors: [],
@@ -307,21 +194,11 @@ export const useEntriesStore = defineStore('entries', () => {
     }
   }
 
-  async function getEntry(id: string): Promise<Entry | null> {
-    return entryRepository.getById(id)
-  }
-
   async function getAggregatedEntry(id: string, asOf?: Date): Promise<AggregatedEntry | null> {
     // Only this entry's subtree, not the whole database. Revisions multiply row counts faster
     // than anything else in the model, so a detail view must never load everything.
     const relevant = await entryRepository.listDescendants(id)
     return reconstructEntryState(id, relevant, { asOf })
-  }
-
-  /** The full version chain for one entry, oldest first. */
-  async function getEntryHistory(id: string): Promise<EntryVersion[]> {
-    const relevant = await entryRepository.listDescendants(id)
-    return buildEntryHistory(id, relevant) ?? []
   }
 
   async function aggregateRoots(): Promise<AggregatedEntry[]> {
@@ -434,11 +311,6 @@ export const useEntriesStore = defineStore('entries', () => {
     })
   }
 
-  /** A new entry's version holding `content` alone, for the plain-text creators. */
-  function plainFields(content: string): VersionedFields {
-    return versionedFieldsOf(createEntryInput({ content, media_refs: collectMediaRefs(content) }))
-  }
-
   /**
    * The one thing that must be true of any document about to become an entry: its body has to say
    * something, in words or an image. A title doesn't count — it names an entry without being one.
@@ -483,17 +355,10 @@ export const useEntriesStore = defineStore('entries', () => {
     rootEntries,
     loading,
     error,
-    rootCount,
     loadRootEntries,
-    createTextEntry,
-    createRelatedEntry,
-    createConnection,
-    reviseEntry,
     inputsForDraft,
     draftHoldsWork,
     showWritten,
-    getEntry,
     getAggregatedEntry,
-    getEntryHistory,
   }
 })

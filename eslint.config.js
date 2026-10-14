@@ -5,7 +5,7 @@ import eslintConfigPrettier from 'eslint-config-prettier'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['dist', 'dev-dist', 'coverage', 'cypress/downloads'] },
+  { ignores: ['dist', 'dev-dist', 'coverage', 'cypress/downloads', '.staged'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...pluginVue.configs['flat/recommended'],

@@ -54,3 +54,6 @@ dev-dist/
 
 # Lint cache
 .eslintcache
+
+# Pre-commit snapshot of the index (scripts/checkStaged.ts)
+.staged/

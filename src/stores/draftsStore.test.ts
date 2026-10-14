@@ -245,7 +245,7 @@ describe('useDraftsStore', () => {
       const sealed = await store.sealDraft('interrupted')
 
       expect(docToPlainText(resumed!.entry.content)).toBe('Half a thought')
-      const trace = (await useEntriesStore().getEntry(sealed.id))?.authoring_trace
+      const trace = (await entryRepository.getById(sealed.id))?.authoring_trace
       expect(trace?.started_at).toBe('2026-09-05T10:00:00.000Z')
       expect(trace?.events.map((event) => event.kind)).toEqual(['edit', 'manual', 'edit'])
     })

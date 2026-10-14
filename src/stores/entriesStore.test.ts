@@ -15,6 +15,23 @@ import { makeDraft, relatedTo, type DraftKind } from '@/testing/draftFixtures'
 import type { Draft } from '@/types/draft'
 import { createEntryInput, type Entry } from '@/types/entry'
 
+/** An entry already on record, written straight to storage. */
+function seedEntry(text: string): Promise<Entry> {
+  return entryRepository.create(createEntryInput({ content: textContent(text) }))
+}
+
+/** A draft of `kind` holding `body`; a revision starts from its parent's first version. */
+function draftFor(kind: DraftKind, body: string, title: string | null = null): Draft {
+  return makeDraft('session-1', {
+    entry: {
+      title,
+      content: serializeDocument(plainTextDocument(body)),
+      base_version_id: kind.kind === 'revision' ? kind.parent_id : null,
+    },
+    kind,
+  })
+}
+
 /**
  * Writes what sealing `draft` would, and the timeline catches up, without a draft store around it:
  * that `seal` also removes the draft is the draft repository's contract.
@@ -36,64 +53,36 @@ describe('useEntriesStore', () => {
     setEntryRepository(new InMemoryEntryRepository())
   })
 
-  it('creates a text entry and refreshes the root timeline', async () => {
+  it('loads the root timeline from the repository', async () => {
     const store = useEntriesStore()
+    await seedEntry('First timeline entry')
 
-    await store.createTextEntry('First timeline entry')
     await store.loadRootEntries()
 
-    expect(store.rootCount).toBe(1)
-    expect(docToPlainText(store.rootEntries[0]!.content)).toBe('First timeline entry')
+    expect(store.rootEntries.map((entry) => docToPlainText(entry.content))).toEqual([
+      'First timeline entry',
+    ])
   })
 
   it('rejects empty content', async () => {
-    const store = useEntriesStore()
-    await expect(store.createTextEntry('   ')).rejects.toThrow('Entry content cannot be empty')
+    await expect(sealDraft(draftFor({ kind: 'new_root' }, '   '))).rejects.toThrow(
+      'Entry content cannot be empty',
+    )
   })
 
   it('gives a related entry the title its draft carries', async () => {
-    const store = useEntriesStore()
-    const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
+    const parent = await seedEntry('I went to Lake Tahoe with Dad')
 
-    const draft = makeDraft('session-titled-related', {
-      entry: {
-        title: 'A later thought',
-        content: serializeDocument(plainTextDocument('Still think about this trip')),
-      },
-      kind: relatedTo(parent),
-    })
-
-    const sealed = await sealDraft(draft)
+    const sealed = await sealDraft(
+      draftFor(relatedTo(parent), 'Still think about this trip', 'A later thought'),
+    )
 
     expect(sealed.title).toBe('A later thought')
   })
 
-  it('returns aggregated entry state from the repository data', async () => {
-    const store = useEntriesStore()
-    const created = await store.createTextEntry('Root content')
-
-    const aggregated = await store.getAggregatedEntry(created.id)
-    expect(docToPlainText(aggregated!.content)).toBe('Root content')
-  })
-
-  it('never alters the parent’s stored row when a related entry is created', async () => {
-    const store = useEntriesStore()
-    const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
-
-    await store.createRelatedEntry({
-      parentId: parent.id,
-      relationType: 'annotation',
-      content: 'Miss those trips',
-    })
-
-    expect(docToPlainText((await store.getEntry(parent.id))!.content)).toBe(
-      'I went to Lake Tahoe with Dad',
-    )
-  })
-
   it('anchors a related entry to a passage by sealing it together with a parent revision', async () => {
     const store = useEntriesStore()
-    const parent = await store.createTextEntry('I went to Lake Tahoe with Dad')
+    const parent = await seedEntry('I went to Lake Tahoe with Dad')
     const marked = withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20)
 
     const draft = makeDraft('session-1', {
@@ -120,18 +109,21 @@ describe('useEntriesStore', () => {
         insertion: null,
       },
     ])
+    // The anchors went into a new version; the row the parent was written as is untouched.
+    expect((await entryRepository.getById(parent.id))?.content).toBe(parent.content)
   })
 
   it('surfaces a connection on both entries it joins', async () => {
     const store = useEntriesStore()
-    const from = await store.createTextEntry('Left my job')
-    const to = await store.createTextEntry('Started the degree')
+    const from = await seedEntry('Left my job')
+    const to = await seedEntry('Started the degree')
 
-    await store.createConnection({
-      fromId: from.id,
-      toId: to.id,
-      content: 'One made the other possible',
-    })
+    await sealDraft(
+      draftFor(
+        { kind: 'new_connection', parent_id: from.id, target_id: to.id },
+        'One made the other possible',
+      ),
+    )
 
     const source = await store.getAggregatedEntry(from.id)
     const destination = await store.getAggregatedEntry(to.id)
@@ -141,11 +133,9 @@ describe('useEntriesStore', () => {
   })
 
   it('keeps an entry’s media through a revision whose new document still contains it', async () => {
-    // `reviseEntry`'s plain-text shortcut always writes a fresh, image-free document — media_refs
-    // is derived from the document, with no exception any more (ENTRY_MODEL.md), so it can only
-    // stay populated when the revision's own content still carries the image node. That's exactly
-    // what the real editor does: it seeds a revision from the current, full document, images
-    // included, which is what this test mirrors via a revision draft instead of the shortcut.
+    // `media_refs` is derived from the document (ENTRY_MODEL.md), so it stays populated only when
+    // the revision's own content still carries the image node — as it does from the real editor,
+    // which seeds a revision from the current, full document, images included.
     const store = useEntriesStore()
     const withPhoto = serializeDocument({
       type: 'doc',
@@ -182,66 +172,21 @@ describe('useEntriesStore', () => {
 
   it('shows the revised text on the timeline rather than the original', async () => {
     const store = useEntriesStore()
-    const created = await store.createTextEntry('I recieved the offer')
+    const created = await seedEntry('I recieved the offer')
+    await sealDraft(draftFor({ kind: 'revision', parent_id: created.id }, 'I received the offer'))
 
-    await store.reviseEntry({ entryId: created.id, content: 'I received the offer' })
     await store.loadRootEntries()
 
     expect(docToPlainText(store.rootEntries[0]!.content)).toBe('I received the offer')
     expect(store.rootEntries[0]?.version.total).toBe(2)
   })
 
-  it('reports the version chain oldest first', async () => {
-    const store = useEntriesStore()
-    const created = await store.createTextEntry('One')
-
-    await store.reviseEntry({ entryId: created.id, content: 'Two' })
-
-    const history = await store.getEntryHistory(created.id)
-    expect(history.map((version) => docToPlainText(version.content))).toEqual(['One', 'Two'])
-  })
-
-  it('carries the author’s dates through a revision instead of dropping them', async () => {
-    const store = useEntriesStore()
-    const draft = makeDraft('session-dated', {
-      entry: {
-        dates: {
-          recorded_at: '1994-06-12',
-          recorded_time_note: 'evening',
-          occurred_at: '1994-06-11',
-          occurred_time_note: 'morning',
-        },
-        content: serializeDocument(plainTextDocument('From the notebook')),
-      },
-    })
-    const created = await sealDraft(draft)
-
-    await store.reviseEntry({ entryId: created.id, content: 'From the notebook, typed up' })
-
-    const aggregated = await store.getAggregatedEntry(created.id)
-    expect(aggregated?.dates).toEqual({
-      recorded_at: '1994-06-12',
-      recorded_time_note: 'evening',
-      occurred_at: '1994-06-11',
-      occurred_time_note: 'morning',
-    })
-  })
-
-  it('rejects a revision that changes nothing', async () => {
-    const store = useEntriesStore()
-    const created = await store.createTextEntry('Nothing to see here')
-
-    await expect(
-      store.reviseEntry({ entryId: created.id, content: 'Nothing to see here' }),
-    ).rejects.toThrow('No changes to save')
-  })
-
   it('updates the revised root in place, without reloading the rest of the timeline', async () => {
     const store = useEntriesStore()
-    const created = await store.createTextEntry('Draft wording')
+    const created = await seedEntry('Draft wording')
     await store.loadRootEntries()
 
-    await store.reviseEntry({ entryId: created.id, content: 'Final wording' })
+    await sealDraft(draftFor({ kind: 'revision', parent_id: created.id }, 'Final wording'))
 
     expect(docToPlainText(store.rootEntries[0]!.content)).toBe('Final wording')
     expect(store.rootEntries[0]?.version.total).toBe(2)
@@ -249,10 +194,10 @@ describe('useEntriesStore', () => {
 
   it('prepends a newly created root without reloading the rest of the timeline', async () => {
     const store = useEntriesStore()
-    await store.createTextEntry('First')
+    await seedEntry('First')
     await store.loadRootEntries()
 
-    await store.createTextEntry('Second')
+    await sealDraft(draftFor({ kind: 'new_root' }, 'Second'))
 
     expect(store.rootEntries.map((entry) => docToPlainText(entry.content))).toEqual([
       'Second',
@@ -262,37 +207,16 @@ describe('useEntriesStore', () => {
 
   it('keeps a related entry out of the root timeline', async () => {
     const store = useEntriesStore()
-    const parent = await store.createTextEntry('Root')
-
-    await store.createRelatedEntry({
-      parentId: parent.id,
-      relationType: 'annotation',
-      content: 'A note',
-    })
+    const parent = await seedEntry('Root')
     await store.loadRootEntries()
 
-    expect(store.rootCount).toBe(1)
+    await sealDraft(draftFor(relatedTo(parent), 'A note'))
+
+    expect(store.rootEntries.map((entry) => entry.id)).toEqual([parent.id])
   })
 
   describe('refusing a write it cannot make', () => {
-    /** A sealed draft standing in for whichever session the test is about to refuse. */
-    function draftFor(kind: DraftKind, body: string, title: string | null = null): Draft {
-      return makeDraft('session-refused', {
-        entry: {
-          title,
-          content: serializeDocument(plainTextDocument(body)),
-          base_version_id: kind.kind === 'revision' ? kind.parent_id : null,
-        },
-        kind,
-      })
-    }
-
     it('will not revise an entry that is not there', async () => {
-      const store = useEntriesStore()
-
-      await expect(
-        store.reviseEntry({ entryId: 'never-created', content: 'Some new wording' }),
-      ).rejects.toThrow('Cannot revise an entry that does not exist')
       await expect(
         sealDraft(draftFor({ kind: 'revision', parent_id: 'never-created' }, 'Words')),
       ).rejects.toThrow('Cannot revise an entry that does not exist')
@@ -314,8 +238,7 @@ describe('useEntriesStore', () => {
     })
 
     it('will not seal a revision draft that changed nothing the version holds', async () => {
-      const store = useEntriesStore()
-      const created = await store.createTextEntry('Nothing to see here')
+      const created = await seedEntry('Nothing to see here')
       const kind = { kind: 'revision', parent_id: created.id } as const
 
       await expect(sealDraft(draftFor(kind, 'Nothing to see here'))).rejects.toThrow(
@@ -326,8 +249,7 @@ describe('useEntriesStore', () => {
     })
 
     it('counts formatting as a change, but not the empty block the editor keeps at the end', async () => {
-      const store = useEntriesStore()
-      const created = await store.createTextEntry('Nothing to see here')
+      const created = await seedEntry('Nothing to see here')
       const words = { type: 'text', text: 'Nothing to see here' }
       const revisedTo = (content: EntryDocument) =>
         makeDraft('session-refused', {

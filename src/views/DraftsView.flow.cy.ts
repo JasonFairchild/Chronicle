@@ -1,6 +1,6 @@
 import App from '@/App.vue'
-import { textContent } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
+import { textContent } from '@/testing/documents'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]

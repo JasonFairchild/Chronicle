@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Transform } from '@tiptap/pm/transform'
-import {
-  ANCHOR_INSERT_NODE,
-  ANCHOR_MARK,
-  plainTextDocument,
-  serializeDocument,
-} from '@/domain/entryDocument'
+import { ANCHOR_INSERT_NODE, ANCHOR_MARK } from '@/domain/entryDocument'
+import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import type { AuthoringMark } from '@/domain/marks'
 import { buildFrames, documentsFromFrames } from '@/editor/markFrames'
 import { documentsAt, replayDocument, type ReplayLog } from '@/editor/replay'

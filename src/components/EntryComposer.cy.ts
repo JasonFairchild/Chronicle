@@ -1,8 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
-import { textContent } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
+import { textContent } from '@/testing/documents'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { emptyEntryDates } from '@/types/entry'
 

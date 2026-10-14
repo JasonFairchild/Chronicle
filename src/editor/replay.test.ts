@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Transform } from '@tiptap/pm/transform'
-import { plainTextDocument, serializeDocument } from '@/domain/entryDocument'
+import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { documentsAt, replayDocument, type ReplayLog } from '@/editor/replay'
 import type { AuthoringEvent } from '@/types/entry'
 

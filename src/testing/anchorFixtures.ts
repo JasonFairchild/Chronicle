@@ -1,4 +1,5 @@
-import { ANCHOR_MARK, serializeDocument } from '@/domain/entryDocument'
+import { ANCHOR_MARK } from '@/domain/entryDocument'
+import { serializeDocument } from '@/testing/documents'
 
 /**
  * A hand-built document carrying one anchor mark over `[from, to)`, standing in for what

@@ -10,10 +10,9 @@ import {
   ANCHOR_MARK,
   collectMediaRefs,
   docToPlainText,
-  plainTextDocument,
-  serializeDocument,
 } from '@/domain/entryDocument'
 import { mediaRepository } from '@/repositories'
+import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
 import { selectTextRange } from '@/testing/selectTextRange'
 

@@ -5,10 +5,10 @@ import { draftRepository, entryRepository, mediaRepository } from '@/repositorie
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
+import { textContent } from '@/testing/documents'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
-import { textContent } from '@/domain/entryDocument'
 import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
 import { formatDate, formatDateline, formatTime } from '@/utils/format'
 

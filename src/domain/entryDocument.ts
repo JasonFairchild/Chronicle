@@ -70,30 +70,6 @@ export function parseDocument(content: string | EntryDocument): EntryDocument {
   return parsed
 }
 
-export function serializeDocument(doc: EntryDocument): string {
-  return JSON.stringify(doc)
-}
-
-/** Wraps plain text as a document, one paragraph per line. */
-export function plainTextDocument(text: string): EntryDocument {
-  const paragraphs = text.split('\n').map((line): DocNode => {
-    return line
-      ? { type: 'paragraph', content: [{ type: 'text', text: line }] }
-      : { type: 'paragraph' }
-  })
-
-  return { type: 'doc', content: paragraphs }
-}
-
-/**
- * Plain text as stored content — the one named way to build a document from a bare string, for the
- * store's simple non-session creation methods and for tests that don't care about rich formatting.
- * A title is never part of it: a title is a sibling field on the entry (ENTRY_MODEL.md, "Fields").
- */
-export function textContent(body: string): string {
-  return serializeDocument(plainTextDocument(body))
-}
-
 /**
  * The canonical flattening: the document's body as plain text, one line per block. Anchor-carried
  * wording is excluded — see `nodeText` — and nothing else is.

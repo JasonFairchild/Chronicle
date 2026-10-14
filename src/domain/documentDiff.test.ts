@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { diffDocuments, diffPlainText, type DiffSegment } from '@/domain/documentDiff'
-import {
-  ANCHOR_INSERT_NODE,
-  ANCHOR_MARK,
-  serializeDocument,
-  textContent,
-} from '@/domain/entryDocument'
+import { ANCHOR_INSERT_NODE, ANCHOR_MARK } from '@/domain/entryDocument'
+import { serializeDocument, textContent } from '@/testing/documents'
 
 /** The later version, rebuilt from the diff — what a reader of the "after" side would see. */
 function after(segments: DiffSegment[]): string {

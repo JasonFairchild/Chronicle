@@ -1,7 +1,7 @@
 import type { Router } from 'vue-router'
 import NewConnectionView from '@/views/NewConnectionView.vue'
-import { textContent } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
+import { textContent } from '@/testing/documents'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput } from '@/types/entry'

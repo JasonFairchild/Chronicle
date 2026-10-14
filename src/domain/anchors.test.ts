@@ -11,7 +11,8 @@ import {
   sessionAnchorIds,
   type AnchorRange,
 } from '@/domain/anchors'
-import { serializeDocument, type DocMark, type EntryDocument } from '@/domain/entryDocument'
+import type { DocMark, EntryDocument } from '@/domain/entryDocument'
+import { serializeDocument } from '@/testing/documents'
 
 /** A one-paragraph document, with a subrange optionally carrying an anchor mark. */
 function doc(text: string, mark?: { anchorId: string; kind: string; from: number; to: number }) {

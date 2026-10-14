@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import DraftsView from '@/views/DraftsView.vue'
-import { textContent } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
+import { textContent } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'

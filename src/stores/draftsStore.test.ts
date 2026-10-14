@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { docToPlainText, textContent } from '@/domain/entryDocument'
+import { docToPlainText } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
 import {
   draftRepository,
@@ -13,6 +13,7 @@ import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
+import { textContent } from '@/testing/documents'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput, type AggregatedEntry } from '@/types/entry'
 

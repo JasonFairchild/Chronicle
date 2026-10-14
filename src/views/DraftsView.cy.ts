@@ -1,6 +1,6 @@
 import DraftsView from '@/views/DraftsView.vue'
-import { textContent } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
+import { textContent } from '@/testing/documents'
 import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput } from '@/types/entry'
 import { formatDate } from '@/utils/format'

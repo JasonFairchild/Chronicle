@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import EntryCard from '@/components/EntryCard.vue'
-import { previewText, textContent } from '@/domain/entryDocument'
+import { previewText } from '@/domain/entryDocument'
+import { textContent } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { emptyEntryDates, type AggregatedEntry } from '@/types/entry'

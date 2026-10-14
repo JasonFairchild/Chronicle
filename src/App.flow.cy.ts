@@ -1,8 +1,9 @@
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
-import { docToPlainText, textContent } from '@/domain/entryDocument'
+import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
+import { textContent } from '@/testing/documents'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput } from '@/types/entry'
 

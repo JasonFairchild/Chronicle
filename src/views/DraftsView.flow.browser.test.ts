@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import App from '@/App.vue'
-import { textContent } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
+import { textContent } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { makeDraft, seedDraft } from '@/testing/draftFixtures'

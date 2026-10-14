@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { Transform } from '@tiptap/pm/transform'
-import { plainTextDocument, serializeDocument, textContent } from '@/domain/entryDocument'
+import { plainTextDocument, serializeDocument, textContent } from '@/testing/documents'
 import { DEFAULT_MARK_POLICY } from '@/domain/marks'
 import { documentsFromFrames } from '@/editor/markFrames'
 import { replayDocument } from '@/editor/replay'

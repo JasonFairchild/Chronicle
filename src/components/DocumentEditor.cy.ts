@@ -6,11 +6,10 @@ import {
   ANCHOR_MARK,
   collectMediaRefs,
   docToPlainText,
-  plainTextDocument,
-  serializeDocument,
 } from '@/domain/entryDocument'
 import { documentsAt } from '@/editor/replay'
 import { withAnchorMark } from '@/testing/anchorFixtures'
+import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { selectTextRange } from '@/testing/selectTextRange'
 
 /** The change this component last reported, which is its whole contract with a parent. */

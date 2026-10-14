@@ -1,5 +1,6 @@
 import EntryCard from '@/components/EntryCard.vue'
-import { previewText, textContent } from '@/domain/entryDocument'
+import { previewText } from '@/domain/entryDocument'
+import { textContent } from '@/testing/documents'
 import { emptyEntryDates, type AggregatedEntry } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 

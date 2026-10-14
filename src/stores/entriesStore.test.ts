@@ -1,16 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useEntriesStore } from '@/stores/entriesStore'
-import {
-  docToPlainText,
-  plainTextDocument,
-  serializeDocument,
-  textContent,
-  type EntryDocument,
-} from '@/domain/entryDocument'
+import { docToPlainText, type EntryDocument } from '@/domain/entryDocument'
 import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { withAnchorMark } from '@/testing/anchorFixtures'
+import { plainTextDocument, serializeDocument, textContent } from '@/testing/documents'
 import { makeDraft, relatedTo, type DraftKind } from '@/testing/draftFixtures'
 import type { Draft } from '@/types/draft'
 import { createEntryInput, type Entry } from '@/types/entry'

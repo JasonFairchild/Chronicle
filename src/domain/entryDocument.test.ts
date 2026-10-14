@@ -7,13 +7,12 @@ import {
   isBlankDraft,
   isEmptyDocument,
   parseDocument,
-  plainTextDocument,
   previewText,
   sameContent,
   sameDocument,
-  serializeDocument,
   type EntryDocument,
 } from '@/domain/entryDocument'
+import { plainTextDocument, serializeDocument } from '@/testing/documents'
 
 const document: EntryDocument = {
   type: 'doc',

@@ -209,6 +209,8 @@ The review pivoted at its first question. `EntryForm.cy.ts` read the repository 
 
 The two open items above are flows, written after commit 2 below, in `.flow.` files.
 
+- [ ] **Connections, discussion first.** The Drafts page refactor this review led to left open whether a connection folds into a related entry. Unifying EntryDetailView's breadcrumbs was tried and dropped as not worth a two-caller helper; revisit it here, since this reshapes them anyway.
+
 **The component / flow split** (D6)
 
 The review's second turn. Component specs had grown into narrow end-to-end tests by default, so whether a spec was about one screen or a path down to storage was settled file by file. TESTING.md now has three levels and one question between them ("Layers"). The specs follow in three commits, each green on its own.

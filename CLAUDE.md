@@ -28,17 +28,21 @@ The rule most often broken. A permission rule matches the **whole** command stri
 - **No related entry or connection is destructive.** Only a `revision` writes content.
 - **Sort entries with `compareEntries`, never `created_at` alone** — it ties at millisecond resolution.
 - Tests alongside every feature.
-- **Verify narrowly; pushes run everything.** Run the specs covering what changed — `npm run test -- <path>`, `npm run test:browser -- <path>`, `npm run cy:run -- --spec <path>` — and `npm run typecheck`. Pre-push runs both component suites (`lefthook.yml`), so run them in full only for a broad change: a store, repository, editor schema, or shared test setup.
+- **Verify in tiers; pushes run everything.** Plans name each step's tier and the specs it runs.
+  - Each step: `npm run typecheck` and the unit specs covering what changed (`npm run test -- <path>`), plus any spec being written.
+  - End of a piece, or before a commit: the browser and Cypress specs covering the changed files (`npm run test:browser -- <path>`, `npm run cy:run -- --spec <path>`).
+  - Full component suites only for a broad change — a store, repository, editor schema, or shared test setup. Pre-push runs them anyway (`lefthook.yml`).
+  - A plan ends with one manual check in the running app.
 - Composition API + `<script setup>`; all data access behind the repository layer.
 - No hard-coded colors that block dark mode.
 - **Semantics first.** Native elements before ARIA; reach for a role or `aria-*` only where no element does the job (the editor's `contenteditable` body is the standing example).
 - **Disable a control only while its action is in flight.** Otherwise leave it enabled and say why it can't proceed.
 - Small, focused changes I can read and explain.
+- A new helper goes above its first caller, so the file reads top-down.
+- **Single-user app: make the common path work, and give a rare race the smallest backstop that holds** — an existing field or constraint before new machinery.
 - **Comments cite nothing that outlives the session** — no plan, chat, or "Piece N"; cite a checked-in doc or nothing. The non-obvious why, stated once, proportional to the code it sits next to — not a walkthrough.
 - **Comment style marks scope, not length.** `/** */` heads a unit (file, function — nested ones too — type, class), even at one line. `//` covers a few lines within a unit, even at several lines. A short note on one field or statement is a trailing `//` on that line, moved above only if it won't fit. Going forward only; fix old comments opportunistically, not in a sweep.
 - Between equally good options, take the one that costs less context.
-- Commit messages: a subject line, then only what the diff can't say — why, and what a reviewer couldn't discover from the code. No tour of the changes.
-- **Draft commits, don't run them.** Staging and `git commit` are mine, every time; don't stage unless asked directly.
 - **No backward compatibility until we deliberately decide it's needed** — including entries in a browser's IndexedDB, which is all test data for now. Change a shape and update every call site, with no fallback for the old one. If old local data breaks, clear IndexedDB or reseed; don't migrate or tolerate it.
 
 ## Landmarks

@@ -29,6 +29,7 @@ The persistent halves run in the browser project only — Dexie needs real Index
 - **Don't test child components.** They get their own specs, or are treated as third party. Selecting or interacting with a child's elements as a means to an end is fine; asserting on behavior that belongs to the child is not. Where a parent only configures a child and the one visible result is styling — a table's `striped` prop, say — assert the prop it passes (`findComponent(Table).props('striped')`), not the computed CSS; the child's spec already proves what the prop does.
 - **Prefer whole scenarios.** One test covering a complete scenario beats several granular ones. Longer tests are fine when they represent one coherent idea, such as select a passage, strike it, propose wording, save, and see it rendered.
 - **Never mock what's in scope.** Everything a spec is about runs for real, watched with a spy where the screen can't show it. For a component spec, that is the component's own script, the children it renders, what it emits, where it navigates, and the stores and composables it runs on. What's outside the scope still runs, but the spec doesn't check it. For a component spec that's storage: seeded the way an intercept seeds a page, stubbed to fail when the failure is the point, and never read back.
+- **Test the code the app runs.** A test goes through the path the app takes, never an API only tests call, so source carries no entry points of its own for tests. The composition root's setters are the one seam (see "Swap the repository").
 - **Use a fail first approach.** Every new test should be proven to fail as expected before being made to pass. For already working code, it can be broken, tested then restored.
 
 ## Layers
@@ -152,6 +153,8 @@ Don't introduce a helper purely to reduce vertical size. Readability beats densi
 `npm run cy:run` (headless) or `npm run cy` (interactive).
 
 ## Coverage
+
+Coverage finds behaviors without a test; it isn't a line target. A gap earns a test when it guards an invariant or something the writer would notice: an `asOf` path, a guard that refuses a bad write, a fold over stored data that must terminate. It doesn't for a defensive early return, a branch reachable only through a type cast, or a view that only arranges its children.
 
 `npm run test:coverage` runs both the `unit` and `browser` Vitest projects with coverage and writes a report to `coverage/` (gitignored). The provider is `istanbul`, not the usual `v8` default: v8 coverage needs Node's inspector, which Browser Mode's Playwright tab doesn't expose, so v8 simply can't instrument the `browser` project at all. Istanbul instruments the source itself, so it works for both projects with one config block. It's also what `@cypress/code-coverage` consumes, so wiring Cypress into the same coverage run later — a natural next comparison, alongside Vitest Browser Mode vs. Cypress as runners — is a small addition rather than a second provider to reconcile. Cypress isn't wired into coverage yet; only Vitest is.
 

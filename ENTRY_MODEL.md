@@ -174,4 +174,5 @@ Default depth is 2: a parent view shows immediate descendants and signals that d
 - **A separate events table with materialized entries.** The entry log already is an event log.
 - **Links, or revisions, in their own tables.** A link row couldn't carry prose, be revised, or take children; a revision table would cost the unified `Entry` and revisions in filtered timelines.
 - **ProseMirror block ids as anchors.** Node attributes duplicate on split and vanish on merge, and give paragraph granularity where users want a sentence.
+- **Injecting repositories with Vue's `provide`/`inject`** in place of the composition root's live bindings (`src/repositories/index.ts`). It would isolate app instances running side by side, which a single-user app doesn't have, and Pinia stores can only `inject` inside an active app. Revisit if that isolation is ever needed.
 - **Anchors as offsets stored on the related entry**, resolved by a fallback ladder (exact position, mapped through steps, quote search, orphaned). Every failure traced to one cause — a fact about the parent's document stored somewhere else — and moving anchors into the parent deleted the ladder.

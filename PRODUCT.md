@@ -199,6 +199,7 @@ Builds on anchor wording becoming ordinary text (CHRONICLE_PLAN.md, "Anchor word
 
 ### Writing history
 
+- **Scrubbing backward** could fade later marks out after a slight delay rather than cutting them.
 - **Zooming in on the scrubber:** between two bookmarks, replay one keystroke at a time. More curiosity than reading tool, but the capture already supports it.
 - Tuning how often moments get bookmarked, re-reading an old session under new rules, or turning capture off — and whether any of that is a user-facing setting at all.
 - **Sittings:** a draft picked up again later records that it was, so the history view can show how many sittings a piece took. Without it, a return is only a long pause, indistinguishable from a tab left open.

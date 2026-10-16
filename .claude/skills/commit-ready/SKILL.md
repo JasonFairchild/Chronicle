@@ -1,6 +1,6 @@
 ---
 name: commit-ready
-description: Getting uncommitted work in Chronicle ready to commit — review it, verify it, and draft its message. Use when the user asks to review uncommitted work, whether it's ready to commit, or for a commit message. Never stages or commits.
+description: Getting uncommitted work in Chronicle ready to commit — review it, verify it, and draft its message. Use when the user asks to review uncommitted work, whether it's ready to commit, or for a commit message. Never commits.
 ---
 
 # Getting a commit ready
@@ -20,6 +20,7 @@ Run when the user asks, not after every turn. The review can change the code, so
    8. Do the docs in CLAUDE.md's table that cover this area still match the code? Do the names and comments?
    9. Does any comment cite something that won't outlive the session, or run longer than its code needs?
    10. Could the developer you're working with explain every line in an interview? Is anything clever that could be plain?
+   11. What in this work was redone, and would a line in a doc have got it right the first time? Flag it for the user to decide; don't add it.
 
    <!-- To add before 7 once more tests are owned: do new and changed tests match the owned ones (REVIEW.md) in approach and simplicity? -->
 

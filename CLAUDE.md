@@ -20,7 +20,6 @@ The rule most often broken. A permission rule matches the **whole** command stri
 | PRODUCT.md | behavior: built, decided, maybe | anything user-visible |
 | CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work |
 | ARCHITECTURE.md | the one-page diagram of layers and flow | adding, removing or rerouting a store, table, repository or flow |
-| TEST_OVERHAUL.md | the drafts test overhaul (temporary) | any draft test, until it's folded into TESTING.md |
 
 ## Rules
 
@@ -42,7 +41,6 @@ The rule most often broken. A permission rule matches the **whole** command stri
 - **Single-user app: make the common path work, and give a rare race the smallest backstop that holds** — an existing field or constraint before new machinery.
 - **Comments cite nothing that outlives the session** — no plan, chat, or "Piece N"; cite a checked-in doc or nothing. The non-obvious why, stated once, proportional to the code it sits next to — not a walkthrough.
 - **Comment style marks scope, not length.** `/** */` heads a unit (file, function — nested ones too — type, class), even at one line. `//` covers a few lines within a unit, even at several lines. A short note on one field or statement is a trailing `//` on that line, moved above only if it won't fit. Going forward only; fix old comments opportunistically, not in a sweep.
-- Between equally good options, take the one that costs less context.
 - **No backward compatibility until we deliberately decide it's needed** — including entries in a browser's IndexedDB, which is all test data for now. Change a shape and update every call site, with no fallback for the old one. If old local data breaks, clear IndexedDB or reseed; don't migrate or tolerate it.
 
 ## Landmarks

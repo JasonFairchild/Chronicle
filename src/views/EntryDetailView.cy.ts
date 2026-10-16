@@ -341,6 +341,58 @@ describe('EntryDetailView', () => {
     })
   })
 
+  it('frees the entry when a revision is changed back to its version and left', () => {
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      const other = await seed({ content: textContent('A different day entirely') })
+      return { parent, other }
+    }).then(({ parent, other }) => {
+      mountDetail(parent.id).then(({ wrapper }) => {
+        cy.findByRole('button', { name: 'Revise entry' }).click()
+        // Typed, then taken back out: the draft has a history but matches the version it started
+        // from.
+        cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}!{backspace}')
+
+        cy.then(async () => {
+          const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+          await wrapper.setProps({ id: other.id })
+          expect(abandonDraft).to.have.callCount(1)
+          await abandonDraft.firstCall.returnValue
+          await wrapper.setProps({ id: parent.id })
+        })
+
+        cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
+        cy.findByRole('button', { name: 'Resume draft' }).should('not.exist')
+      })
+    })
+  })
+
+  it('frees the entry when a related entry is opened and left untouched', () => {
+    cy.then(async () => {
+      const parent = await seed({ content: PARENT_CONTENT })
+      const other = await seed({ content: textContent('A different day entirely') })
+      return { parent, other }
+    }).then(({ parent, other }) => {
+      mountDetail(parent.id).then(({ wrapper }) => {
+        cy.findByRole('button', { name: 'Create related entry' }).click()
+        cy.findByRole('textbox', { name: 'Related entry' }).should('be.visible')
+
+        // Claimed on opening, as Revise is, so leaving it untouched has a claim to give up.
+        cy.then(async () => {
+          const abandonDraft = cy.spy(useDraftsStore(), 'abandonDraft')
+          await wrapper.setProps({ id: other.id })
+          expect(abandonDraft).to.have.callCount(1)
+          await abandonDraft.firstCall.returnValue
+          await wrapper.setProps({ id: parent.id })
+        })
+
+        cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
+        cy.findByRole('button', { name: 'Create related entry' }).should('be.visible')
+        cy.findByRole('button', { name: 'Resume draft' }).should('not.exist')
+      })
+    })
+  })
+
   it('shows a draft on the entry that will not reopen, and frees the entry once it is discarded', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })

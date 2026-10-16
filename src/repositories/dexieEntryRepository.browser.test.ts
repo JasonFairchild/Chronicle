@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import Dexie from 'dexie'
+import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
 import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { runEntryRepositoryContract } from '@/repositories/entryRepository.contract'
 import { createEntryInput } from '@/types/entry'
@@ -25,6 +26,9 @@ runEntryRepositoryContract('Dexie', () => freshRepository())
 describe('DexieEntryRepository persistence', () => {
   it('keeps data when a new instance opens the same database', async () => {
     const databaseName = `chronicle-persistence-${Date.now()}`
+    // By name, so a failing assertion can't leave it behind; Dexie closes open connections first.
+    onTestFinished(() => Dexie.delete(databaseName))
+
     const beforeReload = new DexieEntryRepository(databaseName)
     const created = await beforeReload.create(
       createEntryInput({ content: 'Written before reload' }),
@@ -38,12 +42,12 @@ describe('DexieEntryRepository persistence', () => {
     const fetched = await afterReload.getById(created.id)
 
     expect(fetched?.content).toBe('Written before reload')
-
-    await afterReload.dispose()
   })
 
   it('keeps relations intact across a reload, not just the row that was fetched by id', async () => {
     const databaseName = `chronicle-persistence-relations-${Date.now()}`
+    onTestFinished(() => Dexie.delete(databaseName))
+
     const beforeReload = new DexieEntryRepository(databaseName)
     const parent = await beforeReload.create(createEntryInput({ content: 'Root' }))
     await beforeReload.create(
@@ -56,7 +60,5 @@ describe('DexieEntryRepository persistence', () => {
 
     expect(children).toHaveLength(1)
     expect(children[0]?.content).toBe('Note')
-
-    await afterReload.dispose()
   })
 })

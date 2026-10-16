@@ -318,8 +318,8 @@ describe('useDraftsStore', () => {
     })
   })
 
-  // A revision's claim is taken and released through the page in EntryDetailView's specs; these
-  // are the cases no page reaches yet.
+  // A claim taken and released through the page is EntryDetailView's to prove; these are the cases
+  // no page reaches yet.
   describe('a draft that could revise an entry', () => {
     it('claims the entry the moment a related-entry draft opens, so another tab resumes it instead', async () => {
       const store = useDraftsStore()
@@ -341,16 +341,6 @@ describe('useDraftsStore', () => {
       expect(await otherTab.resumeDraft(sessionId)).not.toBeNull()
     })
 
-    it('releases an untouched related-entry claim once its composer closes', async () => {
-      const store = useDraftsStore()
-      const parent = await existingEntry('The meeting went badly')
-      const sessionId = store.beginDraft({ kind: 'new_related', parent })
-
-      await store.abandonDraft(sessionId)
-
-      expect(await draftRepository.list()).toEqual([])
-    })
-
     it('keeps its claim on disk while its session is open, even emptied', async () => {
       const store = useDraftsStore()
       const parent = await existingEntry('The meeting went badly')
@@ -366,25 +356,6 @@ describe('useDraftsStore', () => {
 
       // Removing it here would let another tab begin a second draft on the same version.
       expect(await draftRepository.list()).toHaveLength(1)
-    })
-
-    it('releases a revision changed back to the version it started from', async () => {
-      const store = useDraftsStore()
-      const original = await existingEntry('I recieved the offer')
-      const sessionId = store.beginDraft({ kind: 'revision', parent: original })
-
-      store.recordChange(sessionId, {
-        content: textContent('I received the offer'),
-        steps: [{ stepType: 'replace' }],
-      })
-      await store.flush(sessionId)
-      store.recordChange(sessionId, {
-        content: textContent('I recieved the offer'),
-        steps: [{ stepType: 'replace' }],
-      })
-      await store.abandonDraft(sessionId)
-
-      expect(await draftRepository.list()).toEqual([])
     })
 
     it('keeps a claim another tab has written in when this one lets it go', async () => {

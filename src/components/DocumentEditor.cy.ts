@@ -8,6 +8,7 @@ import {
   docToPlainText,
 } from '@/domain/entryDocument'
 import { documentsAt } from '@/editor/replay'
+import { mediaRepository } from '@/repositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { selectTextRange } from '@/testing/selectTextRange'
@@ -329,17 +330,22 @@ describe('DocumentEditor', () => {
 
     cy.findByRole('img').should('be.visible')
 
-    cy.get('@change').then((stub) => {
-      const change = lastChange(stub)
-      expect(collectMediaRefs(change.content)).to.have.length(1)
-      // An attachment adds no words, but it is content all the same.
-      expect(change.is_formatting).to.equal(false)
-      expect(change.media_changed).to.equal(true)
-      // The bytes never enter the document: an object URL is minted per page load and would be a
-      // broken reference the moment this entry was read again.
-      expect(change.content).to.not.contain('blob:')
-      expect(change.content).to.not.contain('data:')
-    })
+    cy.get('@change')
+      .then((stub) => {
+        const change = lastChange(stub)
+        const mediaRefs = collectMediaRefs(change.content)
+        expect(mediaRefs).to.have.length(1)
+        // An attachment adds no words, but it is content all the same.
+        expect(change.is_formatting).to.equal(false)
+        expect(change.media_changed).to.equal(true)
+        // The bytes never enter the document: an object URL is minted per page load and would be a
+        // broken reference the moment this entry was read again.
+        expect(change.content).to.not.contain('blob:')
+        expect(change.content).to.not.contain('data:')
+        // Read back because storing is this editor's own output (TESTING.md, "Layers").
+        return mediaRepository.get(mediaRefs[0]!)
+      })
+      .should('not.be.null')
   })
 
   it('bookmarks a paste, distinct from ordinary typing', () => {

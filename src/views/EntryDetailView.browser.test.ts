@@ -339,6 +339,54 @@ describe('EntryDetailView (browser)', () => {
       .not.toBeInTheDocument()
   })
 
+  it('frees the entry when a revision is changed back to its version and left', async () => {
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const other = await entryRepository.create(
+      createEntryInput({ content: textContent('A different day entirely') }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+    await screen.getByRole('textbox', { name: 'Revised entry' }).click()
+    // Typed, then taken back out: the draft has a history but matches the version it started from.
+    await userEvent.keyboard('{Control>}{End}{/Control}!{Backspace}')
+
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
+    await screen.rerender({ id: other.id })
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+    await screen.rerender({ id: parent.id })
+
+    await expect.element(screen.getByRole('button', { name: 'Revise entry' })).toBeVisible()
+    await expect
+      .element(screen.getByRole('button', { name: 'Resume draft' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('frees the entry when a related entry is opened and left untouched', async () => {
+    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const other = await entryRepository.create(
+      createEntryInput({ content: textContent('A different day entirely') }),
+    )
+
+    const screen = await mountDetail(parent.id)
+    await screen.getByRole('button', { name: 'Create related entry' }).click()
+    await expect.element(screen.getByRole('textbox', { name: 'Related entry' })).toBeVisible()
+
+    // Claimed on opening, as Revise is, so leaving it untouched has a claim to give up.
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
+    await screen.rerender({ id: other.id })
+    expect(abandonDraft).toHaveBeenCalledOnce()
+    await abandonDraft.mock.results[0]!.value
+    await screen.rerender({ id: parent.id })
+
+    await expect.element(screen.getByRole('button', { name: 'Revise entry' })).toBeVisible()
+    await expect.element(screen.getByRole('button', { name: 'Create related entry' })).toBeVisible()
+    await expect
+      .element(screen.getByRole('button', { name: 'Resume draft' }))
+      .not.toBeInTheDocument()
+  })
+
   it('shows a draft on the entry that will not reopen, and frees the entry once it is discarded', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
     await seedDraft(draftRepository, {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
 import { runMediaRepositoryContract } from '@/repositories/mediaRepository.contract'
 import { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
 
@@ -23,13 +23,14 @@ describe('OpfsMediaRepository persistence', () => {
   it('keeps a blob when a new instance opens the same directory', async () => {
     const directoryName = `media-persistence-${Date.now()}`
     const beforeReload = new OpfsMediaRepository(directoryName)
+    // Removes the directory by name, so a failing assertion can't leave it behind.
+    onTestFinished(() => beforeReload.dispose())
+
     const id = await beforeReload.put(new Blob([new Uint8Array([7, 7, 7])], { type: 'image/png' }))
 
     const afterReload = new OpfsMediaRepository(directoryName)
     const recovered = await afterReload.get(id)
 
     expect(new Uint8Array(await recovered!.arrayBuffer())).toEqual(Uint8Array.from([7, 7, 7]))
-
-    await afterReload.dispose()
   })
 })

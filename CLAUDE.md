@@ -20,7 +20,6 @@ The rule most often broken. A permission rule matches the **whole** command stri
 | PRODUCT.md | behavior: built, decided, maybe | anything user-visible |
 | CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work |
 | ARCHITECTURE.md | the one-page diagram of layers and flow | adding, removing or rerouting a store, table, repository or flow |
-| TEST_OVERHAUL.md | the drafts test overhaul (temporary) | any draft test, until it's folded into TESTING.md |
 
 ## Rules
 

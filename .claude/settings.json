@@ -54,7 +54,6 @@
       "Bash(git reset:*)",
       "Bash(git clean:*)",
       "Bash(git checkout:*)",
-      "Bash(git restore:*)",
       "Bash(git switch:*)",
       "Bash(git branch:*)",
       "Bash(git tag:*)",
@@ -76,6 +75,7 @@
       "Bash(npm publish:*)",
       "Read(./.env)",
       "Read(./.env.*)"
-    ]
+    ],
+    "ask": ["Bash(git restore:*)"]
   }
 }

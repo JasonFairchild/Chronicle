@@ -27,6 +27,7 @@ The persistent halves run in the browser project only — Dexie needs real Index
 
 - **Test from the user's perspective.** Simulate real interaction and assert what a user can see. Don't assert internal state, private methods, or DOM structure nobody interacts with.
 - **Don't test child components.** They get their own specs, or are treated as third party. Selecting or interacting with a child's elements as a means to an end is fine; asserting on behavior that belongs to the child is not. Where a parent only configures a child and the one visible result is styling — a table's `striped` prop, say — assert the prop it passes (`findComponent(Table).props('striped')`), not the computed CSS; the child's spec already proves what the prop does.
+- **Test what the file adds.** The real stack beneath a spec is how it acts and observes, not what it's about. A shell that holds no state of its own, such as `EntryComposer`, is proven once through its simplest owner; every other owner proves only its wiring.
 - **Prefer whole scenarios.** One test covering a complete scenario beats several granular ones. Longer tests are fine when they represent one coherent idea, such as select a passage, strike it, propose wording, save, and see it rendered.
 - **Never mock what's in scope.** Everything a spec is about runs for real, watched with a spy where the screen can't show it. For a component spec, that is the component's own script, the children it renders, what it emits, where it navigates, and the stores and composables it runs on. What's outside the scope still runs, but the spec doesn't check it. For a component spec that's storage: seeded the way an intercept seeds a page, stubbed to fail when the failure is the point, and never read back.
 - **Test the code the app runs.** A test goes through the path the app takes, never an API only tests call, so source carries no entry points of its own for tests. The composition root's setters are the one seam (see "Swap the repository").
@@ -40,11 +41,11 @@ Tests are one design, judged together rather than file by file. There are three 
 
 - **Seed it** through the repository interface before mounting, with whatever the screen shows.
 - **Fail it** by stubbing one repository method to reject, when what the screen shows for a failure is the point.
-- **Never read it back.** Assert through the UI and the component's own outputs — what it emits, where it navigates. What reached storage is a flow's to check.
+- **Never read it back.** Assert through the UI and the component's own outputs — what it emits, where it navigates. What reached storage is a flow's to check. If a spec needs storage to see a result, first ask whether the screen should show it.
 
 The exception is a unit whose job is storage, such as `useMedia`, or `DocumentEditor` storing an attached image: what it stores is its output, so its spec reads it back.
 
-A component spec owns everything its own code produces: every state its screen can show, how it responds — empty and error states, validation, what each control does there — and where it sends the writer next. It owns them even when a flow walks through them.
+A component spec owns everything its own code produces: every state its screen can show, how it responds — empty and error states, validation, what each control does there — and where it sends the writer next. It owns them even when a flow walks through them. A link is checked by its `href`, not followed: landing there is the destination's to prove.
 
 **Flow specs are narrow end-to-end tests.** They mount `App` at a route and prove a path from the click down to what's stored, across as many screens as it takes. A flow walks one path per user goal and checks where it ends — the saved entry on its page, a draft kept when the page is left. What each screen does along the way, such as where it navigates, the flow leans on without asserting: it fails if that breaks, but the screen's own spec is where it's checked. Keep them independent of which backend is real:
 
@@ -62,7 +63,7 @@ A component spec owns everything its own code produces: every state its screen c
 4. Contracts: one interface, several implementations.
 5. Definitions whose value is the point: the schema, the route table, a constant.
 
-Not for re-walking a path a component or flow spec already walks, or re-proving a child's behavior. When a component or flow spec comes to cover the reason a unit test exists, delete the unit test.
+Not for re-walking a path a component or flow spec already walks, or re-proving a child's behavior. When a component or flow spec comes to cover the reason a unit test exists, delete the unit test — after checking coverage for lines only it reached, since a test can exercise a path it never asserts.
 
 ## Don'ts
 
@@ -132,6 +133,8 @@ Someone should understand a test without leaving the file. Abstraction is justif
   Entries, drafts and mark sets share one uniquely-named database per test, exactly as `src/repositories/index.ts` shares one in production — a transaction cannot span two connections, so a spec covering the anchor-mode atomic seal has to be given the shape it will actually run against. Media gets its own OPFS directory. Neither is opened until first used, so a spec that never touches storage pays almost nothing, and everything created is disposed in one global `afterEach` per runner. The adapter specs call `freshXRepository()` themselves, since a contract wants an instance per factory call. Plain-Node `*.test.ts` unit tests construct `InMemoryEntryRepository` / `InMemoryDraftRepository` / `InMemoryMediaRepository` directly.
 
 - **Fresh instance per test**, not a shared singleton that gets cleared. Isolation by construction.
+
+- **Fixtures may record fake steps** (`{ stepType: 'replace' }`, `{ n: 1 }`) where nothing replays them; a test that types gets real ones from the editor. Revisit once the history view replays traces.
 
 - **Mount through the shared helper, not the runner's mount function directly.** `cy.mount` (wired up in `cypress/support/component.ts`) and `renderComponent` (`src/testing/renderComponent.ts`, used in place of `vitest-browser-vue`'s `render`) both install a fresh Pinia automatically — every store-backed spec needs one, and it's an inert no-op for the ones that don't, so there's no reason to pass it by hand. `cy.mount` additionally accepts `routePath`, which builds a real router (the app's real route table, from `src/testing/testRouter.ts`, on isolated in-memory history), pushes to that path, and waits for it to be ready before mounting — useful for a spec like `EntryCard` or `EntryDetailView` that renders a `<router-link>` or calls `useRoute()`. A spec that reads where the component navigated, or pushes the router itself, builds the router with `createTestRouter()` and passes it as `router` alongside `routePath`, then reads it with `cy.wrap(router).its('currentRoute.value')`, which retries. Vitest specs needing a router build one directly with `createTestRouter()` and `await` its `push`/`isReady` inline; there's no `routePath` equivalent there because Vitest has no command queue to thread the wait through — plain `await` already does it.
 

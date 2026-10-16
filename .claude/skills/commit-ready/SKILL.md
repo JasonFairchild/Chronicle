@@ -1,6 +1,6 @@
 ---
 name: commit-ready
-description: Getting uncommitted work in Chronicle ready to commit — review it, verify it, and draft its message. Use when the user asks to review uncommitted work, whether it's ready to commit, or for a commit message. Never stages or commits.
+description: Getting uncommitted work in Chronicle ready to commit — review it, verify it, and draft its message. Use when the user asks to review uncommitted work, whether it's ready to commit, or for a commit message. Never commits.
 ---
 
 # Getting a commit ready

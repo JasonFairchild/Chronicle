@@ -163,13 +163,23 @@ Builds on anchor wording becoming ordinary text (CHRONICLE_PLAN.md, "Anchor word
 - Ordering by when entries were added or by when things happened.
 - Choosing what the timeline contains: titled related entries as cards of their own, and revisions as their own cards (how often was this reworked?) or hidden.
 
-### 5.7 Connections as a web
+### 5.7 Connecting entries
 
-- A graph view: entries as nodes, connections as labeled arrows.
-- A connection that points at several entries, so "these three circle the same thing" is one record. Open: the shape for several targets, and whether the graph draws it as a node or a hyperedge.
-- Open: **lines drawn between any entries at any time**, with an explanation optional. An explained line keeps being a full entry: it can be revised and have related entries.
-- Open: **related entries and connections overlap**, since both are an entry about other entries. Either they become one kind of child entry, with a parent, optional anchors and optional targets (a connection is one with targets, and a bare line is one with no content), or lines become bare edges with an optional entry explaining them.
-- Open: **removing a line.** Today a connection can't be removed, and its ends can't be revised. A withdrawn line should still show when the timeline is viewed as it stood before the withdrawal.
+Replaces §4.6: a connection stops being its own kind of entry and becomes something any related entry can do.
+
+- **A connection is a related entry that also points at other entries**, its targets. "Connection" stays the word for the line, not for a kind of entry.
+- **It's written in three columns**: the entry it's about, the connection, and one target, with passages highlightable in both outer columns as in §4.4. A picker in the third column chooses the target: a new one, or, when revising, one it already has.
+- **Its highlights in the entry it's about are one set for the connection, not one per target**, and each target has its own. A different passage relating to a different target is a second connection.
+- **Saving revises whichever of the three changed, together**: the connection, and the entry or target if something was highlighted in it, which gains a version with its text unchanged, as in §4.4. A session works on one target at a time, and its draft is outstanding against all three (§4.8). Revising a connection's highlights builds on §5.4.
+- **Switching the third column to another target** is free until something in the current one has changed. After that, switching first warns that this session's changes there will be dropped; the connection's writing and its highlights in the entry it's about stay. A target with a draft of its own open can't be picked or removed until that draft is saved or discarded, and says so.
+- **A light connection needs nothing written.** **Connect to…** on an entry draws the line in one step; revising it later can add the explanation.
+- **Several targets**: one connection can point at several entries, so "these three circle the same thing" is one entry rather than three connections. Targets are picked one at a time, since not every one is known at once.
+- **After saving, targets change only by revising the connection**, in the same three columns, so adding or removing one waits while a draft on the connection is open (§4.8). Removing a target removes what was highlighted in it, so when there's anything, a warning says so first; it all stays in the target's history. **Add target** is offered on any related entry, so one with no targets becomes a connection when it gains its first.
+- **Either end, viewed as it stood before a change, still shows the old line**, and the connection's versions show every change. Neither end is written to unless a passage in it is highlighted, so the connection alone carries the line's history, as a related entry alone carries its own.
+- **A connection whose targets are all removed** stays with the entry it's about, as an ordinary related entry. A light one, with nothing written, leaves current views and stays in history.
+- **The entry a connection is about never changes**, as for any related entry (§5.4). One started from the wrong entry is fixed by removing its targets and connecting again from the right one.
+- **A graph view:** entries as nodes, connections as lines. Open: how one with several targets is drawn.
+- Open: **whether a top-level entry may have targets**, so a new entry can point at older ones without being about any one of them. "These three circle the same thing" has no natural entry to be about. Lean yes: it's one rule fewer.
 
 ### 5.8 Getting things in and out
 
@@ -180,9 +190,14 @@ Builds on anchor wording becoming ordinary text (CHRONICLE_PLAN.md, "Anchor word
 
 - Finished light and dark themes, with a switch that remembers the choice.
 - A polished install experience, on a phone home screen or a desktop.
-- **Designed for phone width**, not only fitted to it. Today no page scrolls sideways on a phone, but none was laid out with one in mind.
 - **No failure is silent.** An error the screen in use doesn't handle itself still reaches the writer, as a plain app-wide notice, never only the console. Failures with a known way forward (a draft changed in another tab, one that can't be reopened) stay where the writer can act on them.
 - **An error says it's an error, not only in red.** Each one gets an icon, and a screen reader hears "Error:" before the message, from text hidden on screen, so the kind comes first for everyone. One shared message replaces the hand-written ones. Anything shown in red is announced as an error; today the notice for a draft on a replaced version is red but announced as a polite status. Polite notices stay on the page and change only their words, since one added with its words already in it may not be read out.
+
+### 5.10 Responsiveness — Later, in one pass
+
+Chronicle is built for a desktop window first. Fitting narrow screens happens later, all at once, rather than page by page as each is built, so until then a page needn't be laid out with a phone in mind. Ideas for that pass collect here:
+
+- Side-by-side columns (§4.4's two, §5.7's three) show one at a time, with a way to switch between them.
 
 ---
 
@@ -225,7 +240,6 @@ Ordinary formatting, strikethrough included, can look like what an anchor op ren
 
 The anchor menu (§4.4) is contextual so these have somewhere to land:
 
-- Anchoring a connection to a passage rather than to a whole entry.
 - Anchoring to an image or caption. Images are block atoms, so this needs node-level anchor attributes rather than a mark.
 
 ### Getting things in and out

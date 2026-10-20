@@ -66,6 +66,8 @@ A connection is a directional edge: `parent_id` is the source, `target_id` the d
 
 **`parent_id` alone defines containment; `target_id` is gathered but never traversed.** Walking `target_id` as if it were a parent breaks three things: a related entry on a connection folds into both endpoints and counts twice; connections chain, so the walk can cycle, and a visited set makes the result depend on traversal order; and "an entry's subtree" stops being well defined. So a connection's children belong to the connection.
 
+PRODUCT.md §5.7 folds connections into related entries, with targets versioned like content; CHRONICLE_PLAN.md has the engineering.
+
 ## Imports
 
 **An import produces media, not entries.** Scans land in the media store as an unfiled queue, and each becomes an entry only through a deliberate act where the user supplies context and dates. That settles `created_at` for imports: it is when the record entered Chronicle, so a batch shares one, and sorting by when things happened is what `occurred_at` and `recorded_at` are for. Within a batch, order falls to the id tiebreak — arbitrary but stable.
@@ -175,4 +177,6 @@ Default depth is 2: a parent view shows immediate descendants and signals that d
 - **Links, or revisions, in their own tables.** A link row couldn't carry prose, be revised, or take children; a revision table would cost the unified `Entry` and revisions in filtered timelines.
 - **ProseMirror block ids as anchors.** Node attributes duplicate on split and vanish on merge, and give paragraph granularity where users want a sentence.
 - **Injecting repositories with Vue's `provide`/`inject`** in place of the composition root's live bindings (`src/repositories/index.ts`). It would isolate app instances running side by side, which a single-user app doesn't have, and Pinia stores can only `inject` inside an active app. Revisit if that isolation is ever needed.
+- **Several parents for one related entry.** It is `target_id` traversed as a parent, so it breaks what Connections lists: anything beneath it is reached twice from an entry above both parents, and an entry's subtree stops being well defined. Several targets, gathered and never traversed, let an entry be about several others without that.
+- **Moving a related entry to another parent.** Containment that changes over time makes every subtree depend on when it's read, and the entry's anchors stay in the first parent's document. A related entry stays about its parent for good (PRODUCT.md §5.4).
 - **Anchors as offsets stored on the related entry**, resolved by a fallback ladder (exact position, mapped through steps, quote search, orphaned). Every failure traced to one cause — a fact about the parent's document stored somewhere else — and moving anchors into the parent deleted the ladder.

@@ -6,7 +6,7 @@ What comes next, and the engineering work that is decided but not built. What de
 
 In order. Reorder here as priorities shift.
 
-1. **Review:** working to understand and own existing code. The longest item by far, and it needn't finish first: a later item waits only on review of the code it changes. Skip `NewConnectionView` and its specs, which 2 removes.
+1. **Review:** working to understand and own existing code, in the order [CODE_REVIEW.md](./CODE_REVIEW.md) sets. The longest item by far, and it needn't finish first: a later item waits only on review of the code it changes.
 2. **Connections folded into related entries** (below; PRODUCT.md §5.7).
 3. **Session tracking as a ProseMirror plugin** (below).
 4. **Anchor wording as marked text** (below). Likely done together with 3, and before 6, since seed traces record whichever document shape exists.

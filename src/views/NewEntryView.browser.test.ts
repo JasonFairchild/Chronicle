@@ -74,6 +74,21 @@ describe('NewEntryView (browser)', () => {
     expect(screen.getByText('We drove up on Friday.').query()).toBeNull()
   })
 
+  it('keeps what was written, and says why, when the discard fails', async () => {
+    vi.spyOn(draftRepository, 'delete').mockRejectedValue(new Error('discard rejected'))
+    const screen = await mountNewEntry()
+
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    await expect
+      .element(screen.getByRole('alert').and(screen.getByText('discard rejected', { exact: true })))
+      .toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('We drove up on Friday.')
+  })
+
   it('names the draft it holds in the URL, and the next one after a discard', async () => {
     const router = createTestRouter()
     // Linked to a draft that's gone, so the page starts a fresh one in its place.

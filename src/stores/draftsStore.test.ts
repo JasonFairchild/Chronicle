@@ -209,6 +209,15 @@ describe('useDraftsStore', () => {
       expect(docToPlainText(stored!.entry.content)).toBe('I received the offer')
     })
 
+    it('leaves the session open when a discard fails', async () => {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      vi.spyOn(draftRepository, 'delete').mockRejectedValueOnce(new Error('discard rejected'))
+
+      await expect(store.discardDraft(sessionId)).rejects.toThrow('discard rejected')
+      expect(store.currentDraft(sessionId)).not.toBeNull()
+    })
+
     it('refuses to seal an empty draft and leaves the session open', async () => {
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })

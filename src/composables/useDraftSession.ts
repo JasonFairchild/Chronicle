@@ -274,14 +274,14 @@ export function useDraftSession() {
 
   /**
    * Throws the session away on request — an explicit "Discard" click — or the draft it couldn't
-   * reopen. That one is let go only once it's gone, so a failure is said where it was clicked.
+   * reopen. Either is let go only once it's gone, so a failure is said where it was clicked.
    */
   async function discard(): Promise<void> {
     const id = sessionId.value ?? unreadable.value?.draft.session_id
     if (!id) return
 
-    sessionId.value = null
     await drafts.discardDraft(id)
+    sessionId.value = null
     unreadable.value = null
   }
 

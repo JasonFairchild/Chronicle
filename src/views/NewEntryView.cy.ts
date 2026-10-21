@@ -57,6 +57,17 @@ describe('NewEntryView', () => {
     cy.findByText('We drove up on Friday.').should('not.exist')
   })
 
+  it('keeps what was written, and says why, when the discard fails', () => {
+    cy.stub(draftRepository, 'delete').rejects(new Error('discard rejected'))
+    cy.mount(NewEntryView, { routePath: '/entries/new' })
+
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
+    cy.findByRole('button', { name: 'Discard' }).click()
+
+    cy.findByRole('alert').should('have.text', 'discard rejected')
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'We drove up on Friday.')
+  })
+
   it('names the draft it holds in the URL, and the next one after a discard', () => {
     const router = createTestRouter()
     // Linked to a draft that's gone, so the page starts a fresh one in its place.

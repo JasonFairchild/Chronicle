@@ -528,8 +528,8 @@ export const useDraftsStore = defineStore('drafts', () => {
       await entry.flushing?.catch(() => {})
     }
 
-    active.delete(sessionId)
     await draftRepository.delete(sessionId)
+    active.delete(sessionId) // Only once the row is gone: a failed delete leaves the session open.
     await loadDrafts()
   }
 

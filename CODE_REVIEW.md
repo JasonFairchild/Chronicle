@@ -10,7 +10,7 @@ CHRONICLE_PLAN.md priority 1: understand and own the existing code, refactoring 
 
 - **Outside in: screens, then composables, stores, model, repositories.** A caller shows what the code beneath it has to offer. A simplification found at a screen narrows an inner API before that API is reviewed, so the inner layer gets reviewed in its slimmed form. Rejected: following NewEntryView all the way down to Dexie first. That reaches the deepest layers before most of their callers have been read, so inner refactors get redone as other callers turn up.
 - **Two tracks, split where the next priorities split.** Track A is the entry and draft path through every layer, which is what item 2 (connections folded) changes. Track B is the editor, which is what items 3 and 4 change. Track A comes first because it holds NewEntryView and unblocks item 2. Item 2 can then start before Track B, and Track B is still fresh when items 3 and 4 change it. Rejected: one pass with all screens first. It puts DocumentEditor (1,130 lines) second, and holds item 2 until both tracks are done.
-- **A shared file is reviewed with the first screen that uses it.** EntryComposer and DraftElsewhereNotice go with NewEntryView, and later screens review only their wiring of them. This is how TESTING.md proves a shell: once, through its simplest owner.
+- **A shared file is reviewed with the first screen that uses it.** EntryComposer and DraftElsewhereNotice go with NewEntryView, and later screens review only their wiring of them. Its own spec proves it (TESTING.md), so theirs prove only that wiring.
 - **Connections: read, don't polish.** NewConnectionView and its specs are skipped, since item 2 removes them. Connection-specific code elsewhere in Track A (`target_id`, the `connection` relation type, `new_connection`) is read for understanding only, because item 2 replaces it. A bug found there still gets fixed.
 - **Anchors are reviewed in full.** Items 3 and 4 (session tracking as a plugin, anchor wording as marked text) may be done during Track B, if reviewing that code makes the case for it.
 - **Read the Browser Mode spec closely, and its Cypress mirror against it.** The pairs cover the same cases on purpose (TESTING.md), so the mirror is checked for drift (a case or assertion one has and the other lacks) rather than re-read from scratch. Shared test setup is reviewed in the first unit that runs it.
@@ -24,11 +24,11 @@ Each unit lists its source with line counts, then the specs reviewed with it. **
 
 ### Track A: the entry and draft path
 
-1. **NewEntryView and the composer shell.** `NewEntryView.vue` 86, `EntryComposer.vue` 131, `EntryDetailsFields.vue` 157, `DraftElsewhereNotice.vue` 26, `useSealDraft.ts` 16, `router/draftQuery.ts` 28, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `realRepositories`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair.
+1. **NewEntryView and the composer shell.** `NewEntryView.vue` 86, `EntryComposer.vue` 131, `EntryDetailsFields.vue` 157, `DraftElsewhereNotice.vue` 26, `useSealDraft.ts` 16, `router/draftQuery.ts` 28, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `realRepositories`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair, `DraftElsewhereNotice` pair, `useSealDraft.test`.
 2. **App shell.** `main.ts` 19, `App.vue` 22, `AppLayout.vue` 50, `router/index.ts` 54, `useLayoutWidth.ts` 29, `useStoragePersistence.ts` 61, `useTabVisibility.ts` 46. Specs: `App.flow` pair, `useStoragePersistence.test`.
 3. **Timeline and Drafts.** `TimelineView.vue` 35, `EntryList.vue` 27, `EntryCard.vue` 78, `DraftsView.vue` 149. Specs: `EntryCard` pair, `DraftsView` component and flow pairs.
 4. **EntryDetailView.** `EntryDetailView.vue` 579, `RelatedEntryComposer.vue` 73. Item 2 rewrites the breadcrumbs. Specs: `EntryDetailView` component pair (~800 lines each) and flow pair.
-5. **Composables.** `useDraftSession.ts` 348, `useMedia.ts` 65. Specs: `useMedia` pair. `useDraftSession` is proven through EntryComposer's specs (A1).
+5. **Composables.** `useDraftSession.ts` 348, `useMedia.ts` 65. Specs: `useMedia` pair. `useDraftSession` has no spec of its own yet: see "Toward later plans".
 6. **draftsStore.** 664. Spec: `draftsStore.test`.
 7. **entriesStore.** 365. Item 2 changes `inputsForDraft`. Spec: `entriesStore.test`.
 8. **The entry model.** `reconstructEntryState.ts` 263, `entryValidation.ts` 84. Item 2 changes connection gathering and `assertValidRelation`. Specs: `reconstructEntryState.test` (601), `entryValidation.test`.
@@ -50,7 +50,33 @@ Items 3 and 4 can start after B1–B3, or within them. Item 4 also touches `mark
 
 Found in one unit and left for the unit that reviews the file.
 
-- (none yet)
+- **A6:** NewEntryView's conflict flow checks that disk keeps the other tab's version, but has never been seen failing. Break `flush`'s `DraftConflictError` branch while reviewing it.
+
+## Toward later plans
+
+Work the review turned up that is bigger than a review fix. Rough notes, kept as they evolve; each becomes a plan when its turn comes.
+
+### Every file proves what it contains (from A1)
+
+- Decided in A1, written into TESTING.md: nearly every source file gets a spec of its own, proving that file's code at its seams (what it takes in, what it produces, what it calls). Composables too. A definitions file tests the value that is its point, or is merged into what uses it. Components get a browser pair; other source a node `*.test.ts`. Flows are always pairs, and overlap a file's spec only to prove files working together.
+- What drove it: NewEntryView.cy had become the spec for `useDraftSession` and `useSealDraft`, because "a shell is proven once through its simplest owner" let anything shared ride on its first caller. Most of its tests needed a second Pinia, App's focus handling or another tab to reach code that wasn't NewEntryView's.
+- Mechanics found: a composable calling `useRouter()` runs in node under `app.runWithContext()`, with a hand-built router. `src/router/index.ts` can't load in node (`createWebHistory` at import needs `window`), so `createTestRouter()` is browser-only. A fire-and-forget `router.push` is asserted with a spy on `push`, not on the route, which hasn't moved yet when the caller resolves.
+
+### `useDraftSession`'s spec and its owners (A5)
+
+- It has no spec, so its behavior is proven through whichever pages own a session: NewEntryView, EntryDetailView, RelatedEntryComposer, EntryComposer, and NewConnectionView until item 2 removes it. Plan its node spec (Pinia, in-memory repositories) together with cutting each owner's spec down to its wiring, so nothing is lost between the two.
+- Held in NewEntryView's specs until then, to move: a reopened draft's title and dates; a draft that can't be reopened shown read-only, with its reason; another tab saving or discarding the open draft, and the notice for it.
+- Candidate titles, from the code: resumes a draft with its words, title, details and parent; shows one that can't be reopened read-only and still discards it; marks a revision stale when its entry has moved on, read-only, and a related entry's marks unsavable; closes, with a notice, when another tab saved or discarded the draft; reloads another tab's version, keeping this tab's text to copy, but only when it lost some; save resolves null when nothing is open, a save is in flight, or the version is stale; abandon keeps what reached disk; reset clears everything for the next entry.
+- The same overlap is likely in EntryDetailView's specs (~800 lines each) and RelatedEntryComposer's owner tests.
+
+### Every file with a spec, or a reason it has none (its own piece; when is undecided)
+
+The plan ends with every `src` file either having a spec of its own or a noted reason it doesn't. The `useDraftSession` work above becomes one item within it.
+
+- List the files with no spec, and decide for each: write one, merge the file into its caller, or note why not.
+- For each file that gets a spec, two steps: write the spec of what the file contains, then search every existing spec for what it now makes redundant, and cut that, wherever it is. Coverage pass last.
+- Cutting includes flows that repeat a screen's own spec. Example: NewEntryView's Discard flow re-checks the emptied page that its component spec owns.
+- Known obstacles to a node spec: `editor/extensions.ts` and `anchorCommands.ts` need a TipTap `Editor`, which needs a DOM (today DocumentEditor's specs cover them). `router/index.ts` calls `createWebHistory` at import, which needs `window`. A third Vitest project on happy-dom or jsdom would run both in node; weigh it against how much of ProseMirror's selection handling those fake.
 
 ## Manual check
 

@@ -51,7 +51,7 @@ Entries are permanent and append-only and receive only finished entries. A sessi
 
 ## Drafts
 
-The draft store is persisted through the same local-first layer as entries, flushing a few hundred milliseconds after the first unsaved change, and so at that interval through continuous typing: a crash costs well under a second of it. This is autosave and unrelated to marks. Its event logs are append-only while the session runs; the only thing that disappears is the whole row, removed when it is sealed or discarded. That makes the draft store the write rule's sanctioned exception: working space, not history.
+The draft store is persisted through the same local-first layer as entries, flushing a few hundred milliseconds after the first unsaved change, and so at that interval through continuous typing: a crash costs well under a second of it. This is autosave and unrelated to marks. Its event logs are append-only while the session runs; the only thing that disappears is the whole row, removed when it is sealed or discarded. The session is let go only once that removal lands, so a failed seal or discard leaves it open. That makes the draft store the write rule's sanctioned exception: working space, not history.
 
 **Sealing is an explicit user action**, never an idle timeout. Until then the work is durable, recoverable, and absent from timelines, so drafts get their own list; none is stranded invisibly.
 

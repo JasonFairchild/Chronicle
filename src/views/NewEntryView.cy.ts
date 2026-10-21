@@ -1,4 +1,3 @@
-import { createPinia, setActivePinia } from 'pinia'
 import NewEntryView from '@/views/NewEntryView.vue'
 import { draftRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
@@ -10,51 +9,35 @@ import { emptyEntryDates } from '@/types/entry'
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('NewEntryView', () => {
-  it('lands on the entry it saves', () => {
+  it('leaves for the saved entry on Save', () => {
     const router = createTestRouter()
     cy.mount(NewEntryView, { routePath: '/entries/new', router })
-    cy.then(() => {
-      cy.spy(useDraftsStore(), 'sealDraft').as('sealDraft')
-    })
 
     cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
-    cy.get('@sealDraft')
-      .should('have.been.calledOnce')
-      .then((sealDraft) => sealDraft.firstCall.returnValue)
-      .then((saved) => {
+    cy.wrap(router).its('currentRoute.value.name').should('equal', 'entry-detail')
+  })
+
+  it('names its draft in the URL, and a new one once Discard empties the page', () => {
+    const router = createTestRouter()
+    cy.mount(NewEntryView, { routePath: '/entries/new', router })
+
+    cy.wrap(router)
+      .its('currentRoute.value.query.draft')
+      .should('be.a', 'string')
+      .then((first) => {
+        cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+        cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
+        cy.findByRole('button', { name: 'Discard' }).click()
+
+        cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
+        cy.findByText('We drove up on Friday.').should('not.exist')
         cy.wrap(router)
-          .its('currentRoute.value')
-          .should('deep.include', { name: 'entry-detail', params: { id: saved.id } })
+          .its('currentRoute.value.query.draft')
+          .should('be.a', 'string')
+          .and('not.equal', first)
       })
-  })
-
-  it('keeps what was written, and says why, when the save fails', () => {
-    const router = createTestRouter()
-    cy.stub(draftRepository, 'seal').rejects(new Error('seal rejected'))
-    cy.mount(NewEntryView, { routePath: '/entries/new', router })
-
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
-    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
-    cy.findByRole('button', { name: 'Save entry' }).click()
-
-    cy.findByRole('alert').should('have.text', 'seal rejected')
-    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
-    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'We drove up on Friday.')
-    cy.wrap(router).its('currentRoute.value.name').should('equal', 'new-entry')
-    cy.findByRole('button', { name: 'Save entry' }).should('be.enabled')
-  })
-
-  it('empties the page on Discard, ready for the next entry', () => {
-    cy.mount(NewEntryView, { routePath: '/entries/new' })
-
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
-    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
-    cy.findByRole('button', { name: 'Discard' }).click()
-
-    cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
-    cy.findByText('We drove up on Friday.').should('not.exist')
   })
 
   it('keeps what was written, and says why, when the discard fails', () => {
@@ -68,9 +51,8 @@ describe('NewEntryView', () => {
     cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'We drove up on Friday.')
   })
 
-  it('names the draft it holds in the URL, and the next one after a discard', () => {
+  it('starts afresh, under a new name, when the draft it links to is gone', () => {
     const router = createTestRouter()
-    // Linked to a draft that's gone, so the page starts a fresh one in its place.
     cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-gone', router })
 
     cy.findByRole('textbox', { name: 'New entry' }).should('be.visible')
@@ -78,17 +60,22 @@ describe('NewEntryView', () => {
       .its('currentRoute.value.query.draft')
       .should('be.a', 'string')
       .and('not.equal', 'session-gone')
-      .then((first) => {
-        cy.findByRole('button', { name: 'Discard' }).click()
-
-        cy.wrap(router)
-          .its('currentRoute.value.query.draft')
-          .should('be.a', 'string')
-          .and('not.equal', first)
-      })
   })
 
-  it('reopens the draft it was linked to, with its words, title and dates', () => {
+  it('says why the draft it links to could not be read, and starts afresh', () => {
+    const router = createTestRouter()
+    cy.stub(draftRepository, 'getById').rejects(new Error('read rejected'))
+    cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-1', router })
+
+    cy.findByRole('alert').should('have.text', 'read rejected')
+    cy.findByRole('textbox', { name: 'New entry' }).should('be.visible')
+    cy.wrap(router)
+      .its('currentRoute.value.query.draft')
+      .should('be.a', 'string')
+      .and('not.equal', 'session-1')
+  })
+
+  it('reopens the draft it links to, with its words, title and dates', () => {
     cy.then(() =>
       seedDraft(
         draftRepository,
@@ -133,7 +120,7 @@ describe('NewEntryView', () => {
     cy.findByText('Half a thought').should('not.exist')
   })
 
-  it('offers a new entry once its draft is saved in another tab', () => {
+  it('offers a new entry once its draft is saved or discarded elsewhere', () => {
     cy.then(() =>
       seedDraft(
         draftRepository,
@@ -146,14 +133,10 @@ describe('NewEntryView', () => {
 
     cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
 
-    // Another tab saves the draft; returning here catches up with disk, as App does on focus.
+    // Another tab's save or discard leaves no row; returning here catches up, as App does on focus.
     cy.then(async () => {
-      const thisTab = useDraftsStore()
-      setActivePinia(createPinia())
-      const otherTab = useDraftsStore()
-      await otherTab.resumeDraft('session-1')
-      await otherTab.sealDraft('session-1')
-      await thisTab.adoptChangesElsewhere()
+      await draftRepository.delete('session-1')
+      await useDraftsStore().adoptChangesElsewhere()
     })
 
     cy.findByText('This draft was saved or discarded elsewhere.').should('be.visible')
@@ -164,42 +147,19 @@ describe('NewEntryView', () => {
     cy.findByText('This draft was saved or discarded elsewhere.').should('not.exist')
   })
 
-  it('keeps the version another tab saved first, and shows what this one had to copy', () => {
-    cy.then(() =>
-      seedDraft(
-        draftRepository,
-        makeDraft('session-1', {
-          entry: { content: textContent('Half a thought'), events: TYPED },
-        }),
-      ),
-    )
-    cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-1' })
+  it('lets go of the draft it holds when it is left', () => {
+    const router = createTestRouter()
+    cy.mount(NewEntryView, { routePath: '/entries/new', router }).then(({ wrapper }) => {
+      cy.spy(useDraftsStore(), 'abandonDraft').as('abandonDraft')
 
-    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
+      cy.wrap(router)
+        .its('currentRoute.value.query.draft')
+        .should('be.a', 'string')
+        .then((id) => {
+          wrapper.unmount()
 
-    // Another tab, with its own stores over the same database, writes the draft first.
-    cy.then(async () => {
-      setActivePinia(createPinia())
-      const otherTab = useDraftsStore()
-      await otherTab.resumeDraft('session-1')
-      otherTab.recordChange('session-1', {
-        content: textContent('Half a thought, finished elsewhere'),
-        steps: [{ stepType: 'replace' }],
-      })
-      await otherTab.flush('session-1')
+          cy.get('@abandonDraft').should('have.been.calledOnce').and('have.been.calledWith', id)
+        })
     })
-
-    // This tab hasn't caught up, so its next write lands on a draft that has moved on.
-    cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+end} here')
-
-    cy.findByText(
-      'This draft was changed elsewhere at the same time, and now shows what was saved there. ' +
-        'What you had here is below.',
-    ).should('be.visible')
-    cy.findByText('Half a thought here').should('be.visible')
-    cy.findByRole('textbox', { name: 'New entry' }).should(
-      'contain.text',
-      'Half a thought, finished elsewhere',
-    )
   })
 })

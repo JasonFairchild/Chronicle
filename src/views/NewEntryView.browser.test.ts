@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { userEvent } from 'vitest/browser'
-import { createPinia, setActivePinia } from 'pinia'
 import type { Router } from 'vue-router'
 import NewEntryView from '@/views/NewEntryView.vue'
 import { draftRepository } from '@/repositories'
@@ -25,46 +23,23 @@ async function mountNewEntry({
 }
 
 describe('NewEntryView (browser)', () => {
-  it('lands on the entry it saves', async () => {
+  it('leaves for the saved entry on Save', async () => {
     const router = createTestRouter()
     const screen = await mountNewEntry({ router })
-    const sealDraft = vi.spyOn(useDraftsStore(), 'sealDraft')
 
     await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
-    await vi.waitFor(() => expect(sealDraft).toHaveBeenCalledOnce())
-    const saved = await sealDraft.mock.results[0]!.value
-    await vi.waitFor(() => {
-      expect(router.currentRoute.value).toMatchObject({
-        name: 'entry-detail',
-        params: { id: saved.id },
-      })
-    })
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('entry-detail'))
   })
 
-  it('keeps what was written, and says why, when the save fails', async () => {
-    vi.spyOn(draftRepository, 'seal').mockRejectedValue(new Error('seal rejected'))
+  it('names its draft in the URL, and a new one once Discard empties the page', async () => {
     const router = createTestRouter()
     const screen = await mountNewEntry({ router })
-
-    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
-    await screen.getByRole('button', { name: 'Save entry' }).click()
-
-    await expect
-      .element(screen.getByRole('alert').and(screen.getByText('seal rejected', { exact: true })))
-      .toBeVisible()
-    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
-    await expect
-      .element(screen.getByRole('textbox', { name: 'New entry' }))
-      .toHaveTextContent('We drove up on Friday.')
-    expect(router.currentRoute.value.name).toBe('new-entry')
-    await expect.element(screen.getByRole('button', { name: 'Save entry' })).toBeEnabled()
-  })
-
-  it('empties the page on Discard, ready for the next entry', async () => {
-    const screen = await mountNewEntry()
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.query.draft).toEqual(expect.any(String)),
+    )
+    const first = router.currentRoute.value.query.draft
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
@@ -72,6 +47,8 @@ describe('NewEntryView (browser)', () => {
 
     await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('')
     expect(screen.getByText('We drove up on Friday.').query()).toBeNull()
+    await vi.waitFor(() => expect(router.currentRoute.value.query.draft).not.toBe(first))
+    expect(router.currentRoute.value.query.draft).toEqual(expect.any(String))
   })
 
   it('keeps what was written, and says why, when the discard fails', async () => {
@@ -89,23 +66,29 @@ describe('NewEntryView (browser)', () => {
       .toHaveTextContent('We drove up on Friday.')
   })
 
-  it('names the draft it holds in the URL, and the next one after a discard', async () => {
+  it('starts afresh, under a new name, when the draft it links to is gone', async () => {
     const router = createTestRouter()
-    // Linked to a draft that's gone, so the page starts a fresh one in its place.
     const screen = await mountNewEntry({ router, draft: 'session-gone' })
 
     await expect.element(screen.getByRole('textbox', { name: 'New entry' })).toBeVisible()
     await vi.waitFor(() => expect(router.currentRoute.value.query.draft).not.toBe('session-gone'))
-    const first = router.currentRoute.value.query.draft
-    expect(first).toEqual(expect.any(String))
-
-    await screen.getByRole('button', { name: 'Discard' }).click()
-
-    await vi.waitFor(() => expect(router.currentRoute.value.query.draft).not.toBe(first))
     expect(router.currentRoute.value.query.draft).toEqual(expect.any(String))
   })
 
-  it('reopens the draft it was linked to, with its words, title and dates', async () => {
+  it('says why the draft it links to could not be read, and starts afresh', async () => {
+    vi.spyOn(draftRepository, 'getById').mockRejectedValue(new Error('read rejected'))
+    const router = createTestRouter()
+    const screen = await mountNewEntry({ router, draft: 'session-1' })
+
+    await expect
+      .element(screen.getByRole('alert').and(screen.getByText('read rejected', { exact: true })))
+      .toBeVisible()
+    await expect.element(screen.getByRole('textbox', { name: 'New entry' })).toBeVisible()
+    await vi.waitFor(() => expect(router.currentRoute.value.query.draft).not.toBe('session-1'))
+    expect(router.currentRoute.value.query.draft).toEqual(expect.any(String))
+  })
+
+  it('reopens the draft it links to, with its words, title and dates', async () => {
     await seedDraft(
       draftRepository,
       makeDraft('session-1', {
@@ -161,7 +144,7 @@ describe('NewEntryView (browser)', () => {
     expect(screen.getByText('Half a thought').query()).toBeNull()
   })
 
-  it('offers a new entry once its draft is saved in another tab', async () => {
+  it('offers a new entry once its draft is saved or discarded elsewhere', async () => {
     await seedDraft(
       draftRepository,
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
@@ -170,14 +153,10 @@ describe('NewEntryView (browser)', () => {
     await expect
       .element(screen.getByRole('textbox', { name: 'New entry' }))
       .toHaveTextContent('Half a thought')
-    const thisTab = useDraftsStore()
 
-    // Another tab saves the draft; returning here catches up with disk, as App does on focus.
-    setActivePinia(createPinia())
-    const otherTab = useDraftsStore()
-    await otherTab.resumeDraft('session-1')
-    await otherTab.sealDraft('session-1')
-    await thisTab.adoptChangesElsewhere()
+    // Another tab's save or discard leaves no row; returning here catches up, as App does on focus.
+    await draftRepository.delete('session-1')
+    await useDraftsStore().adoptChangesElsewhere()
 
     await expect
       .element(screen.getByText('This draft was saved or discarded elsewhere.'))
@@ -189,41 +168,17 @@ describe('NewEntryView (browser)', () => {
     expect(screen.getByText('This draft was saved or discarded elsewhere.').query()).toBeNull()
   })
 
-  it('keeps the version another tab saved first, and shows what this one had to copy', async () => {
-    await seedDraft(
-      draftRepository,
-      makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
+  it('lets go of the draft it holds when it is left', async () => {
+    const router = createTestRouter()
+    const screen = await mountNewEntry({ router })
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.query.draft).toEqual(expect.any(String)),
     )
-    const screen = await mountNewEntry({ draft: 'session-1' })
-    await expect
-      .element(screen.getByRole('textbox', { name: 'New entry' }))
-      .toHaveTextContent('Half a thought')
+    const id = router.currentRoute.value.query.draft
+    const abandonDraft = vi.spyOn(useDraftsStore(), 'abandonDraft')
 
-    // Another tab, with its own stores over the same database, writes the draft first.
-    setActivePinia(createPinia())
-    const otherTab = useDraftsStore()
-    await otherTab.resumeDraft('session-1')
-    otherTab.recordChange('session-1', {
-      content: textContent('Half a thought, finished elsewhere'),
-      steps: [{ stepType: 'replace' }],
-    })
-    await otherTab.flush('session-1')
+    screen.unmount()
 
-    // This tab hasn't caught up, so its next write lands on a draft that has moved on.
-    await screen.getByRole('textbox', { name: 'New entry' }).click()
-    await userEvent.keyboard('{Control>}{End}{/Control} here')
-
-    await expect
-      .element(
-        screen.getByText(
-          'This draft was changed elsewhere at the same time, and now shows what was saved ' +
-            'there. What you had here is below.',
-        ),
-      )
-      .toBeVisible()
-    await expect.element(screen.getByText('Half a thought here')).toBeVisible()
-    await expect
-      .element(screen.getByRole('textbox', { name: 'New entry' }))
-      .toHaveTextContent('Half a thought, finished elsewhere')
+    expect(abandonDraft).toHaveBeenCalledExactlyOnceWith(id)
   })
 })

@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
+import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
+import { textContent } from '@/testing/documents'
+import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
+
+const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 /** Mounts the app behind a real router already at `path`, the new-entry page unless given. */
 async function mountApp({ router = createTestRouter(), path = '/entries/new' } = {}) {
@@ -165,5 +170,45 @@ describe('NewEntryView flows (browser)', () => {
     await vi.waitFor(() => expect(abandonDraft).toHaveBeenCalledOnce())
     await abandonDraft.mock.results[0]!.value
     expect(await draftRepository.list()).toEqual([])
+  })
+
+  it('keeps the version another tab saved first, and shows what this one had to copy', async () => {
+    await seedDraft(
+      draftRepository,
+      makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
+    )
+    const screen = await mountApp({ path: '/entries/new?draft=session-1' })
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('Half a thought')
+
+    // Another tab, with its own stores over the same database, writes the draft first.
+    setActivePinia(createPinia())
+    const otherTab = useDraftsStore()
+    await otherTab.resumeDraft('session-1')
+    otherTab.recordChange('session-1', {
+      content: textContent('Half a thought, finished elsewhere'),
+      steps: [{ stepType: 'replace' }],
+    })
+    await otherTab.flush('session-1')
+
+    // This tab hasn't caught up, so its next write lands on a draft that has moved on.
+    await screen.getByRole('textbox', { name: 'New entry' }).click()
+    await userEvent.keyboard('{Control>}{End}{/Control} here')
+
+    await expect
+      .element(
+        screen.getByText(
+          'This draft was changed elsewhere at the same time, and now shows what was saved ' +
+            'there. What you had here is below.',
+        ),
+      )
+      .toBeVisible()
+    await expect.element(screen.getByText('Half a thought here')).toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('Half a thought, finished elsewhere')
+    const stored = await draftRepository.getById('session-1')
+    expect(docToPlainText(stored!.entry.content)).toBe('Half a thought, finished elsewhere')
   })
 })

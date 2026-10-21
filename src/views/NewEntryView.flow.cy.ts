@@ -1,8 +1,13 @@
+import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
+import { textContent } from '@/testing/documents'
+import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { createTestRouter } from '@/testing/testRouter'
+
+const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('NewEntryView flows', () => {
   it('holds what is written as a draft until it is saved, then lands on the entry, details and all', () => {
@@ -175,6 +180,49 @@ describe('NewEntryView flows', () => {
       .then((abandonDraft) => abandonDraft.firstCall.returnValue)
     cy.then(async () => {
       expect(await draftRepository.list()).to.have.length(0)
+    })
+  })
+
+  it('keeps the version another tab saved first, and shows what this one had to copy', () => {
+    cy.then(() =>
+      seedDraft(
+        draftRepository,
+        makeDraft('session-1', {
+          entry: { content: textContent('Half a thought'), events: TYPED },
+        }),
+      ),
+    )
+    cy.mount(App, { routePath: '/entries/new?draft=session-1' })
+
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
+
+    // Another tab, with its own stores over the same database, writes the draft first.
+    cy.then(async () => {
+      setActivePinia(createPinia())
+      const otherTab = useDraftsStore()
+      await otherTab.resumeDraft('session-1')
+      otherTab.recordChange('session-1', {
+        content: textContent('Half a thought, finished elsewhere'),
+        steps: [{ stepType: 'replace' }],
+      })
+      await otherTab.flush('session-1')
+    })
+
+    // This tab hasn't caught up, so its next write lands on a draft that has moved on.
+    cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+end} here')
+
+    cy.findByText(
+      'This draft was changed elsewhere at the same time, and now shows what was saved there. ' +
+        'What you had here is below.',
+    ).should('be.visible')
+    cy.findByText('Half a thought here').should('be.visible')
+    cy.findByRole('textbox', { name: 'New entry' }).should(
+      'contain.text',
+      'Half a thought, finished elsewhere',
+    )
+    cy.then(async () => {
+      const stored = await draftRepository.getById('session-1')
+      expect(docToPlainText(stored!.entry.content)).to.equal('Half a thought, finished elsewhere')
     })
   })
 })

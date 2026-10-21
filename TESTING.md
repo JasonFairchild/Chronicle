@@ -6,7 +6,7 @@ How tests are written here and why. These apply to component and flow specs in *
 
 | Suffix | Runner | Environment | What belongs here |
 | --- | --- | --- | --- |
-| `*.test.ts` | Vitest, `unit` | node | Pure logic; timing, races and faults the UI can't drive |
+| `*.test.ts` | Vitest, `unit` | node | Source that isn't a component: domain, editor, stores, composables, repositories, types, utils |
 | `*.browser.test.ts` | Vitest, `browser` | real Chromium | Components, and anything needing real browser APIs |
 | `*.cy.ts` | Cypress | real browser | Components, mirroring the `.browser.test.ts` spec |
 | `*.flow.browser.test.ts` | Vitest, `browser` | real Chromium | Flows: the app from a route, down to what's stored |
@@ -17,7 +17,9 @@ How tests are written here and why. These apply to component and flow specs in *
 
 **Duplicate specs are intentional.** `EntryCard.browser.test.ts` and `EntryCard.cy.ts` cover the same cases on purpose, to compare the two runners, and flow specs pair the same way. Don't consolidate them.
 
-**Cypress should keep up with Vitest Browser Mode.** Default to mirroring every `.browser.test.ts` into a `.cy.ts`, the same as any other duplicated pair. Skip the mirror only when there is a real obstacle, not merely because the thing under test isn't a `.vue` file — a composable can still be driven through a small host component. `DexieEntryRepository` is the genuine case: a plain data-layer class with nothing to mount, so it is proven in the Vitest browser project alone.
+**Each file has a spec of its own, in the runner for its kind.** A component gets a pair: a `.browser.test.ts` and its `.cy.ts` mirror. Anything else gets a node `*.test.ts`, even a composable that injects: `useRouter()` resolves under `app.runWithContext()`. The exception is source needing a real browser API, such as the Dexie and OPFS adapters, proven in the Vitest browser project alone, with nothing to mount for Cypress. Flows are always pairs.
+
+**Cypress should keep up with Vitest Browser Mode.** Every `.browser.test.ts` that mounts something has a `.cy.ts` mirror, the same as any other duplicated pair.
 
 **Contract suites are for interfaces with more than one implementation.** Each of the four repositories exports one: `entryRepository.contract.ts`, `draftRepository.contract.ts` and `markSetRepository.contract.ts` (each in-memory and Dexie), and `mediaRepository.contract.ts` (in-memory and OPFS). That is what makes "swap the storage backend by changing one line" provable rather than asserted. They are named `.contract.ts` precisely so no runner picks them up directly.
 
@@ -25,17 +27,17 @@ The persistent halves run in the browser project only — Dexie needs real Index
 
 ## Philosophy
 
-- **Test from the user's perspective.** Simulate real interaction and assert what a user can see. Don't assert internal state, private methods, or DOM structure nobody interacts with.
+- **Test from the user's perspective where there is one.** Simulate real interaction and assert what a user can see. Where a file's output isn't on screen — a call it makes on another file, what a lifecycle hook does — assert that call directly with a spy, rather than hunting for an echo of it a user might notice. Don't assert internal state, private methods, or DOM structure nobody interacts with.
 - **Don't test child components.** They get their own specs, or are treated as third party. Selecting or interacting with a child's elements as a means to an end is fine; asserting on behavior that belongs to the child is not. Where a parent only configures a child and the one visible result is styling — a table's `striped` prop, say — assert the prop it passes (`findComponent(Table).props('striped')`), not the computed CSS; the child's spec already proves what the prop does.
-- **Test what the file adds.** The real stack beneath a spec is how it acts and observes, not what it's about. A shell that holds no state of its own, such as `EntryComposer`, is proven once through its simplest owner; every other owner proves only its wiring.
-- **Prefer whole scenarios.** One test covering a complete scenario beats several granular ones. Longer tests are fine when they represent one coherent idea, such as select a passage, strike it, propose wording, save, and see it rendered.
-- **Never mock what's in scope.** Everything a spec is about runs for real, watched with a spy where the screen can't show it. For a component spec, that is the component's own script, the children it renders, what it emits, where it navigates, and the stores and composables it runs on. What's outside the scope still runs, but the spec doesn't check it. For a component spec that's storage: seeded the way an intercept seeds a page, stubbed to fail when the failure is the point, and never read back.
+- **Test what the file contains.** A spec proves the code in the file it's named after, at its seams: what it takes in, what it produces, what it calls on the files it uses. The real stack beneath is how a spec acts and observes, not what it's about. A file used by several others is proven in its own spec, and each user proves only its wiring of it. A file with nothing worth proving is a candidate to merge into its caller; a definitions file whose value is the point, such as the schema or the route table, tests that value.
+- **One idea per test, at whatever size it takes.** Longer tests are fine when they represent one coherent idea, such as select a passage, strike it, propose wording, save, and see it rendered. A test can equally be as small as one line of its file: a spy on `abandonDraft` across an unmount is how a view proves its `onBeforeUnmount`.
+- **Never mock what's in scope.** Everything a spec is about runs for real, watched with a spy where the screen can't show it. For a component spec, that is the component's own script, the children it renders, what it emits and where it navigates. The stores, composables and storage it runs on still run for real beneath it, unchecked: each has its own spec. Storage is seeded the way an intercept seeds a page, stubbed to fail when the failure is the point, and never read back. A spec may hand its file a stand-in for an input it reads only part of, such as a session holding just the fields the file reads.
 - **Test the code the app runs.** A test goes through the path the app takes, never an API only tests call, so source carries no entry points of its own for tests. The composition root's setters are the one seam (see "Swap the repository").
 - **Use a fail first approach.** Every new test should be proven to fail as expected before being made to pass. For already working code, it can be broken, tested then restored.
 
 ## Layers
 
-Tests are one design, judged together rather than file by file. There are three levels — component, flow and unit — and overlap between them is kept to a minimum, unlike the Cypress ↔ Browser Mode duplication, which is deliberate. One question places a test: **does it check what was stored, or reach another screen?** Yes makes it a flow spec. No makes it a component spec, unless it has one of the reasons for a unit test below.
+Tests are one design, judged together rather than file by file. There are three levels — unit, component and flow. Every file's own spec is a unit or component spec, by its kind ("Where tests live"). One question places a test beyond those: **does it check what was stored, or reach another screen?** Yes makes it a flow spec. Overlap between levels is kept to what each needs, unlike the Cypress ↔ Browser Mode duplication, which is deliberate: a file's spec proves its own code, and a flow proves files working together, leaning on their specs for the details.
 
 **Component specs are the screen alone.** They mount the component under test. Storage runs real and isolated beneath it, as for every spec (see "Swap the repository" below), but it's the backend, out of scope, and is handled the way a request intercept handles one:
 
@@ -55,15 +57,9 @@ A component spec owns everything its own code produces: every state its screen c
 - **When no UI marks the moment, wait on a signal the code already gives** rather than writing a polling helper: spy on the call that awaits the write, await its promise, then read plainly — for absence as well as presence, in both runners. For example, a draft session let go (the page left, a change of entry) calls `drafts.abandonDraft`, which resolves once its flush has landed.
 - **Leave a page the way the writer would:** the header's links, and back through the page you left for (a Timeline card, the Drafts link). Where the same view stays mounted for another entry, push the router there: one the spec builds with `createTestRouter()` and hands to the mount, as `cy.mount`'s `router` option in Cypress.
 
-**A unit test is warranted on top of component and flow coverage for:**
+**Unit specs are a non-component file's own.** They prove its code directly: many cases as a table of inputs, and timing, ordering and races driven deterministically. A store's fault handling — a failed write, a conflict — is proven in the store's spec; what a screen shows for one is the component's. A contract suite proves one interface across its implementations.
 
-1. Pure logic with many cases, where a table of inputs beats a UI scenario per case.
-2. Timing, ordering and races the UI can't drive deterministically.
-3. How a store handles a fault — a failed write, a conflict. What a screen shows for one is a component spec's.
-4. Contracts: one interface, several implementations.
-5. Definitions whose value is the point: the schema, the route table, a constant.
-
-Not for re-walking a path a component or flow spec already walks, or re-proving a child's behavior. When a component or flow spec comes to cover the reason a unit test exists, delete the unit test — after checking coverage for lines only it reached, since a test can exercise a path it never asserts.
+A behavior is proven once, in the spec of the file whose code it is. A component spec doesn't re-prove a store or composable it runs on, and a unit spec doesn't re-walk a component's wiring of it. Before deleting a test because another now covers it, check coverage for lines only it reached, since a test can exercise a path it never asserts.
 
 ## Don'ts
 

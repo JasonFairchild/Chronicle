@@ -35,8 +35,8 @@ describe('NewEntryView', () => {
     cy.stub(draftRepository, 'seal').rejects(new Error('seal rejected'))
     cy.mount(NewEntryView, { routePath: '/entries/new', router })
 
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
-    cy.focused().type('We drove up on Friday.')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     cy.findByRole('button', { name: 'Save entry' }).click()
 
     cy.findByRole('alert').should('have.text', 'seal rejected')
@@ -49,12 +49,32 @@ describe('NewEntryView', () => {
   it('empties the page on Discard, ready for the next entry', () => {
     cy.mount(NewEntryView, { routePath: '/entries/new' })
 
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
-    cy.focused().type('We drove up on Friday.')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     cy.findByRole('button', { name: 'Discard' }).click()
 
     cy.findByRole('textbox', { name: 'Title' }).should('have.value', '')
     cy.findByText('We drove up on Friday.').should('not.exist')
+  })
+
+  it('names the draft it holds in the URL, and the next one after a discard', () => {
+    const router = createTestRouter()
+    // Linked to a draft that's gone, so the page starts a fresh one in its place.
+    cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-gone', router })
+
+    cy.findByRole('textbox', { name: 'New entry' }).should('be.visible')
+    cy.wrap(router)
+      .its('currentRoute.value.query.draft')
+      .should('be.a', 'string')
+      .and('not.equal', 'session-gone')
+      .then((first) => {
+        cy.findByRole('button', { name: 'Discard' }).click()
+
+        cy.wrap(router)
+          .its('currentRoute.value.query.draft')
+          .should('be.a', 'string')
+          .and('not.equal', first)
+      })
   })
 
   it('reopens the draft it was linked to, with its words, title and dates', () => {

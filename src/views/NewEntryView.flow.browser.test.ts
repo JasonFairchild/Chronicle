@@ -7,10 +7,9 @@ import { useDraftsStore } from '@/stores/draftsStore'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 
-/** Mounts the app behind a real router already at the new-entry page. */
-async function mountApp() {
-  const router = createTestRouter()
-  await router.push('/entries/new')
+/** Mounts the app behind a real router already at `path`, the new-entry page unless given. */
+async function mountApp({ router = createTestRouter(), path = '/entries/new' } = {}) {
+  await router.push(path)
   await router.isReady()
 
   return renderComponent(App, { global: { plugins: [router] } })
@@ -21,7 +20,7 @@ describe('NewEntryView flows (browser)', () => {
     const screen = await mountApp()
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await userEvent.keyboard('{Enter}We drove up on Friday.')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     // Exact, or a label would also match the note beside it ("Time it happened").
     await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
     await screen.getByLabelText('Time it happened').fill('late morning')
@@ -71,7 +70,7 @@ describe('NewEntryView flows (browser)', () => {
     const screen = await mountApp()
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await userEvent.keyboard('{Enter}We drove up on Friday.')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     // On disk first, so there is a row for Discard to remove.
     await vi.waitFor(async () => {
       expect(await draftRepository.list()).toHaveLength(1)
@@ -85,6 +84,25 @@ describe('NewEntryView flows (browser)', () => {
     expect(discardDraft).toHaveBeenCalledOnce()
     await discardDraft.mock.results[0]!.value
     expect(await draftRepository.list()).toEqual([])
+  })
+
+  it('reopens what was typed after a reload', async () => {
+    const router = createTestRouter()
+    const screen = await mountApp({ router })
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
+
+    // A reload: written out as App does for a tab being left, then the same address afresh. Read
+    // before unmounting, which returns the router to its start.
+    await useDraftsStore().flushAll()
+    const address = router.currentRoute.value.fullPath
+    screen.unmount()
+    const reloaded = await mountApp({ path: address })
+
+    await expect.element(reloaded.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
+    await expect
+      .element(reloaded.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('We drove up on Friday.')
   })
 
   it('leaves no draft behind for a page that was only opened', async () => {
@@ -101,7 +119,7 @@ describe('NewEntryView flows (browser)', () => {
   it('keeps what was typed, details and all, when the page is left without saving', async () => {
     const screen = await mountApp()
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await userEvent.keyboard('{Enter}We drove up on Friday.')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     await screen.getByLabelText('Happened', { exact: true }).fill('1994-06-11')
     await screen.getByLabelText('Time it happened').fill('late morning')
     await screen.getByLabelText('Where', { exact: true }).fill('home')

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
@@ -8,26 +9,13 @@ import { useDraftToResume } from '@/router/draftQuery'
 import { toErrorMessage } from '@/utils/format'
 
 /**
- * Where a new entry is written, and where the app opens. Typing here is a draft session, not an
- * entry. Nothing reaches the entries table until someone presses Save, and nothing is lost in the
- * meantime: the buffer flushes on a short timer, so a closed laptop costs a fraction of a sentence
- * rather than the whole thought.
- *
- * Opened immediately rather than on the first keystroke: the session has to exist before the editor
- * can report into it, and an untouched one costs nothing — nothing is written until something is
- * typed, and `abandon` below drops a session nobody used.
+ * Where a new entry is written, and where the app opens. Its session opens at once, since the
+ * editor needs one to report into; one never typed into writes nothing and is dropped on leaving.
  */
 const session = useDraftSession()
 const resumeError = ref<string | null>(null)
 
-const resumeDraftId = useDraftToResume().value
-if (resumeDraftId) void reopen(resumeDraftId)
-else session.begin({ kind: 'new_root' })
-
-/**
- * Reopens the draft this page was linked to. One that's gone, or failed to reopen, gives way to a
- * fresh draft, as on an unlinked visit; one that can't be reopened shows read-only instead.
- */
+/** Reopens the linked draft, or starts afresh if it's gone. One that can't reopen shows read-only. */
 async function reopen(id: string): Promise<void> {
   try {
     if (await session.resume(id)) return
@@ -37,16 +25,27 @@ async function reopen(id: string): Promise<void> {
   if (!session.readOnly) session.begin({ kind: 'new_root' })
 }
 
+const resumeDraftId = useDraftToResume().value
+if (resumeDraftId) void reopen(resumeDraftId)
+else session.begin({ kind: 'new_root' })
+
+// Names the open draft in the URL so a reload reopens it.
+const router = useRouter()
+watch(
+  () => session.sessionId,
+  (id) => {
+    if (id) void router.replace({ query: { draft: id } })
+  },
+  { immediate: true },
+)
+
 const handleSave = useSealDraft(session)
 
-/** Throws the draft away and starts over. Re-keying the editor gives it a genuinely empty document. */
 async function handleDiscard(): Promise<void> {
   await session.discard()
   session.begin({ kind: 'new_root' })
 }
 
-// Whatever is pending has to reach disk before this page goes away — and if it was opened and
-// never typed into, there is nothing to keep, so the session is dropped rather than left open.
 onBeforeUnmount(() => {
   void session.abandon()
 })
@@ -62,7 +61,6 @@ onBeforeUnmount(() => {
 
     <DraftElsewhereNotice :session="session" />
 
-    <!-- A draft saved or discarded in another tab closes here once this tab is returned to. -->
     <button
       v-if="!session.hasDraft && session.elsewhereNotice"
       type="button"
@@ -72,7 +70,7 @@ onBeforeUnmount(() => {
       Start a new entry
     </button>
 
-    <!-- Only once there's a draft: an editor shown before a resume lands drops what's typed. -->
+    <!-- Not before a resume lands, or what's typed meanwhile is lost. -->
     <EntryComposer
       v-if="session.hasDraft"
       :session="session"

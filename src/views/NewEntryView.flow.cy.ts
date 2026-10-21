@@ -2,14 +2,15 @@ import App from '@/App.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
+import { createTestRouter } from '@/testing/testRouter'
 
 describe('NewEntryView flows', () => {
   it('holds what is written as a draft until it is saved, then lands on the entry, details and all', () => {
     cy.mount(App, { routePath: '/entries/new' })
     cy.spy(draftRepository, 'save').as('saveDraft')
 
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
-    cy.focused().type('We drove up on Friday.')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     cy.findByLabelText('Happened').type('1994-06-11')
     cy.findByLabelText('Time it happened').type('late morning')
     cy.findByLabelText('Where').type('home')
@@ -61,8 +62,8 @@ describe('NewEntryView flows', () => {
     cy.mount(App, { routePath: '/entries/new' })
     cy.spy(draftRepository, 'save').as('saveDraft')
 
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
-    cy.focused().type('We drove up on Friday.')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     // On disk first, so there is a row for Discard to remove.
     cy.get('@saveDraft')
       .should('have.been.called')
@@ -81,6 +82,22 @@ describe('NewEntryView flows', () => {
     cy.then(async () => {
       expect(await draftRepository.list()).to.have.length(0)
     })
+  })
+
+  it('reopens what was typed after a reload', () => {
+    const router = createTestRouter()
+    cy.mount(App, { routePath: '/entries/new', router })
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
+
+    // A reload: written out as App does for a tab being left, then the same address afresh.
+    cy.then(() => useDraftsStore().flushAll())
+    cy.wrap(router)
+      .its('currentRoute.value.fullPath')
+      .then((path) => cy.mount(App, { routePath: path }))
+
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'We drove up on Friday.')
   })
 
   it('leaves no draft behind for a page that was only opened', () => {
@@ -102,8 +119,8 @@ describe('NewEntryView flows', () => {
 
   it('keeps what was typed, details and all, when the page is left without saving', () => {
     cy.mount(App, { routePath: '/entries/new' })
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
-    cy.focused().type('We drove up on Friday.')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     cy.findByLabelText('Happened').type('1994-06-11')
     cy.findByLabelText('Time it happened').type('late morning')
     cy.findByLabelText('Where').type('home')

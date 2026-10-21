@@ -49,7 +49,7 @@ describe('NewEntryView (browser)', () => {
     const screen = await mountNewEntry({ router })
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await userEvent.keyboard('{Enter}We drove up on Friday.')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     await screen.getByRole('button', { name: 'Save entry' }).click()
 
     await expect
@@ -67,11 +67,27 @@ describe('NewEntryView (browser)', () => {
     const screen = await mountNewEntry()
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await userEvent.keyboard('{Enter}We drove up on Friday.')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     await screen.getByRole('button', { name: 'Discard' }).click()
 
     await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('')
     expect(screen.getByText('We drove up on Friday.').query()).toBeNull()
+  })
+
+  it('names the draft it holds in the URL, and the next one after a discard', async () => {
+    const router = createTestRouter()
+    // Linked to a draft that's gone, so the page starts a fresh one in its place.
+    const screen = await mountNewEntry({ router, draft: 'session-gone' })
+
+    await expect.element(screen.getByRole('textbox', { name: 'New entry' })).toBeVisible()
+    await vi.waitFor(() => expect(router.currentRoute.value.query.draft).not.toBe('session-gone'))
+    const first = router.currentRoute.value.query.draft
+    expect(first).toEqual(expect.any(String))
+
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    await vi.waitFor(() => expect(router.currentRoute.value.query.draft).not.toBe(first))
+    expect(router.currentRoute.value.query.draft).toEqual(expect.any(String))
   })
 
   it('reopens the draft it was linked to, with its words, title and dates', async () => {

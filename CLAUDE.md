@@ -39,7 +39,7 @@ The rule most often broken. A permission rule matches the **whole** command stri
 - Small, focused changes I can read and explain.
 - A new helper goes above its first caller, so the file reads top-down.
 - **Single-user app: make the common path work, and give a rare race the smallest backstop that holds** — an existing field or constraint before new machinery.
-- **Comments cite nothing that outlives the session** — no plan, chat, or "Piece N"; cite a checked-in doc or nothing. The non-obvious why, stated once, proportional to the code it sits next to — not a walkthrough.
+- **Comments cite nothing that outlives the session** — no plan, chat, or "Piece N"; cite a checked-in doc or nothing. The non-obvious why, stated once, proportional to the code it sits next to — not a walkthrough. A comment saying what breaks without a line is checked by removing that line.
 - **Comment style marks scope, not length.** `/** */` heads a unit (file, function — nested ones too — type, class), even at one line. `//` covers a few lines within a unit, even at several lines. A short note on one field or statement is a trailing `//` on that line, moved above only if it won't fit. Going forward only; fix old comments opportunistically, not in a sweep.
 - **No backward compatibility until we deliberately decide it's needed** — including entries in a browser's IndexedDB, which is all test data for now. Change a shape and update every call site, with no fallback for the old one. If old local data breaks, clear IndexedDB or reseed; don't migrate or tolerate it.
 

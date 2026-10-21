@@ -72,8 +72,8 @@ describe('EntryComposer', () => {
 
     // Any change answers it, even one that still leaves nothing written: a title names an entry
     // without being one, and spaces say nothing.
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
-    cy.focused().type('   ')
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('   ')
     cy.findByRole('alert').should('not.exist')
 
     cy.findByRole('button', { name: 'Save entry' }).click()

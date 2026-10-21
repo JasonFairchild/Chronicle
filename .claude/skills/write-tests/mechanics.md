@@ -15,6 +15,7 @@ How-to that TESTING.md's rules leave to the writer: where the two runners differ
 
 - **Import test helpers by alias** (`@/testing/…`), setup files included. A relative path loads a second copy of the module: `browserSetup.ts` once disposed a list no spec had added to, and no database was deleted.
 - **A persistence test cleans up after itself.** The adapter specs' persistence tests open storage under a name of their own, to reopen it, so the global hook never sees it. Delete it by name with `onTestFinished` where it's created, not at the end of the body, where a failed assertion skips it.
+- **Read a router's address before unmounting the app.** When its last app unmounts, vue-router returns it to `/`, so a reload simulated by remounting at `currentRoute.fullPath` lands at the start instead.
 - **Fail a write by stubbing the `@/repositories` binding before mounting** — `cy.stub(entryRepository, 'create').rejects(…)`, `vi.spyOn(…).mockRejectedValue(…)`. The global `beforeEach` has already put that test's instance there.
 
 ## Waiting on the editor

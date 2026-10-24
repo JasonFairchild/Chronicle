@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+
 import { StaleVersionError } from '@/domain/entryValidation'
 import { makeDraft, relatedTo } from '@/testing/draftFixtures'
-import { createEntryInput, type AuthoringEvent } from '@/types/entry'
+import { type AuthoringEvent, createEntryInput } from '@/types/entry'
+
 import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
 import type { EntryRepository } from './entryRepository'
 

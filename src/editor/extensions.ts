@@ -9,25 +9,27 @@
  * one (there).
  */
 
-import { Extension, mergeAttributes, Mark, Node, type Extensions } from '@tiptap/core'
+import { Extension, type Extensions, Mark, mergeAttributes, Node } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
-import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
+import { VueNodeViewRenderer } from '@tiptap/vue-3'
+
 import { anchorIdsIn } from '@/domain/anchors'
 import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
-  MEDIA_NODE,
   type EntryDocument,
+  MEDIA_NODE,
 } from '@/domain/entryDocument'
-import AnchorInsertView from './AnchorInsertView.vue'
+
 import {
+  type AnchorModeStorage,
   createAnchorInsertStorage,
   createAnchorModeStorage,
   isAnchorEdit,
   markAnchor,
-  type AnchorModeStorage,
 } from './anchorCommands'
+import AnchorInsertView from './AnchorInsertView.vue'
 
 // An image whose bytes live in the media store, referenced by blob id only — no data/object URL or
 // path — so `media_refs` can be derived from the document and a reload never finds a dead URL.

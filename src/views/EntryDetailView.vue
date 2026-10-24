@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryCard from '@/components/EntryCard.vue'
@@ -13,10 +14,10 @@ import { useSealDraft } from '@/composables/useSealDraft'
 import { useTabReturn } from '@/composables/useTabVisibility'
 import { currentVersionId } from '@/domain/reconstructEntryState'
 import { useDraftToResume } from '@/router/draftQuery'
-import { versionsRevisedBy, type DraftSnapshot } from '@/types/draft'
-import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
+import { type DraftSnapshot, versionsRevisedBy } from '@/types/draft'
+import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
 import {
   entryDetailLines,
   entryLabel,

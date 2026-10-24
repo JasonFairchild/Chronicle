@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+
 import { StaleVersionError } from '@/domain/entryValidation'
 import { createEntryInput } from '@/types/entry'
+
 import type { EntryRepository } from './entryRepository'
 
 /**

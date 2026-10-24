@@ -1,5 +1,5 @@
-import { emptyEntryDetails, versionedFieldsOf } from './entry'
 import type { AuthoringEvent, VersionedFields } from './entry'
+import { emptyEntryDetails, versionedFieldsOf } from './entry'
 
 /** One document a session is writing: where it started and where it is. */
 export interface DraftDocument {

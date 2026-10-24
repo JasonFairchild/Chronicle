@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+
 import { provideLayoutWidth } from '@/composables/useLayoutWidth'
 import { useStoragePersistence } from '@/composables/useStoragePersistence'
 

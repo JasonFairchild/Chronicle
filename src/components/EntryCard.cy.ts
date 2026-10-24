@@ -1,7 +1,7 @@
 import EntryCard from '@/components/EntryCard.vue'
 import { previewText } from '@/domain/entryDocument'
 import { textContent } from '@/testing/documents'
-import { emptyEntryDates, type AggregatedEntry } from '@/types/entry'
+import { type AggregatedEntry, emptyEntryDates } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 
 const CREATED_AT = '2026-01-01T00:00:00.000Z'

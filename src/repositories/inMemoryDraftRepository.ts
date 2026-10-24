@@ -1,5 +1,6 @@
+import { type Draft, type DraftSnapshot, toSnapshot, withEvents } from '@/types/draft'
 import type { AuthoringEvent, CreateEntryInput, Entry } from '@/types/entry'
-import { toSnapshot, withEvents, type Draft, type DraftSnapshot } from '@/types/draft'
+
 import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
 import type { EntryRepository } from './entryRepository'
 

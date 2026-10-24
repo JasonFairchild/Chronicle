@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+
 import {
+  type AnchorRange,
   anchorRangeOverlapping,
   anchorRefsFor,
   anchorsPlacedSince,
@@ -9,7 +11,6 @@ import {
   relationTypeForAnchors,
   resolveAnchors,
   sessionAnchorIds,
-  type AnchorRange,
 } from '@/domain/anchors'
 import type { DocMark, EntryDocument } from '@/domain/entryDocument'
 import { serializeDocument } from '@/testing/documents'

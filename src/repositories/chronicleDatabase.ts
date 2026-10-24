@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+
 import type { DraftDocumentRole, DraftSnapshot } from '@/types/draft'
 import type { AuthoringEvent, Entry } from '@/types/entry'
 import type { MarkSet } from '@/types/markSet'

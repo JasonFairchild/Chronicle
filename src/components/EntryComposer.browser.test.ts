@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { describe, expect, it, vi } from 'vitest'
+
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { draftRepository } from '@/repositories'

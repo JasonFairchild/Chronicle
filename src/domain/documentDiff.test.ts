@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { diffDocuments, diffPlainText, type DiffSegment } from '@/domain/documentDiff'
 import { ANCHOR_INSERT_NODE, ANCHOR_MARK } from '@/domain/entryDocument'
 import { serializeDocument, textContent } from '@/testing/documents'

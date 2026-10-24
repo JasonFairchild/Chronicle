@@ -6,12 +6,14 @@ import {
   RemoveMarkStep,
   ReplaceAroundStep,
   ReplaceStep,
-  Transform,
   type Step,
+  Transform,
 } from '@tiptap/pm/transform'
+
 import { ANCHOR_INSERT_NODE, ANCHOR_MARK, type EntryDocument } from '@/domain/entryDocument'
 import type { AuthoringMark } from '@/domain/marks'
 import type { FrameChange, MarkFrame, MarkSet } from '@/types/markSet'
+
 import { applySteps, replayDocument, type ReplayLog } from './replay'
 
 /**

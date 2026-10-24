@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { changesInside } from '@/domain/anchorWarnings'
 
 // An anchor covering positions 10–20, as in "I went to |Lake Tahoe| with Dad".

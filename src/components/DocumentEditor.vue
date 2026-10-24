@@ -31,10 +31,6 @@ export interface EditorChange extends ChangeSignals {
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import { EditorContent, useEditor } from '@tiptap/vue-3'
-import type { Transaction } from '@tiptap/pm/state'
-import type { EditorView } from '@tiptap/pm/view'
 import {
   Bold,
   Eraser,
@@ -43,29 +39,36 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  type LucideIcon,
   MoreHorizontal,
   Quote,
   Redo2,
   Strikethrough,
   Underline,
   Undo2,
-  type LucideIcon,
 } from '@lucide/vue'
+import type { Transaction } from '@tiptap/pm/state'
+import type { EditorView } from '@tiptap/pm/view'
+import { EditorContent, useEditor } from '@tiptap/vue-3'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+
+import AnchorMenu from '@/components/AnchorMenu.vue'
+import { useMedia } from '@/composables/useMedia'
 import {
   collectAnchors,
   innermostAnchorAt,
   pairableAnchorAt,
   sessionAnchorIds as sessionAnchorIdsIn,
 } from '@/domain/anchors'
-import { useMedia } from '@/composables/useMedia'
 import {
   contentDelta,
-  parseDocument,
-  MEDIA_NODE,
   type DocMark,
   type EntryDocument,
+  MEDIA_NODE,
+  parseDocument,
 } from '@/domain/entryDocument'
 import {
+  type AnchorSpan,
   anchorSpans,
   editableAnchorRanges,
   mapAnchorSpans,
@@ -75,12 +78,10 @@ import {
   readAnchorAnnouncement,
   readAnchorWordingText,
   sealedAnchorIdsOf,
-  type AnchorSpan,
 } from '@/editor/anchorCommands'
 import { entryExtensions } from '@/editor/extensions'
-import AnchorMenu from '@/components/AnchorMenu.vue'
-import { toErrorMessage } from '@/utils/format'
 import type { AnchorKind } from '@/types/entry'
+import { toErrorMessage } from '@/utils/format'
 
 const props = withDefaults(
   defineProps<{

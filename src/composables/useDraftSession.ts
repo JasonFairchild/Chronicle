@@ -1,12 +1,13 @@
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
+
 import type { EditorChange } from '@/components/DocumentEditor.vue'
 import { docToPlainText, isEmptyDocument } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
 import { currentVersionId } from '@/domain/reconstructEntryState'
-import { DraftUnreadableError, useDraftsStore, type BeginDraftInput } from '@/stores/draftsStore'
+import { type BeginDraftInput, DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import { versionsRevisedBy, type Draft, type DraftSnapshot } from '@/types/draft'
-import { emptyEntryDetails, entryDetailsOf, type Entry, type EntryDetails } from '@/types/entry'
+import { type Draft, type DraftSnapshot, versionsRevisedBy } from '@/types/draft'
+import { emptyEntryDetails, type Entry, type EntryDetails, entryDetailsOf } from '@/types/entry'
 
 /**
  * One single-document draft session: begin or resume it, mirror an editor's changes into it, seal

@@ -1,5 +1,5 @@
-import type { AuthoringMark, MarkPolicy } from '@/domain/marks'
 import type { EntryDocument } from '@/domain/entryDocument'
+import type { AuthoringMark, MarkPolicy } from '@/domain/marks'
 
 /**
  * Something a frame's view should point at, in ProseMirror positions within that frame's own

@@ -13,13 +13,14 @@
  */
 
 import type { AnchorKind, AnchorRef, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
+
 import {
-  parseDocument,
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
   type DocMark,
   type DocNode,
   type EntryDocument,
+  parseDocument,
 } from './entryDocument'
 
 /** One anchor as the parent's document currently holds it. */

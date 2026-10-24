@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import NewEntryView from '@/views/NewEntryView.vue'
-import TimelineView from '@/views/TimelineView.vue'
+
+import DraftsView from '@/views/DraftsView.vue'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 import NewConnectionView from '@/views/NewConnectionView.vue'
-import DraftsView from '@/views/DraftsView.vue'
+import NewEntryView from '@/views/NewEntryView.vue'
+import TimelineView from '@/views/TimelineView.vue'
 
 /**
  * Exported separately from the router built below so tests can build their own router — real

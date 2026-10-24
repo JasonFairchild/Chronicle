@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+
 import { previewText } from '@/domain/entryDocument'
 import { draftLocation } from '@/router/draftQuery'
 import { useDraftsStore } from '@/stores/draftsStore'

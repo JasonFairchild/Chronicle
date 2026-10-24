@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
 import { Transform } from '@tiptap/pm/transform'
-import { plainTextDocument, serializeDocument, textContent } from '@/testing/documents'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
+
 import { DEFAULT_MARK_POLICY } from '@/domain/marks'
 import { documentsFromFrames } from '@/editor/markFrames'
 import { replayDocument } from '@/editor/replay'
@@ -14,7 +14,8 @@ import {
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { InMemoryMarkSetRepository } from '@/repositories/inMemoryMarkSetRepository'
 import { useMarkSetsStore } from '@/stores/markSetsStore'
-import { createEntryInput, type AuthoringTrace } from '@/types/entry'
+import { plainTextDocument, serializeDocument, textContent } from '@/testing/documents'
+import { type AuthoringTrace, createEntryInput } from '@/types/entry'
 
 /** A session that finished "It rained" with " all day.", as one edit. */
 function traceOfOneSentence(): AuthoringTrace {

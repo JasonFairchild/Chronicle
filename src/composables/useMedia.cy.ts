@@ -1,4 +1,5 @@
 import { effectScope } from 'vue'
+
 import { useMedia } from '@/composables/useMedia'
 
 /**

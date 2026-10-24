@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import type { Router } from 'vue-router'
-import EntryDetailView from '@/views/EntryDetailView.vue'
+
 import { draftRepository, entryRepository, mediaRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
@@ -11,6 +11,7 @@ import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
 import { formatDate, formatDateline, formatTime } from '@/utils/format'
+import EntryDetailView from '@/views/EntryDetailView.vue'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
 const PARENT_CONTENT = textContent(PARENT_TEXT)

@@ -1,6 +1,7 @@
 import { newEntryId, newEntryTimestamp } from '@/types/entry'
 import { compareMarkSets, type CreateMarkSetInput, type MarkSet } from '@/types/markSet'
-import { resolveDatabase, type ChronicleDatabase } from './chronicleDatabase'
+
+import { type ChronicleDatabase, resolveDatabase } from './chronicleDatabase'
 import type { MarkSetRepository } from './markSetRepository'
 
 export class DexieMarkSetRepository implements MarkSetRepository {

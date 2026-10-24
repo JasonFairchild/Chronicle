@@ -1,5 +1,6 @@
 import Dexie from 'dexie'
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
+
 import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { runEntryRepositoryContract } from '@/repositories/entryRepository.contract'
 import { createEntryInput } from '@/types/entry'

@@ -1,5 +1,6 @@
-import { effectScope } from 'vue'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { effectScope } from 'vue'
+
 import { useMedia } from '@/composables/useMedia'
 
 /**

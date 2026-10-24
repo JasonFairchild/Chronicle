@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import EntryDetailsFields from '@/components/EntryDetailsFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'

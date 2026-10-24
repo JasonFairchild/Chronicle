@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
+
 import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
 import {
   collectMediaRefs,
@@ -11,16 +12,16 @@ import { reconstructEntryState } from '@/domain/reconstructEntryState'
 import { entryRepository } from '@/repositories'
 import type { DraftSnapshot } from '@/types/draft'
 import {
-  createEntryInput,
-  versionedFieldsOf,
   type AggregatedEntry,
   type AuthoringTrace,
   type CreateEntryInput,
+  createEntryInput,
   type Entry,
   type EntryDates,
   type NarrativeRelation,
   type RevisionMode,
   type VersionedFields,
+  versionedFieldsOf,
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 

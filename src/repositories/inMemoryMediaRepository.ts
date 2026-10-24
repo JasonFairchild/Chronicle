@@ -1,5 +1,6 @@
 import { newEntryId } from '@/types/entry'
-import { extensionForMime, mimeForMediaId, type MediaRepository } from './mediaRepository'
+
+import { extensionForMime, type MediaRepository, mimeForMediaId } from './mediaRepository'
 
 /**
  * The node-friendly adapter, used by store and component tests so they never need OPFS. Ids carry

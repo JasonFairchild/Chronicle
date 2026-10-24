@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { TraceRecorder } from '@/domain/traceRecorder'
 
 /** Drives the clock by hand so a session's timing is asserted rather than waited for. */

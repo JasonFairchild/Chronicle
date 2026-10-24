@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { emptyEntryDates, emptyEntryDetails } from '@/types/entry'
 import {
   entryDetailLines,

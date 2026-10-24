@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+
 import { docToPlainText } from '@/domain/entryDocument'
-import { textContent } from '@/testing/documents'
 import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
+import { textContent } from '@/testing/documents'
 import { emptyEntryDates, type Entry } from '@/types/entry'
 
 /**

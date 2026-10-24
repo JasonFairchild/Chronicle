@@ -1,7 +1,7 @@
 import App from '@/App.vue'
-import { textContent } from '@/testing/documents'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
+import { textContent } from '@/testing/documents'
 import { createEntryInput } from '@/types/entry'
 
 describe('NewConnectionView flows', () => {

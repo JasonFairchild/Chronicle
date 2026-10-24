@@ -1,5 +1,6 @@
 import { computed, type ComputedRef } from 'vue'
-import { useRoute, type RouteLocationRaw } from 'vue-router'
+import { type RouteLocationRaw, useRoute } from 'vue-router'
+
 import type { DraftSnapshot } from '@/types/draft'
 
 /** The page a draft was started from, linked to reopen it there. */

@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
 import { Transform } from '@tiptap/pm/transform'
-import { plainTextDocument, serializeDocument } from '@/testing/documents'
+import { describe, expect, it } from 'vitest'
+
 import { documentsAt, replayDocument, type ReplayLog } from '@/editor/replay'
+import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import type { AuthoringEvent } from '@/types/entry'
 
 const base = serializeDocument(plainTextDocument('It rained'))

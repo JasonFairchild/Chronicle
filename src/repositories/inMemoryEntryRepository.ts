@@ -1,11 +1,12 @@
+import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
 import {
   compareEntries,
-  newEntryId,
-  newEntryTimestamp,
   type CreateEntryInput,
   type Entry,
+  newEntryId,
+  newEntryTimestamp,
 } from '@/types/entry'
-import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
+
 import type { EntryRepository } from './entryRepository'
 
 /**

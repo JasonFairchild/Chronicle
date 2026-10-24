@@ -1,4 +1,4 @@
-import { inject, provide, ref, type InjectionKey, type Ref } from 'vue'
+import { inject, type InjectionKey, provide, type Ref, ref } from 'vue'
 
 /**
  * How wide the page's content column may be.

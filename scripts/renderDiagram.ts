@@ -7,6 +7,7 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
 import { chromium } from 'playwright'
 
 const outDir = process.argv[2] ?? join(tmpdir(), 'chronicle-diagram')

@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
+
 import App from '@/App.vue'
+import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
-import { createTestRouter } from '@/testing/testRouter'
 import { selectTextRange } from '@/testing/selectTextRange'
-import { docToPlainText } from '@/domain/entryDocument'
+import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput } from '@/types/entry'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'

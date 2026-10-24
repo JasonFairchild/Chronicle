@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
+
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { draftRepository } from '@/repositories'

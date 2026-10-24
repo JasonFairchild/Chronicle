@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { reactive } from 'vue'
+
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 import { renderComponent } from '@/testing/renderComponent'

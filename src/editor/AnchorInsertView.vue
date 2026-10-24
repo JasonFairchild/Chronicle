@@ -24,10 +24,13 @@
  * meant for the nested control, leaving it visible but untypeable. Marking this node's own DOM
  * subtree as not editable tells the browser to leave it alone and manage the input normally.
  */
-import { computed, nextTick, ref, watch } from 'vue'
-import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { Check, Highlighter, Strikethrough, Trash2 } from '@lucide/vue'
+import { nodeViewProps, NodeViewWrapper } from '@tiptap/vue-3'
+import { computed, nextTick, ref, watch } from 'vue'
+
+import { ANCHOR_INSERT_NODE } from '@/domain/entryDocument'
 import {
+  type AnchorInsertStorage,
   cancelAnchorInsert,
   commitAnchorInsert,
   editableAnchorRanges,
@@ -36,9 +39,7 @@ import {
   removeAnchor,
   setAnchorKind,
   updateAnchorInsertText,
-  type AnchorInsertStorage,
 } from '@/editor/anchorCommands'
-import { ANCHOR_INSERT_NODE } from '@/domain/entryDocument'
 import type { AnchorKind } from '@/types/entry'
 
 const props = defineProps(nodeViewProps)

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
+
 import type { DraftSession } from '@/composables/useDraftSession'
 import { useSealDraft } from '@/composables/useSealDraft'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'

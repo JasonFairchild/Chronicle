@@ -1,6 +1,7 @@
+import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
-import { createPinia, setActivePinia } from 'pinia'
+
 import App from '@/App.vue'
 import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'

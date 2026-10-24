@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { shallowRef } from 'vue'
+
 import { DEFAULT_MARK_POLICY, deriveMarks, type MarkPolicy } from '@/domain/marks'
 import { buildFrames } from '@/editor/markFrames'
 import { entryRepository, markSetRepository } from '@/repositories'

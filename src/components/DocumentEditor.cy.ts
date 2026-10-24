@@ -1,12 +1,12 @@
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
-import { TraceRecorder } from '@/domain/traceRecorder'
 import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
   collectMediaRefs,
   docToPlainText,
 } from '@/domain/entryDocument'
+import { TraceRecorder } from '@/domain/traceRecorder'
 import { documentsAt } from '@/editor/replay'
 import { mediaRepository } from '@/repositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'

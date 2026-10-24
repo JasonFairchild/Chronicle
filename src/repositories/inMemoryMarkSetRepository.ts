@@ -1,5 +1,6 @@
 import { newEntryId, newEntryTimestamp } from '@/types/entry'
 import { compareMarkSets, type CreateMarkSetInput, type MarkSet } from '@/types/markSet'
+
 import type { MarkSetRepository } from './markSetRepository'
 
 export class InMemoryMarkSetRepository implements MarkSetRepository {

@@ -1,13 +1,15 @@
 import Dexie from 'dexie'
-import type { AuthoringEvent, CreateEntryInput, Entry } from '@/types/entry'
+
 import {
-  toSnapshot,
-  withEvents,
   type Draft,
   type DraftDocumentRole,
   type DraftSnapshot,
+  toSnapshot,
+  withEvents,
 } from '@/types/draft'
-import { resolveDatabase, type ChronicleDatabase, type StoredDraftEvent } from './chronicleDatabase'
+import type { AuthoringEvent, CreateEntryInput, Entry } from '@/types/entry'
+
+import { type ChronicleDatabase, resolveDatabase, type StoredDraftEvent } from './chronicleDatabase'
 import { DexieEntryRepository } from './dexieEntryRepository'
 import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
 

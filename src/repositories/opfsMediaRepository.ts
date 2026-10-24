@@ -1,5 +1,6 @@
 import { newEntryId } from '@/types/entry'
-import { extensionForMime, mimeForMediaId, type MediaRepository } from './mediaRepository'
+
+import { extensionForMime, type MediaRepository, mimeForMediaId } from './mediaRepository'
 
 function isNotFound(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'NotFoundError'

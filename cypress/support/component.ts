@@ -4,11 +4,13 @@
 // You can read more here: https://on.cypress.io/configuration
 // ***********************************************************
 
+import '@testing-library/cypress/add-commands'
+import '@/assets/main.css'
+
 import { type CyMountOptions, mount } from 'cypress/vue'
 import { createPinia } from 'pinia'
 import type { Router } from 'vue-router'
-import '@testing-library/cypress/add-commands'
-import '@/assets/main.css'
+
 import { disposeTestRepositories, freshRepositories } from '@/testing/realRepositories'
 import { createTestRouter } from '@/testing/testRouter'
 

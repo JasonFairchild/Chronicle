@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+
 import App from '@/App.vue'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'

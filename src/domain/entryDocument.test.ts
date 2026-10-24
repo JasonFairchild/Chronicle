@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest'
+
 import {
   ANCHOR_INSERT_NODE,
   collectMediaRefs,
   contentDelta,
   docToPlainText,
+  type EntryDocument,
   isBlankDraft,
   isEmptyDocument,
   parseDocument,
   previewText,
   sameContent,
   sameDocument,
-  type EntryDocument,
 } from '@/domain/entryDocument'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 

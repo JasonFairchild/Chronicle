@@ -1,11 +1,12 @@
 import type { Router } from 'vue-router'
+
 import App from '@/App.vue'
+import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
-import { docToPlainText } from '@/domain/entryDocument'
 import { createEntryInput, type Entry } from '@/types/entry'
 
 const PARENT_TEXT = 'I went to Lake Tahoe with Dad'

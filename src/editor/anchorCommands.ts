@@ -1,14 +1,15 @@
 import type { Editor } from '@tiptap/core'
 import type { Mark, Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
+import { type EditorState, TextSelection, type Transaction } from '@tiptap/pm/state'
 import type { StepMap } from '@tiptap/pm/transform'
-import { ref, type Ref } from 'vue'
+import { type Ref, ref } from 'vue'
+
 import {
+  type AnchorRange,
   anchorRangeOverlapping,
   collectAnchors,
-  newAnchorId,
-  type AnchorRange,
   type DocumentAnchor,
+  newAnchorId,
 } from '@/domain/anchors'
 import { changesInside } from '@/domain/anchorWarnings'
 import { ANCHOR_INSERT_NODE, ANCHOR_MARK, type EntryDocument } from '@/domain/entryDocument'

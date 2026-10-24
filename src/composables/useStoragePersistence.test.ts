@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+
 import {
+  type PersistableStorage,
   requestPersistentStorage,
   useStoragePersistence,
-  type PersistableStorage,
 } from '@/composables/useStoragePersistence'
 
 function storage(persisted: boolean, grants: boolean): PersistableStorage {

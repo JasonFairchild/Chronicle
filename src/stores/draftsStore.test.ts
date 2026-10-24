@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { docToPlainText } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
 import {
@@ -15,7 +16,7 @@ import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
 import { draftChangeTo, makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
-import { createEntryInput, type AggregatedEntry } from '@/types/entry'
+import { type AggregatedEntry, createEntryInput } from '@/types/entry'
 
 /** An entry already on record, as a session opened against it would find it. */
 async function existingEntry(text: string): Promise<AggregatedEntry> {

@@ -1,8 +1,10 @@
 import { getSchema } from '@tiptap/core'
 import type { Node as ProseMirrorNode, Schema } from '@tiptap/pm/model'
 import { Step, Transform } from '@tiptap/pm/transform'
-import { parseDocument, type EntryDocument } from '@/domain/entryDocument'
+
+import { type EntryDocument, parseDocument } from '@/domain/entryDocument'
 import type { AuthoringTrace } from '@/types/entry'
+
 import { entryExtensions } from './extensions'
 
 /**

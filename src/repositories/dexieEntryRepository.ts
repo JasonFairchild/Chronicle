@@ -1,12 +1,13 @@
+import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
 import {
   compareEntries,
-  newEntryId,
-  newEntryTimestamp,
   type CreateEntryInput,
   type Entry,
+  newEntryId,
+  newEntryTimestamp,
 } from '@/types/entry'
-import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
-import { resolveDatabase, type ChronicleDatabase, type StoredEntry } from './chronicleDatabase'
+
+import { type ChronicleDatabase, resolveDatabase, type StoredEntry } from './chronicleDatabase'
 import type { EntryRepository } from './entryRepository'
 
 /** Drops the storage-only indexing flag. */

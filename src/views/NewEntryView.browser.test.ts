@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Router } from 'vue-router'
-import NewEntryView from '@/views/NewEntryView.vue'
+
 import { draftRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
@@ -8,6 +8,7 @@ import { makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { emptyEntryDates } from '@/types/entry'
+import NewEntryView from '@/views/NewEntryView.vue'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 

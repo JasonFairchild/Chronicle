@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
+
 import {
   advanceIdClock,
   compareEntries,
   createEntryInput,
-  newEntryId,
   type Entry,
+  newEntryId,
 } from '@/types/entry'
 
 describe('advanceIdClock', () => {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+
 import EntryList from '@/components/EntryList.vue'
 import { useEntriesStore } from '@/stores/entriesStore'
 

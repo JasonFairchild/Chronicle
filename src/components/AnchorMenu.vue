@@ -14,11 +14,12 @@
  * earlier related entry's sealed one — `markAnchor` (`editor/anchorCommands.ts`) decides which, so
  * this menu stays two plain buttons with no state of its own to track.
  */
-import { ref } from 'vue'
-import { BubbleMenu } from '@tiptap/vue-3/menus'
+import { Highlighter, type LucideIcon, Strikethrough } from '@lucide/vue'
 import type { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
-import { Highlighter, Strikethrough, type LucideIcon } from '@lucide/vue'
+import { BubbleMenu } from '@tiptap/vue-3/menus'
+import { ref } from 'vue'
+
 import type { AnchorKind } from '@/types/entry'
 
 defineProps<{

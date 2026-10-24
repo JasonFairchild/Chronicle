@@ -1,30 +1,32 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
+
 import { isBlankDraft, isEmptyDocument } from '@/domain/entryDocument'
 import { currentVersionId } from '@/domain/reconstructEntryState'
 import { TraceRecorder } from '@/domain/traceRecorder'
 import { draftRepository } from '@/repositories'
 import { DraftConflictError, type PersistedEvents } from '@/repositories/draftRepository'
 import {
+  type Draft,
+  type DraftDocument,
   draftFieldsOf,
+  type DraftSnapshot,
   newDraftEntry,
   toSnapshot,
   versionsRevisedBy,
   withEvents,
-  type Draft,
-  type DraftDocument,
-  type DraftSnapshot,
 } from '@/types/draft'
 import {
-  entryDetailsOf,
-  newEntryId,
-  newEntryTimestamp,
   type AggregatedEntry,
   type ChangeSignals,
   type Entry,
   type EntryDetails,
+  entryDetailsOf,
+  newEntryId,
+  newEntryTimestamp,
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
+
 import { useEntriesStore } from './entriesStore'
 
 /**

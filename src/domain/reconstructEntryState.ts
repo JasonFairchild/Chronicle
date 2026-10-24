@@ -1,12 +1,13 @@
 import {
-  compareEntries,
-  versionedFieldsOf,
   type AggregatedEntry,
+  compareEntries,
   type Entry,
   type EntryVersion,
-  type ResolvedRelatedEntry,
   type ResolvedConnection,
+  type ResolvedRelatedEntry,
+  versionedFieldsOf,
 } from '@/types/entry'
+
 import { resolveAnchors } from './anchors'
 
 export interface ReconstructOptions {

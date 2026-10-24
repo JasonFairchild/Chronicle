@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 

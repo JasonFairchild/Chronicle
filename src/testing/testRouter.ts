@@ -1,4 +1,5 @@
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
+
 import { routes } from '@/router'
 
 /**

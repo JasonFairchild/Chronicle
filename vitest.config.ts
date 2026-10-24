@@ -1,7 +1,9 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url'
-import { mergeConfig, defineConfig } from 'vite'
+
 import { playwright } from '@vitest/browser-playwright'
+import { defineConfig, mergeConfig } from 'vite'
+
 import viteConfig from './vite.config.ts'
 
 export default mergeConfig(

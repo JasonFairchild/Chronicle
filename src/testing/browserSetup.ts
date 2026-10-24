@@ -1,5 +1,6 @@
 import { afterEach, beforeEach } from 'vitest'
 import { cleanup } from 'vitest-browser-vue'
+
 // By alias, as specs import it: a relative path loads a second copy, with its own database.
 import { disposeTestRepositories, freshRepositories } from '@/testing/realRepositories'
 

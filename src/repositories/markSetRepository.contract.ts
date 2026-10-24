@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+
 import { DEFAULT_MARK_POLICY } from '@/domain/marks'
 import type { CreateMarkSetInput } from '@/types/markSet'
+
 import type { MarkSetRepository } from './markSetRepository'
 
 function makeInput(overrides: Partial<CreateMarkSetInput> = {}): CreateMarkSetInput {

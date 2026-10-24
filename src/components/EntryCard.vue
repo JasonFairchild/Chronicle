@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+
 import { previewText } from '@/domain/entryDocument'
 import type { AggregatedEntry } from '@/types/entry'
 import { entryLabel, entryWhenLines, formatDate } from '@/utils/format'

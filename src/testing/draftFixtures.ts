@@ -1,7 +1,7 @@
 import type { DraftRepository } from '@/repositories/draftRepository'
 import type { DraftChange } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
-import { newDraftEntry, type Draft, type DraftDocument } from '@/types/draft'
+import { type Draft, type DraftDocument, newDraftEntry } from '@/types/draft'
 import type { Entry } from '@/types/entry'
 
 const DRAFT_STARTED_AT = '2026-09-05T10:00:00.000Z'

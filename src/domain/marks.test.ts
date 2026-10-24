@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { DEFAULT_MARK_POLICY, deriveMarks } from '@/domain/marks'
 import type { ChangeSignals, EditEvent, ManualEvent } from '@/types/entry'
 

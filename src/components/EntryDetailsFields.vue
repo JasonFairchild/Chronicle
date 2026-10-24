@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
+
 import type { EntryDates, EntryDetails } from '@/types/entry'
 
 defineProps<{

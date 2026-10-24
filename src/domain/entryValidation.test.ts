@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+
 import {
   assertValidRelation,
-  StaleVersionError,
   type RelationLookups,
+  StaleVersionError,
 } from '@/domain/entryValidation'
 import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
 

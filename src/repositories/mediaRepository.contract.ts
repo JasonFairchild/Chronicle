@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+
 import type { MediaRepository } from './mediaRepository'
 
 /** A one-pixel PNG, small enough to read at a glance and real enough to keep its type. */

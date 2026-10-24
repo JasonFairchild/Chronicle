@@ -49,6 +49,17 @@ export const ANCHOR_INSERT_NODE = 'anchorInsert'
 /** Nodes that sit inside a line rather than starting one. */
 const INLINE_NODES = new Set(['text', 'hardBreak', ANCHOR_INSERT_NODE])
 
+/** A blank body to start a session in. `isEmptyDocument` still reports this as empty. */
+export function emptyDocument(): EntryDocument {
+  return { type: 'doc', content: [{ type: 'paragraph' }] }
+}
+
+function isEntryDocument(value: unknown): value is EntryDocument {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<EntryDocument>
+  return candidate.type === 'doc' && Array.isArray(candidate.content)
+}
+
 /**
  * Reads stored content as a document. `Entry.content` is always a real serialized document — see
  * CLAUDE.md, "No backward compatibility" — so invalid content is a real bug and throws rather than
@@ -68,6 +79,21 @@ export function parseDocument(content: string | EntryDocument): EntryDocument {
     throw new Error('Stored content is not a serialized document')
   }
   return parsed
+}
+
+function nodeText(node: DocNode): string {
+  if (node.type === 'text') return node.text ?? ''
+  if (node.type === 'hardBreak') return '\n'
+  // Anchor-carried wording belongs to the related entry that proposed it, not to this document's
+  // author. See ANCHOR_INSERT_NODE above: this line is why an anchor is non-destructive.
+  if (node.type === ANCHOR_INSERT_NODE) return ''
+
+  const children = node.content ?? []
+  if (children.length === 0) return ''
+
+  // A paragraph's children run together on one line; a list's children each start their own.
+  const inline = children.every((child) => INLINE_NODES.has(child.type))
+  return children.map(nodeText).join(inline ? '' : '\n')
 }
 
 /**
@@ -90,6 +116,11 @@ export function docToPlainText(content: string | EntryDocument): string {
 export function previewText(content: string | EntryDocument, limit = 160): string {
   const singleLine = docToPlainText(content).replace(/\s+/g, ' ').trim()
   return singleLine.length > limit ? `${singleLine.slice(0, limit - 3)}...` : singleLine
+}
+
+function walk(node: DocNode, visit: (node: DocNode) => void): void {
+  visit(node)
+  for (const child of node.content ?? []) walk(child, visit)
 }
 
 /**
@@ -136,6 +167,13 @@ export interface ContentDelta {
   sameAnchors: boolean
 }
 
+function anchorKey(anchors: DocumentAnchor[]): string {
+  return anchors
+    .map((anchor) => `${anchor.anchor_id}:${anchor.kind ?? ''}`)
+    .sort()
+    .join('\n')
+}
+
 /**
  * Compares two documents along the three axes a change's signals are read from, in one pass so
  * `DocumentEditor` never has to re-walk the document per signal.
@@ -175,15 +213,6 @@ export function sameContent(a: string | EntryDocument, b: string | EntryDocument
   return delta.sameText && delta.sameMedia
 }
 
-/**
- * True when two documents are the same document, formatting included: marks and block types count,
- * where `sameContent` sees only words and attachments. What a revision has to change to be worth
- * saving. The editor's trailing empty blocks (see `contentDelta`) still don't count.
- */
-export function sameDocument(a: string | EntryDocument, b: string | EntryDocument): boolean {
-  return authoredJson(parseDocument(a)) === authoredJson(parseDocument(b))
-}
-
 function authoredJson(doc: EntryDocument): string {
   const content = [...doc.content]
   let last = content[content.length - 1]
@@ -195,40 +224,11 @@ function authoredJson(doc: EntryDocument): string {
   return JSON.stringify({ ...doc, content })
 }
 
-function anchorKey(anchors: DocumentAnchor[]): string {
-  return anchors
-    .map((anchor) => `${anchor.anchor_id}:${anchor.kind ?? ''}`)
-    .sort()
-    .join('\n')
-}
-
-function nodeText(node: DocNode): string {
-  if (node.type === 'text') return node.text ?? ''
-  if (node.type === 'hardBreak') return '\n'
-  // Anchor-carried wording belongs to the related entry that proposed it, not to this document's
-  // author. See ANCHOR_INSERT_NODE above: this line is why an anchor is non-destructive.
-  if (node.type === ANCHOR_INSERT_NODE) return ''
-
-  const children = node.content ?? []
-  if (children.length === 0) return ''
-
-  // A paragraph's children run together on one line; a list's children each start their own.
-  const inline = children.every((child) => INLINE_NODES.has(child.type))
-  return children.map(nodeText).join(inline ? '' : '\n')
-}
-
-function walk(node: DocNode, visit: (node: DocNode) => void): void {
-  visit(node)
-  for (const child of node.content ?? []) walk(child, visit)
-}
-
-function isEntryDocument(value: unknown): value is EntryDocument {
-  if (typeof value !== 'object' || value === null) return false
-  const candidate = value as Partial<EntryDocument>
-  return candidate.type === 'doc' && Array.isArray(candidate.content)
-}
-
-/** A blank body to start a session in. `isEmptyDocument` still reports this as empty. */
-export function emptyDocument(): EntryDocument {
-  return { type: 'doc', content: [{ type: 'paragraph' }] }
+/**
+ * True when two documents are the same document, formatting included: marks and block types count,
+ * where `sameContent` sees only words and attachments. What a revision has to change to be worth
+ * saving. The editor's trailing empty blocks (see `contentDelta`) still don't count.
+ */
+export function sameDocument(a: string | EntryDocument, b: string | EntryDocument): boolean {
+  return authoredJson(parseDocument(a)) === authoredJson(parseDocument(b))
 }

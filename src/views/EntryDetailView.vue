@@ -101,6 +101,12 @@ const heading = computed(() => {
   return entry.title || formatDateline(entry.created_at)
 })
 
+const versionLabel = computed(() => {
+  const version = aggregated.value?.version
+  if (!version || version.total <= 1) return null
+  return `Version ${version.index} of ${version.total}`
+})
+
 /** The muted line under the heading. An untitled entry's heading is already the day, so only the time. */
 const metaLine = computed(() => {
   const entry = aggregated.value
@@ -114,12 +120,6 @@ const metaLine = computed(() => {
 
 /** The writer's own details, one line each. Empty when they gave none, so nothing is shown. */
 const detailLines = computed(() => (aggregated.value ? entryDetailLines(aggregated.value) : []))
-
-const versionLabel = computed(() => {
-  const version = aggregated.value?.version
-  if (!version || version.total <= 1) return null
-  return `Version ${version.index} of ${version.total}`
-})
 
 /**
  * The related entry each disturbed anchor belongs to, named rather than merely counted
@@ -140,6 +140,83 @@ const revisionWarnings = computed<string[]>(() => {
   const names = revisionAffectedAnchorIds.value.map((id) => owners.get(id) ?? 'a related entry')
   return [...new Set(names)]
 })
+
+/**
+ * One line per anchor. A strike and its replacement wording are one anchor sharing one id, not two
+ * things to guess into a pair, so there is exactly one case for a strike whether or not it carries
+ * replacement wording. An orphaned anchor keeps the wording it covered, so a revision that breaks a
+ * reference reads as history rather than disappearing.
+ */
+function describeAnchor(resolved: ResolvedAnchor): string {
+  if (resolved.status === 'orphaned') {
+    return resolved.quote
+      ? `Was attached to: “${resolved.quote}”`
+      : 'Was attached to a removed passage'
+  }
+
+  const where = resolved.quote ? `“${resolved.quote}”` : 'a point in the text'
+
+  if (resolved.kind === 'strike') {
+    return resolved.insertion
+      ? `Strikes ${where}, replaced with “${resolved.insertion}”`
+      : `Strikes ${where}`
+  }
+
+  if (resolved.kind === 'comment') {
+    return resolved.insertion ? `On ${where}, adds “${resolved.insertion}”` : `On ${where}`
+  }
+
+  // No mark at all: a bare insertion with nothing struck.
+  return resolved.insertion ? `Adds “${resolved.insertion}”` : 'On a point in the text'
+}
+
+/** The label(s) an entry's breadcrumb line links to — its parent, or both ends of a connection. */
+async function loadBreadcrumb(entry: AggregatedEntry): Promise<{ id: string; label: string }[]> {
+  const ids: string[] =
+    entry.relation_type === 'annotation' || entry.relation_type === 'update'
+      ? entry.parent_id
+        ? [entry.parent_id]
+        : []
+      : entry.relation_type === 'connection'
+        ? [entry.parent_id, entry.target_id].filter((id): id is string => id !== null)
+        : []
+
+  if (ids.length === 0) return []
+
+  // The aggregated form, not the raw row: title folds through the version chain like the rest of
+  // the author-supplied fields (ENTRY_MODEL.md, "Version chains"), so reading the row directly
+  // would show a stale or blank name for an entry a revision has since renamed.
+  const found = await Promise.all(ids.map((id) => store.getAggregatedEntry(id)))
+  return ids.flatMap((id, index) => {
+    const other = found[index]
+    return other ? [{ id, label: entryLabel(other) }] : []
+  })
+}
+
+/**
+ * Reads the drafts table for one that could revise this entry. Asked again whenever a new draft is
+ * about to begin, not trusted from page load, since another tab may have started one since.
+ */
+async function findOutstandingDraft(): Promise<DraftSnapshot | null> {
+  await drafts.loadDrafts()
+  return outstandingDraft.value
+}
+
+/** Reopens the outstanding draft in place, in whichever composer it was written in. */
+async function resumeOutstandingDraft(): Promise<void> {
+  const draft = outstandingDraft.value
+  if (!draft) return
+
+  actionError.value = null
+  const session = draft.kind === 'revision' ? revisionSession : relatedSession
+
+  try {
+    // Gone since the list was read: sealed or discarded elsewhere, so nothing is outstanding.
+    if (!(await session.resume(draft.session_id))) await findOutstandingDraft()
+  } catch (err) {
+    actionError.value = toErrorMessage(err, 'Failed to resume draft')
+  }
+}
 
 async function loadEntry(entryId: string): Promise<void> {
   loading.value = true
@@ -192,63 +269,74 @@ async function refreshEntry(): Promise<void> {
 
 useTabReturn(() => void refreshEntry())
 
+onMounted(() => {
+  void loadEntry(props.id)
+})
+
+/** Connections get the full entry model (title, dates, rich content), so they're a whole screen. */
+function goToNewConnection(): void {
+  void router.push({ name: 'new-connection', params: { id: props.id } })
+}
+
 /**
- * Reads the drafts table for one that could revise this entry. Asked again whenever a new draft is
- * about to begin, not trusted from page load, since another tab may have started one since.
+ * Before a new draft begins: reopens one already outstanding on this entry instead, and says
+ * whether it did. A check that fails begins nothing either.
  */
-async function findOutstandingDraft(): Promise<DraftSnapshot | null> {
-  await drafts.loadDrafts()
-  return outstandingDraft.value
-}
-
-/** Reopens the outstanding draft in place, in whichever composer it was written in. */
-async function resumeOutstandingDraft(): Promise<void> {
-  const draft = outstandingDraft.value
-  if (!draft) return
-
-  actionError.value = null
-  const session = draft.kind === 'revision' ? revisionSession : relatedSession
-
+async function resumedInstead(): Promise<boolean> {
   try {
-    // Gone since the list was read: sealed or discarded elsewhere, so nothing is outstanding.
-    if (!(await session.resume(draft.session_id))) await findOutstandingDraft()
+    if (!(await findOutstandingDraft())) return false
   } catch (err) {
-    actionError.value = toErrorMessage(err, 'Failed to resume draft')
+    actionError.value = toErrorMessage(err, 'Failed to load drafts')
+    return true
   }
+
+  await resumeOutstandingDraft()
+  return true
 }
 
-/** The label(s) an entry's breadcrumb line links to — its parent, or both ends of a connection. */
-async function loadBreadcrumb(entry: AggregatedEntry): Promise<{ id: string; label: string }[]> {
-  const ids: string[] =
-    entry.relation_type === 'annotation' || entry.relation_type === 'update'
-      ? entry.parent_id
-        ? [entry.parent_id]
-        : []
-      : entry.relation_type === 'connection'
-        ? [entry.parent_id, entry.target_id].filter((id): id is string => id !== null)
-        : []
+/**
+ * Opening an entry to revise it produces a pending revision draft, leaving the entry untouched
+ * until it is sealed. The draft seeds from the current aggregate state rather than the stored
+ * row, or an entry that has already been revised would reopen at its first version.
+ */
+async function startRevising(): Promise<void> {
+  const current = aggregated.value
+  if (!current || (await resumedInstead())) return
 
-  if (ids.length === 0) return []
-
-  // The aggregated form, not the raw row: title folds through the version chain like the rest of
-  // the author-supplied fields (ENTRY_MODEL.md, "Version chains"), so reading the row directly
-  // would show a stale or blank name for an entry a revision has since renamed.
-  const found = await Promise.all(ids.map((id) => store.getAggregatedEntry(id)))
-  return ids.flatMap((id, index) => {
-    const other = found[index]
-    return other ? [{ id, label: entryLabel(other) }] : []
-  })
+  revisionSession.begin({ kind: 'revision', parent: current })
 }
+
+function trackAffectedAnchors(change: EditorChange): void {
+  revisionAffectedAnchorIds.value = change.affectedAnchorIds ?? []
+}
+
+async function saveRevision(): Promise<void> {
+  const saved = await revisionSession.save()
+  if (saved) await loadEntry(props.id)
+}
+
+/**
+ * Opens an anchor-mode session: two documents, the parent gaining provisional anchors and the
+ * related entry's own prose, sealing atomically together (AUTHORING.md, "Drafts").
+ *
+ * Anchoring is optional within it. Marking nothing and simply writing produces a related entry
+ * about this one at large, which is why there is one way in here rather than a separate form.
+ */
+async function startRelatedEntry(): Promise<void> {
+  const current = aggregated.value
+  if (!current || (await resumedInstead())) return
+
+  relatedSession.begin({ kind: 'new_related', parent: current })
+}
+
+/** Lands on the new related entry, whose breadcrumb leads back here. */
+const saveRelatedEntry = useSealDraft(relatedSession)
 
 /** Lets go of the revision session: its work stays a draft, and an untouched claim is released. */
 function resetRevisionState(): void {
   revisionSession.reset()
   revisionAffectedAnchorIds.value = []
 }
-
-onMounted(() => {
-  void loadEntry(props.id)
-})
 
 watch(
   () => props.id,
@@ -290,94 +378,6 @@ onBeforeUnmount(() => {
   resetRevisionState()
   relatedSession.reset()
 })
-
-/** Connections get the full entry model (title, dates, rich content), so they're a whole screen. */
-function goToNewConnection(): void {
-  void router.push({ name: 'new-connection', params: { id: props.id } })
-}
-
-/**
- * Opening an entry to revise it produces a pending revision draft, leaving the entry untouched
- * until it is sealed. The draft seeds from the current aggregate state rather than the stored
- * row, or an entry that has already been revised would reopen at its first version.
- */
-async function startRevising(): Promise<void> {
-  const current = aggregated.value
-  if (!current || (await resumedInstead())) return
-
-  revisionSession.begin({ kind: 'revision', parent: current })
-}
-
-/**
- * Before a new draft begins: reopens one already outstanding on this entry instead, and says
- * whether it did. A check that fails begins nothing either.
- */
-async function resumedInstead(): Promise<boolean> {
-  try {
-    if (!(await findOutstandingDraft())) return false
-  } catch (err) {
-    actionError.value = toErrorMessage(err, 'Failed to load drafts')
-    return true
-  }
-
-  await resumeOutstandingDraft()
-  return true
-}
-
-function trackAffectedAnchors(change: EditorChange): void {
-  revisionAffectedAnchorIds.value = change.affectedAnchorIds ?? []
-}
-
-async function saveRevision(): Promise<void> {
-  const saved = await revisionSession.save()
-  if (saved) await loadEntry(props.id)
-}
-
-/**
- * Opens an anchor-mode session: two documents, the parent gaining provisional anchors and the
- * related entry's own prose, sealing atomically together (AUTHORING.md, "Drafts").
- *
- * Anchoring is optional within it. Marking nothing and simply writing produces a related entry
- * about this one at large, which is why there is one way in here rather than a separate form.
- */
-async function startRelatedEntry(): Promise<void> {
-  const current = aggregated.value
-  if (!current || (await resumedInstead())) return
-
-  relatedSession.begin({ kind: 'new_related', parent: current })
-}
-
-/** Lands on the new related entry, whose breadcrumb leads back here. */
-const saveRelatedEntry = useSealDraft(relatedSession)
-
-/**
- * One line per anchor. A strike and its replacement wording are one anchor sharing one id, not two
- * things to guess into a pair, so there is exactly one case for a strike whether or not it carries
- * replacement wording. An orphaned anchor keeps the wording it covered, so a revision that breaks a
- * reference reads as history rather than disappearing.
- */
-function describeAnchor(resolved: ResolvedAnchor): string {
-  if (resolved.status === 'orphaned') {
-    return resolved.quote
-      ? `Was attached to: “${resolved.quote}”`
-      : 'Was attached to a removed passage'
-  }
-
-  const where = resolved.quote ? `“${resolved.quote}”` : 'a point in the text'
-
-  if (resolved.kind === 'strike') {
-    return resolved.insertion
-      ? `Strikes ${where}, replaced with “${resolved.insertion}”`
-      : `Strikes ${where}`
-  }
-
-  if (resolved.kind === 'comment') {
-    return resolved.insertion ? `On ${where}, adds “${resolved.insertion}”` : `On ${where}`
-  }
-
-  // No mark at all: a bare insertion with nothing struck.
-  return resolved.insertion ? `Adds “${resolved.insertion}”` : 'On a point in the text'
-}
 </script>
 
 <template>

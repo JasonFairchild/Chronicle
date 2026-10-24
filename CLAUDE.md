@@ -38,7 +38,7 @@ The rule most often broken. A permission rule matches the **whole** command stri
 - **Semantics first.** Native elements before ARIA; reach for a role or `aria-*` only where no element does the job (the editor's `contenteditable` body is the standing example).
 - **Disable a control only while its action is in flight.** Otherwise leave it enabled and say why it can't proceed.
 - Small, focused changes I can read and explain.
-- A new helper goes above its first caller, so the file reads top-down.
+- **Files read top-down.** A helper goes above its first caller; lint catches functions but not class methods called through `this`. In a component, store or composable: setup first, then actions in the order they're used, teardown last unless it sits beside the setup it undoes; a `return` lists state, then actions, in file order.
 - **Single-user app: make the common path work, and give a rare race the smallest backstop that holds** — an existing field or constraint before new machinery.
 - **Comments cite nothing that outlives the session** — no plan, chat, or "Piece N"; cite a checked-in doc or nothing. The non-obvious why, stated once, proportional to the code it sits next to — not a walkthrough. A comment saying what breaks without a line is checked by removing that line.
 - **Comment style marks scope, not length.** `/** */` heads a unit (file, function — nested ones too — type, class), even at one line. `//` covers a few lines within a unit, even at several lines. A short note on one field or statement is a trailing `//` on that line, moved above only if it won't fit. Going forward only; fix old comments opportunistically, not in a sweep.

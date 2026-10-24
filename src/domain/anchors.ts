@@ -41,6 +41,21 @@ export function newAnchorId(): string {
   return crypto.randomUUID()
 }
 
+function walk(node: DocNode, visit: (node: DocNode) => void): void {
+  visit(node)
+  for (const child of node.content ?? []) walk(child, visit)
+}
+
+function attrString(attrs: Record<string, unknown> | undefined, name: string): string | null {
+  const value = attrs?.[name]
+  return typeof value === 'string' && value ? value : null
+}
+
+function anchorKind(attrs: Record<string, unknown> | undefined): AnchorKind | null {
+  const kind = attrString(attrs, 'kind')
+  return kind === 'comment' || kind === 'strike' ? kind : null
+}
+
 /**
  * Every anchor in a document, in the order its marks and nodes appear.
  *
@@ -154,6 +169,19 @@ export function anchorsPlacedSince(
 }
 
 /**
+ * The anchors a session placed, as the document holds them. Ids the document does not carry are
+ * skipped — nothing should record a reference to an anchor that was undone before sealing.
+ */
+function placedAnchors(anchorIds: string[], content: string | EntryDocument): DocumentAnchor[] {
+  const present = new Map(collectAnchors(content).map((anchor) => [anchor.anchor_id, anchor]))
+
+  return anchorIds.flatMap((anchorId) => {
+    const anchor = present.get(anchorId)
+    return anchor ? [anchor] : []
+  })
+}
+
+/**
  * What a related entry stores for the anchors it just placed: the ids, plus the wording each one
  * covers at this moment.
  */
@@ -180,19 +208,6 @@ export function relationTypeForAnchors(
   )
 
   return corrects ? 'update' : 'annotation'
-}
-
-/**
- * The anchors a session placed, as the document holds them. Ids the document does not carry are
- * skipped — nothing should record a reference to an anchor that was undone before sealing.
- */
-function placedAnchors(anchorIds: string[], content: string | EntryDocument): DocumentAnchor[] {
-  const present = new Map(collectAnchors(content).map((anchor) => [anchor.anchor_id, anchor]))
-
-  return anchorIds.flatMap((anchorId) => {
-    const anchor = present.get(anchorId)
-    return anchor ? [anchor] : []
-  })
 }
 
 /**
@@ -272,19 +287,4 @@ export function anchorRangeOverlapping<T extends AnchorRange>(
   to: number,
 ): T | null {
   return ranges.find((range) => range.from < to && from < range.to) ?? null
-}
-
-function anchorKind(attrs: Record<string, unknown> | undefined): AnchorKind | null {
-  const kind = attrString(attrs, 'kind')
-  return kind === 'comment' || kind === 'strike' ? kind : null
-}
-
-function attrString(attrs: Record<string, unknown> | undefined, name: string): string | null {
-  const value = attrs?.[name]
-  return typeof value === 'string' && value ? value : null
-}
-
-function walk(node: DocNode, visit: (node: DocNode) => void): void {
-  visit(node)
-  for (const child of node.content ?? []) walk(child, visit)
 }

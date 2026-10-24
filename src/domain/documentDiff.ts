@@ -40,59 +40,6 @@ export interface DiffSegment {
  */
 const MAX_ALIGNED_TOKENS = 2_000
 
-/** The diff between two stored documents. The entry point a revision view wants. */
-export function diffDocuments(
-  before: string | EntryDocument,
-  after: string | EntryDocument,
-): DiffSegment[] {
-  return diffPlainText(docToPlainText(before), docToPlainText(after))
-}
-
-/**
- * The diff between two plain strings, word by word. Public because the entry's title is plain text
- * living beside the document rather than inside it (ENTRY_MODEL.md, "Fields"), so renaming shows up
- * here and not in `diffDocuments`.
- *
- * Words rather than characters: a reader comparing two versions of a sentence wants to see which
- * words changed, not that the 14th character became a "t". Whitespace rides along with the words
- * rather than being trimmed away, so the segments still concatenate back into the exact text — the
- * line breaks between blocks included.
- */
-export function diffPlainText(before: string, after: string): DiffSegment[] {
-  const a = tokenize(before)
-  const b = tokenize(after)
-
-  // The shared head and tail, which a revision usually leaves almost entirely alone. Removing them
-  // first is what keeps the alignment below measuring the handful of words that actually changed.
-  let head = 0
-  while (head < a.length && head < b.length && a[head] === b[head]) head++
-
-  let tail = 0
-  while (
-    tail < a.length - head &&
-    tail < b.length - head &&
-    a[a.length - 1 - tail] === b[b.length - 1 - tail]
-  ) {
-    tail++
-  }
-
-  const removed = a.slice(head, a.length - tail)
-  const added = b.slice(head, b.length - tail)
-
-  const segments: DiffSegment[] = []
-  push(segments, 'unchanged', a.slice(0, head).join(''))
-
-  if (removed.length > MAX_ALIGNED_TOKENS || added.length > MAX_ALIGNED_TOKENS) {
-    push(segments, 'removed', removed.join(''))
-    push(segments, 'added', added.join(''))
-  } else {
-    for (const segment of align(removed, added)) push(segments, segment.kind, segment.text)
-  }
-
-  push(segments, 'unchanged', a.slice(a.length - tail).join(''))
-  return segments
-}
-
 /**
  * Each word with the whitespace that follows it, so the tokens concatenate back into the string
  * exactly. Carrying the space rather than tokenizing it separately is what keeps "Lake Tahoe" →
@@ -101,6 +48,15 @@ export function diffPlainText(before: string, after: string): DiffSegment[] {
  */
 function tokenize(text: string): string[] {
   return text.match(/\S+\s*|\s+/g) ?? []
+}
+
+/** Appends text, extending the previous segment when it is of the same kind. */
+function push(segments: DiffSegment[], kind: DiffKind, text: string): void {
+  if (text === '') return
+
+  const last = segments[segments.length - 1]
+  if (last?.kind === kind) last.text += text
+  else segments.push({ kind, text })
 }
 
 /**
@@ -152,11 +108,55 @@ function align(a: string[], b: string[]): DiffSegment[] {
   return segments
 }
 
-/** Appends text, extending the previous segment when it is of the same kind. */
-function push(segments: DiffSegment[], kind: DiffKind, text: string): void {
-  if (text === '') return
+/**
+ * The diff between two plain strings, word by word. Public because the entry's title is plain text
+ * living beside the document rather than inside it (ENTRY_MODEL.md, "Fields"), so renaming shows up
+ * here and not in `diffDocuments`.
+ *
+ * Words rather than characters: a reader comparing two versions of a sentence wants to see which
+ * words changed, not that the 14th character became a "t". Whitespace rides along with the words
+ * rather than being trimmed away, so the segments still concatenate back into the exact text — the
+ * line breaks between blocks included.
+ */
+export function diffPlainText(before: string, after: string): DiffSegment[] {
+  const a = tokenize(before)
+  const b = tokenize(after)
 
-  const last = segments[segments.length - 1]
-  if (last?.kind === kind) last.text += text
-  else segments.push({ kind, text })
+  // The shared head and tail, which a revision usually leaves almost entirely alone. Removing them
+  // first is what keeps the alignment below measuring the handful of words that actually changed.
+  let head = 0
+  while (head < a.length && head < b.length && a[head] === b[head]) head++
+
+  let tail = 0
+  while (
+    tail < a.length - head &&
+    tail < b.length - head &&
+    a[a.length - 1 - tail] === b[b.length - 1 - tail]
+  ) {
+    tail++
+  }
+
+  const removed = a.slice(head, a.length - tail)
+  const added = b.slice(head, b.length - tail)
+
+  const segments: DiffSegment[] = []
+  push(segments, 'unchanged', a.slice(0, head).join(''))
+
+  if (removed.length > MAX_ALIGNED_TOKENS || added.length > MAX_ALIGNED_TOKENS) {
+    push(segments, 'removed', removed.join(''))
+    push(segments, 'added', added.join(''))
+  } else {
+    for (const segment of align(removed, added)) push(segments, segment.kind, segment.text)
+  }
+
+  push(segments, 'unchanged', a.slice(a.length - tail).join(''))
+  return segments
+}
+
+/** The diff between two stored documents. The entry point a revision view wants. */
+export function diffDocuments(
+  before: string | EntryDocument,
+  after: string | EntryDocument,
+): DiffSegment[] {
+  return diffPlainText(docToPlainText(before), docToPlainText(after))
 }

@@ -163,34 +163,6 @@ const AnchorInsert = Node.create({
   },
 })
 
-export interface EntryExtensionOptions {
-  /** True for an anchor-mode session: installs the guard that blocks every other kind of edit. */
-  anchorMode?: boolean
-  /**
-   * The document as it stood when this **session** began — a resumed draft's
-   * `Draft.parent.base_content`. Omitted for a fresh session, where the document the editor opens
-   * with is already that base. Every anchor it carries belongs to an earlier, already-sealed
-   * related entry; everything that appears afterward is this session's own. See AUTHORING.md,
-   * "Drafts".
-   */
-  baseContent?: string
-}
-
-export function entryExtensions({
-  anchorMode = false,
-  baseContent,
-}: EntryExtensionOptions = {}): Extensions {
-  return [
-    StarterKit,
-    MediaImage,
-    // Installed in every editor, not only anchor-mode ones: a text-mode revision has to be able to
-    // read, render, and carry forward the anchors already in the document it is editing.
-    Anchor,
-    AnchorInsert,
-    ...(anchorMode ? [AnchorMode.configure({ baseContent })] : []),
-  ]
-}
-
 /**
  * Installs `isAnchorEdit` (`anchorCommands.ts`) as a ProseMirror plugin's `filterTransaction` —
  * which lives on a plugin spec, not on the `EditorProps` TipTap types for DOM-facing options, hence
@@ -223,5 +195,33 @@ const AnchorMode = Extension.create<{ baseContent?: string }, AnchorModeStorage>
     }
   },
 })
+
+export interface EntryExtensionOptions {
+  /** True for an anchor-mode session: installs the guard that blocks every other kind of edit. */
+  anchorMode?: boolean
+  /**
+   * The document as it stood when this **session** began — a resumed draft's
+   * `Draft.parent.base_content`. Omitted for a fresh session, where the document the editor opens
+   * with is already that base. Every anchor it carries belongs to an earlier, already-sealed
+   * related entry; everything that appears afterward is this session's own. See AUTHORING.md,
+   * "Drafts".
+   */
+  baseContent?: string
+}
+
+export function entryExtensions({
+  anchorMode = false,
+  baseContent,
+}: EntryExtensionOptions = {}): Extensions {
+  return [
+    StarterKit,
+    MediaImage,
+    // Installed in every editor, not only anchor-mode ones: a text-mode revision has to be able to
+    // read, render, and carry forward the anchors already in the document it is editing.
+    Anchor,
+    AnchorInsert,
+    ...(anchorMode ? [AnchorMode.configure({ baseContent })] : []),
+  ]
+}
 
 export { Anchor, AnchorInsert, MediaImage }

@@ -37,6 +37,12 @@ const heading = computed(() =>
   source.value ? `New connection from “${entryLabel(source.value)}”` : 'New connection',
 )
 
+/** Reopens the draft this page was linked to, showing the entry it connects to in the picker. */
+async function reopen(id: string): Promise<void> {
+  const draft = (await session.resume(id)) ?? session.unreadable?.draft
+  if (draft?.kind === 'new_connection') targetId.value = draft.target_id
+}
+
 onMounted(async () => {
   loading.value = true
   error.value = null
@@ -54,12 +60,6 @@ onMounted(async () => {
     loading.value = false
   }
 })
-
-/** Reopens the draft this page was linked to, showing the entry it connects to in the picker. */
-async function reopen(id: string): Promise<void> {
-  const draft = (await session.resume(id)) ?? session.unreadable?.draft
-  if (draft?.kind === 'new_connection') targetId.value = draft.target_id
-}
 
 /**
  * A connection structurally cannot exist without a destination (`target_id`), so the session only

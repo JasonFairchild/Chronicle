@@ -3,6 +3,17 @@ import { toSnapshot, withEvents, type Draft, type DraftSnapshot } from '@/types/
 import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
 import type { EntryRepository } from './entryRepository'
 
+function append(
+  store: Map<string, AuthoringEvent[]>,
+  sessionId: string,
+  events: AuthoringEvent[],
+  persistedCount: number,
+): void {
+  const existing = store.get(sessionId) ?? []
+  const tail = structuredClone(events.slice(persistedCount))
+  store.set(sessionId, [...existing, ...tail])
+}
+
 /**
  * Events in their own map, appended rather than replaced wholesale, so the contract's append-only
  * assertions actually exercise something — a repository that just stored `Draft` objects whole
@@ -39,6 +50,13 @@ export class InMemoryDraftRepository implements DraftRepository {
     this.snapshots.set(draft.session_id, structuredClone(toSnapshot(draft)))
   }
 
+  private reassemble(snapshot: DraftSnapshot): Draft {
+    return withEvents(snapshot, {
+      entry: this.entryEvents.get(snapshot.session_id) ?? [],
+      parent: this.parentEvents.get(snapshot.session_id) ?? [],
+    })
+  }
+
   async getById(sessionId: string): Promise<Draft | null> {
     const snapshot = this.snapshots.get(sessionId)
     return snapshot ? structuredClone(this.reassemble(snapshot)) : null
@@ -66,22 +84,4 @@ export class InMemoryDraftRepository implements DraftRepository {
     this.entryEvents.delete(sessionId)
     this.parentEvents.delete(sessionId)
   }
-
-  private reassemble(snapshot: DraftSnapshot): Draft {
-    return withEvents(snapshot, {
-      entry: this.entryEvents.get(snapshot.session_id) ?? [],
-      parent: this.parentEvents.get(snapshot.session_id) ?? [],
-    })
-  }
-}
-
-function append(
-  store: Map<string, AuthoringEvent[]>,
-  sessionId: string,
-  events: AuthoringEvent[],
-  persistedCount: number,
-): void {
-  const existing = store.get(sessionId) ?? []
-  const tail = structuredClone(events.slice(persistedCount))
-  store.set(sessionId, [...existing, ...tail])
 }

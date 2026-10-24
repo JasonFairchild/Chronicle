@@ -31,49 +31,10 @@ interface Walk {
   seen: Set<string>
 }
 
-/**
- * The ordered version chain for one entry: its original content first, then each revision.
- *
- * Only revisions write content. Annotations, updates, and connections never do, which is what keeps
- * a single fold coherent and lets a revision be applied without erasing a related entry.
- */
-export function buildEntryHistory(
-  entryId: string,
-  entries: Entry[],
-  asOf?: Date,
-): EntryVersion[] | null {
-  const index = buildIndex(entries)
-  return historyFor(entryId, index, asOf?.toISOString())
-}
-
-/**
- * One entry's own state folded out of its version chain, plus its relations as collections.
- *
- * The pure core of the model: given the rows, it answers both "what does this entry say now" and
- * "what did it say at time T" with the same walk, which is what keeps historical reconstruction
- * from needing machinery of its own. Related entries are exposed as collections, never concatenated
- * into the parent's text — concatenating would make anchoring impossible and `content` untrue.
- */
-export function reconstructEntryState(
-  entryId: string,
-  entries: Entry[],
-  options: ReconstructOptions = {},
-): AggregatedEntry | null {
-  const walk: Walk = {
-    index: buildIndex(entries),
-    asOfIso: options.asOf?.toISOString(),
-    seen: new Set<string>(),
-  }
-
-  return aggregate(entryId, walk, options.depth ?? DEFAULT_DEPTH)
-}
-
-/**
- * The id of the row an entry's current version came from: its own for version one, the revision's
- * after that. What a draft records as the version it started from.
- */
-export function currentVersionId(entry: AggregatedEntry): string {
-  return entry.version.revision_id ?? entry.id
+function push(map: Map<string, Entry[]>, key: string, entry: Entry): void {
+  const list = map.get(key)
+  if (list) list.push(entry)
+  else map.set(key, [entry])
 }
 
 function buildIndex(entries: Entry[]): EntryIndex {
@@ -98,12 +59,6 @@ function buildIndex(entries: Entry[]): EntryIndex {
   for (const list of connectionsTo.values()) list.sort(compareEntries)
 
   return { byId, childrenOf, connectionsTo }
-}
-
-function push(map: Map<string, Entry[]>, key: string, entry: Entry): void {
-  const list = map.get(key)
-  if (list) list.push(entry)
-  else map.set(key, [entry])
 }
 
 function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): EntryVersion[] | null {
@@ -134,6 +89,106 @@ function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): Entry
   }
 
   return versions
+}
+
+/**
+ * The ordered version chain for one entry: its original content first, then each revision.
+ *
+ * Only revisions write content. Annotations, updates, and connections never do, which is what keeps
+ * a single fold coherent and lets a revision be applied without erasing a related entry.
+ */
+export function buildEntryHistory(
+  entryId: string,
+  entries: Entry[],
+  asOf?: Date,
+): EntryVersion[] | null {
+  const index = buildIndex(entries)
+  return historyFor(entryId, index, asOf?.toISOString())
+}
+
+function hasVisibleChildren(entryId: string, walk: Walk): boolean {
+  const children = walk.index.childrenOf.get(entryId) ?? []
+
+  return children.some(
+    (child) =>
+      child.relation_type !== 'revision' && (!walk.asOfIso || child.created_at <= walk.asOfIso),
+  )
+}
+
+function resolveRelatedEntries(
+  descendants: Entry[],
+  current: EntryVersion,
+  walk: Walk,
+  depth: number,
+): ResolvedRelatedEntry[] {
+  const resolved: ResolvedRelatedEntry[] = []
+
+  for (const child of descendants) {
+    if (child.relation_type !== 'annotation' && child.relation_type !== 'update') continue
+    if (walk.asOfIso && child.created_at > walk.asOfIso) continue
+
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- mutual recursion with aggregate
+    const entry = aggregate(child.id, walk, depth - 1)
+    if (!entry) continue
+
+    resolved.push({
+      entry,
+      relation_type: child.relation_type,
+      // Against the version being viewed, not the original: the anchors live in the parent's
+      // document, so "which version" is the whole question of where they are.
+      anchors: resolveAnchors(child.anchors, current.content),
+      has_children: hasVisibleChildren(child.id, walk),
+    })
+  }
+
+  // `descendants` runs oldest-first — the order the version chain's own folding depends on — but a
+  // reader wants the newest related entry on top, so display order is reversed only here, after
+  // that folding is done.
+  return resolved.reverse()
+}
+
+/**
+ * A connection is an edge, so it surfaces on both endpoints. The direction is real and kept,
+ * but the destination is not blind to a link pointing at it.
+ */
+function resolveConnections(
+  entryId: string,
+  descendants: Entry[],
+  walk: Walk,
+  depth: number,
+): ResolvedConnection[] {
+  const outgoing = descendants.filter((child) => child.relation_type === 'connection')
+  const incoming = walk.index.connectionsTo.get(entryId) ?? []
+
+  const resolved: ResolvedConnection[] = []
+
+  for (const connection of [...outgoing, ...incoming].sort(compareEntries)) {
+    if (walk.asOfIso && connection.created_at > walk.asOfIso) continue
+
+    const direction = connection.parent_id === entryId ? 'outgoing' : 'incoming'
+    const otherId = direction === 'outgoing' ? connection.target_id : connection.parent_id
+    if (!otherId) continue
+
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- mutual recursion with aggregate
+    const entry = aggregate(connection.id, walk, depth - 1)
+    if (!entry) continue
+
+    resolved.push({ entry, other_id: otherId, direction })
+  }
+
+  // Same reasoning as `resolveRelatedEntries`: the merge above has to run oldest-first to break ties
+  // the same way `compareEntries` does everywhere else, but a reader wants the newest connection
+  // first.
+  return resolved.reverse()
+}
+
+/** Length of the entry's full version chain: the original, plus one per revision. */
+function totalVersions(entryId: string, index: EntryIndex): number {
+  const revisions = (index.childrenOf.get(entryId) ?? []).filter(
+    (child) => child.relation_type === 'revision',
+  )
+
+  return revisions.length + 1
 }
 
 function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry | null {
@@ -178,85 +233,32 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
   }
 }
 
-function resolveRelatedEntries(
-  descendants: Entry[],
-  current: EntryVersion,
-  walk: Walk,
-  depth: number,
-): ResolvedRelatedEntry[] {
-  const resolved: ResolvedRelatedEntry[] = []
-
-  for (const child of descendants) {
-    if (child.relation_type !== 'annotation' && child.relation_type !== 'update') continue
-    if (walk.asOfIso && child.created_at > walk.asOfIso) continue
-
-    const entry = aggregate(child.id, walk, depth - 1)
-    if (!entry) continue
-
-    resolved.push({
-      entry,
-      relation_type: child.relation_type,
-      // Against the version being viewed, not the original: the anchors live in the parent's
-      // document, so "which version" is the whole question of where they are.
-      anchors: resolveAnchors(child.anchors, current.content),
-      has_children: hasVisibleChildren(child.id, walk),
-    })
+/**
+ * One entry's own state folded out of its version chain, plus its relations as collections.
+ *
+ * The pure core of the model: given the rows, it answers both "what does this entry say now" and
+ * "what did it say at time T" with the same walk, which is what keeps historical reconstruction
+ * from needing machinery of its own. Related entries are exposed as collections, never concatenated
+ * into the parent's text — concatenating would make anchoring impossible and `content` untrue.
+ */
+export function reconstructEntryState(
+  entryId: string,
+  entries: Entry[],
+  options: ReconstructOptions = {},
+): AggregatedEntry | null {
+  const walk: Walk = {
+    index: buildIndex(entries),
+    asOfIso: options.asOf?.toISOString(),
+    seen: new Set<string>(),
   }
 
-  // `descendants` runs oldest-first — the order the version chain's own folding depends on — but a
-  // reader wants the newest related entry on top, so display order is reversed only here, after
-  // that folding is done.
-  return resolved.reverse()
+  return aggregate(entryId, walk, options.depth ?? DEFAULT_DEPTH)
 }
 
 /**
- * A connection is an edge, so it surfaces on both endpoints. The direction is real and kept,
- * but the destination is not blind to a link pointing at it.
+ * The id of the row an entry's current version came from: its own for version one, the revision's
+ * after that. What a draft records as the version it started from.
  */
-function resolveConnections(
-  entryId: string,
-  descendants: Entry[],
-  walk: Walk,
-  depth: number,
-): ResolvedConnection[] {
-  const outgoing = descendants.filter((child) => child.relation_type === 'connection')
-  const incoming = walk.index.connectionsTo.get(entryId) ?? []
-
-  const resolved: ResolvedConnection[] = []
-
-  for (const connection of [...outgoing, ...incoming].sort(compareEntries)) {
-    if (walk.asOfIso && connection.created_at > walk.asOfIso) continue
-
-    const direction = connection.parent_id === entryId ? 'outgoing' : 'incoming'
-    const otherId = direction === 'outgoing' ? connection.target_id : connection.parent_id
-    if (!otherId) continue
-
-    const entry = aggregate(connection.id, walk, depth - 1)
-    if (!entry) continue
-
-    resolved.push({ entry, other_id: otherId, direction })
-  }
-
-  // Same reasoning as `resolveRelatedEntries`: the merge above has to run oldest-first to break ties
-  // the same way `compareEntries` does everywhere else, but a reader wants the newest connection
-  // first.
-  return resolved.reverse()
-}
-
-/** Length of the entry's full version chain: the original, plus one per revision. */
-function totalVersions(entryId: string, index: EntryIndex): number {
-  const revisions = (index.childrenOf.get(entryId) ?? []).filter(
-    (child) => child.relation_type === 'revision',
-  )
-
-  return revisions.length + 1
-}
-
-function hasVisibleChildren(entryId: string, walk: Walk): boolean {
-  const children = walk.index.childrenOf.get(entryId) ?? []
-
-  return children.some(
-    (child) =>
-      child.relation_type !== 'revision' && (!walk.asOfIso || child.created_at <= walk.asOfIso),
-  )
+export function currentVersionId(entry: AggregatedEntry): string {
+  return entry.version.revision_id ?? entry.id
 }

@@ -40,7 +40,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - AppLayout provides through an exported `layoutWidthKey`. That's an app use, not a test entry point.
   - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it (TESTING.md, Don'ts), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
   - `useLayoutWidth` gets a node spec under `app.runWithContext()` with `app.provide(layoutWidthKey, …)`. Vue 3.5's `provide()` does nothing outside a component and only warns; `inject()` works under `runWithContext`.
-  - EntryDetailView raising and lowering the width (`EntryDetailView.vue:279–289`) is that view's own code and is untested, so it gains a test in its pair.
+  - EntryDetailView raising and lowering the width (its `relatedSession.hasDraft` watch, and the reset in `onBeforeUnmount`) is that view's own code and is untested, so it gains a test in its pair.
   - Rejected: a browser host spec. The file has no lifecycle hooks and no browser API, and the spec would prove the plumbing while missing the view's behavior.
 - **`useDraftSession` needs no host.**
   - It injects nothing and has no lifecycle hooks, and Pinia's `useStore` falls back to the active Pinia. Its `DocumentEditor` import is type-only.
@@ -200,7 +200,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
       - lists root entries once mounted
       - says why a load failed, with `listRootEntries` stubbed to reject
     - The empty text is EntryList's, a child, so TimelineView doesn't assert it.
-    - Source change: `loadRootEntries` rethrows, so `void store.loadRootEntries()` would leave an unhandled rejection that fails both runners. The call becomes `.catch(() => {})`, since `store.error` already says why, as DraftsView does (`DraftsView.vue:35–36`).
+    - Source change: `loadRootEntries` rethrows, so `void store.loadRootEntries()` would leave an unhandled rejection that fails both runners. The call becomes `.catch(() => {})`, since `store.error` already says why, as DraftsView's `refresh` does.
     - Verify: both pairs.
 
 13. **`compareMarkSets` spec**, `src/types/markSet.test.ts`, mirroring `compareEntries` in `entry.test.ts`: by `created_at`, tied on `id`. The contract hits the tie only by chance.

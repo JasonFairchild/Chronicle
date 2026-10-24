@@ -8,6 +8,14 @@ export type PersistableStorage = Pick<StorageManager, 'persist' | 'persisted'>
 
 const DISMISSED_KEY = 'chronicle:storage-notice-dismissed'
 
+function readDismissed(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(DISMISSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 const persistence = ref<StoragePersistence>('unknown')
 const dismissed = ref(readDismissed())
 
@@ -49,12 +57,4 @@ export function useStoragePersistence() {
   }
 
   return { persistence, showNotice, dismiss }
-}
-
-function readDismissed(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(DISMISSED_KEY) === '1'
-  } catch {
-    return false
-  }
 }

@@ -17,4 +17,5 @@ description: Planning a Chronicle change that spans more than a step or two — 
    - **Decisions**, each with its why, plus any rejected alternative someone would otherwise reopen.
    - **Commits**, in order, each green on its own: what goes in, and its Verify — the tier from CLAUDE.md's verify rule, with the specs it runs named.
    - **Manual check** at the end: what to do in the running app, and what should be seen.
+   - Throughout, cite code by name, never `file:line`: the next move of that code makes a line number stale.
 5. **Decisions that outlast the plan** go into the docs in the commits that make them, so the plan can be deleted without losing anything.

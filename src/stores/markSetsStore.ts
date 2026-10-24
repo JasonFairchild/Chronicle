@@ -13,15 +13,6 @@ export const useMarkSetsStore = defineStore('markSets', () => {
   const markSets = shallowRef<MarkSet[]>([]) // The sets of whichever entry was loaded last.
 
   /**
-   * The entry's sets, oldest first, building a default one first if it has none. That keeps
-   * building lazy: nothing is spent on an entry until someone opens its history.
-   */
-  async function loadMarkSets(entryId: string): Promise<void> {
-    markSets.value = await markSetRepository.listForEntry(entryId)
-    if (markSets.value.length === 0) await createMarkSet(entryId, 'Default')
-  }
-
-  /**
    * Builds a set from the entry's trace and saves it. Always a new set, since a name is a label and
    * not a key: retuning a policy makes a new set beside the old one. Null for an entry nothing was
    * typed into, such as an import, which has no session to mark.
@@ -46,10 +37,19 @@ export const useMarkSetsStore = defineStore('markSets', () => {
     return created
   }
 
+  /**
+   * The entry's sets, oldest first, building a default one first if it has none. That keeps
+   * building lazy: nothing is spent on an entry until someone opens its history.
+   */
+  async function loadMarkSets(entryId: string): Promise<void> {
+    markSets.value = await markSetRepository.listForEntry(entryId)
+    if (markSets.value.length === 0) await createMarkSet(entryId, 'Default')
+  }
+
   async function deleteMarkSet(id: string): Promise<void> {
     await markSetRepository.delete(id)
     markSets.value = markSets.value.filter((set) => set.id !== id)
   }
 
-  return { markSets, loadMarkSets, createMarkSet, deleteMarkSet }
+  return { markSets, createMarkSet, loadMarkSets, deleteMarkSet }
 })

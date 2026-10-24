@@ -36,15 +36,6 @@ function handleChange(change: EditorChange): void {
   emit('change', change)
 }
 
-/** Asks the same question the seal will, so the owner is never handed a save bound to fail. */
-async function handleSave(): Promise<void> {
-  if (!props.session.canSave) {
-    error.value = 'Write something in the entry first. A title alone can’t be saved.'
-    return
-  }
-  await run(props.onSave, 'Failed to save entry')
-}
-
 /** Runs the owner's handler for one button, saying why if it fails. */
 async function run(action: () => Promise<void> | void, fallback: string): Promise<void> {
   error.value = null
@@ -53,6 +44,15 @@ async function run(action: () => Promise<void> | void, fallback: string): Promis
   } catch (err) {
     error.value = toErrorMessage(err, fallback)
   }
+}
+
+/** Asks the same question the seal will, so the owner is never handed a save bound to fail. */
+async function handleSave(): Promise<void> {
+  if (!props.session.canSave) {
+    error.value = 'Write something in the entry first. A title alone can’t be saved.'
+    return
+  }
+  await run(props.onSave, 'Failed to save entry')
 }
 </script>
 

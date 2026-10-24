@@ -72,15 +72,6 @@ export function useDraftSession() {
   /** The same condition `entriesStore.requireContent` enforces, asked before a save is attempted. */
   const canSave = computed(() => !isEmptyDocument(content.value))
 
-  /**
-   * What an editor showing this session is keyed on. It changes when the draft is reloaded from
-   * disk under it, or turns read-only: `DocumentEditor` reads its content and whether it can be
-   * typed in once, on mount, so a remount is the swap.
-   */
-  const reloads = ref(0)
-  const editorKey = computed(
-    () => `${sessionId.value ?? ''}:${reloads.value}:${readOnly.value ? 'read' : 'write'}`,
-  )
   /** How many of another tab's changes to this draft are caught up on (`drafts.elsewhere`). */
   let changesSeen = 0
   /** Said when another tab changed this draft in a way the writer should know about. */
@@ -112,31 +103,34 @@ export function useDraftSession() {
   const hasDraft = computed(() => isOpen.value || readOnly.value)
 
   /**
-   * Catches up when another tab changed this draft: a reload shows its version, and a draft sealed
-   * or discarded there closes here. Quiet unless this tab lost something or lost the draft.
+   * What an editor showing this session is keyed on. It changes when the draft is reloaded from
+   * disk under it, or turns read-only: `DocumentEditor` reads its content and whether it can be
+   * typed in once, on mount, so a remount is the swap.
    */
-  watch(
-    () => (sessionId.value ? drafts.elsewhere[sessionId.value] : undefined),
-    (change) => {
-      const id = sessionId.value
-      if (!change || !id || change.count <= changesSeen) return
-      changesSeen = change.count
-
-      unsavedText.value = change.unsaved ? docToPlainText(change.unsaved) : null
-      if (change.gone) {
-        sessionId.value = null
-        elsewhereNotice.value = 'This draft was saved or discarded elsewhere.'
-        return
-      }
-
-      mirror(drafts.currentDraft(id)!, parentTitle.value)
-      reloads.value += 1
-      elsewhereNotice.value = unsavedText.value
-        ? 'This draft was changed elsewhere at the same time, and now shows what was saved ' +
-          'there. What you had here is below.'
-        : null
-    },
+  const reloads = ref(0)
+  const editorKey = computed(
+    () => `${sessionId.value ?? ''}:${reloads.value}:${readOnly.value ? 'read' : 'write'}`,
   )
+
+  /** Mirrors a draft into the refs an editor binds to, whether it is beginning or resuming. */
+  function mirror(draft: DraftSnapshot, nextParentTitle: string | null): void {
+    kind.value = draft.kind
+    content.value = draft.entry.content
+    title.value = draft.entry.title
+    details.value = entryDetailsOf(draft.entry)
+    parentContent.value = draft.kind === 'new_related' ? draft.parent.content : ''
+    parentBaseContent.value = draft.kind === 'new_related' ? draft.parent.base_content : ''
+    parentTitle.value = nextParentTitle
+  }
+
+  /** Takes a draft as this session's from here on, with nothing another tab did before now. */
+  function openAs(id: string): void {
+    changesSeen = drafts.elsewhere[id]?.count ?? 0
+    elsewhereNotice.value = null
+    unsavedText.value = null
+    unreadable.value = null
+    sessionId.value = id
+  }
 
   /** Opens a brand-new session — nothing is written until the first real change. */
   function begin(start: BeginDraftInput): void {
@@ -147,13 +141,16 @@ export function useDraftSession() {
     openAs(id)
   }
 
-  /** Takes a draft as this session's from here on, with nothing another tab did before now. */
-  function openAs(id: string): void {
-    changesSeen = drafts.elsewhere[id]?.count ?? 0
-    elsewhereNotice.value = null
-    unsavedText.value = null
-    unreadable.value = null
-    sessionId.value = id
+  /**
+   * Mirrors a stored draft, reading the entry it could revise: for its title, which anchor mode
+   * never changes, and to say at once if it has moved on, rather than only when Save is refused.
+   */
+  async function mirrorReopened(draft: DraftSnapshot): Promise<void> {
+    const [revises] = versionsRevisedBy(draft)
+    const parent = revises ? await entries.getAggregatedEntry(revises.entry_id) : null
+
+    mirror(draft, draft.kind === 'new_related' ? (parent?.title ?? null) : null)
+    stale.value = parent !== null && currentVersionId(parent) !== revises?.base_version_id
   }
 
   /**
@@ -182,27 +179,31 @@ export function useDraftSession() {
   }
 
   /**
-   * Mirrors a stored draft, reading the entry it could revise: for its title, which anchor mode
-   * never changes, and to say at once if it has moved on, rather than only when Save is refused.
+   * Catches up when another tab changed this draft: a reload shows its version, and a draft sealed
+   * or discarded there closes here. Quiet unless this tab lost something or lost the draft.
    */
-  async function mirrorReopened(draft: DraftSnapshot): Promise<void> {
-    const [revises] = versionsRevisedBy(draft)
-    const parent = revises ? await entries.getAggregatedEntry(revises.entry_id) : null
+  watch(
+    () => (sessionId.value ? drafts.elsewhere[sessionId.value] : undefined),
+    (change) => {
+      const id = sessionId.value
+      if (!change || !id || change.count <= changesSeen) return
+      changesSeen = change.count
 
-    mirror(draft, draft.kind === 'new_related' ? (parent?.title ?? null) : null)
-    stale.value = parent !== null && currentVersionId(parent) !== revises?.base_version_id
-  }
+      unsavedText.value = change.unsaved ? docToPlainText(change.unsaved) : null
+      if (change.gone) {
+        sessionId.value = null
+        elsewhereNotice.value = 'This draft was saved or discarded elsewhere.'
+        return
+      }
 
-  /** Mirrors a draft into the refs an editor binds to, whether it is beginning or resuming. */
-  function mirror(draft: DraftSnapshot, nextParentTitle: string | null): void {
-    kind.value = draft.kind
-    content.value = draft.entry.content
-    title.value = draft.entry.title
-    details.value = entryDetailsOf(draft.entry)
-    parentContent.value = draft.kind === 'new_related' ? draft.parent.content : ''
-    parentBaseContent.value = draft.kind === 'new_related' ? draft.parent.base_content : ''
-    parentTitle.value = nextParentTitle
-  }
+      mirror(drafts.currentDraft(id)!, parentTitle.value)
+      reloads.value += 1
+      elsewhereNotice.value = unsavedText.value
+        ? 'This draft was changed elsewhere at the same time, and now shows what was saved ' +
+          'there. What you had here is below.'
+        : null
+    },
+  )
 
   /** Forwards one `DocumentEditor` change into the session. */
   function handleChange(change: EditorChange): void {

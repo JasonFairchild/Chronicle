@@ -24,10 +24,6 @@ const error = ref<string | null>(null)
 /** What each draft is attached to, so the list can name it rather than just describe its kind. */
 const parentLabels = ref<Record<string, string>>({})
 
-onMounted(() => {
-  void refresh()
-})
-
 async function refresh(): Promise<void> {
   error.value = null
 
@@ -38,16 +34,13 @@ async function refresh(): Promise<void> {
   }
 }
 
-// Whatever reloaded the list — this page, a discard, a return to the tab — its names follow.
-watch(
-  () => drafts.drafts,
-  (list) => {
-    loadParentLabels(list).catch((err) => {
-      error.value = toErrorMessage(err, 'Failed to load drafts')
-    })
-  },
-  { immediate: true },
-)
+onMounted(() => {
+  void refresh()
+})
+
+function parentIdOf(draft: DraftSnapshot): string | null {
+  return draft.kind === 'new_root' ? null : draft.parent_id
+}
 
 async function loadParentLabels(list: DraftSnapshot[]): Promise<void> {
   const parentIds = [...new Set(list.map(parentIdOf))].filter((id): id is string => id !== null)
@@ -64,9 +57,16 @@ async function loadParentLabels(list: DraftSnapshot[]): Promise<void> {
   parentLabels.value = labels
 }
 
-function parentIdOf(draft: DraftSnapshot): string | null {
-  return draft.kind === 'new_root' ? null : draft.parent_id
-}
+// Whatever reloaded the list — this page, a discard, a return to the tab — its names follow.
+watch(
+  () => drafts.drafts,
+  (list) => {
+    loadParentLabels(list).catch((err) => {
+      error.value = toErrorMessage(err, 'Failed to load drafts')
+    })
+  },
+  { immediate: true },
+)
 
 /** A drafts list exists so nothing is stranded, which means saying what each one would become. */
 function describe(draft: DraftSnapshot): string {

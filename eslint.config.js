@@ -27,6 +27,7 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      '@typescript-eslint/no-use-before-define': 'error',
     },
   },
   {

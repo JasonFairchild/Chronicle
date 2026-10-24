@@ -30,83 +30,6 @@ function reproduces(step: Step, before: ProseMirrorNode, after: ProseMirrorNode)
   }
 }
 
-/**
- * One frame per mark, in a single replay pass over the log. Stops at the last mark replay reaches.
- * `check` is a parameter only so a test can fail it.
- */
-export function buildFrames(
-  log: ReplayLog,
-  marks: readonly AuthoringMark[],
-  check: NetStepCheck = reproduces,
-): MarkFrame[] {
-  const base = replayDocument(log.base_content)
-  if (!base) return []
-
-  let previous = base
-  const frames: MarkFrame[] = []
-  let applied = 0
-
-  for (const mark of marks) {
-    const segment = new Transform(previous)
-    for (; applied < mark.index; applied++) {
-      const event = log.events[applied]
-      if (event.kind === 'edit' && !applySteps(segment, event.steps)) return frames
-    }
-
-    const { at, index, reasons } = mark
-    frames.push({ at, index, reasons: [...reasons], ...frameOf(segment, check) })
-    previous = segment.doc
-  }
-
-  return frames
-}
-
-/**
- * The document at each frame, rebuilt from `base_content` by applying each frame's net change in
- * turn: one step per mark, not the raw log's thousands. Stops where a step no longer applies, as
- * replay does.
- */
-export function documentsFromFrames(
-  set: Pick<MarkSet, 'base_content' | 'frames'>,
-): EntryDocument[] {
-  let doc = replayDocument(set.base_content)
-  const documents: EntryDocument[] = []
-
-  for (const { net } of set.frames) {
-    if (!doc) break
-
-    if ('document' in net) {
-      doc = replayDocument(net.document)
-    } else {
-      const transform = new Transform(doc)
-      doc = applySteps(transform, net.steps) ? transform.doc : null
-    }
-
-    if (doc) documents.push(doc.toJSON() as EntryDocument)
-  }
-
-  return documents
-}
-
-/**
- * A segment's net change and what to highlight. A net step that fails `check` is stored as the
- * whole document instead, so every frame is right by construction.
- */
-function frameOf(segment: Transform, check: NetStepCheck): Pick<MarkFrame, 'net' | 'changes'> {
-  const { before, doc: after } = segment
-  const diff = differingRange(before, after)
-  if (!diff) return { net: { steps: [] }, changes: [] }
-
-  const step = new ReplaceStep(diff.start, diff.endA, after.slice(diff.start, diff.endB))
-
-  return {
-    net: check(step, before, after)
-      ? { steps: [step.toJSON()] }
-      : { document: after.toJSON() as EntryDocument },
-    changes: changesIn(segment, diff.start, diff.endB),
-  }
-}
-
 /** ProseMirror's own diff of two documents, or null when they're the same. */
 function differingRange(a: ProseMirrorNode, b: ProseMirrorNode) {
   const start = a.content.findDiffStart(b.content)
@@ -121,46 +44,6 @@ function differingRange(a: ProseMirrorNode, b: ProseMirrorNode) {
   }
 
   return { start, endA, endB }
-}
-
-/**
- * What to highlight, read from the segment's steps. Text and nodes come from `ChangeSet`, which
- * cancels out anything typed and deleted again. Mark, attribute and rewrapping steps don't read as
- * a change there, so each one's range is mapped forward and clipped to where the documents differ:
- * outside that, it was undone.
- */
-function changesIn(segment: Transform, differFrom: number, differTo: number): FrameChange[] {
-  const { before, doc: after, steps, docs, mapping } = segment
-  const changes: FrameChange[] = []
-
-  for (const change of ChangeSet.create(before).addSteps(after, mapping.maps, null).changes) {
-    const at = change.fromB
-
-    const deleted = visibleIn(before, change.fromA, change.toA)
-    if (deleted === 'content') {
-      const removed = before.textBetween(change.fromA, change.toA, '\n')
-      changes.push({ kind: 'removed', from: at, to: at, removed })
-    }
-    if (deleted === 'anchor') changes.push({ kind: 'anchor', from: at, to: at })
-
-    const inserted = visibleIn(after, change.fromB, change.toB)
-    if (inserted) {
-      const kind = inserted === 'content' ? 'added' : 'anchor'
-      changes.push({ kind, from: change.fromB, to: change.toB })
-    }
-  }
-
-  steps.forEach((step, i) => {
-    const touched = touchedBy(step, docs[i])
-    if (!touched) return
-
-    const forward = mapping.slice(i)
-    const from = Math.max(forward.map(touched.from, 1), differFrom)
-    const to = Math.min(forward.map(touched.to, -1), differTo)
-    if (from < to) changes.push({ kind: touched.kind, from, to })
-  })
-
-  return tidy(changes)
 }
 
 /**
@@ -222,4 +105,121 @@ function tidy(changes: FrameChange[]): FrameChange[] {
   }
 
   return tidied
+}
+
+/**
+ * What to highlight, read from the segment's steps. Text and nodes come from `ChangeSet`, which
+ * cancels out anything typed and deleted again. Mark, attribute and rewrapping steps don't read as
+ * a change there, so each one's range is mapped forward and clipped to where the documents differ:
+ * outside that, it was undone.
+ */
+function changesIn(segment: Transform, differFrom: number, differTo: number): FrameChange[] {
+  const { before, doc: after, steps, docs, mapping } = segment
+  const changes: FrameChange[] = []
+
+  for (const change of ChangeSet.create(before).addSteps(after, mapping.maps, null).changes) {
+    const at = change.fromB
+
+    const deleted = visibleIn(before, change.fromA, change.toA)
+    if (deleted === 'content') {
+      const removed = before.textBetween(change.fromA, change.toA, '\n')
+      changes.push({ kind: 'removed', from: at, to: at, removed })
+    }
+    if (deleted === 'anchor') changes.push({ kind: 'anchor', from: at, to: at })
+
+    const inserted = visibleIn(after, change.fromB, change.toB)
+    if (inserted) {
+      const kind = inserted === 'content' ? 'added' : 'anchor'
+      changes.push({ kind, from: change.fromB, to: change.toB })
+    }
+  }
+
+  steps.forEach((step, i) => {
+    const touched = touchedBy(step, docs[i])
+    if (!touched) return
+
+    const forward = mapping.slice(i)
+    const from = Math.max(forward.map(touched.from, 1), differFrom)
+    const to = Math.min(forward.map(touched.to, -1), differTo)
+    if (from < to) changes.push({ kind: touched.kind, from, to })
+  })
+
+  return tidy(changes)
+}
+
+/**
+ * A segment's net change and what to highlight. A net step that fails `check` is stored as the
+ * whole document instead, so every frame is right by construction.
+ */
+function frameOf(segment: Transform, check: NetStepCheck): Pick<MarkFrame, 'net' | 'changes'> {
+  const { before, doc: after } = segment
+  const diff = differingRange(before, after)
+  if (!diff) return { net: { steps: [] }, changes: [] }
+
+  const step = new ReplaceStep(diff.start, diff.endA, after.slice(diff.start, diff.endB))
+
+  return {
+    net: check(step, before, after)
+      ? { steps: [step.toJSON()] }
+      : { document: after.toJSON() as EntryDocument },
+    changes: changesIn(segment, diff.start, diff.endB),
+  }
+}
+
+/**
+ * One frame per mark, in a single replay pass over the log. Stops at the last mark replay reaches.
+ * `check` is a parameter only so a test can fail it.
+ */
+export function buildFrames(
+  log: ReplayLog,
+  marks: readonly AuthoringMark[],
+  check: NetStepCheck = reproduces,
+): MarkFrame[] {
+  const base = replayDocument(log.base_content)
+  if (!base) return []
+
+  let previous = base
+  const frames: MarkFrame[] = []
+  let applied = 0
+
+  for (const mark of marks) {
+    const segment = new Transform(previous)
+    for (; applied < mark.index; applied++) {
+      const event = log.events[applied]
+      if (event.kind === 'edit' && !applySteps(segment, event.steps)) return frames
+    }
+
+    const { at, index, reasons } = mark
+    frames.push({ at, index, reasons: [...reasons], ...frameOf(segment, check) })
+    previous = segment.doc
+  }
+
+  return frames
+}
+
+/**
+ * The document at each frame, rebuilt from `base_content` by applying each frame's net change in
+ * turn: one step per mark, not the raw log's thousands. Stops where a step no longer applies, as
+ * replay does.
+ */
+export function documentsFromFrames(
+  set: Pick<MarkSet, 'base_content' | 'frames'>,
+): EntryDocument[] {
+  let doc = replayDocument(set.base_content)
+  const documents: EntryDocument[] = []
+
+  for (const { net } of set.frames) {
+    if (!doc) break
+
+    if ('document' in net) {
+      doc = replayDocument(net.document)
+    } else {
+      const transform = new Transform(doc)
+      doc = applySteps(transform, net.steps) ? transform.doc : null
+    }
+
+    if (doc) documents.push(doc.toJSON() as EntryDocument)
+  }
+
+  return documents
 }

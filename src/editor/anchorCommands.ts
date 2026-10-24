@@ -150,6 +150,89 @@ export interface EditableAnchorRange extends AnchorRange {
   kind: AnchorKind | null
 }
 
+/** Where one anchor sits in a document, in ProseMirror positions. */
+export interface AnchorSpan {
+  anchor_id: string
+  quote: string
+  from: number
+  to: number
+}
+
+/**
+ * The region each anchor occupies, taken as the outermost extent of its pieces.
+ *
+ * A strike and the wording replacing it are one anchor in two places, adjacent by construction, so
+ * one span covering both is the region the anchor is responsible for — and it means deleting the
+ * proposed wording counts as disturbing the anchor just as deleting the struck text does.
+ */
+export function anchorSpans(doc: ProseMirrorNode): AnchorSpan[] {
+  const spans = new Map<string, AnchorSpan>()
+
+  const extend = (anchorId: string, from: number, to: number, quote: string) => {
+    const existing = spans.get(anchorId)
+    if (!existing) {
+      spans.set(anchorId, { anchor_id: anchorId, quote, from, to })
+      return
+    }
+
+    existing.from = Math.min(existing.from, from)
+    existing.to = Math.max(existing.to, to)
+    existing.quote += quote
+  }
+
+  doc.descendants((node, pos) => {
+    if (node.type.name === ANCHOR_INSERT_NODE) {
+      const anchorId = node.attrs.anchorId
+      if (typeof anchorId === 'string' && anchorId) extend(anchorId, pos, pos + node.nodeSize, '')
+      return false
+    }
+
+    if (!node.isText) return true
+
+    for (const mark of node.marks) {
+      if (mark.type.name !== ANCHOR_MARK) continue
+      const anchorId = mark.attrs.anchorId
+      if (typeof anchorId === 'string' && anchorId) {
+        extend(anchorId, pos, pos + node.nodeSize, node.text ?? '')
+      }
+    }
+
+    return true
+  })
+
+  return [...spans.values()]
+}
+
+/** One span moved through an edit, and whether that edit changed the text it covers. */
+export interface MappedAnchorSpan extends AnchorSpan {
+  changedInside: boolean
+}
+
+/**
+ * Moves each span through an edit's step maps and reports whether any step changed the text under
+ * it. Positions come back alongside the judgment because a revision session runs many edits in
+ * sequence, each resuming from where the last left off — a caller keeps passing back the spans it
+ * was given, one transaction at a time.
+ *
+ * Walks one map at a time rather than a composed `Mapping`, since each step's replaced range is
+ * only comparable to the span as it stood just before that step. The endpoints are mapped with
+ * opposite biases, matching the mark's `inclusive: false`, so text typed at an edge stays outside.
+ */
+export function mapAnchorSpans(spans: AnchorSpan[], maps: readonly StepMap[]): MappedAnchorSpan[] {
+  return spans.map((span) => {
+    let { from, to } = span
+    let changedInside = false
+    for (const map of maps) {
+      map.forEach((oldStart, oldEnd) => {
+        if (changesInside({ from, to }, { from: oldStart, to: oldEnd })) changedInside = true
+      })
+      from = map.map(from, 1)
+      to = Math.max(from, map.map(to, -1))
+    }
+    return { anchor_id: span.anchor_id, quote: span.quote, from, to, changedInside }
+  })
+}
+
 /**
  * The mark-and-node extents of every anchor this session may still edit, for the click resolution
  * in `DocumentEditor`'s `handleClick` (`innermostAnchorAt`, `domain/anchors.ts`). Empty whenever
@@ -183,6 +266,37 @@ interface AnchorMarkExtent extends AnchorRange {
 }
 
 /**
+ * The individual text-node pieces of one anchor's *mark*, before merging into an outer extent — a
+ * mutation (`setAnchorKind`, `removeAnchor`) must act on exactly these, not the outer extent
+ * `anchorSpans` reports: a *newer* anchor's `anchorInsert` node can sit inside an *older* anchor's
+ * range, and `addMark`/`removeMark` over the whole extent would touch that atom node too.
+ *
+ * Carries each piece's actual `Mark` instance, not just its type, because the mark's own `excludes:
+ * ''` (`extensions.ts`) lets a different anchor's mark legally share a span with this one —
+ * `removeMark`/`setAnchorKind` must remove precisely this mark, not every anchor mark ProseMirror
+ * finds in the range. Passing the bare mark *type* there instead would strip a different, unrelated
+ * anchor's mark out from under it.
+ */
+export function anchorMarkRanges(
+  doc: ProseMirrorNode,
+  anchorId: string,
+): { from: number; to: number; mark: Mark }[] {
+  const pieces: { from: number; to: number; mark: Mark }[] = []
+
+  doc.descendants((node, pos) => {
+    if (!node.isText) return true
+    for (const mark of node.marks) {
+      if (mark.type.name === ANCHOR_MARK && mark.attrs.anchorId === anchorId) {
+        pieces.push({ from: pos, to: pos + node.nodeSize, mark })
+      }
+    }
+    return true
+  })
+
+  return pieces
+}
+
+/**
  * The mark-only extent of every anchor in the document that has a mark at all, this session's own or
  * an earlier related entry's alike — what `markAnchor` checks a fresh selection against to keep
  * anchors exclusive (PRODUCT.md §4.4): touching any existing anchor's marked passage at all blocks
@@ -211,6 +325,11 @@ function allMarkExtents(editor: Editor): AnchorMarkExtent[] {
       },
     ]
   })
+}
+
+function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
+  transaction.setMeta(ANCHOR_EDIT_META, true)
+  editor.view.dispatch(transaction)
 }
 
 /**
@@ -258,6 +377,72 @@ export function addAnchorMark(
   transaction.insert(to, insertNode)
   transaction.setSelection(TextSelection.create(transaction.doc, to + insertNode.nodeSize))
   announce(transaction, `${kind === 'strike' ? 'Struck' : 'Highlighted'} "${quote}"`)
+
+  openWordingBox(editor, anchorId, '')
+  dispatchAnchorEdit(editor, transaction)
+  return anchorId
+}
+
+/** The position and node of the `anchorInsert` node carrying `anchorId`, if the document has one. */
+function findAnchorInsert(
+  doc: ProseMirrorNode,
+  anchorId: string,
+): { pos: number; node: ProseMirrorNode } | null {
+  const insertType = doc.type.schema.nodes[ANCHOR_INSERT_NODE]
+  let found: { pos: number; node: ProseMirrorNode } | null = null
+
+  doc.descendants((node, pos) => {
+    if (found) return false
+    if (node.type === insertType && node.attrs.anchorId === anchorId) {
+      found = { pos, node }
+      return false
+    }
+    return true
+  })
+
+  return found
+}
+
+/**
+ * Opens an anchor's wording box for editing — the one mechanism behind both entry points into a
+ * wording session: clicking a placed anchor to reopen it (`appendText` omitted, existing wording
+ * kept as-is) and typing at the caret right after a mark this session placed (`appendText` is the
+ * character just typed, from `DocumentEditor`'s `handleTextInput`).
+ *
+ * Routing both through one function is what stops a highlight that already has committed wording
+ * from growing a *second* `anchorInsert` node sharing its id: the caret's neighboring mark alone
+ * cannot tell "this anchor already has a node" from "it doesn't yet", so only a lookup can. Appends
+ * to the existing node when there is one; otherwise inserts a fresh node right after the mark's own
+ * extent, matching where `addAnchorMark` places its own.
+ */
+export function openAnchorWording(
+  editor: Editor,
+  anchorId: string,
+  appendText = '',
+): string | null {
+  const { state } = editor
+  const insertType = state.schema.nodes[ANCHOR_INSERT_NODE]
+  if (!insertType) return null
+
+  const existing = findAnchorInsert(state.doc, anchorId)
+
+  if (existing) {
+    const openedText = String(existing.node.attrs.text ?? '')
+    const transaction = appendText
+      ? state.tr.setNodeAttribute(existing.pos, 'text', openedText + appendText)
+      : state.tr
+
+    openWordingBox(editor, anchorId, openedText)
+    dispatchAnchorEdit(editor, transaction)
+    return anchorId
+  }
+
+  const span = anchorSpans(state.doc).find((candidate) => candidate.anchor_id === anchorId)
+  if (!span) return null
+
+  const insertNode = insertType.create({ anchorId, text: appendText })
+  const transaction = state.tr.insert(span.to, insertNode)
+  transaction.setSelection(TextSelection.create(transaction.doc, span.to + insertNode.nodeSize))
 
   openWordingBox(editor, anchorId, '')
   dispatchAnchorEdit(editor, transaction)
@@ -362,52 +547,6 @@ export function removeAnchor(editor: Editor, anchorId: string): void {
 }
 
 /**
- * Opens an anchor's wording box for editing — the one mechanism behind both entry points into a
- * wording session: clicking a placed anchor to reopen it (`appendText` omitted, existing wording
- * kept as-is) and typing at the caret right after a mark this session placed (`appendText` is the
- * character just typed, from `DocumentEditor`'s `handleTextInput`).
- *
- * Routing both through one function is what stops a highlight that already has committed wording
- * from growing a *second* `anchorInsert` node sharing its id: the caret's neighboring mark alone
- * cannot tell "this anchor already has a node" from "it doesn't yet", so only a lookup can. Appends
- * to the existing node when there is one; otherwise inserts a fresh node right after the mark's own
- * extent, matching where `addAnchorMark` places its own.
- */
-export function openAnchorWording(
-  editor: Editor,
-  anchorId: string,
-  appendText = '',
-): string | null {
-  const { state } = editor
-  const insertType = state.schema.nodes[ANCHOR_INSERT_NODE]
-  if (!insertType) return null
-
-  const existing = findAnchorInsert(state.doc, anchorId)
-
-  if (existing) {
-    const openedText = String(existing.node.attrs.text ?? '')
-    const transaction = appendText
-      ? state.tr.setNodeAttribute(existing.pos, 'text', openedText + appendText)
-      : state.tr
-
-    openWordingBox(editor, anchorId, openedText)
-    dispatchAnchorEdit(editor, transaction)
-    return anchorId
-  }
-
-  const span = anchorSpans(state.doc).find((candidate) => candidate.anchor_id === anchorId)
-  if (!span) return null
-
-  const insertNode = insertType.create({ anchorId, text: appendText })
-  const transaction = state.tr.insert(span.to, insertNode)
-  transaction.setSelection(TextSelection.create(transaction.doc, span.to + insertNode.nodeSize))
-
-  openWordingBox(editor, anchorId, '')
-  dispatchAnchorEdit(editor, transaction)
-  return anchorId
-}
-
-/**
  * Opens a fresh wording session at `pos` for a bare insertion — an empty caret with nothing
  * pairable before it (`pairableAnchorAt`, `domain/anchors.ts`). Places an `anchorInsert` node
  * carrying `text` as its first character and marks it the open one, so its node view
@@ -504,143 +643,4 @@ export function cancelAnchorInsert(editor: Editor, pos: number): void {
     : editor.state.tr.delete(pos, pos + 1)
 
   dispatchAnchorEdit(editor, transaction)
-}
-
-/** Where one anchor sits in a document, in ProseMirror positions. */
-export interface AnchorSpan {
-  anchor_id: string
-  quote: string
-  from: number
-  to: number
-}
-
-/**
- * The region each anchor occupies, taken as the outermost extent of its pieces.
- *
- * A strike and the wording replacing it are one anchor in two places, adjacent by construction, so
- * one span covering both is the region the anchor is responsible for — and it means deleting the
- * proposed wording counts as disturbing the anchor just as deleting the struck text does.
- */
-export function anchorSpans(doc: ProseMirrorNode): AnchorSpan[] {
-  const spans = new Map<string, AnchorSpan>()
-
-  const extend = (anchorId: string, from: number, to: number, quote: string) => {
-    const existing = spans.get(anchorId)
-    if (!existing) {
-      spans.set(anchorId, { anchor_id: anchorId, quote, from, to })
-      return
-    }
-
-    existing.from = Math.min(existing.from, from)
-    existing.to = Math.max(existing.to, to)
-    existing.quote += quote
-  }
-
-  doc.descendants((node, pos) => {
-    if (node.type.name === ANCHOR_INSERT_NODE) {
-      const anchorId = node.attrs.anchorId
-      if (typeof anchorId === 'string' && anchorId) extend(anchorId, pos, pos + node.nodeSize, '')
-      return false
-    }
-
-    if (!node.isText) return true
-
-    for (const mark of node.marks) {
-      if (mark.type.name !== ANCHOR_MARK) continue
-      const anchorId = mark.attrs.anchorId
-      if (typeof anchorId === 'string' && anchorId) {
-        extend(anchorId, pos, pos + node.nodeSize, node.text ?? '')
-      }
-    }
-
-    return true
-  })
-
-  return [...spans.values()]
-}
-
-/**
- * The individual text-node pieces of one anchor's *mark*, before merging into an outer extent — a
- * mutation (`setAnchorKind`, `removeAnchor`) must act on exactly these, not the outer extent
- * `anchorSpans` reports: a *newer* anchor's `anchorInsert` node can sit inside an *older* anchor's
- * range, and `addMark`/`removeMark` over the whole extent would touch that atom node too.
- *
- * Carries each piece's actual `Mark` instance, not just its type, because the mark's own `excludes:
- * ''` (`extensions.ts`) lets a different anchor's mark legally share a span with this one —
- * `removeMark`/`setAnchorKind` must remove precisely this mark, not every anchor mark ProseMirror
- * finds in the range. Passing the bare mark *type* there instead would strip a different, unrelated
- * anchor's mark out from under it.
- */
-export function anchorMarkRanges(
-  doc: ProseMirrorNode,
-  anchorId: string,
-): { from: number; to: number; mark: Mark }[] {
-  const pieces: { from: number; to: number; mark: Mark }[] = []
-
-  doc.descendants((node, pos) => {
-    if (!node.isText) return true
-    for (const mark of node.marks) {
-      if (mark.type.name === ANCHOR_MARK && mark.attrs.anchorId === anchorId) {
-        pieces.push({ from: pos, to: pos + node.nodeSize, mark })
-      }
-    }
-    return true
-  })
-
-  return pieces
-}
-
-/** The position and node of the `anchorInsert` node carrying `anchorId`, if the document has one. */
-function findAnchorInsert(
-  doc: ProseMirrorNode,
-  anchorId: string,
-): { pos: number; node: ProseMirrorNode } | null {
-  const insertType = doc.type.schema.nodes[ANCHOR_INSERT_NODE]
-  let found: { pos: number; node: ProseMirrorNode } | null = null
-
-  doc.descendants((node, pos) => {
-    if (found) return false
-    if (node.type === insertType && node.attrs.anchorId === anchorId) {
-      found = { pos, node }
-      return false
-    }
-    return true
-  })
-
-  return found
-}
-
-/** One span moved through an edit, and whether that edit changed the text it covers. */
-export interface MappedAnchorSpan extends AnchorSpan {
-  changedInside: boolean
-}
-
-/**
- * Moves each span through an edit's step maps and reports whether any step changed the text under
- * it. Positions come back alongside the judgment because a revision session runs many edits in
- * sequence, each resuming from where the last left off — a caller keeps passing back the spans it
- * was given, one transaction at a time.
- *
- * Walks one map at a time rather than a composed `Mapping`, since each step's replaced range is
- * only comparable to the span as it stood just before that step. The endpoints are mapped with
- * opposite biases, matching the mark's `inclusive: false`, so text typed at an edge stays outside.
- */
-export function mapAnchorSpans(spans: AnchorSpan[], maps: readonly StepMap[]): MappedAnchorSpan[] {
-  return spans.map((span) => {
-    let { from, to } = span
-    let changedInside = false
-    for (const map of maps) {
-      map.forEach((oldStart, oldEnd) => {
-        if (changesInside({ from, to }, { from: oldStart, to: oldEnd })) changedInside = true
-      })
-      from = map.map(from, 1)
-      to = Math.max(from, map.map(to, -1))
-    }
-    return { anchor_id: span.anchor_id, quote: span.quote, from, to, changedInside }
-  })
-}
-
-function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
-  transaction.setMeta(ANCHOR_EDIT_META, true)
-  editor.view.dispatch(transaction)
 }

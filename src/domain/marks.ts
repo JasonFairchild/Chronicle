@@ -74,6 +74,58 @@ function sortByPriority(reasons: readonly MarkReason[]): MarkReason[] {
 }
 
 /**
+ * Appends `mark`, or merges it into the previous mark when it lands within `minGapMs` — what keeps
+ * bolding eight words one at a time from becoming eight stops. The merged mark moves up to the end
+ * of the cluster it now represents, and the reasons union. A manual mark never merges in either
+ * direction: the writer placed it deliberately.
+ */
+function place(marks: AuthoringMark[], mark: AuthoringMark, minGapMs: number): void {
+  if (mark.reasons.length === 0) return
+
+  const last = marks[marks.length - 1]
+  const merges =
+    last !== undefined &&
+    mark.at - last.at < minGapMs &&
+    !last.reasons.includes('manual') &&
+    !mark.reasons.includes('manual')
+
+  if (merges) {
+    last.at = mark.at
+    last.index = mark.index
+    last.reasons = sortByPriority([...last.reasons, ...mark.reasons])
+  } else {
+    marks.push(mark)
+  }
+}
+
+/**
+ * Every reason an edit is worth marking, not a choice between them: one edit can satisfy several,
+ * such as a sentence finished right after a long pause. Empty means nothing to mark.
+ */
+function reasonsFor(
+  edit: EditEvent,
+  paused: boolean,
+  lastMarkAt: number,
+  policy: MarkPolicy,
+): MarkReason[] {
+  const inserted = edit.inserted_text ?? ''
+  const lastChar = inserted.slice(-1)
+  const reasons: MarkReason[] = []
+
+  if (paused) reasons.push('pause')
+  if (edit.is_paste) reasons.push('paste')
+  if (edit.media_changed) reasons.push('media')
+  // The emptiness guard matters: `includes('')` is true for any string.
+  if (lastChar !== '' && policy.punctuation.includes(lastChar)) reasons.push('punctuation')
+  if (policy.triggerPatterns.some((pattern) => pattern.test(inserted))) reasons.push('pattern')
+  if (edit.is_anchor_op) reasons.push('anchor')
+  if (edit.is_formatting) reasons.push('format')
+  if (edit.at - lastMarkAt >= policy.intervalMs) reasons.push('interval')
+
+  return sortByPriority(reasons)
+}
+
+/**
  * Every mark `policy` finds in a session's log, in one pass.
  *
  * `deletion` is the one reason judged in retrospect: a run of deleting edits is marked when it
@@ -117,56 +169,4 @@ export function deriveMarks(
 
   closeDeletionRun()
   return marks
-}
-
-/**
- * Every reason an edit is worth marking, not a choice between them: one edit can satisfy several,
- * such as a sentence finished right after a long pause. Empty means nothing to mark.
- */
-function reasonsFor(
-  edit: EditEvent,
-  paused: boolean,
-  lastMarkAt: number,
-  policy: MarkPolicy,
-): MarkReason[] {
-  const inserted = edit.inserted_text ?? ''
-  const lastChar = inserted.slice(-1)
-  const reasons: MarkReason[] = []
-
-  if (paused) reasons.push('pause')
-  if (edit.is_paste) reasons.push('paste')
-  if (edit.media_changed) reasons.push('media')
-  // The emptiness guard matters: `includes('')` is true for any string.
-  if (lastChar !== '' && policy.punctuation.includes(lastChar)) reasons.push('punctuation')
-  if (policy.triggerPatterns.some((pattern) => pattern.test(inserted))) reasons.push('pattern')
-  if (edit.is_anchor_op) reasons.push('anchor')
-  if (edit.is_formatting) reasons.push('format')
-  if (edit.at - lastMarkAt >= policy.intervalMs) reasons.push('interval')
-
-  return sortByPriority(reasons)
-}
-
-/**
- * Appends `mark`, or merges it into the previous mark when it lands within `minGapMs` — what keeps
- * bolding eight words one at a time from becoming eight stops. The merged mark moves up to the end
- * of the cluster it now represents, and the reasons union. A manual mark never merges in either
- * direction: the writer placed it deliberately.
- */
-function place(marks: AuthoringMark[], mark: AuthoringMark, minGapMs: number): void {
-  if (mark.reasons.length === 0) return
-
-  const last = marks[marks.length - 1]
-  const merges =
-    last !== undefined &&
-    mark.at - last.at < minGapMs &&
-    !last.reasons.includes('manual') &&
-    !mark.reasons.includes('manual')
-
-  if (merges) {
-    last.at = mark.at
-    last.index = mark.index
-    last.reasons = sortByPriority([...last.reasons, ...mark.reasons])
-  } else {
-    marks.push(mark)
-  }
 }

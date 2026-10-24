@@ -45,6 +45,44 @@ export function formatTime(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(iso))
 }
 
+/** A value and its note as "value · note", either alone, or null when neither says anything. */
+function phrase(value: string | null | undefined, note: string | null | undefined): string | null {
+  const main = value?.trim() ?? ''
+  const extra = note?.trim() ?? ''
+
+  if (main && extra) return `${main} · ${extra}`
+  return main || extra || null
+}
+
+/**
+ * A date-only `YYYY-MM-DD` as local text.
+ *
+ * Split into parts rather than handed to `new Date(string)`, which reads a date-only string as UTC
+ * midnight and so renders the day *before* in every negative-offset timezone — the entered date
+ * changing on its way to the screen. Anything not shaped like a day is shown as stored rather than
+ * as "Invalid Date".
+ */
+function formatDay(day: string): string {
+  const [year, month, date] = day.split('-').map(Number)
+  if (!year || !month || !date) return day
+
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
+    new Date(year, month - 1, date),
+  )
+}
+
+/**
+ * A user-supplied day and its freeform time as one phrase — "Jun 12, 1994 · morning". Either half
+ * alone is a legitimate answer, since a remembered "one winter evening" with no date is still worth
+ * keeping.
+ */
+function formatWhen(
+  day: string | null | undefined,
+  timeNote: string | null | undefined,
+): string | null {
+  return phrase(day ? formatDay(day) : null, timeNote)
+}
+
 /** Each date's labelled line, or null when it wasn't given — worded once for cards and pages alike. */
 function dateLines(dates: EntryDates): { happened: string | null; written: string | null } {
   const happened = formatWhen(dates.occurred_at, dates.occurred_time_note)
@@ -81,44 +119,6 @@ export function entryDetailLines(details: EntryDetails): string[] {
   const medium = phrase(details.original_medium, details.original_medium_note)
 
   return present([happened, where && `Where: ${where}`, written, medium && `Written in ${medium}`])
-}
-
-/**
- * A user-supplied day and its freeform time as one phrase — "Jun 12, 1994 · morning". Either half
- * alone is a legitimate answer, since a remembered "one winter evening" with no date is still worth
- * keeping.
- */
-function formatWhen(
-  day: string | null | undefined,
-  timeNote: string | null | undefined,
-): string | null {
-  return phrase(day ? formatDay(day) : null, timeNote)
-}
-
-/** A value and its note as "value · note", either alone, or null when neither says anything. */
-function phrase(value: string | null | undefined, note: string | null | undefined): string | null {
-  const main = value?.trim() ?? ''
-  const extra = note?.trim() ?? ''
-
-  if (main && extra) return `${main} · ${extra}`
-  return main || extra || null
-}
-
-/**
- * A date-only `YYYY-MM-DD` as local text.
- *
- * Split into parts rather than handed to `new Date(string)`, which reads a date-only string as UTC
- * midnight and so renders the day *before* in every negative-offset timezone — the entered date
- * changing on its way to the screen. Anything not shaped like a day is shown as stored rather than
- * as "Invalid Date".
- */
-function formatDay(day: string): string {
-  const [year, month, date] = day.split('-').map(Number)
-  if (!year || !month || !date) return day
-
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
-    new Date(year, month - 1, date),
-  )
 }
 
 /**

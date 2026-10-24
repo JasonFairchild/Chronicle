@@ -57,6 +57,16 @@ export class InMemoryEntryRepository implements EntryRepository {
     return entry ? structuredClone(entry) : null
   }
 
+  private collect(
+    predicate: (entry: Entry) => boolean,
+    sorter: (a: Entry, b: Entry) => number = compareEntries,
+  ): Entry[] {
+    return [...this.entries.values()]
+      .filter(predicate)
+      .sort(sorter)
+      .map((entry) => structuredClone(entry))
+  }
+
   async listRootEntries(): Promise<Entry[]> {
     return this.collect(
       (entry) => entry.relation_type === null,
@@ -121,15 +131,5 @@ export class InMemoryEntryRepository implements EntryRepository {
 
   clear(): void {
     this.entries.clear()
-  }
-
-  private collect(
-    predicate: (entry: Entry) => boolean,
-    sorter: (a: Entry, b: Entry) => number = compareEntries,
-  ): Entry[] {
-    return [...this.entries.values()]
-      .filter(predicate)
-      .sort(sorter)
-      .map((entry) => structuredClone(entry))
   }
 }

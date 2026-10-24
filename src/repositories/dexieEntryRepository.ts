@@ -9,6 +9,16 @@ import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
 import { resolveDatabase, type ChronicleDatabase, type StoredEntry } from './chronicleDatabase'
 import type { EntryRepository } from './entryRepository'
 
+/** Drops the storage-only indexing flag. */
+function stripStorage(entry: StoredEntry): Entry {
+  const { is_root: _is_root, ...rest } = entry
+  return rest
+}
+
+function dedupeById(entries: StoredEntry[]): StoredEntry[] {
+  return [...new Map(entries.map((entry) => [entry.id, entry])).values()]
+}
+
 /**
  * SQLite WASM + OPFS is the preferred long-term adapter (CHRONICLE_PLAN.md); Dexie ships first
  * because it needs no cross-origin isolation headers and proves the same interface can be backed
@@ -143,14 +153,4 @@ export class DexieEntryRepository implements EntryRepository {
   async dispose(): Promise<void> {
     await this.db.delete()
   }
-}
-
-/** Drops the storage-only indexing flag. */
-function stripStorage(entry: StoredEntry): Entry {
-  const { is_root: _is_root, ...rest } = entry
-  return rest
-}
-
-function dedupeById(entries: StoredEntry[]): StoredEntry[] {
-  return [...new Map(entries.map((entry) => [entry.id, entry])).values()]
 }

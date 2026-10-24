@@ -109,6 +109,70 @@ interface ActiveSession {
   flushing: Promise<void> | null
 }
 
+/** An existing entry's document as a session finds it: its current version. */
+function startingDocument(entry: AggregatedEntry): Omit<DraftDocument, 'events'> {
+  return {
+    base_version_id: currentVersionId(entry),
+    base_content: entry.content,
+    content: entry.content,
+  }
+}
+
+/**
+ * A new session's snapshot. Revising starts from a copy of the current version, so whatever the
+ * writer leaves alone saves unchanged. Each `base_*` starts equal to what it describes and never
+ * moves: it is what a trace replays from, and for the parent also what `anchorsPlacedSince` diffs
+ * against.
+ */
+function startingSnapshot(
+  start: BeginDraftInput,
+  sessionId: string,
+  startedAt: string,
+): DraftSnapshot {
+  const header = { session_id: sessionId, started_at: startedAt, updated_at: startedAt }
+
+  switch (start.kind) {
+    case 'new_root':
+      return { ...header, kind: start.kind, entry: newDraftEntry() }
+    case 'new_connection':
+      return {
+        ...header,
+        kind: start.kind,
+        parent_id: start.parent_id,
+        target_id: start.target_id,
+        entry: newDraftEntry(),
+      }
+    case 'new_related':
+      return {
+        ...header,
+        kind: start.kind,
+        parent_id: start.parent.id,
+        entry: newDraftEntry(),
+        parent: startingDocument(start.parent),
+      }
+    case 'revision':
+      return {
+        ...header,
+        kind: start.kind,
+        parent_id: start.parent.id,
+        entry: { ...startingDocument(start.parent), ...draftFieldsOf(start.parent) },
+      }
+  }
+}
+
+/** Whether a draft holds an entry against other drafts while open (PRODUCT.md §4.8). */
+function claimsEntry(draft: DraftSnapshot): boolean {
+  return versionsRevisedBy(draft).length > 0
+}
+
+/** How long each of a draft's event logs is. */
+function eventCounts(draft: Draft): PersistedEvents {
+  return {
+    entry: draft.entry.events.length,
+    parent: draft.kind === 'new_related' ? draft.parent.events.length : 0,
+  }
+}
+
 export const useDraftsStore = defineStore('drafts', () => {
   const drafts = shallowRef<DraftSnapshot[]>([])
   const error = ref<string | null>(null)
@@ -121,42 +185,18 @@ export const useDraftsStore = defineStore('drafts', () => {
   let adopting: Promise<void> | null = null
 
   /**
-   * Opens a session. One for a new entry writes nothing yet: a composer someone opened and walked
-   * away from is not a draft, and a drafts list full of empty rows would defeat the point of having one.
-   * A session that could revise an entry is written at once instead, as a claim every tab can see
-   * before a word is typed, so another tab resumes it rather than beginning a second draft on the
-   * same version. `abandonDraft` releases it if nothing comes of it.
+   * The drafts list. It exists because a draft can live indefinitely, so without somewhere to see
+   * them, an unsealed session would be stranded where nothing in the app ever mentions it again.
    */
-  function beginDraft(start: BeginDraftInput): string {
-    const sessionId = newEntryId()
-    const snapshot = startingSnapshot(start, sessionId, newEntryTimestamp())
-    const entry = open(withEvents(snapshot, { entry: [], parent: [] }), false)
+  async function loadDrafts(): Promise<void> {
+    error.value = null
 
-    active.set(sessionId, entry)
-    if (claimsEntry(snapshot)) {
-      entry.dirty = true
-      void flush(sessionId)
+    try {
+      drafts.value = await draftRepository.list()
+    } catch (err) {
+      error.value = toErrorMessage(err, 'Failed to load drafts')
+      throw err
     }
-    return sessionId
-  }
-
-  /**
-   * Reopens a draft with its event logs intact, always as disk has it: another tab may have
-   * carried it on since this one last held it. Anything this tab still holds is written first, so
-   * the read includes it; if that write fails, what this tab holds is all there is.
-   */
-  async function resumeDraft(sessionId: string): Promise<Draft | null> {
-    if (active.has(sessionId)) await letGo(sessionId)
-    const unwritten = active.get(sessionId)
-    if (unwritten) return structuredClone(materialize(unwritten))
-
-    const draft = await draftRepository.getById(sessionId)
-    if (!draft) return null
-
-    // Nothing new to write until this session is typed in, but the row is already on disk, so
-    // emptying it later has something to delete.
-    active.set(sessionId, open(draft, true))
-    return structuredClone(draft)
   }
 
   /** Holds a draft open: its snapshot, and a recorder per document carrying on from its log. */
@@ -188,90 +228,11 @@ export const useDraftsStore = defineStore('drafts', () => {
     }
   }
 
-  /**
-   * Appends a change into a `TraceRecorder` — shared by `recordChange` (the entry's own prose) and
-   * `recordParentChange` (the parent's provisional document in an anchor-mode session), so both
-   * streams are recorded exactly the same way. Anchor mode limits what the *editor* can produce
-   * (ENTRY_MODEL.md, "Two creation experiences, kept separate"); this is the recorder that takes
-   * whatever it does produce, and it has no notion of which mode a change came from.
-   *
-   * A change with no steps did not touch the traced document — a retitling is the one that does
-   * this for `recordChange`, since the title is a plain field beside the editor rather than part of
-   * it. It is skipped entirely: an event for it would let a policy mark a stream for something that
-   * never entered it.
-   */
-  function recordInto(recorder: TraceRecorder, change: DraftChange): void {
-    if (change.steps.length === 0) return
+  function cancelFlush(entry: ActiveSession): void {
+    if (entry.timer === null) return
 
-    recorder.record(change)
-  }
-
-  /** Swaps in a session's next snapshot, stamped now, and schedules the flush that writes it. */
-  function replaceSnapshot(sessionId: string, entry: ActiveSession, next: DraftSnapshot): void {
-    entry.draft = { ...next, updated_at: newEntryTimestamp() }
-    entry.dirty = true
-    scheduleFlush(sessionId)
-  }
-
-  /**
-   * Records a change and schedules a flush. The buffer is append-only while the session runs:
-   * events accumulate and nothing already recorded is rewritten, so no authoring history is lost by
-   * design. Only the snapshot moves.
-   */
-  function recordChange(sessionId: string, change: DraftChange): void {
-    const entry = requireActive(sessionId)
-    recordInto(entry.recorder, change)
-
-    const { draft } = entry
-    replaceSnapshot(sessionId, entry, {
-      ...draft,
-      entry: { ...draft.entry, content: change.content, title: change.title },
-    })
-  }
-
-  /**
-   * Records a change to the **parent's** provisional document, for an anchor-mode session only —
-   * an ordinary `DraftChange` like the entry's own, against the session's second document. Which
-   * anchors the session has placed is nowhere in here: it is the difference between
-   * `parent.base_content` and `parent.content` (`anchorsPlacedSince`), read when someone asks.
-   */
-  function recordParentChange(sessionId: string, change: DraftChange): void {
-    const entry = requireActive(sessionId)
-    const { draft, parentRecorder } = entry
-    if (draft.kind !== 'new_related' || !parentRecorder) {
-      throw new Error('recordParentChange called on a session with no parent document')
-    }
-
-    recordInto(parentRecorder, change)
-
-    replaceSnapshot(sessionId, entry, {
-      ...draft,
-      parent: { ...draft.parent, content: change.content },
-    })
-  }
-
-  /**
-   * Records the details set alongside the words. Copied into plain objects rather than stored by
-   * reference: these arrive from a form's reactive state, and a Vue proxy does not survive the
-   * `structuredClone` on the way into the repository.
-   */
-  function recordDetails(sessionId: string, details: EntryDetails): void {
-    const entry = requireActive(sessionId)
-    const { draft } = entry
-
-    replaceSnapshot(sessionId, entry, {
-      ...draft,
-      entry: { ...draft.entry, ...entryDetailsOf(details) },
-    })
-  }
-
-  /** A mark the writer asked for, rather than one a policy finds. */
-  function addMark(sessionId: string): void {
-    const entry = requireActive(sessionId)
-
-    entry.recorder.mark()
-    entry.dirty = true
-    scheduleFlush(sessionId)
+    clearTimeout(entry.timer)
+    entry.timer = null
   }
 
   /**
@@ -288,6 +249,27 @@ export const useDraftsStore = defineStore('drafts', () => {
       entry: entry.recorder.events,
       parent: entry.parentRecorder?.events ?? [],
     })
+  }
+
+  /**
+   * Replaces an open session with what disk holds, or closes it if disk holds nothing, because
+   * another tab has written it. The session showing it catches up through `elsewhere`. `unsaved`
+   * is the document this tab had that disk didn't take.
+   */
+  async function adoptStored(sessionId: string, unsaved: string | null): Promise<void> {
+    const current = active.get(sessionId)
+    if (current) cancelFlush(current)
+
+    try {
+      const stored = await draftRepository.getById(sessionId)
+      if (stored) active.set(sessionId, open(stored, true))
+      else active.delete(sessionId)
+
+      const count = (elsewhere.value[sessionId]?.count ?? 0) + 1
+      elsewhere.value = { ...elsewhere.value, [sessionId]: { count, gone: !stored, unsaved } }
+    } catch (err) {
+      error.value = toErrorMessage(err, 'Failed to reload draft')
+    }
   }
 
   /**
@@ -366,6 +348,205 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
+   * Opens a session. One for a new entry writes nothing yet: a composer someone opened and walked
+   * away from is not a draft, and a drafts list full of empty rows would defeat the point of having one.
+   * A session that could revise an entry is written at once instead, as a claim every tab can see
+   * before a word is typed, so another tab resumes it rather than beginning a second draft on the
+   * same version. `abandonDraft` releases it if nothing comes of it.
+   */
+  function beginDraft(start: BeginDraftInput): string {
+    const sessionId = newEntryId()
+    const snapshot = startingSnapshot(start, sessionId, newEntryTimestamp())
+    const entry = open(withEvents(snapshot, { entry: [], parent: [] }), false)
+
+    active.set(sessionId, entry)
+    if (claimsEntry(snapshot)) {
+      entry.dirty = true
+      void flush(sessionId)
+    }
+    return sessionId
+  }
+
+  /** Writes what a session holds, then drops it from memory. Returns it, or null if it was kept. */
+  async function letGo(sessionId: string): Promise<ActiveSession | null> {
+    await flush(sessionId)
+
+    const entry = active.get(sessionId)
+    if (!entry || entry.dirty) return null
+    active.delete(sessionId)
+    return entry
+  }
+
+  /**
+   * Reopens a draft with its event logs intact, always as disk has it: another tab may have
+   * carried it on since this one last held it. Anything this tab still holds is written first, so
+   * the read includes it; if that write fails, what this tab holds is all there is.
+   */
+  async function resumeDraft(sessionId: string): Promise<Draft | null> {
+    if (active.has(sessionId)) await letGo(sessionId)
+    const unwritten = active.get(sessionId)
+    if (unwritten) return structuredClone(materialize(unwritten))
+
+    const draft = await draftRepository.getById(sessionId)
+    if (!draft) return null
+
+    // Nothing new to write until this session is typed in, but the row is already on disk, so
+    // emptying it later has something to delete.
+    active.set(sessionId, open(draft, true))
+    return structuredClone(draft)
+  }
+
+  /** The in-progress snapshot, without waiting for it to reach disk. */
+  function currentDraft(sessionId: string): Draft | null {
+    const entry = active.get(sessionId)
+    return entry ? structuredClone(materialize(entry)) : null
+  }
+
+  /**
+   * Appends a change into a `TraceRecorder` — shared by `recordChange` (the entry's own prose) and
+   * `recordParentChange` (the parent's provisional document in an anchor-mode session), so both
+   * streams are recorded exactly the same way. Anchor mode limits what the *editor* can produce
+   * (ENTRY_MODEL.md, "Two creation experiences, kept separate"); this is the recorder that takes
+   * whatever it does produce, and it has no notion of which mode a change came from.
+   *
+   * A change with no steps did not touch the traced document — a retitling is the one that does
+   * this for `recordChange`, since the title is a plain field beside the editor rather than part of
+   * it. It is skipped entirely: an event for it would let a policy mark a stream for something that
+   * never entered it.
+   */
+  function recordInto(recorder: TraceRecorder, change: DraftChange): void {
+    if (change.steps.length === 0) return
+
+    recorder.record(change)
+  }
+
+  function requireActive(sessionId: string): ActiveSession {
+    const entry = active.get(sessionId)
+    if (!entry) {
+      throw new Error(`No open draft session ${sessionId}`)
+    }
+    return entry
+  }
+
+  function scheduleFlush(sessionId: string): void {
+    const entry = requireActive(sessionId)
+    if (entry.timer !== null) return
+
+    // A throttle, not a debounce: later keystrokes don't restart the timer, so continuous typing
+    // still writes every DRAFT_FLUSH_MS rather than waiting for a pause that may never come.
+    entry.timer = setTimeout(() => {
+      entry.timer = null
+      void flush(sessionId)
+    }, DRAFT_FLUSH_MS)
+  }
+
+  /** Swaps in a session's next snapshot, stamped now, and schedules the flush that writes it. */
+  function replaceSnapshot(sessionId: string, entry: ActiveSession, next: DraftSnapshot): void {
+    entry.draft = { ...next, updated_at: newEntryTimestamp() }
+    entry.dirty = true
+    scheduleFlush(sessionId)
+  }
+
+  /**
+   * Records a change and schedules a flush. The buffer is append-only while the session runs:
+   * events accumulate and nothing already recorded is rewritten, so no authoring history is lost by
+   * design. Only the snapshot moves.
+   */
+  function recordChange(sessionId: string, change: DraftChange): void {
+    const entry = requireActive(sessionId)
+    recordInto(entry.recorder, change)
+
+    const { draft } = entry
+    replaceSnapshot(sessionId, entry, {
+      ...draft,
+      entry: { ...draft.entry, content: change.content, title: change.title },
+    })
+  }
+
+  /**
+   * Records a change to the **parent's** provisional document, for an anchor-mode session only —
+   * an ordinary `DraftChange` like the entry's own, against the session's second document. Which
+   * anchors the session has placed is nowhere in here: it is the difference between
+   * `parent.base_content` and `parent.content` (`anchorsPlacedSince`), read when someone asks.
+   */
+  function recordParentChange(sessionId: string, change: DraftChange): void {
+    const entry = requireActive(sessionId)
+    const { draft, parentRecorder } = entry
+    if (draft.kind !== 'new_related' || !parentRecorder) {
+      throw new Error('recordParentChange called on a session with no parent document')
+    }
+
+    recordInto(parentRecorder, change)
+
+    replaceSnapshot(sessionId, entry, {
+      ...draft,
+      parent: { ...draft.parent, content: change.content },
+    })
+  }
+
+  /**
+   * Records the details set alongside the words. Copied into plain objects rather than stored by
+   * reference: these arrive from a form's reactive state, and a Vue proxy does not survive the
+   * `structuredClone` on the way into the repository.
+   */
+  function recordDetails(sessionId: string, details: EntryDetails): void {
+    const entry = requireActive(sessionId)
+    const { draft } = entry
+
+    replaceSnapshot(sessionId, entry, {
+      ...draft,
+      entry: { ...draft.entry, ...entryDetailsOf(details) },
+    })
+  }
+
+  /** A mark the writer asked for, rather than one a policy finds. */
+  function addMark(sessionId: string): void {
+    const entry = requireActive(sessionId)
+
+    entry.recorder.mark()
+    entry.dirty = true
+    scheduleFlush(sessionId)
+  }
+
+  /** Writes everything pending now, for a tab being left: whatever opens a draft next reads disk. */
+  async function flushAll(): Promise<void> {
+    await Promise.all([...active.keys()].map((sessionId) => flush(sessionId)))
+  }
+
+  async function catchUpWithDisk(): Promise<void> {
+    const open = [...active.entries()].filter(([, entry]) => entry.persisted)
+
+    // A write of this tab's still landing would read as someone else's.
+    await Promise.all(open.map(([, entry]) => entry.flushing?.catch(() => {})))
+
+    try {
+      drafts.value = await draftRepository.list()
+      const stored = new Map(drafts.value.map((row) => [row.session_id, row.updated_at]))
+      for (const [sessionId, entry] of open) {
+        if (stored.get(sessionId) === entry.storedAt) continue
+        await adoptStored(sessionId, entry.dirty ? entry.draft.entry.content : null)
+      }
+    } catch (err) {
+      error.value = toErrorMessage(err, 'Failed to check drafts')
+    }
+  }
+
+  /**
+   * Catches every open session up with disk, for a tab being returned to: a draft another tab has
+   * written since is reloaded, and one sealed or discarded there is closed. Only sessions already
+   * on disk are asked about; one never written can't have been opened anywhere else. One read of
+   * the snapshots covers them all, since drafts are few and none of their logs are needed to tell,
+   * and it refreshes the drafts list too, so an entry another tab has claimed offers its draft.
+   */
+  function adoptChangesElsewhere(): Promise<void> {
+    // A return fires visibility and focus together; one check answers both.
+    adopting ??= catchUpWithDisk().finally(() => {
+      adopting = null
+    })
+    return adopting
+  }
+
+  /**
    * The explicit user action that ends a session: the immutable entries holding the final snapshot
    * and the completed traces, written in the same transaction that removes the draft. Never an idle
    * timeout — until someone seals, the work stays a draft, recoverable and absent from every
@@ -414,29 +595,6 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * Called when whatever opened a session goes away — a composer unmounted, a page navigated from
-   * — without the user explicitly saving or discarding. Real work is left exactly as `flush` leaves
-   * it: a resumable draft, since closing a tab must not discard it. The session itself is let go
-   * once everything typed is on disk, so resuming later reads it back from there, along with
-   * anything another tab added since. A failed write keeps it, or its words would go with it. A
-   * claim on an entry that nothing came of is released, so the entry is free to revise again.
-   */
-  async function abandonDraft(sessionId: string): Promise<void> {
-    const entry = await letGo(sessionId)
-    if (entry && claimsEntry(entry.draft)) await releaseIfEmpty(sessionId)
-  }
-
-  /** Writes what a session holds, then drops it from memory. Returns it, or null if it was kept. */
-  async function letGo(sessionId: string): Promise<ActiveSession | null> {
-    await flush(sessionId)
-
-    const entry = active.get(sessionId)
-    if (!entry || entry.dirty) return null
-    active.delete(sessionId)
-    return entry
-  }
-
-  /**
    * Removes a claim that holds no work. Judged by what disk holds rather than this tab's copy:
    * another tab may have resumed the draft and written in it since.
    */
@@ -452,63 +610,17 @@ export const useDraftsStore = defineStore('drafts', () => {
     }
   }
 
-  /** Writes everything pending now, for a tab being left: whatever opens a draft next reads disk. */
-  async function flushAll(): Promise<void> {
-    await Promise.all([...active.keys()].map((sessionId) => flush(sessionId)))
-  }
-
   /**
-   * Catches every open session up with disk, for a tab being returned to: a draft another tab has
-   * written since is reloaded, and one sealed or discarded there is closed. Only sessions already
-   * on disk are asked about; one never written can't have been opened anywhere else. One read of
-   * the snapshots covers them all, since drafts are few and none of their logs are needed to tell,
-   * and it refreshes the drafts list too, so an entry another tab has claimed offers its draft.
+   * Called when whatever opened a session goes away — a composer unmounted, a page navigated from
+   * — without the user explicitly saving or discarding. Real work is left exactly as `flush` leaves
+   * it: a resumable draft, since closing a tab must not discard it. The session itself is let go
+   * once everything typed is on disk, so resuming later reads it back from there, along with
+   * anything another tab added since. A failed write keeps it, or its words would go with it. A
+   * claim on an entry that nothing came of is released, so the entry is free to revise again.
    */
-  function adoptChangesElsewhere(): Promise<void> {
-    // A return fires visibility and focus together; one check answers both.
-    adopting ??= catchUpWithDisk().finally(() => {
-      adopting = null
-    })
-    return adopting
-  }
-
-  async function catchUpWithDisk(): Promise<void> {
-    const open = [...active.entries()].filter(([, entry]) => entry.persisted)
-
-    // A write of this tab's still landing would read as someone else's.
-    await Promise.all(open.map(([, entry]) => entry.flushing?.catch(() => {})))
-
-    try {
-      drafts.value = await draftRepository.list()
-      const stored = new Map(drafts.value.map((row) => [row.session_id, row.updated_at]))
-      for (const [sessionId, entry] of open) {
-        if (stored.get(sessionId) === entry.storedAt) continue
-        await adoptStored(sessionId, entry.dirty ? entry.draft.entry.content : null)
-      }
-    } catch (err) {
-      error.value = toErrorMessage(err, 'Failed to check drafts')
-    }
-  }
-
-  /**
-   * Replaces an open session with what disk holds, or closes it if disk holds nothing, because
-   * another tab has written it. The session showing it catches up through `elsewhere`. `unsaved`
-   * is the document this tab had that disk didn't take.
-   */
-  async function adoptStored(sessionId: string, unsaved: string | null): Promise<void> {
-    const current = active.get(sessionId)
-    if (current) cancelFlush(current)
-
-    try {
-      const stored = await draftRepository.getById(sessionId)
-      if (stored) active.set(sessionId, open(stored, true))
-      else active.delete(sessionId)
-
-      const count = (elsewhere.value[sessionId]?.count ?? 0) + 1
-      elsewhere.value = { ...elsewhere.value, [sessionId]: { count, gone: !stored, unsaved } }
-    } catch (err) {
-      error.value = toErrorMessage(err, 'Failed to reload draft')
-    }
+  async function abandonDraft(sessionId: string): Promise<void> {
+    const entry = await letGo(sessionId)
+    if (entry && claimsEntry(entry.draft)) await releaseIfEmpty(sessionId)
   }
 
   /** Throws the session away. The one thing that ever removes work, and only on request. */
@@ -526,135 +638,23 @@ export const useDraftsStore = defineStore('drafts', () => {
     await loadDrafts()
   }
 
-  /**
-   * The drafts list. It exists because a draft can live indefinitely, so without somewhere to see
-   * them, an unsealed session would be stranded where nothing in the app ever mentions it again.
-   */
-  async function loadDrafts(): Promise<void> {
-    error.value = null
-
-    try {
-      drafts.value = await draftRepository.list()
-    } catch (err) {
-      error.value = toErrorMessage(err, 'Failed to load drafts')
-      throw err
-    }
-  }
-
-  /** The in-progress snapshot, without waiting for it to reach disk. */
-  function currentDraft(sessionId: string): Draft | null {
-    const entry = active.get(sessionId)
-    return entry ? structuredClone(materialize(entry)) : null
-  }
-
-  function scheduleFlush(sessionId: string): void {
-    const entry = requireActive(sessionId)
-    if (entry.timer !== null) return
-
-    // A throttle, not a debounce: later keystrokes don't restart the timer, so continuous typing
-    // still writes every DRAFT_FLUSH_MS rather than waiting for a pause that may never come.
-    entry.timer = setTimeout(() => {
-      entry.timer = null
-      void flush(sessionId)
-    }, DRAFT_FLUSH_MS)
-  }
-
-  function cancelFlush(entry: ActiveSession): void {
-    if (entry.timer === null) return
-
-    clearTimeout(entry.timer)
-    entry.timer = null
-  }
-
-  function requireActive(sessionId: string): ActiveSession {
-    const entry = active.get(sessionId)
-    if (!entry) {
-      throw new Error(`No open draft session ${sessionId}`)
-    }
-    return entry
-  }
-
   return {
     drafts,
     error,
     elsewhere,
+    loadDrafts,
+    flush,
     beginDraft,
     resumeDraft,
+    currentDraft,
     recordChange,
     recordParentChange,
     recordDetails,
     addMark,
-    flush,
     flushAll,
     adoptChangesElsewhere,
-    abandonDraft,
     sealDraft,
+    abandonDraft,
     discardDraft,
-    loadDrafts,
-    currentDraft,
   }
 })
-
-/**
- * A new session's snapshot. Revising starts from a copy of the current version, so whatever the
- * writer leaves alone saves unchanged. Each `base_*` starts equal to what it describes and never
- * moves: it is what a trace replays from, and for the parent also what `anchorsPlacedSince` diffs
- * against.
- */
-function startingSnapshot(
-  start: BeginDraftInput,
-  sessionId: string,
-  startedAt: string,
-): DraftSnapshot {
-  const header = { session_id: sessionId, started_at: startedAt, updated_at: startedAt }
-
-  switch (start.kind) {
-    case 'new_root':
-      return { ...header, kind: start.kind, entry: newDraftEntry() }
-    case 'new_connection':
-      return {
-        ...header,
-        kind: start.kind,
-        parent_id: start.parent_id,
-        target_id: start.target_id,
-        entry: newDraftEntry(),
-      }
-    case 'new_related':
-      return {
-        ...header,
-        kind: start.kind,
-        parent_id: start.parent.id,
-        entry: newDraftEntry(),
-        parent: startingDocument(start.parent),
-      }
-    case 'revision':
-      return {
-        ...header,
-        kind: start.kind,
-        parent_id: start.parent.id,
-        entry: { ...startingDocument(start.parent), ...draftFieldsOf(start.parent) },
-      }
-  }
-}
-
-/** Whether a draft holds an entry against other drafts while open (PRODUCT.md §4.8). */
-function claimsEntry(draft: DraftSnapshot): boolean {
-  return versionsRevisedBy(draft).length > 0
-}
-
-/** An existing entry's document as a session finds it: its current version. */
-function startingDocument(entry: AggregatedEntry): Omit<DraftDocument, 'events'> {
-  return {
-    base_version_id: currentVersionId(entry),
-    base_content: entry.content,
-    content: entry.content,
-  }
-}
-
-/** How long each of a draft's event logs is. */
-function eventCounts(draft: Draft): PersistedEvents {
-  return {
-    entry: draft.entry.events.length,
-    parent: draft.kind === 'new_related' ? draft.parent.events.length : 0,
-  }
-}

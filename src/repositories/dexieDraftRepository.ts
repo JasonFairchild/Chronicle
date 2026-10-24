@@ -11,6 +11,30 @@ import { resolveDatabase, type ChronicleDatabase, type StoredDraftEvent } from '
 import { DexieEntryRepository } from './dexieEntryRepository'
 import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
 
+function eventRows(
+  sessionId: string,
+  document: DraftDocumentRole,
+  events: AuthoringEvent[],
+  persistedCount: number,
+): StoredDraftEvent[] {
+  return events.slice(persistedCount).map((event, i) => ({
+    session_id: sessionId,
+    document,
+    index: persistedCount + i,
+    event,
+  }))
+}
+
+function reassemble(snapshot: DraftSnapshot, rows: StoredDraftEvent[]): Draft {
+  const byDocument = (document: DraftDocumentRole) =>
+    rows
+      .filter((row) => row.document === document)
+      .sort((a, b) => a.index - b.index)
+      .map((row) => row.event)
+
+  return withEvents(snapshot, { entry: byDocument('entry'), parent: byDocument('parent') })
+}
+
 /**
  * Drafts on disk, not in memory. That is the whole reason a crash costs nothing: every scheduled
  * flush lands in the same local-first store the entries use, so a closed laptop loses at most the
@@ -60,6 +84,10 @@ export class DexieDraftRepository implements DraftRepository {
     })
   }
 
+  private async eventsFor(sessionId: string): Promise<StoredDraftEvent[]> {
+    return this.db.draftEvents.where('session_id').equals(sessionId).toArray()
+  }
+
   async getById(sessionId: string): Promise<Draft | null> {
     const snapshot = await this.db.drafts.get(sessionId)
     if (!snapshot) return null
@@ -97,36 +125,8 @@ export class DexieDraftRepository implements DraftRepository {
     })
   }
 
-  private async eventsFor(sessionId: string): Promise<StoredDraftEvent[]> {
-    return this.db.draftEvents.where('session_id').equals(sessionId).toArray()
-  }
-
   /** Closes this instance's connection without deleting the database. */
   close(): void {
     this.db.close()
   }
-}
-
-function eventRows(
-  sessionId: string,
-  document: DraftDocumentRole,
-  events: AuthoringEvent[],
-  persistedCount: number,
-): StoredDraftEvent[] {
-  return events.slice(persistedCount).map((event, i) => ({
-    session_id: sessionId,
-    document,
-    index: persistedCount + i,
-    event,
-  }))
-}
-
-function reassemble(snapshot: DraftSnapshot, rows: StoredDraftEvent[]): Draft {
-  const byDocument = (document: DraftDocumentRole) =>
-    rows
-      .filter((row) => row.document === document)
-      .sort((a, b) => a.index - b.index)
-      .map((row) => row.event)
-
-  return withEvents(snapshot, { entry: byDocument('entry'), parent: byDocument('parent') })
 }

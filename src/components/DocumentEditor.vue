@@ -203,6 +203,55 @@ function anchorMarkupAttr(document: EntryDocument): Record<string, string> {
  */
 const liveRegionMessage = ref('')
 
+/**
+ * The text a change added, for the mark policy's punctuation and pattern checks. The steps remain
+ * the authoritative record of what happened.
+ */
+function insertedTextOf(transaction: Transaction): string {
+  let inserted = ''
+
+  for (const step of transaction.steps) {
+    const slice = (
+      step as {
+        slice?: {
+          content: {
+            size: number
+            textBetween: (from: number, to: number, separator?: string) => string
+          }
+        }
+      }
+    ).slice
+    if (slice) inserted += slice.content.textBetween(0, slice.content.size, '')
+  }
+
+  return inserted
+}
+
+/**
+ * Characters this change removed, for the deletion runs `deriveMarks` finds. Measured against the
+ * document each step saw *before* it applied (`transaction.docs[i]`), not the flattened text
+ * before and after: a selection replaced by something longer would net
+ * positive there, missing the destructive edit it actually was, and an anchor op would misregister
+ * as one too, which the non-destructive invariant forbids.
+ *
+ * Filtered to `stepType === 'replace'` — a `replaceAround` (wrapping a paragraph in a list) spans
+ * the whole block with its content reinserted through the gap, and naive arithmetic would report
+ * the entire paragraph as deleted. `textBetween` returns 0 for an `anchorInsert` node on its own,
+ * since it is an atom carrying its text as an attribute rather than as document text.
+ */
+function removedTextOf(transaction: Transaction): number {
+  let removed = 0
+
+  transaction.steps.forEach((step, i) => {
+    if (step.toJSON().stepType !== 'replace') return
+
+    const { from, to } = step as unknown as { from: number; to: number }
+    removed += transaction.docs[i]!.textBetween(from, to, '').length
+  })
+
+  return removed
+}
+
 const editor = useEditor({
   // In anchor mode, `entryExtensions` installs the guard that lets through only the anchor
   // commands below and undo/redo of them — see `isAnchorEdit`. That is what makes "no related entry
@@ -406,55 +455,6 @@ function focusBody(): void {
 }
 
 /**
- * The text a change added, for the mark policy's punctuation and pattern checks. The steps remain
- * the authoritative record of what happened.
- */
-function insertedTextOf(transaction: Transaction): string {
-  let inserted = ''
-
-  for (const step of transaction.steps) {
-    const slice = (
-      step as {
-        slice?: {
-          content: {
-            size: number
-            textBetween: (from: number, to: number, separator?: string) => string
-          }
-        }
-      }
-    ).slice
-    if (slice) inserted += slice.content.textBetween(0, slice.content.size, '')
-  }
-
-  return inserted
-}
-
-/**
- * Characters this change removed, for the deletion runs `deriveMarks` finds. Measured against the
- * document each step saw *before* it applied (`transaction.docs[i]`), not the flattened text
- * before and after: a selection replaced by something longer would net
- * positive there, missing the destructive edit it actually was, and an anchor op would misregister
- * as one too, which the non-destructive invariant forbids.
- *
- * Filtered to `stepType === 'replace'` — a `replaceAround` (wrapping a paragraph in a list) spans
- * the whole block with its content reinserted through the gap, and naive arithmetic would report
- * the entire paragraph as deleted. `textBetween` returns 0 for an `anchorInsert` node on its own,
- * since it is an atom carrying its text as an attribute rather than as document text.
- */
-function removedTextOf(transaction: Transaction): number {
-  let removed = 0
-
-  transaction.steps.forEach((step, i) => {
-    if (step.toJSON().stepType !== 'replace') return
-
-    const { from, to } = step as unknown as { from: number; to: number }
-    removed += transaction.docs[i]!.textBetween(from, to, '').length
-  })
-
-  return removed
-}
-
-/**
  * `AnchorMenu`'s one entry point back into the editor. The range is read explicitly rather than
  * left to `markAnchor`'s own default, because the button that calls this lives in a menu whose
  * own controls can hold focus — see `anchorCommands.ts`'s note on why the range is an explicit,
@@ -471,6 +471,71 @@ function handleAnchorMark(kind: AnchorKind): void {
 
 const linkOpen = ref(false)
 const linkUrl = ref('')
+
+const moreOpen = ref(false)
+const moreToggle = ref<HTMLButtonElement | null>(null)
+const morePanel = ref<HTMLElement | null>(null)
+
+function toggleMore(): void {
+  moreOpen.value = !moreOpen.value
+  if (moreOpen.value) linkOpen.value = false
+}
+
+function closeMore(returnFocus: boolean): void {
+  moreOpen.value = false
+  if (returnFocus) moreToggle.value?.focus()
+}
+
+function handleDocumentPointerDown(event: PointerEvent): void {
+  if (!moreOpen.value) return
+  const target = event.target as Node
+  if (moreToggle.value?.contains(target) || morePanel.value?.contains(target)) return
+  moreOpen.value = false
+}
+
+onMounted(() => document.addEventListener('pointerdown', handleDocumentPointerDown))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', handleDocumentPointerDown))
+
+function clearFormatting(): void {
+  editor.value?.chain().focus().unsetAllMarks().clearNodes().run()
+  closeMore(false)
+}
+
+function triggerAddImage(): void {
+  fileInput.value?.click()
+  closeMore(false)
+}
+
+/** Seeded from the link under the cursor, so clicking Link on an existing one edits it. */
+function openLink(): void {
+  if (linkOpen.value) {
+    linkOpen.value = false
+    return
+  }
+
+  linkUrl.value = (editor.value?.getAttributes('link').href as string | undefined) ?? ''
+  linkOpen.value = true
+  moreOpen.value = false
+}
+
+/**
+ * Applies to the whole link when the caret merely sits inside one, which is what a reader means by
+ * "change this link". An empty address removes it instead, so the field doubles as the way out.
+ * The href itself is left to the Link extension, which rejects protocols it does not allow.
+ */
+function applyLink(): void {
+  const href = linkUrl.value.trim()
+  const chain = editor.value?.chain().focus().extendMarkRange('link')
+  if (!chain) return
+
+  if (href) {
+    chain.setLink({ href }).run()
+  } else {
+    chain.unsetLink().run()
+  }
+
+  linkOpen.value = false
+}
 
 /** One icon button in the toolbar. `active` is omitted for commands that are not a state to be in. */
 interface ToolbarAction {
@@ -595,71 +660,6 @@ function setTextStyle(event: Event): void {
     default:
       chain.setParagraph().run()
   }
-}
-
-const moreOpen = ref(false)
-const moreToggle = ref<HTMLButtonElement | null>(null)
-const morePanel = ref<HTMLElement | null>(null)
-
-function toggleMore(): void {
-  moreOpen.value = !moreOpen.value
-  if (moreOpen.value) linkOpen.value = false
-}
-
-function closeMore(returnFocus: boolean): void {
-  moreOpen.value = false
-  if (returnFocus) moreToggle.value?.focus()
-}
-
-function handleDocumentPointerDown(event: PointerEvent): void {
-  if (!moreOpen.value) return
-  const target = event.target as Node
-  if (moreToggle.value?.contains(target) || morePanel.value?.contains(target)) return
-  moreOpen.value = false
-}
-
-onMounted(() => document.addEventListener('pointerdown', handleDocumentPointerDown))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', handleDocumentPointerDown))
-
-function clearFormatting(): void {
-  editor.value?.chain().focus().unsetAllMarks().clearNodes().run()
-  closeMore(false)
-}
-
-function triggerAddImage(): void {
-  fileInput.value?.click()
-  closeMore(false)
-}
-
-/** Seeded from the link under the cursor, so clicking Link on an existing one edits it. */
-function openLink(): void {
-  if (linkOpen.value) {
-    linkOpen.value = false
-    return
-  }
-
-  linkUrl.value = (editor.value?.getAttributes('link').href as string | undefined) ?? ''
-  linkOpen.value = true
-  moreOpen.value = false
-}
-
-/**
- * Applies to the whole link when the caret merely sits inside one, which is what a reader means by
- * "change this link". An empty address removes it instead, so the field doubles as the way out.
- * The href itself is left to the Link extension, which rejects protocols it does not allow.
- */
-function applyLink(): void {
-  const href = linkUrl.value.trim()
-  const chain = editor.value?.chain().focus().extendMarkRange('link')
-  if (!chain) return
-
-  if (href) {
-    chain.setLink({ href }).run()
-  } else {
-    chain.unsetLink().run()
-  }
-
-  linkOpen.value = false
 }
 
 async function handleFiles(event: Event): Promise<void> {

@@ -1,6 +1,10 @@
 import { newEntryId } from '@/types/entry'
 import { extensionForMime, mimeForMediaId, type MediaRepository } from './mediaRepository'
 
+function isNotFound(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'NotFoundError'
+}
+
 /**
  * The Origin Private File System: real files in the browser's own storage, never surfaced to the
  * user's disk and never leaving the device. It is the right home for photos specifically because
@@ -11,6 +15,11 @@ import { extensionForMime, mimeForMediaId, type MediaRepository } from './mediaR
  */
 export class OpfsMediaRepository implements MediaRepository {
   constructor(private directoryName = 'media') {}
+
+  private async directory(): Promise<FileSystemDirectoryHandle> {
+    const root = await navigator.storage.getDirectory()
+    return root.getDirectoryHandle(this.directoryName, { create: true })
+  }
 
   async put(blob: Blob): Promise<string> {
     const id = `${newEntryId()}.${extensionForMime(blob.type)}`
@@ -74,13 +83,4 @@ export class OpfsMediaRepository implements MediaRepository {
       if (!isNotFound(error)) throw error
     }
   }
-
-  private async directory(): Promise<FileSystemDirectoryHandle> {
-    const root = await navigator.storage.getDirectory()
-    return root.getDirectoryHandle(this.directoryName, { create: true })
-  }
-}
-
-function isNotFound(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'NotFoundError'
 }

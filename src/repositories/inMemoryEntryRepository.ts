@@ -133,5 +133,3 @@ export class InMemoryEntryRepository implements EntryRepository {
       .map((entry) => structuredClone(entry))
   }
 }
-
-export const entryRepository = new InMemoryEntryRepository()

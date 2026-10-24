@@ -1,8 +1,29 @@
 import type { DraftRepository } from '@/repositories/draftRepository'
-import { newDraftEntry, type Draft, type DraftDocument, type DraftEntry } from '@/types/draft'
+import type { DraftChange } from '@/stores/draftsStore'
+import { textContent } from '@/testing/documents'
+import { newDraftEntry, type Draft, type DraftDocument } from '@/types/draft'
 import type { Entry } from '@/types/entry'
 
 const DRAFT_STARTED_AT = '2026-09-05T10:00:00.000Z'
+
+/**
+ * One editor change to an untitled draft, leaving its body reading `body`: a placeholder step, and
+ * every signal unset.
+ */
+export function draftChangeTo(body: string, change: Partial<DraftChange> = {}): DraftChange {
+  return {
+    content: textContent(body),
+    title: null,
+    steps: [{ stepType: 'replace' }],
+    inserted_text: '',
+    removed_chars: 0,
+    is_formatting: false,
+    is_anchor_op: false,
+    is_paste: false,
+    media_changed: false,
+    ...change,
+  }
+}
 
 /** What a draft will become: its kind and the fields that kind carries. */
 export type DraftKind = Draft extends infer D
@@ -21,7 +42,7 @@ export function makeDraft(
     entry = {},
     kind = { kind: 'new_root' },
     updatedAt = DRAFT_STARTED_AT,
-  }: { entry?: Partial<DraftEntry>; kind?: DraftKind; updatedAt?: string } = {},
+  }: { entry?: Partial<Draft['entry']>; kind?: DraftKind; updatedAt?: string } = {},
 ): Draft {
   return {
     session_id: sessionId,

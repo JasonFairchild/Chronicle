@@ -1,6 +1,6 @@
 # Chronicle — Architecture
 
-The whole app on one page: what each layer holds and how data moves between them. The docs in CLAUDE.md's table own the details; this owns only the picture. Update it in the same change that adds, removes or reroutes a store, table, repository or flow.
+The whole app on one page: what each layer holds and how data moves between them. The docs in CLAUDE.md's table own the details; this owns only the picture and what its shapes are called. Update it in the same change that adds, removes or reroutes a store, table, repository or flow, or adds a shared type.
 
 It uses Mermaid's ELK layout, which VS Code's built-in preview supports; a renderer without ELK falls back to the default layout, which draws it less tidily.
 
@@ -115,3 +115,17 @@ flowchart TB
   classDef planned stroke-dasharray: 6 4
   class SCRUB planned
 ```
+
+## Shapes by stage
+
+A shape's name says which stage of the flow above it belongs to. An entry passes through every stage; a mark set goes from input straight to sealed. A draft's rows are on disk but still working, since they're overwritten.
+
+| Stage | What it is | Named | Types |
+| --- | --- | --- | --- |
+| Input | what a caller hands over to create or begin something | `<Verb><Noun>Input`, after the call it feeds | `CreateEntryInput`, `CreateMarkSetInput`, `BeginDraftInput` |
+| Change | one edit, as it passes each layer of the write path | `*Change` | `EditorChange` → `DraftChange` → `AuthoringChange` |
+| Working | a session's state, rewritten until it's sealed | `Draft*` | `Draft`, `DraftSnapshot`, `DraftDocument`, `DraftFields`, `DraftEvents`; and `AuthoringEvent`, appended until sealing makes the log an `AuthoringTrace` |
+| Sealed | written once, never rewritten | the bare noun | `Entry` with its `AuthoringTrace`; `MarkSet`, which may be deleted but never edited |
+| Derived | computed from sealed rows on read, never stored in this form | for how it's derived, where that's the point: `Aggregated*` is folded from rows, `Resolved*` is a reference looked up as it stands now; otherwise a plain noun, like `EntryVersion` | `AggregatedEntry`, `ResolvedRelatedEntry`, `ResolvedConnection`, `ResolvedAnchor`, `EntryVersion`, `AuthoringMark`; and `MarkFrame`, which a `MarkSet` caches |
+
+Not stages: field groups every stage shares (`VersionedFields`, `EntryDetails`, `EntryDates`, `ChangeSignals`), which is how a draft's fields copy onto an entry and back; and `Stored*` (`StoredEntry`, `StoredDraftEvent`), the Dexie adapter's own rows, which never leave it.

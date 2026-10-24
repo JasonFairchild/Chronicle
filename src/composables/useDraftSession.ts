@@ -3,7 +3,7 @@ import type { EditorChange } from '@/components/DocumentEditor.vue'
 import { docToPlainText, isEmptyDocument } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
 import { currentVersionId } from '@/domain/reconstructEntryState'
-import { DraftUnreadableError, useDraftsStore, type DraftStart } from '@/stores/draftsStore'
+import { DraftUnreadableError, useDraftsStore, type BeginDraftInput } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { versionsRevisedBy, type Draft, type DraftSnapshot } from '@/types/draft'
 import { emptyEntryDetails, entryDetailsOf, type Entry, type EntryDetails } from '@/types/entry'
@@ -139,7 +139,7 @@ export function useDraftSession() {
   )
 
   /** Opens a brand-new session — nothing is written until the first real change. */
-  function begin(start: DraftStart): void {
+  function begin(start: BeginDraftInput): void {
     const id = drafts.beginDraft(start)
 
     mirror(drafts.currentDraft(id)!, start.kind === 'new_related' ? start.parent.title : null)

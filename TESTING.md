@@ -66,7 +66,7 @@ A behavior is proven once, in the spec of the file whose code it is. A component
 Be hardline on these, particularly for new tests.
 
 - Don't over-abstract. No shared mock modules, selector maps, or elaborate data builders unless repetition has actually become noisy.
-- Don't change source code to make a test easier without saying so.
+- Don't change source code to make a test easier without saying so. Never loosen a source type for a test's convenience; give the tests a fixture that fills the defaults, as `draftChangeTo` does.
 - Don't use `defineComponent` in component tests; pass the component to `cy.mount` / `render`.
 - Don't add triple-slash references in test files.
 - Don't import `mount` directly. Use `cy.mount` in Cypress, `renderComponent` (not `render`) in Vitest Browser Mode.
@@ -104,6 +104,7 @@ Test ids are legitimate when the thing being located has no semantic role at all
 - **Imperative, concise test names.** `renders the entry's own text`, not `should render the entry's own text`. Never lead with "should".
 - **Group related assertions** that share setup. Split when setup is trivial and a clean dividing line exists.
 - **Keep test data local** to the `it` or its enclosing `describe`. Mount with only the props that scenario needs.
+- **Name a fixture after what it builds:** `makeDraft`, `draftChangeTo`.
 - **Hard-code assertion values.** Prefer duplication over indirection until it gets noisy.
 - **One blank line after mounting**, before the first assertion or interaction.
 - **Chain with `.and()`** after the first `.should()` in Cypress.

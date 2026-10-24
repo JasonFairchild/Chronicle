@@ -4,7 +4,7 @@ import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { draftChangeTo, makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { createTestRouter } from '@/testing/testRouter'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -201,10 +201,7 @@ describe('NewEntryView flows', () => {
       setActivePinia(createPinia())
       const otherTab = useDraftsStore()
       await otherTab.resumeDraft('session-1')
-      otherTab.recordChange('session-1', {
-        content: textContent('Half a thought, finished elsewhere'),
-        steps: [{ stepType: 'replace' }],
-      })
+      otherTab.recordChange('session-1', draftChangeTo('Half a thought, finished elsewhere'))
       await otherTab.flush('session-1')
     })
 

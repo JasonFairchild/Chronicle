@@ -15,9 +15,6 @@ export interface DraftDocument {
  */
 export type DraftFields = Omit<VersionedFields, 'content' | 'media_refs'>
 
-/** The entry a session produces: its document plus every versioned field written beside it. */
-export type DraftEntry = DraftDocument & DraftFields
-
 /**
  * A draft whose documents are `Doc`, so one union serves with event logs and without. `parent`
  * exists only for `new_related` (anchor mode): if it gains anchors, they seal into its own

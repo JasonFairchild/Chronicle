@@ -3,9 +3,9 @@ import type { ChangeSignals } from '@/types/entry'
 
 /**
  * One editor change, as the draft buffer records it. `ChangeSignals` are required here, not
- * optional as they are on `AuthoringChange`/`DraftChange`: this is the one emit site actually
- * producing them, so the compiler should catch a call that forgets one when a signal is added, such
- * as `handleTitleInput` below.
+ * optional as they are on `AuthoringChange`: this is the one emit site actually producing them, so
+ * the compiler should catch a call that forgets one when a signal is added, such as
+ * `handleTitleInput` below.
  */
 export interface EditorChange extends ChangeSignals {
   /** The document's body as it now stands, serialized the way an entry stores it. */

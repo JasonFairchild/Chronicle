@@ -34,28 +34,21 @@ import { useEntriesStore } from './entriesStore'
  */
 export const DRAFT_FLUSH_MS = 300
 
-/**
- * What one editor change tells the buffer. `ChangeSignals` are optional — a caller focused on the
- * body alone, most tests among them, has nothing to say about them.
- */
-export interface DraftChange extends Partial<ChangeSignals> {
+/** What one editor change tells the buffer. */
+export interface DraftChange extends ChangeSignals {
   /** The document as it now stands. */
   content: string
-  /**
-   * The title field as it now stands, when the editor offers one; null when it doesn't. Optional
-   * because a caller focused on the body alone — most tests among them — has nothing to say about
-   * it; omitting it reads as "unchanged from null," the same way a fresh buffer starts.
-   */
-  title?: string | null
+  /** The title field as it now stands, when the editor offers one; null when it doesn't. */
+  title: string | null
   /** Serialized ProseMirror steps for this change. The session never interprets them. */
-  steps?: unknown[]
+  steps: unknown[]
 }
 
 /**
  * What a session starts from. Revising or relating to an entry starts from its aggregate, the
  * current version, which is where the draft's base version and its seeded fields come from.
  */
-export type DraftStart =
+export type BeginDraftInput =
   | { kind: 'new_root' }
   | { kind: 'new_related'; parent: AggregatedEntry }
   | { kind: 'new_connection'; parent_id: string; target_id: string }
@@ -134,7 +127,7 @@ export const useDraftsStore = defineStore('drafts', () => {
    * before a word is typed, so another tab resumes it rather than beginning a second draft on the
    * same version. `abandonDraft` releases it if nothing comes of it.
    */
-  function beginDraft(start: DraftStart): string {
+  function beginDraft(start: BeginDraftInput): string {
     const sessionId = newEntryId()
     const snapshot = startingSnapshot(start, sessionId, newEntryTimestamp())
     const entry = open(withEvents(snapshot, { entry: [], parent: [] }), false)
@@ -208,9 +201,9 @@ export const useDraftsStore = defineStore('drafts', () => {
    * never entered it.
    */
   function recordInto(recorder: TraceRecorder, change: DraftChange): void {
-    if ((change.steps ?? []).length === 0) return
+    if (change.steps.length === 0) return
 
-    recorder.record({ ...change, steps: change.steps ?? [] })
+    recorder.record(change)
   }
 
   /** Swaps in a session's next snapshot, stamped now, and schedules the flush that writes it. */
@@ -232,7 +225,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     const { draft } = entry
     replaceSnapshot(sessionId, entry, {
       ...draft,
-      entry: { ...draft.entry, content: change.content, title: change.title ?? null },
+      entry: { ...draft.entry, content: change.content, title: change.title },
     })
   }
 
@@ -608,7 +601,11 @@ export const useDraftsStore = defineStore('drafts', () => {
  * moves: it is what a trace replays from, and for the parent also what `anchorsPlacedSince` diffs
  * against.
  */
-function startingSnapshot(start: DraftStart, sessionId: string, startedAt: string): DraftSnapshot {
+function startingSnapshot(
+  start: BeginDraftInput,
+  sessionId: string,
+  startedAt: string,
+): DraftSnapshot {
   const header = { session_id: sessionId, started_at: startedAt, updated_at: startedAt }
 
   switch (start.kind) {

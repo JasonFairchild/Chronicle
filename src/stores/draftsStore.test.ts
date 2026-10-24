@@ -14,7 +14,7 @@ import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
-import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
+import { draftChangeTo, makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput, type AggregatedEntry } from '@/types/entry'
 
 /** An entry already on record, as a session opened against it would find it. */
@@ -51,15 +51,9 @@ describe('useDraftsStore', () => {
       const sessionId = store.beginDraft({ kind: 'new_root' })
       const save = vi.spyOn(draftRepository, 'save')
 
-      store.recordChange(sessionId, {
-        content: textContent('It rai'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('It rai'))
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS - 1)
-      store.recordChange(sessionId, {
-        content: textContent('It rained'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
       expect(save).not.toHaveBeenCalled()
 
       // A debounce would have restarted on the second change and still be waiting.
@@ -80,10 +74,7 @@ describe('useDraftsStore', () => {
       // snapshot is only in memory until this call lands.
       const save = vi.spyOn(draftRepository, 'save').mockRejectedValueOnce(new Error('Quota'))
 
-      store.recordChange(sessionId, {
-        content: textContent('It rained all day.'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('It rained all day.'))
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
       expect(save).toHaveBeenCalledTimes(1)
@@ -104,10 +95,7 @@ describe('useDraftsStore', () => {
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
 
-      store.recordChange(sessionId, {
-        content: textContent('It rained all day.'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('It rained all day.'))
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
       expect(await draftRepository.getById(sessionId)).not.toBeNull()
 
@@ -124,17 +112,13 @@ describe('useDraftsStore', () => {
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
 
-      store.recordChange(sessionId, {
-        content: textContent('We drove up on Friday'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('We drove up on Friday'))
       // What retitling looks like from here: the title is a plain field beside the editor, so it
       // produces no steps and the body's own chain has nothing to record.
-      store.recordChange(sessionId, {
-        content: textContent('We drove up on Friday'),
-        title: 'Lake Tahoe',
-        steps: [],
-      })
+      store.recordChange(
+        sessionId,
+        draftChangeTo('We drove up on Friday', { title: 'Lake Tahoe', steps: [] }),
+      )
 
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
@@ -152,10 +136,7 @@ describe('useDraftsStore', () => {
         vi.useFakeTimers()
         const store = useDraftsStore()
         const sessionId = store.beginDraft({ kind: 'new_root' })
-        store.recordChange(sessionId, {
-          content: textContent('A day at the lake'),
-          steps: [{ stepType: 'replace' }],
-        })
+        store.recordChange(sessionId, draftChangeTo('A day at the lake'))
 
         // Let the scheduled flush actually start its write, but hold it open so ending the
         // session can race it — this is exactly the window the fix has to close.
@@ -196,10 +177,7 @@ describe('useDraftsStore', () => {
           base_version_id: original.id,
         }),
       )
-      store.recordChange(sessionId, {
-        content: textContent('I received the offer'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('I received the offer'))
 
       // Sealing cancels the scheduled flush, so a refusal has to schedule another.
       await expect(store.sealDraft(sessionId)).rejects.toThrow(StaleVersionError)
@@ -221,10 +199,7 @@ describe('useDraftsStore', () => {
     it('refuses to seal an empty draft and leaves the session open', async () => {
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
-      store.recordChange(sessionId, {
-        content: textContent('   '),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('   '))
 
       await expect(store.sealDraft(sessionId)).rejects.toThrow('Entry content cannot be empty')
       expect(docToPlainText(store.currentDraft(sessionId)!.entry.content)).toBe('   ')
@@ -248,10 +223,7 @@ describe('useDraftsStore', () => {
       )
 
       const resumed = await store.resumeDraft('interrupted')
-      store.recordChange('interrupted', {
-        content: textContent('Half a thought, finished.'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange('interrupted', draftChangeTo('Half a thought, finished.'))
       const sealed = await store.sealDraft('interrupted')
 
       expect(docToPlainText(resumed!.entry.content)).toBe('Half a thought')
@@ -279,10 +251,7 @@ describe('useDraftsStore', () => {
       )
 
       await store.resumeDraft('interrupted-anchor')
-      store.recordChange('interrupted-anchor', {
-        content: textContent('Worth revisiting.'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange('interrupted-anchor', draftChangeTo('Worth revisiting.'))
       await store.sealDraft('interrupted-anchor')
 
       const [parentRevision] = await entryRepository.listRevisions(parent.id)
@@ -300,10 +269,7 @@ describe('useDraftsStore', () => {
     it('resumes what is on disk, not what this tab held when it last let the draft go', async () => {
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
-      store.recordChange(sessionId, {
-        content: textContent('Half a thought'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('Half a thought'))
       await store.abandonDraft(sessionId)
 
       // Another tab picks the draft up and carries on with it.
@@ -355,12 +321,9 @@ describe('useDraftsStore', () => {
       const parent = await existingEntry('The meeting went badly')
       const sessionId = store.beginDraft({ kind: 'new_related', parent })
 
-      store.recordChange(sessionId, {
-        content: textContent('It rained'),
-        steps: [{ stepType: 'replace' }],
-      })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
       await store.flush(sessionId)
-      store.recordChange(sessionId, { content: '', steps: [{ stepType: 'replace' }] })
+      store.recordChange(sessionId, draftChangeTo(''))
       await store.flush(sessionId)
 
       // Removing it here would let another tab begin a second draft on the same version.
@@ -375,10 +338,7 @@ describe('useDraftsStore', () => {
 
       const otherTab = anotherTab()
       await otherTab.resumeDraft(sessionId)
-      otherTab.recordChange(sessionId, {
-        content: textContent('I received the offer'),
-        steps: [{ stepType: 'replace' }],
-      })
+      otherTab.recordChange(sessionId, draftChangeTo('I received the offer'))
       await otherTab.flush(sessionId)
 
       // Untouched here, but judged by what disk holds, not by what this tab did.

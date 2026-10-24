@@ -38,6 +38,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - Proposed line, to decide at that commit: _"A composable whose point is a browser event in a lifecycle hook is proven in the browser project alone, through a host component that only calls it; the host is scaffolding, not the subject, so it has no Cypress mirror."_
 - **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, its only caller.**
   - AppLayout provides through an exported `layoutWidthKey`. That's an app use, not a test entry point.
+  - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it (TESTING.md, Don'ts), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
   - `useLayoutWidth` gets a node spec under `app.runWithContext()` with `app.provide(layoutWidthKey, …)`. Vue 3.5's `provide()` does nothing outside a component and only warns; `inject()` works under `runWithContext`.
   - EntryDetailView raising and lowering the width (`EntryDetailView.vue:279–289`) is that view's own code and is untested, so it gains a test in its pair.
   - Rejected: a browser host spec. The file has no lifecycle hooks and no browser API, and the spec would prove the plumbing while missing the view's behavior.
@@ -186,11 +187,11 @@ When a commit changes how a test is written, not just what it proves, grep the o
     - `aria-current` is RouterLink's, and the width class is styling; neither is asserted.
     - Verify: both specs.
 
-11. **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, then spec it.** The source change: AppLayout provides through an exported `layoutWidthKey`.
+11. **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, drop the fallback, then spec it.** The source change: AppLayout provides through an exported `layoutWidthKey`, and `useLayoutWidth` throws with no provider.
     - `src/composables/useLayoutWidth.test.ts`, node, under `app.runWithContext()`:
       - returns the ref provided under the key
-      - with no provider, two calls get two refs, not a shared one
-    - EntryDetailView gains one test in its pair: the width it's given (through the mount's `global.provide`) turns `'wide'` while the related composer is open, and back to `'normal'` after Discard and after unmount.
+      - throws with no provider
+    - EntryDetailView's `mountDetail`, in both runners, provides a width ref through the mount's `global.provide`. The pair gains one test: that ref turns `'wide'` while the related composer is open, and back to `'normal'` after Discard and after unmount.
     - Verify: the new spec, and the AppLayout and EntryDetailView pairs.
 
 12. **`EntryList` and `TimelineView` pairs, and drop `emptyMessage`.**

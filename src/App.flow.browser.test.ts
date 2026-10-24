@@ -8,7 +8,7 @@ import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { draftChangeTo, makeDraft, seedDraft } from '@/testing/draftFixtures'
 import { createEntryInput } from '@/types/entry'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -57,10 +57,7 @@ describe('App flows (browser)', () => {
     // Carried on in another tab while this one sat in the background.
     const otherTab = openOtherTab()
     await otherTab.resumeDraft('session-1')
-    otherTab.recordChange('session-1', {
-      content: textContent('Half a thought, carried on elsewhere'),
-      steps: [{ stepType: 'replace' }],
-    })
+    otherTab.recordChange('session-1', draftChangeTo('Half a thought, carried on elsewhere'))
     await otherTab.flush('session-1')
     window.dispatchEvent(new Event('focus'))
 
@@ -83,10 +80,7 @@ describe('App flows (browser)', () => {
     setVisibility('hidden')
     const otherTab = openOtherTab()
     await otherTab.resumeDraft('session-1')
-    otherTab.recordChange('session-1', {
-      content: textContent('Half a thought, carried on elsewhere'),
-      steps: [{ stepType: 'replace' }],
-    })
+    otherTab.recordChange('session-1', draftChangeTo('Half a thought, carried on elsewhere'))
     await otherTab.flush('session-1')
     setVisibility('visible')
 

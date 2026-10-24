@@ -19,7 +19,7 @@ The rule most often broken. A permission rule matches the **whole** command stri
 | TESTING.md | how tests are written | any test |
 | PRODUCT.md | behavior: built, decided, maybe | anything user-visible |
 | CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work |
-| ARCHITECTURE.md | the one-page diagram of layers and flow | adding, removing or rerouting a store, table, repository or flow |
+| ARCHITECTURE.md | the one-page diagram of layers and flow; type names by stage | adding, removing or rerouting a store, table, repository or flow; naming a shared type |
 
 ## Rules
 
@@ -33,6 +33,7 @@ The rule most often broken. A permission rule matches the **whole** command stri
   - Full component suites only for a broad change — a store, repository, editor schema, or shared test setup. Pre-push runs them anyway (`lefthook.yml`).
   - A plan ends with one manual check in the running app.
 - Composition API + `<script setup>`; all data access behind the repository layer.
+- **Types live by who uses them.** Shapes that are stored or cross layers go in `src/types/`; a module's own inputs, outputs and errors live beside it.
 - No hard-coded colors that block dark mode.
 - **Semantics first.** Native elements before ARIA; reach for a role or `aria-*` only where no element does the job (the editor's `contenteditable` body is the standing example).
 - **Disable a control only while its action is in flight.** Otherwise leave it enabled and say why it can't proceed.

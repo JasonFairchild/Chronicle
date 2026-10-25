@@ -4,7 +4,7 @@ import type { Router } from 'vue-router'
 import { draftRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { emptyEntryDates } from '@/types/entry'
@@ -90,8 +90,7 @@ describe('NewEntryView (browser)', () => {
   })
 
   it('reopens the draft it links to, with its words, title and dates', async () => {
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', {
         entry: {
           content: textContent('Half a thought'),
@@ -115,7 +114,7 @@ describe('NewEntryView (browser)', () => {
   })
 
   it('shows a linked draft that will not reopen, and starts afresh once it is discarded', async () => {
-    await seedDraft(draftRepository, {
+    await draftRepository.save({
       ...makeDraft('session-1', {
         entry: { content: textContent('Half a thought'), events: TYPED },
       }),

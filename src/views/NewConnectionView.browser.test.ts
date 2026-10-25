@@ -3,7 +3,7 @@ import type { Router } from 'vue-router'
 
 import { draftRepository, entryRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput } from '@/types/entry'
@@ -67,8 +67,7 @@ describe('NewConnectionView (browser)', () => {
     const destination = await entryRepository.create(
       createEntryInput({ content: textContent('Started the degree') }),
     )
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', {
         entry: { content: textContent('One led to the other'), events: TYPED },
         kind: { kind: 'new_connection', parent_id: source.id, target_id: destination.id },

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import App from '@/App.vue'
 import { draftRepository, entryRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 
@@ -20,8 +20,7 @@ async function mountApp() {
 
 describe('DraftsView flows (browser)', () => {
   it('resumes a draft on the page it was started from', async () => {
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
 
@@ -34,8 +33,7 @@ describe('DraftsView flows (browser)', () => {
   })
 
   it('discards a draft on request, the one thing that removes work', async () => {
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
     )
 

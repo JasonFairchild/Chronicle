@@ -1,15 +1,14 @@
 import App from '@/App.vue'
 import { draftRepository, entryRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft } from '@/testing/draftFixtures'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
 describe('DraftsView flows', () => {
   it('resumes a draft on the page it was started from', () => {
     cy.then(() =>
-      seedDraft(
-        draftRepository,
+      draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
@@ -24,8 +23,7 @@ describe('DraftsView flows', () => {
 
   it('discards a draft on request, the one thing that removes work', () => {
     cy.then(() =>
-      seedDraft(
-        draftRepository,
+      draftRepository.save(
         makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
       ),
     )

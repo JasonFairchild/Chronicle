@@ -1,4 +1,3 @@
-import type { DraftRepository } from '@/repositories/draftRepository'
 import type { DraftChange } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { type Draft, type DraftDocument, newDraftEntry } from '@/types/draft'
@@ -79,9 +78,4 @@ export function relatedTo(
       ...since,
     },
   }
-}
-
-/** Stores `draft` as a first save would, with none of its events on disk yet. */
-export async function seedDraft(drafts: DraftRepository, draft: Draft): Promise<void> {
-  await drafts.save(draft)
 }

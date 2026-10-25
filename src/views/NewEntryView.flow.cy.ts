@@ -5,7 +5,7 @@ import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
-import { draftChangeTo, makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { draftChangeTo, makeDraft } from '@/testing/draftFixtures'
 import { createTestRouter } from '@/testing/testRouter'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -186,8 +186,7 @@ describe('NewEntryView flows', () => {
 
   it('keeps the version another tab saved first, and shows what this one had to copy', () => {
     cy.then(() =>
-      seedDraft(
-        draftRepository,
+      draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),

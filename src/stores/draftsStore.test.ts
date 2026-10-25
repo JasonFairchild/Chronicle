@@ -15,7 +15,7 @@ import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
-import { draftChangeTo, makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
+import { draftChangeTo, makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { type AggregatedEntry, createEntryInput } from '@/types/entry'
 
 /** An entry already on record, as a session opened against it would find it. */
@@ -260,8 +260,7 @@ describe('useDraftsStore', () => {
   describe('resuming', () => {
     it('resumes a draft left behind by a reload with its history intact', async () => {
       const store = useDraftsStore()
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('interrupted', {
           entry: {
             content: textContent('Half a thought'),
@@ -289,8 +288,7 @@ describe('useDraftsStore', () => {
       const parent = await existingEntry(parentContent)
       const markedParentContent = withAnchorMark(parentContent, 'anchor-1', 4, 11)
 
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('interrupted-anchor', {
           kind: relatedTo(parent, {
             content: markedParentContent,
@@ -462,8 +460,7 @@ describe('useDraftsStore', () => {
     it('keeps a resumed draft that holds work when it is let go untouched', async () => {
       const store = useDraftsStore()
       const original = await existingEntry('I recieved the offer')
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('interrupted-revision', {
           entry: {
             base_version_id: original.id,
@@ -485,8 +482,7 @@ describe('useDraftsStore', () => {
       const original = await existingEntry('I recieved the offer')
       await store.loadDrafts()
 
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('claimed-elsewhere', {
           entry: { base_version_id: original.id, base_content: original.content },
           kind: { kind: 'revision', parent_id: original.id },

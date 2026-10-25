@@ -8,7 +8,7 @@ import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
-import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
@@ -390,7 +390,7 @@ describe('EntryDetailView (browser)', () => {
 
   it('shows a draft on the entry that will not reopen, and frees the entry once it is discarded', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
-    await seedDraft(draftRepository, {
+    await draftRepository.save({
       ...makeDraft('session-1', {
         entry: {
           base_version_id: parent.id,
@@ -456,8 +456,7 @@ describe('EntryDetailView (browser)', () => {
 
   it('reopens the related-entry draft it was linked to on both halves', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', {
         entry: { content: textContent('Wrong lake'), events: TYPED },
         kind: relatedTo(parent),
@@ -476,8 +475,7 @@ describe('EntryDetailView (browser)', () => {
 
   it('opens a revision it was linked to read-only, and says why, when the entry was revised since', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', {
         entry: {
           base_version_id: parent.id,

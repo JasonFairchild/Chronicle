@@ -6,7 +6,7 @@ import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
-import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
@@ -397,7 +397,7 @@ describe('EntryDetailView', () => {
   it('shows a draft on the entry that will not reopen, and frees the entry once it is discarded', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })
-      await seedDraft(draftRepository, {
+      await draftRepository.save({
         ...makeDraft('session-1', {
           entry: {
             base_version_id: parent.id,
@@ -454,8 +454,7 @@ describe('EntryDetailView', () => {
   it('reopens the related-entry draft it was linked to on both halves', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('Wrong lake'), events: TYPED },
           kind: relatedTo(parent),
@@ -476,8 +475,7 @@ describe('EntryDetailView', () => {
   it('opens a revision it was linked to read-only, and says why, when the entry was revised since', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('session-1', {
           entry: {
             base_version_id: parent.id,

@@ -5,7 +5,7 @@ import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { draftRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
-import { makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { emptyEntryDates } from '@/types/entry'
 
@@ -24,7 +24,7 @@ describe('EntryComposer (browser)', () => {
     const text =
       'Everything I meant to say about the lake that summer: the cabin, the dock, the long drive ' +
       'home, and why none of it went the way we planned.'
-    await seedDraft(draftRepository, {
+    await draftRepository.save({
       ...makeDraft('session-1', {
         entry: {
           content: textContent(text),

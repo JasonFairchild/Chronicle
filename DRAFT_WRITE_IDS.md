@@ -1,6 +1,6 @@
 # A tab writes only over the draft it has seen
 
-Status: commit 0 lands with this file. Commit 1 done in the working tree and green on the full suites, awaiting commit; it also holds AUTHORING.md's new "Draft safety" section, three citation fixes (`App.vue`, `draftRepository.contract.ts`, and `compareEntries`/`compareMarkSets`, which cited a CLAUDE.md "Ordering" heading that doesn't exist), CLAUDE.md's repository rule now saying the layer stamps every id it stores, the write-plan skill asking what a change makes redundant, and the write-tests skill asking each claim of a test to be seen failing. Commits 2 and 3 next. This file is deleted when commit 3 lands, once anything that outlasts it is in the docs.
+Status: commits 0 and 1 landed. Commit 2 done in the working tree and green on the full suites, awaiting commit. Commit 3 next. This file is deleted when commit 3 lands, once anything that outlasts it is in the docs.
 
 ## Context
 

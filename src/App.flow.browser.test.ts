@@ -7,7 +7,7 @@ import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
-import { draftChangeTo, makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { draftChangeTo, makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput } from '@/types/entry'
@@ -46,8 +46,7 @@ describe('App flows (browser)', () => {
   })
 
   it('shows what another tab wrote to the open draft once this tab is returned to', async () => {
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
     const screen = await mountApp('/entries/new?draft=session-1')
@@ -68,8 +67,7 @@ describe('App flows (browser)', () => {
   })
 
   it('shows what another tab wrote to the open draft once this tab is shown again', async () => {
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
     const screen = await mountApp('/entries/new?draft=session-1')
@@ -91,8 +89,7 @@ describe('App flows (browser)', () => {
   })
 
   it('closes the open draft and says so once another tab has saved it', async () => {
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
     const screen = await mountApp('/entries/new?draft=session-1')
@@ -119,8 +116,7 @@ describe('App flows (browser)', () => {
     await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
 
     // Another tab opens a revision, which claims the entry before a word is typed.
-    await seedDraft(
-      draftRepository,
+    await draftRepository.save(
       makeDraft('session-1', {
         entry: {
           base_version_id: entry.id,

@@ -5,7 +5,7 @@ import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
-import { draftChangeTo, makeDraft, seedDraft } from '@/testing/draftFixtures'
+import { draftChangeTo, makeDraft } from '@/testing/draftFixtures'
 import { createEntryInput } from '@/types/entry'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -37,8 +37,7 @@ describe('App flows', () => {
 
   it('shows what another tab wrote to the open draft once this tab is returned to', () => {
     cy.then(() =>
-      seedDraft(
-        draftRepository,
+      draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
@@ -65,8 +64,7 @@ describe('App flows', () => {
 
   it('shows what another tab wrote to the open draft once this tab is shown again', () => {
     cy.then(() =>
-      seedDraft(
-        draftRepository,
+      draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
@@ -94,8 +92,7 @@ describe('App flows', () => {
 
   it('closes the open draft and says so once another tab has saved it', () => {
     cy.then(() =>
-      seedDraft(
-        draftRepository,
+      draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
@@ -127,8 +124,7 @@ describe('App flows', () => {
 
       // Another tab opens a revision, which claims the entry before a word is typed.
       cy.then(() =>
-        seedDraft(
-          draftRepository,
+        draftRepository.save(
           makeDraft('session-1', {
             entry: {
               base_version_id: entry.id,

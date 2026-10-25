@@ -1,6 +1,6 @@
 import { draftRepository, entryRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
-import { makeDraft, relatedTo, seedDraft } from '@/testing/draftFixtures'
+import { makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { createEntryInput } from '@/types/entry'
 import { formatDate } from '@/utils/format'
 import DraftsView from '@/views/DraftsView.vue'
@@ -17,31 +17,27 @@ describe('DraftsView', () => {
         createEntryInput({ content: textContent('Started the degree') }),
       )
       // Seeded out of order, so the order shown is the list's own.
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('related', {
           entry: { content: textContent('It was salvaged later'), events: TYPED },
           kind: relatedTo(parent),
           updatedAt: '2026-09-05T10:01:00.000Z',
         }),
       )
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('root', {
           entry: { content: textContent('A thought of its own'), events: TYPED },
           updatedAt: '2026-09-05T10:04:00.000Z',
         }),
       )
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('connection', {
           entry: { content: textContent('One led to the other'), events: TYPED },
           kind: { kind: 'new_connection', parent_id: parent.id, target_id: other.id },
           updatedAt: '2026-09-05T10:02:00.000Z',
         }),
       )
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('revision', {
           entry: {
             base_version_id: parent.id,
@@ -115,8 +111,7 @@ describe('DraftsView', () => {
           base_version_id: parent.id,
         }),
       )
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('connection', {
           entry: { content: textContent('One led to the other'), events: TYPED },
           kind: { kind: 'new_connection', parent_id: parent.id, target_id: other.id },
@@ -130,15 +125,13 @@ describe('DraftsView', () => {
 
   it('discards the draft it is asked to, leaving the rest listed', () => {
     cy.then(async () => {
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('kept', {
           entry: { content: textContent('Keep writing this'), events: TYPED },
           updatedAt: '2026-09-05T10:02:00.000Z',
         }),
       )
-      await seedDraft(
-        draftRepository,
+      await draftRepository.save(
         makeDraft('discarded', {
           entry: { content: textContent('Never mind'), events: TYPED },
           updatedAt: '2026-09-05T10:01:00.000Z',

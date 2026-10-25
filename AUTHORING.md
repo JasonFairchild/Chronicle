@@ -51,7 +51,7 @@ Entries are permanent and append-only and receive only finished entries. A sessi
 
 ## Drafts
 
-The draft store is persisted through the same local-first layer as entries, flushing a few hundred milliseconds after the first unsaved change, and so at that interval through continuous typing: a crash costs well under a second of it. This is autosave and unrelated to marks. Its event logs are append-only while the session runs; the only thing that disappears is the whole row, removed when it is sealed or discarded. The session is let go only once that removal lands, so a failed seal or discard leaves it open. That makes the draft store the write rule's sanctioned exception: working space, not history.
+The draft store is persisted through the same local-first layer as entries, flushing 300 ms after the first unsaved change, and so at that interval through continuous typing. This is autosave and unrelated to marks. Its event logs are append-only while the session runs; the only thing that disappears is the whole row, removed when it is sealed or discarded. The session is let go only once that removal lands, so a failed seal or discard leaves it open. That makes the draft store the write rule's sanctioned exception: working space, not history.
 
 **Sealing is an explicit user action**, never an idle timeout. Until then the work is durable, recoverable, and absent from timelines, so drafts get their own list; none is stranded invisibly.
 
@@ -69,6 +69,7 @@ type Draft = {
   session_id: string
   started_at: string // shared by both documents' traces — one session, two documents
   updated_at: string
+  write_id: string | null // the stored write this copy follows; null before the first
   entry: DraftDocument & DraftFields // the entry this session produces
 } & (
   | { kind: 'new_root' }
@@ -86,10 +87,24 @@ type Draft = {
 
 **A draft that could revise an entry is a claim** — a `revision`, or a `new_related` whose anchors revise the parent (`versionsRevisedBy`, `types/draft.ts`) — and the entry offers to resume it rather than start another. It is written when the session begins, so another tab sees it before anything is typed, and kept while the session is open however empty. Abandoning it removes it only if the stored draft holds no work (`draftHoldsWork`), judged on disk because another tab may have written since. A tab closed mid-session can't be relied on to finish a delete, so that draft stays; if its entry moves on meanwhile, reopening it says so (`useDraftSession`), and a save is refused regardless.
 
-**Sealing is one transaction.** `DraftRepository.seal` removes the draft and writes its entries together, so a crash can't leave a draft whose entries already exist, to be saved twice. The removal goes first, so a refused revision rolls it back too.
+## Draft safety
 
-**One draft, many tabs.** Disk is authoritative: resuming reads the stored draft, and a released session is dropped from memory once flushed. A tab being left flushes at once; a tab being returned to (visibility or focus, wired in `App.vue`) reloads each open draft whose stored `updated_at` isn't the one it last read or wrote, and closes one sealed or discarded elsewhere, saying so. Event rows are added, never put, so two tabs writing at once can't interleave one log: an append at an index already stored is a `DraftConflictError`, the whole save rolls back, and the losing tab keeps the other's version and shows its own text to copy. The gap — a title- or dates-only write from a tab not yet checked — needs focus, which checks first.
+**Words can be lost, but never silently.** Disk is authoritative: resuming reads the stored draft, and a released session is dropped from memory once flushed. Each guard keeps a loss small or shows it:
+
+| Guard | What it prevents |
+| --- | --- |
+| A flush 300 ms after a change, and at once when a tab is left or a session let go | A crash costing more than a fraction of a second |
+| Every save, delete and seal names the stored write it follows (`write_id`, stamped by `DraftRepository` on each save), and is refused whole with a `DraftConflictError` if disk holds another or none; deleting a draft already gone is the one exception. A save appends only past the stored log | A tab writing over, deleting or sealing words it hasn't seen |
+| A flush that loses adopts the stored draft and shows its own text to copy | A lost race going unseen |
+| A tab being returned to (visibility or focus, wired in `App.vue`) reloads each open draft whose stored `write_id` isn't the one it last read or wrote, keeping its own unflushed text to copy, and closes one sealed or discarded elsewhere, saying so | A conflict at the first keystroke after another tab wrote |
+| `DraftRepository.seal` removes the draft and writes its entries in one transaction, the removal first | A crash leaving a draft to be saved twice, or a refused save losing the draft |
+| Sealing refuses a stale base version ("Drafts", above) | A save overwriting a newer version of the entry |
+
+Anything read for its `write_id` is read after this tab's writes in progress land (`writesLanded`, `draftsStore.ts`), or a write that follows it is refused for this tab's own.
 
 ## Considered and rejected
 
 - **Deciding marks while the writer types**, storing the resulting bookmarks. That froze the policy at capture time, needed state seeded across reloads and backdated deletion marks, and lost `paste` for any later policy. Storing signals and deriving marks removed all three.
+- **One writer per draft** (Web Locks), a second tab opening it read-only with "take over here". It needs a read-only editor state, a take-over flow and a lock lifecycle, and a take-over that interrupts a write still needs the write-id check underneath.
+- **Live sync between tabs** (BroadcastChannel, or Dexie's `liveQuery`). More machinery; `liveQuery` ties the draft repository to Dexie ahead of SQLite; and a frozen tab misses messages, so the return check would stay anyway.
+- **`updated_at` as a draft's version**, in place of a write id. Two writes in one millisecond would share it, as tests' writes routinely do, and it is stamped at every change site, where one already missed it.

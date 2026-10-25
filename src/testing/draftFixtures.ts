@@ -28,13 +28,13 @@ export function draftChangeTo(body: string, change: Partial<DraftChange> = {}): 
 /** What a draft will become: its kind and the fields that kind carries. */
 export type DraftKind = Draft extends infer D
   ? D extends unknown
-    ? Omit<D, 'session_id' | 'started_at' | 'updated_at' | 'entry'>
+    ? Omit<D, 'session_id' | 'started_at' | 'updated_at' | 'write_id' | 'entry'>
     : never
   : never
 
 /**
  * A draft as a reload would find it: a new root entry unless `kind` says otherwise, its entry an
- * empty new one under `entry`, with no events unless given.
+ * empty new one under `entry`, with no events unless given, following stored write `writeId`.
  */
 export function makeDraft(
   sessionId: string,
@@ -42,12 +42,19 @@ export function makeDraft(
     entry = {},
     kind = { kind: 'new_root' },
     updatedAt = DRAFT_STARTED_AT,
-  }: { entry?: Partial<Draft['entry']>; kind?: DraftKind; updatedAt?: string } = {},
+    writeId = null,
+  }: {
+    entry?: Partial<Draft['entry']>
+    kind?: DraftKind
+    updatedAt?: string
+    writeId?: string | null
+  } = {},
 ): Draft {
   return {
     session_id: sessionId,
     started_at: DRAFT_STARTED_AT,
     updated_at: updatedAt,
+    write_id: writeId,
     entry: { ...newDraftEntry(), events: [], ...entry },
     ...kind,
   }
@@ -76,5 +83,5 @@ export function relatedTo(
 
 /** Stores `draft` as a first save would, with none of its events on disk yet. */
 export async function seedDraft(drafts: DraftRepository, draft: Draft): Promise<void> {
-  await drafts.save(draft, { entry: 0, parent: 0 })
+  await drafts.save(draft)
 }

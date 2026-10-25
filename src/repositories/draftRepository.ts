@@ -1,22 +1,20 @@
-import type { Draft, DraftDocumentRole, DraftSnapshot } from '@/types/draft'
+import type { Draft, DraftSnapshot } from '@/types/draft'
 import type { CreateEntryInput, Entry } from '@/types/entry'
 
 /**
- * How much of each of a session's event logs the store already holds, so a save appends only the
- * tail. `parent` is meaningless (and ignored) when the draft has no `parent` document.
- */
-export type PersistedEvents = Record<DraftDocumentRole, number>
-
-/**
- * A save that would append events over ones already stored: another tab wrote this draft since
- * this one last read or wrote it. Refused whole, since interleaving two tabs' events would leave a
- * log that replays to neither's document.
+ * A write to a draft that another tab has written, sealed or discarded since this one last read or
+ * wrote it: the write it follows isn't the stored row's `write_id`. Refused whole, writing nothing.
  */
 export class DraftConflictError extends Error {
   constructor() {
     super('This draft was changed in another tab')
     this.name = 'DraftConflictError'
   }
+}
+
+/** Refuses a write unless `stored` is the row `follows` names; null names none. */
+export function assertFollows(stored: DraftSnapshot | undefined, follows: string | null): void {
+  if ((stored?.write_id ?? null) !== follows) throw new DraftConflictError()
 }
 
 /**
@@ -26,15 +24,18 @@ export class DraftConflictError extends Error {
  *
  * Its own interface rather than a corner of the entry repository: drafts are keyed by session, are
  * mutable, and are deleted on sealing. Nothing they need overlaps with what an entry query does.
+ *
+ * Every write names the stored write it follows: null for none. One that names any other throws
+ * `DraftConflictError`, checked in the write's own transaction.
  */
 export interface DraftRepository {
   /**
-   * Upsert the snapshot and append whatever events `persisted` says aren't stored yet. Called on
-   * every scheduled flush, so it must be cheap — the event log is the one unbounded part of a
-   * draft, which is why it is appended rather than rewritten wholesale. Throws
-   * `DraftConflictError`, writing nothing, if an event it appends is already stored.
+   * Upserts the snapshot as a new write following `draft.write_id`, and returns the new write's
+   * id. Called on every scheduled flush, so it must be cheap — the event log is the one unbounded
+   * part of a draft, so only its tail is appended: with the write it follows confirmed, what's
+   * stored is the start of what `draft` holds.
    */
-  save(draft: Draft, persisted: PersistedEvents): Promise<void>
+  save(draft: Draft): Promise<string>
   getById(sessionId: string): Promise<Draft | null>
   /**
    * Most recently touched first: the drafts list exists so none are stranded invisibly. Snapshots,
@@ -45,9 +46,13 @@ export interface DraftRepository {
    * Writes the entries a draft seals into and removes the draft, as one unit. Two writes could
    * leave a draft whose entries already exist — after a crash between them, or a delete that
    * failed — and saving it again would duplicate them for good. A refused write, such as a stale
-   * revision, leaves the draft exactly as it was. Returns the entries in `inputs` order.
+   * revision, leaves the draft exactly as it was, and a draft already gone is refused, so its
+   * entries are never written twice. Returns the entries in `inputs` order.
    */
-  seal(sessionId: string, inputs: CreateEntryInput[]): Promise<Entry[]>
-  /** Removes a draft without sealing it: discarding it, or emptying it of everything written. */
-  delete(sessionId: string): Promise<void>
+  seal(sessionId: string, inputs: CreateEntryInput[], follows: string | null): Promise<Entry[]>
+  /**
+   * Removes a draft without sealing it: discarding it, or emptying it of everything written. One
+   * already gone is no conflict, since that is the state asked for.
+   */
+  delete(sessionId: string, follows: string | null): Promise<void>
 }

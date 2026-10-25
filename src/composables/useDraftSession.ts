@@ -278,7 +278,7 @@ export function useDraftSession() {
     const id = sessionId.value ?? unreadable.value?.draft.session_id
     if (!id) return
 
-    await drafts.discardDraft(id)
+    await drafts.discardDraft(id, unreadable.value?.draft.write_id ?? null)
     sessionId.value = null
     unreadable.value = null
   }

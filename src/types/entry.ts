@@ -210,7 +210,7 @@ export function createEntryInput(
   }
 }
 
-/** Total order every list and fold uses. See CLAUDE.md, "Ordering". */
+/** Total order every list and fold uses, tied on id (ENTRY_MODEL.md, "Fields"). */
 export function compareEntries(a: Entry, b: Entry): number {
   return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 }

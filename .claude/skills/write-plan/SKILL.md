@@ -8,7 +8,7 @@ description: Planning a Chronicle change that spans more than a step or two — 
 1. **Tidy first.** Plans in `~/.claude/plans/` marked `Status: done` more than seven days ago, unless they've come up since: move anything lasting into the docs, then delete them. In memory, drop progress notes, facts that no longer hold, and anything a CLAUDE.md or checked-in doc already says. List what you'd delete, and delete on the user's word.
 2. **Read** the sections of the docs in CLAUDE.md's table that cover the change, and the code it touches.
 3. **Test the design while it's open.** Skip this for a routine plan.
-   - **A decision with real alternatives:** give a fresh Plan agent the draft and the docs, not this session's reasoning, and ask for the weakest decision and a simpler alternative. It argues; you decide, and tell the user what it raised.
+   - **A decision with real alternatives:** give a fresh Plan agent the draft and the docs, not this session's reasoning, and ask for the weakest decision, a simpler alternative, and what the change makes redundant: guards, bookkeeping, parameters, and their tests. It argues; you decide, and tell the user what it raised.
    - **Doubt about feasibility:** a spike by an agent in its own worktree, reported back and thrown away, so the user's working tree is untouched.
    - **Several areas not yet read:** parallel Explore agents, so the plan's context holds conclusions rather than file dumps.
 4. **Write it in this shape:**

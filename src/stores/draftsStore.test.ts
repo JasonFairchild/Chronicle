@@ -128,6 +128,39 @@ describe('useDraftsStore', () => {
       expect(flushed?.entry.title).toBe('Lake Tahoe')
       expect(flushed?.entry.events).toHaveLength(1)
     })
+
+    it('writes a draft again once it is typed in after being emptied', async () => {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
+      await store.flush(sessionId)
+      store.recordChange(sessionId, draftChangeTo(''))
+      await store.flush(sessionId)
+
+      store.recordChange(sessionId, draftChangeTo('It snowed'))
+      await store.flush(sessionId)
+
+      const stored = await draftRepository.getById(sessionId)
+      expect(stored?.entry.content).toBe(textContent('It snowed'))
+    })
+
+    it('keeps what another tab wrote when this one, not having seen it, empties its copy', async () => {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
+      await store.flush(sessionId)
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, draftChangeTo('It rained all day'))
+      await otherTab.flush(sessionId)
+
+      store.recordChange(sessionId, draftChangeTo(''))
+      await store.flush(sessionId)
+
+      const stored = await draftRepository.getById(sessionId)
+      expect(stored?.entry.content).toBe(textContent('It rained all day'))
+    })
   })
 
   describe('ending a session', () => {
@@ -146,15 +179,16 @@ describe('useDraftsStore', () => {
         const held = new Promise<void>((resolve) => {
           releaseSave = resolve
         })
-        vi.spyOn(draftRepository, 'save').mockImplementationOnce(async (draft, persisted) => {
+        vi.spyOn(draftRepository, 'save').mockImplementationOnce(async (draft) => {
           await held
-          return originalSave(draft, persisted)
+          return originalSave(draft)
         })
 
         await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
         // The flush's write is now in flight, awaiting `held`.
 
-        const ending = store[end](sessionId)
+        const ending =
+          end === 'sealDraft' ? store.sealDraft(sessionId) : store.discardDraft(sessionId, null)
         releaseSave()
         await ending
 
@@ -188,12 +222,28 @@ describe('useDraftsStore', () => {
       expect(docToPlainText(stored!.entry.content)).toBe('I received the offer')
     })
 
+    it('lists a draft as this tab last wrote it, so discarding it from the list follows that write', async () => {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
+      await store.flush(sessionId)
+      store.recordChange(sessionId, draftChangeTo('It rained all day'))
+
+      // Leaving the composer for the drafts list: its last write is still landing as the list loads.
+      const leaving = store.abandonDraft(sessionId)
+      await store.loadDrafts()
+      await leaving
+      await store.discardDraft(sessionId, store.drafts[0]!.write_id)
+
+      expect(await draftRepository.getById(sessionId)).toBeNull()
+    })
+
     it('leaves the session open when a discard fails', async () => {
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
       vi.spyOn(draftRepository, 'delete').mockRejectedValueOnce(new Error('discard rejected'))
 
-      await expect(store.discardDraft(sessionId)).rejects.toThrow('discard rejected')
+      await expect(store.discardDraft(sessionId, null)).rejects.toThrow('discard rejected')
       expect(store.currentDraft(sessionId)).not.toBeNull()
     })
 
@@ -275,17 +325,14 @@ describe('useDraftsStore', () => {
 
       // Another tab picks the draft up and carries on with it.
       const stored = (await draftRepository.getById(sessionId))!
-      await draftRepository.save(
-        {
-          ...stored,
-          entry: {
-            ...stored.entry,
-            content: textContent('Half a thought, finished elsewhere'),
-            events: [...stored.entry.events, { kind: 'edit', at: 5_000, steps: [{ n: 2 }] }],
-          },
+      await draftRepository.save({
+        ...stored,
+        entry: {
+          ...stored.entry,
+          content: textContent('Half a thought, finished elsewhere'),
+          events: [...stored.entry.events, { kind: 'edit', at: 5_000, steps: [{ n: 2 }] }],
         },
-        { entry: stored.entry.events.length, parent: 0 },
-      )
+      })
 
       const resumed = await store.resumeDraft(sessionId)
       const sealed = await store.sealDraft(sessionId)
@@ -296,13 +343,10 @@ describe('useDraftsStore', () => {
     })
 
     it('forgets what another tab changed once the draft is resumed, since the resume reads it', async () => {
-      vi.useFakeTimers()
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
       store.recordChange(sessionId, draftChangeTo('Half a thought'))
       await store.flush(sessionId)
-      // Same-millisecond writes share an `updated_at`, which a return can't tell apart.
-      await vi.advanceTimersByTimeAsync(1)
 
       const otherTab = anotherTab()
       await otherTab.resumeDraft(sessionId)
@@ -390,6 +434,29 @@ describe('useDraftsStore', () => {
 
       const stored = await draftRepository.getById(sessionId)
       expect(docToPlainText(stored!.entry.content)).toBe('I received the offer')
+    })
+
+    it('keeps a claim another tab writes in while this one releases it, saying nothing', async () => {
+      const store = useDraftsStore()
+      const original = await existingEntry('I recieved the offer')
+      const sessionId = store.beginDraft({ kind: 'revision', parent: original })
+      await store.flush(sessionId)
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+
+      // The other tab types just after this one has read the claim as empty.
+      const read = draftRepository.getById.bind(draftRepository)
+      vi.spyOn(draftRepository, 'getById').mockImplementationOnce(async (id) => {
+        const stored = await read(id)
+        otherTab.recordChange(sessionId, draftChangeTo('I received the offer'))
+        await otherTab.flush(sessionId)
+        return stored
+      })
+      await store.abandonDraft(sessionId)
+
+      const stored = await draftRepository.getById(sessionId)
+      expect(stored?.entry.content).toBe(textContent('I received the offer'))
+      expect(store.error).toBeNull()
     })
 
     it('keeps a resumed draft that holds work when it is let go untouched', async () => {

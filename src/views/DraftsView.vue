@@ -82,11 +82,11 @@ function describe(draft: DraftSnapshot): string {
   return `Related entry on “${parent}”`
 }
 
-async function discard(sessionId: string): Promise<void> {
+async function discard(draft: DraftSnapshot): Promise<void> {
   error.value = null
 
   try {
-    await drafts.discardDraft(sessionId)
+    await drafts.discardDraft(draft.session_id, draft.write_id)
   } catch (err) {
     error.value = toErrorMessage(err, 'Failed to discard draft')
   }
@@ -132,11 +132,7 @@ async function discard(sessionId: string): Promise<void> {
         </p>
 
         <div class="mt-3 flex justify-end gap-2">
-          <button
-            type="button"
-            class="btn-secondary px-3 py-1.5"
-            @click="discard(draft.session_id)"
-          >
+          <button type="button" class="btn-secondary px-3 py-1.5" @click="discard(draft)">
             Discard
           </button>
           <RouterLink :to="draftLocation(draft)" class="btn-primary px-3 py-1.5">

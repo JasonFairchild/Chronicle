@@ -8,24 +8,11 @@ import {
   withEvents,
 } from '@/types/draft'
 import type { AuthoringEvent, CreateEntryInput, Entry } from '@/types/entry'
+import { newId } from '@/utils/id'
 
 import { type ChronicleDatabase, resolveDatabase, type StoredDraftEvent } from './chronicleDatabase'
 import { DexieEntryRepository } from './dexieEntryRepository'
-import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
-
-function eventRows(
-  sessionId: string,
-  document: DraftDocumentRole,
-  events: AuthoringEvent[],
-  persistedCount: number,
-): StoredDraftEvent[] {
-  return events.slice(persistedCount).map((event, i) => ({
-    session_id: sessionId,
-    document,
-    index: persistedCount + i,
-    event,
-  }))
-}
+import { assertFollows, type DraftRepository } from './draftRepository'
 
 function reassemble(snapshot: DraftSnapshot, rows: StoredDraftEvent[]): Draft {
   const byDocument = (document: DraftDocumentRole) =>
@@ -52,21 +39,33 @@ export class DexieDraftRepository implements DraftRepository {
     this.entries = new DexieEntryRepository(this.db)
   }
 
-  async save(draft: Draft, persisted: PersistedEvents): Promise<void> {
-    const newEvents = [
-      ...eventRows(draft.session_id, 'entry', draft.entry.events, persisted.entry),
-      ...(draft.kind === 'new_related'
-        ? eventRows(draft.session_id, 'parent', draft.parent.events, persisted.parent)
-        : []),
-    ]
+  /** Rows for what `events` holds past the stored log, which is always where it starts. */
+  private async tailRows(
+    sessionId: string,
+    document: DraftDocumentRole,
+    events: AuthoringEvent[],
+  ): Promise<StoredDraftEvent[]> {
+    const stored = await this.db.draftEvents
+      .where('[session_id+document+index]')
+      .between([sessionId, document, Dexie.minKey], [sessionId, document, Dexie.maxKey])
+      .count()
+    return events
+      .slice(stored)
+      .map((event, i) => ({ session_id: sessionId, document, index: stored + i, event }))
+  }
 
+  async save(draft: Draft): Promise<string> {
+    const { session_id: sessionId } = draft
+    const writeId = newId()
     // The snapshot row never carries events: they live in `draftEvents` from here on, appended
     // rather than rewritten, and reassembled by `getById`.
-    const snapshot = toSnapshot(draft)
+    const snapshot = { ...toSnapshot(draft), write_id: writeId }
 
     // One transaction: a crash between the two writes must not leave events on disk that the
     // snapshot doesn't yet account for, or vice versa.
     await this.db.transaction('rw', this.db.drafts, this.db.draftEvents, async () => {
+      assertFollows(await this.db.drafts.get(sessionId), draft.write_id)
+
       // `put`, not `add`: overwriting is the point of this store, and it is why drafts are kept
       // out of the entries table rather than being a flag on it. The clone guards a narrower race
       // than crash recovery (that fidelity comes from the durable event log): Dexie holds this
@@ -74,16 +73,17 @@ export class DexieDraftRepository implements DraftRepository {
       // later, and cloning keeps a keystroke landing in that window from mutating an in-flight
       // write.
       await this.db.drafts.put(structuredClone(snapshot))
-      if (newEvents.length === 0) return
 
-      // `add`, not `put`: an event is appended once, and an index already taken means another tab
-      // wrote this log since this one last did. Throwing aborts the snapshot write above too.
-      try {
-        await this.db.draftEvents.bulkAdd(structuredClone(newEvents))
-      } catch (err) {
-        throw err instanceof Dexie.BulkError ? new DraftConflictError() : err
-      }
+      const newEvents = [
+        ...(await this.tailRows(sessionId, 'entry', draft.entry.events)),
+        ...(draft.kind === 'new_related'
+          ? await this.tailRows(sessionId, 'parent', draft.parent.events)
+          : []),
+      ]
+      // `add`, not `put`: a stored event is never written over.
+      if (newEvents.length > 0) await this.db.draftEvents.bulkAdd(structuredClone(newEvents))
     })
+    return writeId
   }
 
   private async eventsFor(sessionId: string): Promise<StoredDraftEvent[]> {
@@ -109,19 +109,27 @@ export class DexieDraftRepository implements DraftRepository {
     )
   }
 
-  async seal(sessionId: string, inputs: CreateEntryInput[]): Promise<Entry[]> {
+  async seal(
+    sessionId: string,
+    inputs: CreateEntryInput[],
+    follows: string | null,
+  ): Promise<Entry[]> {
     const { drafts, draftEvents, entries } = this.db
 
     // `createMany` opens its own transaction on `entries`, which joins this one. The draft goes
     // first, so an entry the write refuses rolls its deletion back too.
     return this.db.transaction('rw', [drafts, draftEvents, entries], async () => {
-      await this.delete(sessionId)
+      assertFollows(await drafts.get(sessionId), follows) // `delete` takes a row already gone.
+      await this.delete(sessionId, follows)
       return this.entries.createMany(inputs)
     })
   }
 
-  async delete(sessionId: string): Promise<void> {
+  async delete(sessionId: string, follows: string | null): Promise<void> {
     await this.db.transaction('rw', this.db.drafts, this.db.draftEvents, async () => {
+      const stored = await this.db.drafts.get(sessionId)
+      if (stored) assertFollows(stored, follows)
+
       await this.db.drafts.delete(sessionId)
       await this.db.draftEvents.where('session_id').equals(sessionId).delete()
     })

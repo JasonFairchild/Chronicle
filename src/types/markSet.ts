@@ -35,7 +35,7 @@ export interface MarkSet {
 
 export type CreateMarkSetInput = Omit<MarkSet, 'id' | 'created_at'>
 
-/** Oldest first, tied on id as entries are (CLAUDE.md, "Ordering"). */
+/** Oldest first, tied on id as entries are (ENTRY_MODEL.md, "Fields"). */
 export function compareMarkSets(a: MarkSet, b: MarkSet): number {
   return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 }

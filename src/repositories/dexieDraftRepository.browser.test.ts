@@ -28,7 +28,6 @@ describe('DexieDraftRepository persistence', () => {
           events: [{ kind: 'edit', at: 1_000, steps: [{ stepType: 'replace' }] }],
         },
       }),
-      { entry: 0, parent: 0 },
     )
 
     // A fresh connection sharing no in-memory state with the first — the closest an automated

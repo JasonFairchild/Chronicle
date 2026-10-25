@@ -146,8 +146,7 @@ describe('NewEntryView (browser)', () => {
   })
 
   it('offers a new entry once its draft is saved or discarded elsewhere', async () => {
-    await seedDraft(
-      draftRepository,
+    const stored = await draftRepository.save(
       makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
     )
     const screen = await mountNewEntry({ draft: 'session-1' })
@@ -156,7 +155,7 @@ describe('NewEntryView (browser)', () => {
       .toHaveTextContent('Half a thought')
 
     // Another tab's save or discard leaves no row; returning here catches up, as App does on focus.
-    await draftRepository.delete('session-1')
+    await draftRepository.delete('session-1', stored)
     await useDraftsStore().adoptChangesElsewhere()
 
     await expect

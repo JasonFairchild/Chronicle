@@ -24,6 +24,7 @@ type DraftOf<Doc> = {
   session_id: string
   started_at: string // Shared by both documents' traces when sealing.
   updated_at: string
+  write_id: string | null // The stored write it follows, if any (AUTHORING.md, "Draft safety").
   entry: Doc & DraftFields
 } & (
   | { kind: 'new_root' }

@@ -5,7 +5,7 @@ import { isBlankDraft, isEmptyDocument } from '@/domain/entryDocument'
 import { currentVersionId } from '@/domain/reconstructEntryState'
 import { TraceRecorder } from '@/domain/traceRecorder'
 import { draftRepository } from '@/repositories'
-import { DraftConflictError, type PersistedEvents } from '@/repositories/draftRepository'
+import { DraftConflictError } from '@/repositories/draftRepository'
 import {
   type Draft,
   type DraftDocument,
@@ -80,7 +80,10 @@ export class DraftUnreadableError extends Error {
 }
 
 interface ActiveSession {
-  /** Every event log lives in the recorders, joined to this only by `materialize`. */
+  /**
+   * Every event log lives in the recorders, joined to this only by `materialize`. Its `write_id`
+   * is the stored write this tab last read or made, null while nothing is on disk.
+   */
   draft: DraftSnapshot
   recorder: TraceRecorder
   /** The parent document's log, present exactly when the draft has a `parent`. */
@@ -88,24 +91,11 @@ interface ActiveSession {
   timer: ReturnType<typeof setTimeout> | null
   /** True once anything has actually been typed, so an opened-and-abandoned composer saves nothing. */
   dirty: boolean
-  /** Whether a row for this session exists on disk, so an emptied draft knows to remove it. */
-  persisted: boolean
-  /**
-   * The stored row's `updated_at` as this tab last read or wrote it. A row that says otherwise was
-   * written by another tab since.
-   */
-  storedAt: string | null
-  /**
-   * How much of each event log the store already holds, so the next flush's `save` appends only
-   * the tail. Advanced only after a successful write — see `flush` — and reset to zero the moment
-   * a write deletes the row instead, or the counts and what's actually stored would drift apart.
-   */
-  persistedEvents: PersistedEvents
   /**
    * The repository write `flush` is currently awaiting, if any. Cancelling the timer stops a
    * flush that hasn't started; it does nothing for one already mid-write. Sealing or discarding
-   * must wait on this too, or a write that resolves after `delete()` has already run would
-   * resurrect the row it just removed.
+   * waits on this too: a session's first write, following none, would recreate the row if it
+   * landed after, and a later one would refuse the seal or discard as a conflict.
    */
   flushing: Promise<void> | null
 }
@@ -130,7 +120,12 @@ function startingSnapshot(
   sessionId: string,
   startedAt: string,
 ): DraftSnapshot {
-  const header = { session_id: sessionId, started_at: startedAt, updated_at: startedAt }
+  const header = {
+    session_id: sessionId,
+    started_at: startedAt,
+    updated_at: startedAt,
+    write_id: null,
+  }
 
   switch (start.kind) {
     case 'new_root':
@@ -166,14 +161,6 @@ function claimsEntry(draft: DraftSnapshot): boolean {
   return versionsRevisedBy(draft).length > 0
 }
 
-/** How long each of a draft's event logs is. */
-function eventCounts(draft: Draft): PersistedEvents {
-  return {
-    entry: draft.entry.events.length,
-    parent: draft.kind === 'new_related' ? draft.parent.events.length : 0,
-  }
-}
-
 export const useDraftsStore = defineStore('drafts', () => {
   const drafts = shallowRef<DraftSnapshot[]>([])
   const error = ref<string | null>(null)
@@ -185,14 +172,22 @@ export const useDraftsStore = defineStore('drafts', () => {
   const active = new Map<string, ActiveSession>()
   let adopting: Promise<void> | null = null
 
+  /** Resolves once every write this tab has under way has landed, so a read of disk includes it. */
+  async function writesLanded(): Promise<void> {
+    await Promise.all([...active.values()].map((entry) => entry.flushing?.catch(() => {})))
+  }
+
   /**
    * The drafts list. It exists because a draft can live indefinitely, so without somewhere to see
    * them, an unsealed session would be stranded where nothing in the app ever mentions it again.
+   * Read once this tab's own writes land, or a row would name a write before them, and discarding
+   * it from here would be refused.
    */
   async function loadDrafts(): Promise<void> {
     error.value = null
 
     try {
+      await writesLanded()
       drafts.value = await draftRepository.list()
     } catch (err) {
       error.value = toErrorMessage(err, 'Failed to load drafts')
@@ -201,7 +196,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /** Holds a draft open: its snapshot, and a recorder per document carrying on from its log. */
-  function open(draft: Draft, persisted: boolean): ActiveSession {
+  function open(draft: Draft): ActiveSession {
     const recorderFor = (document: DraftDocument) => {
       try {
         return TraceRecorder.resume(
@@ -221,10 +216,6 @@ export const useDraftsStore = defineStore('drafts', () => {
       parentRecorder: draft.kind === 'new_related' ? recorderFor(draft.parent) : null,
       timer: null,
       dirty: false,
-      persisted,
-      storedAt: persisted ? draft.updated_at : null,
-      // Whatever a draft arrives with is, by definition, already stored.
-      persistedEvents: eventCounts(draft),
       flushing: null,
     }
   }
@@ -263,7 +254,7 @@ export const useDraftsStore = defineStore('drafts', () => {
 
     try {
       const stored = await draftRepository.getById(sessionId)
-      if (stored) active.set(sessionId, open(stored, true))
+      if (stored) active.set(sessionId, open(stored))
       else active.delete(sessionId)
 
       const change = { gone: !stored, unsaved }
@@ -297,27 +288,24 @@ export const useDraftsStore = defineStore('drafts', () => {
     entry.dirty = false
 
     const write = (async () => {
-      // One write at a time: each appends events from where the last one's left off. One that
-      // lost to another tab has already replaced this session with what disk holds.
+      // One write at a time: each follows the one before it. One that lost to another tab has
+      // already replaced this session with what disk holds.
       await previous?.catch(() => {})
       if (active.get(sessionId) !== entry) return
       const draft = materialize(entry)
 
+      // Each write's id goes on the snapshot as it is by then: one replaced while the write was
+      // under way still carries the id it was built on.
       if (!claimsEntry(draft) && isBlankDraft(draft.entry.content, draft.entry.title)) {
-        if (entry.persisted) {
-          await draftRepository.delete(sessionId)
-          entry.persisted = false
-          entry.storedAt = null
-          // The row and its events are both gone; the next save must start the log over.
-          entry.persistedEvents = { entry: 0, parent: 0 }
+        if (draft.write_id !== null) {
+          await draftRepository.delete(sessionId, draft.write_id)
+          entry.draft = { ...entry.draft, write_id: null }
         }
         return
       }
 
-      await draftRepository.save(draft, entry.persistedEvents)
-      entry.persisted = true
-      entry.storedAt = draft.updated_at
-      entry.persistedEvents = eventCounts(draft)
+      const writeId = await draftRepository.save(draft)
+      entry.draft = { ...entry.draft, write_id: writeId }
     })()
 
     entry.flushing = write
@@ -358,7 +346,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   function beginDraft(start: BeginDraftInput): string {
     const sessionId = newId()
     const snapshot = startingSnapshot(start, sessionId, newTimestamp())
-    const entry = open(withEvents(snapshot, { entry: [], parent: [] }), false)
+    const entry = open(withEvents(snapshot, { entry: [], parent: [] }))
 
     active.set(sessionId, entry)
     if (claimsEntry(snapshot)) {
@@ -396,9 +384,8 @@ export const useDraftsStore = defineStore('drafts', () => {
     const draft = await draftRepository.getById(sessionId)
     if (!draft) return null
 
-    // Nothing new to write until this session is typed in, but the row is already on disk, so
-    // emptying it later has something to delete.
-    active.set(sessionId, open(draft, true))
+    // Nothing new to write until this session is typed in.
+    active.set(sessionId, open(draft))
     return structuredClone(toSnapshot(draft))
   }
 
@@ -520,16 +507,16 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   async function catchUpWithDisk(): Promise<void> {
-    const open = [...active.entries()].filter(([, entry]) => entry.persisted)
-
-    // A write of this tab's still landing would read as someone else's.
-    await Promise.all(open.map(([, entry]) => entry.flushing?.catch(() => {})))
+    // A write of this tab's still landing would read as someone else's, and one that deletes a row
+    // takes its session off disk, so which sessions are asked about is settled after them.
+    await writesLanded()
+    const open = [...active.entries()].filter(([, entry]) => entry.draft.write_id !== null)
 
     try {
       drafts.value = await draftRepository.list()
-      const stored = new Map(drafts.value.map((row) => [row.session_id, row.updated_at]))
+      const stored = new Map(drafts.value.map((row) => [row.session_id, row.write_id]))
       for (const [sessionId, entry] of open) {
-        if (stored.get(sessionId) === entry.storedAt) continue
+        if (stored.get(sessionId) === entry.draft.write_id) continue
         await adoptStored(sessionId, entry.dirty ? entry.draft.entry.content : null)
       }
     } catch (err) {
@@ -561,9 +548,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   async function sealDraft(sessionId: string): Promise<Entry> {
     const entry = requireActive(sessionId)
     cancelFlush(entry)
-    // A flush already mid-write must finish before the seal removes this session's row, or its
-    // resolution could land after and resurrect a draft for content that is already an entry.
-    await entry.flushing?.catch(() => {})
+    await entry.flushing?.catch(() => {}) // Why, at `ActiveSession.flushing`.
 
     if (isEmptyDocument(entry.draft.entry.content)) {
       throw new Error('Entry content cannot be empty')
@@ -579,7 +564,7 @@ export const useDraftsStore = defineStore('drafts', () => {
         entry.recorder.seal(),
         entry.parentRecorder?.seal() ?? null,
       )
-      written = await draftRepository.seal(sessionId, inputs)
+      written = await draftRepository.seal(sessionId, inputs, entry.draft.write_id)
     } catch (err) {
       error.value = toErrorMessage(err, 'Failed to save entry')
       // Whatever was typed since the last flush still has to reach disk.
@@ -602,16 +587,18 @@ export const useDraftsStore = defineStore('drafts', () => {
 
   /**
    * Removes a claim that holds no work. Judged by what disk holds rather than this tab's copy:
-   * another tab may have resumed the draft and written in it since.
+   * another tab may have resumed the draft and written in it since, even after the read here, which
+   * refuses the delete and keeps the claim.
    */
   async function releaseIfEmpty(sessionId: string): Promise<void> {
     try {
       const stored = await draftRepository.getById(sessionId)
       if (!stored || (await useEntriesStore().draftHoldsWork(stored))) return
 
-      await draftRepository.delete(sessionId)
+      await draftRepository.delete(sessionId, stored.write_id)
       await loadDrafts()
     } catch (err) {
+      if (err instanceof DraftConflictError) return
       error.value = toErrorMessage(err, 'Failed to release draft')
     }
   }
@@ -629,17 +616,19 @@ export const useDraftsStore = defineStore('drafts', () => {
     if (entry && claimsEntry(entry.draft)) await releaseIfEmpty(sessionId)
   }
 
-  /** Throws the session away. The one thing that ever removes work, and only on request. */
-  async function discardDraft(sessionId: string): Promise<void> {
+  /**
+   * Throws the session away. The one thing that ever removes work, and only on request. A draft no
+   * session here holds is discarded as `seen`, the stored write its caller last read: a list row,
+   * or a draft that couldn't be reopened.
+   */
+  async function discardDraft(sessionId: string, seen: string | null): Promise<void> {
     const entry = active.get(sessionId)
     if (entry) {
       cancelFlush(entry)
-      // Same reasoning as sealDraft: let a flush already mid-write land before the row it holds
-      // is deleted, or it can resurrect what's being discarded.
-      await entry.flushing?.catch(() => {})
+      await entry.flushing?.catch(() => {}) // Why, at `ActiveSession.flushing`.
     }
 
-    await draftRepository.delete(sessionId)
+    await draftRepository.delete(sessionId, entry ? entry.draft.write_id : seen)
     active.delete(sessionId) // Only once the row is gone: a failed delete leaves the session open.
     await loadDrafts()
   }

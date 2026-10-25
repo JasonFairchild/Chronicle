@@ -121,21 +121,21 @@ describe('NewEntryView', () => {
   })
 
   it('offers a new entry once its draft is saved or discarded elsewhere', () => {
-    cy.then(() =>
-      seedDraft(
-        draftRepository,
+    let stored: string
+    cy.then(async () => {
+      stored = await draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('Half a thought'), events: TYPED },
         }),
-      ),
-    )
+      )
+    })
     cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-1' })
 
     cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
 
     // Another tab's save or discard leaves no row; returning here catches up, as App does on focus.
     cy.then(async () => {
-      await draftRepository.delete('session-1')
+      await draftRepository.delete('session-1', stored)
       await useDraftsStore().adoptChangesElsewhere()
     })
 

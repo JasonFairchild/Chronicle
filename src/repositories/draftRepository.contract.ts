@@ -4,10 +4,8 @@ import { StaleVersionError } from '@/domain/entryValidation'
 import { makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { type AuthoringEvent, createEntryInput } from '@/types/entry'
 
-import { DraftConflictError, type DraftRepository, type PersistedEvents } from './draftRepository'
+import { DraftConflictError, type DraftRepository } from './draftRepository'
 import type { EntryRepository } from './entryRepository'
-
-const NOTHING_PERSISTED: PersistedEvents = { entry: 0, parent: 0 }
 
 /** A draft repository with the entry repository its seals write into. */
 export interface DraftStorage {
@@ -33,14 +31,15 @@ export function runDraftRepositoryContract(
     })
 
     it('seals a draft into its entries and removes it, as one write', async () => {
-      await repository.save(
+      const stored = await repository.save(
         makeDraft('session-1', { entry: { content: 'Finished' } }),
-        NOTHING_PERSISTED,
       )
 
-      const [sealed] = await repository.seal('session-1', [
-        createEntryInput({ content: 'Finished' }),
-      ])
+      const [sealed] = await repository.seal(
+        'session-1',
+        [createEntryInput({ content: 'Finished' })],
+        stored,
+      )
 
       expect((await entries.getById(sealed!.id))?.content).toBe('Finished')
       expect(await repository.getById('session-1')).toBeNull()
@@ -56,38 +55,77 @@ export function runDraftRepositoryContract(
           base_version_id: root.id,
         })
       await entries.create(staleRevision())
-      const draft = makeDraft('session-1', {
-        entry: {
-          title: 'Second go',
-          content: 'Two, from a stale start',
-          events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
-        },
-      })
-      await repository.save(draft, NOTHING_PERSISTED)
+      const stored = await repository.save(
+        makeDraft('session-1', {
+          entry: {
+            title: 'Second go',
+            content: 'Two, from a stale start',
+            events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
+          },
+        }),
+      )
+      const before = await repository.getById('session-1')
 
-      await expect(repository.seal('session-1', [staleRevision()])).rejects.toThrow(
+      await expect(repository.seal('session-1', [staleRevision()], stored)).rejects.toThrow(
         StaleVersionError,
       )
 
-      expect(await repository.getById('session-1')).toEqual(draft)
+      expect(await repository.getById('session-1')).toEqual(before)
       expect(await entries.listRevisions(root.id)).toHaveLength(1)
+    })
+
+    it('refuses to seal a draft written since, writing no entry', async () => {
+      const first = await repository.save(makeDraft('session-1', { entry: { content: 'One' } }))
+      // Another tab writes on...
+      await repository.save(
+        makeDraft('session-1', { entry: { content: 'One two' }, writeId: first }),
+      )
+
+      // ...and this one seals the version it last saw.
+      await expect(
+        repository.seal('session-1', [createEntryInput({ content: 'One' })], first),
+      ).rejects.toThrow(DraftConflictError)
+
+      expect((await repository.getById('session-1'))?.entry.content).toBe('One two')
+      expect(await entries.listRootEntries()).toEqual([])
+    })
+
+    it('refuses to seal a draft removed since, so its entry is never written twice', async () => {
+      const stored = await repository.save(makeDraft('session-1', { entry: { content: 'One' } }))
+      // Another tab seals it...
+      await repository.seal('session-1', [createEntryInput({ content: 'One' })], stored)
+
+      // ...and this one, holding the same write, seals it again.
+      await expect(
+        repository.seal('session-1', [createEntryInput({ content: 'One' })], stored),
+      ).rejects.toThrow(DraftConflictError)
+
+      expect(await entries.listRootEntries()).toHaveLength(1)
     })
 
     it('returns the entries it seals in the order it was given them', async () => {
       const root = await entries.create(createEntryInput({ content: 'One' }))
-      await repository.save(makeDraft('session-1'), NOTHING_PERSISTED)
+      const stored = await repository.save(makeDraft('session-1'))
 
       // An anchor-mode seal: the parent's revision, then the related entry, which the caller
       // tells apart by position alone.
-      const sealed = await repository.seal('session-1', [
-        createEntryInput({
-          content: 'One, marked',
-          parent_id: root.id,
-          relation_type: 'revision',
-          base_version_id: root.id,
-        }),
-        createEntryInput({ content: 'About one', parent_id: root.id, relation_type: 'annotation' }),
-      ])
+      const sealed = await repository.seal(
+        'session-1',
+        [
+          createEntryInput({
+            content: 'One, marked',
+            parent_id: root.id,
+            relation_type: 'revision',
+            base_version_id: root.id,
+          }),
+          createEntryInput({
+            content: 'About one',
+            parent_id: root.id,
+            relation_type: 'annotation',
+          }),
+        ],
+        stored,
+      )
 
       expect(sealed.map((entry) => entry.content)).toEqual(['One, marked', 'About one'])
     })
@@ -117,7 +155,6 @@ export function runDraftRepositoryContract(
             },
           ),
         }),
-        NOTHING_PERSISTED,
       )
 
       const fetched = await repository.getById('session-1')
@@ -146,16 +183,13 @@ export function runDraftRepositoryContract(
     })
 
     it('overwrites in place, because a live session is working space rather than history', async () => {
-      await repository.save(
-        makeDraft('session-1', { entry: { content: 'It rai' } }),
-        NOTHING_PERSISTED,
-      )
+      const first = await repository.save(makeDraft('session-1', { entry: { content: 'It rai' } }))
       await repository.save(
         makeDraft('session-1', {
           entry: { content: 'It rained all day.' },
           updatedAt: '2026-09-05T10:00:05.000Z',
+          writeId: first,
         }),
-        NOTHING_PERSISTED,
       )
 
       expect(await repository.list()).toHaveLength(1)
@@ -163,14 +197,8 @@ export function runDraftRepositoryContract(
     })
 
     it('lists drafts most recently touched first', async () => {
-      await repository.save(
-        makeDraft('older', { updatedAt: '2026-09-05T10:00:00.000Z' }),
-        NOTHING_PERSISTED,
-      )
-      await repository.save(
-        makeDraft('newer', { updatedAt: '2026-09-05T11:00:00.000Z' }),
-        NOTHING_PERSISTED,
-      )
+      await repository.save(makeDraft('older', { updatedAt: '2026-09-05T10:00:00.000Z' }))
+      await repository.save(makeDraft('newer', { updatedAt: '2026-09-05T11:00:00.000Z' }))
 
       expect((await repository.list()).map((draft) => draft.session_id)).toEqual(['newer', 'older'])
     })
@@ -178,8 +206,8 @@ export function runDraftRepositoryContract(
     it('lists drafts touched in the same millisecond later-begun first', async () => {
       // Session ids are time-ordered, so the later one sorts last as text.
       const touchedAt = '2026-09-05T10:00:00.000Z'
-      await repository.save(makeDraft('session-1', { updatedAt: touchedAt }), NOTHING_PERSISTED)
-      await repository.save(makeDraft('session-2', { updatedAt: touchedAt }), NOTHING_PERSISTED)
+      await repository.save(makeDraft('session-1', { updatedAt: touchedAt }))
+      await repository.save(makeDraft('session-2', { updatedAt: touchedAt }))
 
       expect((await repository.list()).map((draft) => draft.session_id)).toEqual([
         'session-2',
@@ -192,7 +220,6 @@ export function runDraftRepositoryContract(
         makeDraft('session-1', {
           entry: { content: 'It rai', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
         }),
-        NOTHING_PERSISTED,
       )
 
       const [snapshot] = await repository.list()
@@ -201,11 +228,30 @@ export function runDraftRepositoryContract(
     })
 
     it('deletes a draft, which is what sealing does once the entry is committed', async () => {
-      await repository.save(makeDraft('session-1'), NOTHING_PERSISTED)
-      await repository.delete('session-1')
+      const stored = await repository.save(makeDraft('session-1'))
+      await repository.delete('session-1', stored)
 
       expect(await repository.getById('session-1')).toBeNull()
       expect(await repository.list()).toEqual([])
+    })
+
+    it('refuses to delete a draft written since', async () => {
+      const first = await repository.save(makeDraft('session-1', { entry: { content: 'One' } }))
+      await repository.save(
+        makeDraft('session-1', { entry: { content: 'One two' }, writeId: first }),
+      )
+
+      await expect(repository.delete('session-1', first)).rejects.toThrow(DraftConflictError)
+
+      expect((await repository.getById('session-1'))?.entry.content).toBe('One two')
+    })
+
+    it('deletes a draft already gone without complaint', async () => {
+      const stored = await repository.save(makeDraft('session-1'))
+      await repository.delete('session-1', stored)
+
+      // Another tab, still holding the same write, discards it too.
+      await expect(repository.delete('session-1', stored)).resolves.toBeUndefined()
     })
 
     it('returns null for a session it has never seen', async () => {
@@ -215,18 +261,17 @@ export function runDraftRepositoryContract(
     it("does not keep the caller's object, so a session that keeps typing cannot rewrite what it stored", async () => {
       const draft = makeDraft('session-1', { entry: { content: 'It rai' } })
 
-      await repository.save(draft, NOTHING_PERSISTED)
+      await repository.save(draft)
       draft.entry.content = 'It rained all day, mutated after the save resolved'
 
       expect((await repository.getById('session-1'))?.entry.content).toBe('It rai')
     })
 
     it('appends only the events it has not already stored, and reads the whole log back', async () => {
-      await repository.save(
+      const first = await repository.save(
         makeDraft('session-1', {
           entry: { content: 'It rai', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
         }),
-        NOTHING_PERSISTED,
       )
       await repository.save(
         makeDraft('session-1', {
@@ -237,143 +282,82 @@ export function runDraftRepositoryContract(
               { kind: 'edit', at: 2_000, steps: [{ n: 2 }] },
             ],
           },
+          writeId: first,
         }),
-        { entry: 1, parent: 0 },
       )
 
       const fetched = await repository.getById('session-1')
       expect(fetched?.entry.events.map((event) => event.at)).toEqual([1_000, 2_000])
     })
 
-    it('refuses to append over events already stored, so two tabs cannot interleave one log', async () => {
-      const first: AuthoringEvent = { kind: 'edit', at: 1_000, steps: [{ n: 1 }] }
-      await repository.save(
-        makeDraft('session-1', { entry: { content: 'One', events: [first] } }),
-        NOTHING_PERSISTED,
-      )
-      // Two tabs both loaded one event. This one appends its second first...
-      await repository.save(
-        makeDraft('session-1', {
-          entry: {
-            content: 'One two',
-            events: [first, { kind: 'edit', at: 2_000, steps: [{ n: 2 }] }],
-          },
-        }),
-        { entry: 1, parent: 0 },
-      )
-
-      // ...and the other, still believing one is stored, appends a different second.
-      await expect(
-        repository.save(
-          makeDraft('session-1', {
-            entry: {
-              content: 'One three',
-              events: [first, { kind: 'edit', at: 3_000, steps: [{ n: 3 }] }],
-            },
-          }),
-          { entry: 1, parent: 0 },
-        ),
-      ).rejects.toThrow(DraftConflictError)
-
-      const fetched = await repository.getById('session-1')
-      expect(fetched?.entry.content).toBe('One two')
-      expect(fetched?.entry.events.map((event) => event.at)).toEqual([1_000, 2_000])
-    })
-
-    it('refuses a save that conflicts on the parent log alone, writing none of it', async () => {
-      const parent = { id: 'entry-9', content: 'Parent base' }
+    it('refuses a title-only save that follows a write it never saw', async () => {
       const typed: AuthoringEvent = { kind: 'edit', at: 1_000, steps: [{ n: 1 }] }
-      const marked: AuthoringEvent = { kind: 'edit', at: 1_000, steps: [{ n: 'p1' }] }
-      await repository.save(
-        makeDraft('session-1', {
-          entry: { content: 'One', events: [typed] },
-          kind: relatedTo(parent, { content: 'Parent one', events: [marked] }),
-        }),
-        NOTHING_PERSISTED,
-      )
-      // Two tabs both loaded both logs. This one marks the parent again first...
-      await repository.save(
-        makeDraft('session-1', {
-          entry: { content: 'One', events: [typed] },
-          kind: relatedTo(parent, {
-            content: 'Parent one two',
-            events: [marked, { kind: 'edit', at: 2_000, steps: [{ n: 'p2' }] }],
-          }),
-        }),
-        { entry: 1, parent: 1 },
-      )
-
-      // ...and the other marks it differently and types on, an append the entry log alone would
-      // have taken.
-      await expect(
-        repository.save(
-          makeDraft('session-1', {
-            entry: {
-              content: 'One three',
-              events: [typed, { kind: 'edit', at: 3_000, steps: [{ n: 3 }] }],
-            },
-            kind: relatedTo(parent, {
-              content: 'Parent one three',
-              events: [marked, { kind: 'edit', at: 3_000, steps: [{ n: 'p3' }] }],
-            }),
-          }),
-          { entry: 1, parent: 1 },
-        ),
-      ).rejects.toThrow(DraftConflictError)
-
-      const fetched = await repository.getById('session-1')
-      if (fetched?.kind !== 'new_related') throw new Error('Expected a related-entry draft')
-      expect(fetched.entry.content).toBe('One')
-      expect(fetched.entry.events.map((event) => event.at)).toEqual([1_000])
-      expect(fetched.parent.events.map((event) => event.at)).toEqual([1_000, 2_000])
-    })
-
-    it('takes a save with no events to append, even over a log another tab has added to', async () => {
-      const first: AuthoringEvent = { kind: 'edit', at: 1_000, steps: [{ n: 1 }] }
-      await repository.save(
-        makeDraft('session-1', { entry: { content: 'One', events: [first] } }),
-        NOTHING_PERSISTED,
+      const first = await repository.save(
+        makeDraft('session-1', { entry: { content: 'One', events: [typed] } }),
       )
       // Another tab types on...
       await repository.save(
         makeDraft('session-1', {
           entry: {
             content: 'One two',
-            events: [first, { kind: 'edit', at: 2_000, steps: [{ n: 2 }] }],
+            events: [typed, { kind: 'edit', at: 2_000, steps: [{ n: 2 }] }],
           },
+          writeId: first,
         }),
-        { entry: 1, parent: 0 },
       )
 
-      // ...and this one, still at one event, changes only the title. With no index to collide on,
-      // it lands over the other's snapshot: the gap AUTHORING.md accepts ("One draft, many tabs"),
-      // since writing here takes focus, and a tab return catches up with disk first.
-      await repository.save(
-        makeDraft('session-1', { entry: { title: 'Retitled', content: 'One', events: [first] } }),
-        { entry: 1, parent: 0 },
-      )
+      // ...and this one, still at one event, changes only the title.
+      await expect(
+        repository.save(
+          makeDraft('session-1', {
+            entry: { title: 'Retitled', content: 'One', events: [typed] },
+            writeId: first,
+          }),
+        ),
+      ).rejects.toThrow(DraftConflictError)
 
       const fetched = await repository.getById('session-1')
-      expect(fetched?.entry.title).toBe('Retitled')
-      expect(fetched?.entry.content).toBe('One')
-      expect(fetched?.entry.events.map((event) => event.at)).toEqual([1_000, 2_000])
+      expect(fetched?.entry.title).toBeNull()
+      expect(fetched?.entry.content).toBe('One two')
+    })
+
+    it('refuses a first save over a draft another tab has stored', async () => {
+      await repository.save(makeDraft('session-1', { entry: { content: 'Written elsewhere' } }))
+
+      await expect(
+        repository.save(makeDraft('session-1', { entry: { content: 'Written here' } })),
+      ).rejects.toThrow(DraftConflictError)
+
+      expect((await repository.getById('session-1'))?.entry.content).toBe('Written elsewhere')
+    })
+
+    it('refuses a save to a draft removed since', async () => {
+      const stored = await repository.save(makeDraft('session-1'))
+      await repository.delete('session-1', stored)
+
+      await expect(
+        repository.save(
+          makeDraft('session-1', {
+            entry: { content: 'Typed on in a stale tab' },
+            writeId: stored,
+          }),
+        ),
+      ).rejects.toThrow(DraftConflictError)
+
+      expect(await repository.getById('session-1')).toBeNull()
     })
 
     it("forgets a session's events when its draft is deleted", async () => {
-      await repository.save(
+      const stored = await repository.save(
         makeDraft('session-1', {
           entry: { content: 'It rai', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
         }),
-        NOTHING_PERSISTED,
       )
-      await repository.delete('session-1')
+      await repository.delete('session-1', stored)
 
       // Reused session id, as a fresh `beginDraft` would never produce, but the row's absence is
       // what a stale, un-cleaned-up event row would betray.
-      await repository.save(
-        makeDraft('session-1', { entry: { content: 'Fresh start' } }),
-        NOTHING_PERSISTED,
-      )
+      await repository.save(makeDraft('session-1', { entry: { content: 'Fresh start' } }))
 
       expect((await repository.getById('session-1'))?.entry.events).toEqual([])
     })
@@ -381,7 +365,7 @@ export function runDraftRepositoryContract(
     it("reassembles a resumed session's logs in the order they were written", async () => {
       const parent = { id: 'entry-9', content: 'Parent base' }
 
-      await repository.save(
+      const first = await repository.save(
         makeDraft('session-1', {
           entry: { content: 'One', events: [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }] },
           kind: relatedTo(parent, {
@@ -389,7 +373,6 @@ export function runDraftRepositoryContract(
             events: [{ kind: 'edit', at: 1_000, steps: [{ n: 'p1' }] }],
           }),
         }),
-        NOTHING_PERSISTED,
       )
       await repository.save(
         makeDraft('session-1', {
@@ -407,8 +390,8 @@ export function runDraftRepositoryContract(
               { kind: 'edit', at: 2_000, steps: [{ n: 'p2' }] },
             ],
           }),
+          writeId: first,
         }),
-        { entry: 1, parent: 1 },
       )
 
       const fetched = await repository.getById('session-1')

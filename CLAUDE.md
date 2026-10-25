@@ -32,7 +32,7 @@ The rule most often broken. A permission rule matches the **whole** command stri
   - End of a piece, or before a commit: the browser and Cypress specs covering the changed files (`npm run test:browser -- <path>`, `npm run cy:run -- --spec <path>`).
   - Full component suites only for a broad change — a store, repository, editor schema, or shared test setup. Pre-push runs them anyway (`lefthook.yml`).
   - A plan ends with one manual check in the running app.
-- Composition API + `<script setup>`; all data access behind the repository layer.
+- Composition API + `<script setup>`; all data access behind the repository layer, which stamps every id it stores, write versions included.
 - **Types live by who uses them.** Shapes that are stored or cross layers go in `src/types/`; a module's own inputs, outputs and errors live beside it.
 - No hard-coded colors that block dark mode.
 - **Semantics first.** Native elements before ARIA; reach for a role or `aria-*` only where no element does the job (the editor's `contenteditable` body is the standing example).

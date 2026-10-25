@@ -1,6 +1,7 @@
 import type { Router } from 'vue-router'
 
 import { draftRepository, entryRepository } from '@/repositories'
+import { DraftConflictError } from '@/repositories/draftRepository'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
 import { createTestRouter } from '@/testing/testRouter'
@@ -51,6 +52,36 @@ describe('NewConnectionView', () => {
       cy.wrap(router)
         .its('currentRoute.value')
         .should('deep.include', { name: 'entry-detail', params: { id: source.id } })
+    })
+  })
+
+  it('stays on the page when Discard is refused for another tab’s write', () => {
+    cy.then(async () => {
+      const source = await entryRepository.create(
+        createEntryInput({ content: textContent('Left my job') }),
+      )
+      const destination = await entryRepository.create(
+        createEntryInput({ content: textContent('Started the degree') }),
+      )
+      await draftRepository.save(
+        makeDraft('session-1', {
+          entry: { content: textContent('One led to the other'), events: TYPED },
+          kind: { kind: 'new_connection', parent_id: source.id, target_id: destination.id },
+        }),
+      )
+      return source
+    }).then((source) => {
+      cy.stub(draftRepository, 'delete').rejects(new DraftConflictError())
+      const router = createTestRouter()
+      mountNewConnection(source.id, { router, draft: 'session-1' })
+
+      cy.findByRole('button', { name: 'Discard' }).click()
+
+      cy.findByText(
+        'This draft was changed elsewhere at the same time, and now shows what was saved ' +
+          'there. What you had here is below.',
+      ).should('be.visible')
+      cy.wrap(router).its('currentRoute.value.name').should('equal', 'new-connection')
     })
   })
 

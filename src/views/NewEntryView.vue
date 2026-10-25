@@ -43,8 +43,7 @@ watch(
 const handleSave = useSealDraft(session)
 
 async function handleDiscard(): Promise<void> {
-  await session.discard()
-  session.begin({ kind: 'new_root' })
+  if (await session.discard()) session.begin({ kind: 'new_root' })
 }
 
 onBeforeUnmount(() => {

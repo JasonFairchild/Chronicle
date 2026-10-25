@@ -5,7 +5,7 @@ import type { DraftSession } from '@/composables/useDraftSession'
 
 /** A session holding only what the notice reads of it, each null unless given. */
 function sessionWith(fields: Partial<DraftSession>): DraftSession {
-  return reactive({ elsewhereNotice: null, unsavedText: null, ...fields }) as DraftSession
+  return reactive({ elsewhereNotice: null, unsaved: null, ...fields }) as DraftSession
 }
 
 describe('DraftElsewhereNotice', () => {
@@ -27,12 +27,13 @@ describe('DraftElsewhereNotice', () => {
       props: {
         session: sessionWith({
           elsewhereNotice: 'This draft was changed elsewhere at the same time.',
-          unsavedText: 'Half a thought here',
+          unsaved: { title: 'Lake Tahoe', text: 'Half a thought here' },
         }),
       },
     })
 
     cy.findByText('This draft was changed elsewhere at the same time.').should('be.visible')
+    cy.findByText('Lake Tahoe').should('be.visible')
     cy.findByText('Half a thought here').should('be.visible')
   })
 })

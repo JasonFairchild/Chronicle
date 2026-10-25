@@ -7,7 +7,7 @@ import { renderComponent } from '@/testing/renderComponent'
 
 /** A session holding only what the notice reads of it, each null unless given. */
 function sessionWith(fields: Partial<DraftSession>): DraftSession {
-  return reactive({ elsewhereNotice: null, unsavedText: null, ...fields }) as DraftSession
+  return reactive({ elsewhereNotice: null, unsaved: null, ...fields }) as DraftSession
 }
 
 describe('DraftElsewhereNotice (browser)', () => {
@@ -29,7 +29,7 @@ describe('DraftElsewhereNotice (browser)', () => {
       props: {
         session: sessionWith({
           elsewhereNotice: 'This draft was changed elsewhere at the same time.',
-          unsavedText: 'Half a thought here',
+          unsaved: { title: 'Lake Tahoe', text: 'Half a thought here' },
         }),
       },
     })
@@ -37,6 +37,7 @@ describe('DraftElsewhereNotice (browser)', () => {
     await expect
       .element(screen.getByText('This draft was changed elsewhere at the same time.'))
       .toBeVisible()
+    await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
     await expect.element(screen.getByText('Half a thought here')).toBeVisible()
   })
 })

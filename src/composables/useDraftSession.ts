@@ -1,9 +1,10 @@
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
 
 import type { EditorChange } from '@/components/DocumentEditor.vue'
-import { docToPlainText, isEmptyDocument } from '@/domain/entryDocument'
+import { docToPlainText, isBlankDraft, isEmptyDocument } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
 import { currentVersionId } from '@/domain/reconstructEntryState'
+import { DraftConflictError } from '@/repositories/draftRepository'
 import { type BeginDraftInput, DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { type DraftSnapshot, versionsRevisedBy } from '@/types/draft'
@@ -76,7 +77,7 @@ export function useDraftSession() {
   /** Said when another tab changed this draft in a way the writer should know about. */
   const elsewhereNotice = ref<string | null>(null)
   /** What this tab held when another tab's version replaced it, for the writer to copy from. */
-  const unsavedText = ref<string | null>(null)
+  const unsaved = ref<{ title: string | null; text: string } | null>(null)
   /**
    * The draft `resume` found but couldn't reopen, held here so every composer says so the same way,
    * and so `discard` can still throw it away.
@@ -125,7 +126,7 @@ export function useDraftSession() {
   /** Takes a draft as this session's from here on, with the last one's notices cleared. */
   function openAs(id: string): void {
     elsewhereNotice.value = null
-    unsavedText.value = null
+    unsaved.value = null
     unreadable.value = null
     sessionId.value = id
   }
@@ -186,7 +187,12 @@ export function useDraftSession() {
       const id = sessionId.value
       if (!change || !id) return
 
-      unsavedText.value = change.unsaved ? docToPlainText(change.unsaved) : null
+      // A blank copy lost nothing, so there is nothing to offer.
+      const had = change.unsaved?.entry
+      unsaved.value =
+        had && !isBlankDraft(had.content, had.title)
+          ? { title: had.title, text: docToPlainText(had.content) }
+          : null
       if (change.gone) {
         sessionId.value = null
         elsewhereNotice.value = 'This draft was saved or discarded elsewhere.'
@@ -195,7 +201,7 @@ export function useDraftSession() {
 
       mirror(drafts.currentDraft(id)!, parentTitle.value)
       reloads.value += 1
-      elsewhereNotice.value = unsavedText.value
+      elsewhereNotice.value = unsaved.value
         ? 'This draft was changed elsewhere at the same time, and now shows what was saved ' +
           'there. What you had here is below.'
         : null
@@ -236,8 +242,9 @@ export function useDraftSession() {
    * open or a save is already in flight, so a caller can guard a button's click handler with
    * `if (!(await session.save())) return` the same way it would have guarded on a local flag. A
    * stale version also resolves to `null`: `readOnlyReason` or `staleNotice` explains it, per kind,
-   * so a caller's own error message would only repeat it less precisely. Any other sealing failure
-   * (empty content, "no changes to save") still throws, for the caller's try/catch to report.
+   * so a caller's own error message would only repeat it less precisely. So does a draft another
+   * tab wrote since, which `elsewhereNotice` explains. Any other sealing failure (empty content, "no
+   * changes to save") still throws, for the caller's try/catch to report.
    */
   async function save(): Promise<Entry | null> {
     const id = sessionId.value
@@ -249,6 +256,7 @@ export function useDraftSession() {
       sessionId.value = null
       return entry
     } catch (err) {
+      if (err instanceof DraftConflictError) return null
       if (!(err instanceof StaleVersionError)) throw err
       stale.value = true
       return null
@@ -273,14 +281,21 @@ export function useDraftSession() {
   /**
    * Throws the session away on request — an explicit "Discard" click — or the draft it couldn't
    * reopen. Either is let go only once it's gone, so a failure is said where it was clicked.
+   * Resolves to whether it went: one another tab wrote since stays, reloaded as that tab left it.
    */
-  async function discard(): Promise<void> {
+  async function discard(): Promise<boolean> {
     const id = sessionId.value ?? unreadable.value?.draft.session_id
-    if (!id) return
+    if (!id) return false
 
-    await drafts.discardDraft(id, unreadable.value?.draft.write_id ?? null)
+    try {
+      await drafts.discardDraft(id, unreadable.value?.draft.write_id ?? null)
+    } catch (err) {
+      if (err instanceof DraftConflictError) return false
+      throw err
+    }
     sessionId.value = null
     unreadable.value = null
+    return true
   }
 
   /**
@@ -306,7 +321,7 @@ export function useDraftSession() {
     kind.value = null
     stale.value = false
     elsewhereNotice.value = null
-    unsavedText.value = null
+    unsaved.value = null
     unreadable.value = null
   }
 
@@ -323,7 +338,7 @@ export function useDraftSession() {
     staleNotice,
     editorKey,
     elsewhereNotice,
-    unsavedText,
+    unsaved,
     unreadable,
     isOpen,
     readOnlyReason,

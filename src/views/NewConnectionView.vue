@@ -77,8 +77,7 @@ function pickTarget(): void {
 const save = useSealDraft(session)
 
 async function discard(): Promise<void> {
-  await session.discard()
-  void router.push({ name: 'entry-detail', params: { id: props.id } })
+  if (await session.discard()) void router.push({ name: 'entry-detail', params: { id: props.id } })
 }
 
 onBeforeUnmount(() => {

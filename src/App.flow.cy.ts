@@ -159,6 +159,23 @@ describe('App flows', () => {
     })
   })
 
+  it('writes what was typed at once when the window loses focus', () => {
+    cy.mount(App, { routePath: '/' })
+
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
+
+    // Two windows side by side both stay visible, so clicking into the other only blurs this one.
+    cy.window().then(async (win) => {
+      const flushAll = cy.spy(useDraftsStore(), 'flushAll')
+      win.dispatchEvent(new Event('blur'))
+
+      expect(flushAll).to.have.callCount(1)
+      await flushAll.firstCall.returnValue
+      const [draft] = await draftRepository.list()
+      expect(docToPlainText(draft!.entry.content)).to.equal('We drove up on Friday.')
+    })
+  })
+
   it('writes what was typed at once when the tab is hidden', () => {
     cy.mount(App, { routePath: '/' })
 

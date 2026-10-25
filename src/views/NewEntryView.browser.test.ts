@@ -167,6 +167,69 @@ describe('NewEntryView (browser)', () => {
     expect(screen.getByText('This draft was saved or discarded elsewhere.').query()).toBeNull()
   })
 
+  it('shows the version another tab saved, and no error, when Save is refused for it', async () => {
+    const stored = await draftRepository.save(
+      makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
+    )
+    const screen = await mountNewEntry({ draft: 'session-1' })
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('Half a thought')
+
+    // Another tab writes the draft, and this one saves before catching up.
+    await draftRepository.save(
+      makeDraft('session-1', {
+        entry: { content: textContent('Half a thought, finished elsewhere'), events: TYPED },
+        writeId: stored,
+      }),
+    )
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+
+    await expect
+      .element(
+        screen.getByText(
+          'This draft was changed elsewhere at the same time, and now shows what was saved ' +
+            'there. What you had here is below.',
+        ),
+      )
+      .toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('Half a thought, finished elsewhere')
+    expect(screen.getByRole('alert').query()).toBeNull()
+  })
+
+  it('keeps the version another tab saved when Discard is refused for it, and says so', async () => {
+    const stored = await draftRepository.save(
+      makeDraft('session-1', { entry: { content: textContent('Half a thought'), events: TYPED } }),
+    )
+    const screen = await mountNewEntry({ draft: 'session-1' })
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('Half a thought')
+
+    await draftRepository.save(
+      makeDraft('session-1', {
+        entry: { content: textContent('Half a thought, finished elsewhere'), events: TYPED },
+        writeId: stored,
+      }),
+    )
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    await expect
+      .element(
+        screen.getByText(
+          'This draft was changed elsewhere at the same time, and now shows what was saved ' +
+            'there. What you had here is below.',
+        ),
+      )
+      .toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent('Half a thought, finished elsewhere')
+    expect(screen.getByRole('alert').query()).toBeNull()
+  })
+
   it('lets go of the draft it holds when it is left', async () => {
     const router = createTestRouter()
     const screen = await mountNewEntry({ router })

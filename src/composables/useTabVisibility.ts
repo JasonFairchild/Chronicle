@@ -24,9 +24,10 @@ export function useTabReturn(callback: () => void): void {
 
 /**
  * Runs `callback` whenever this tab is left, for as long as the calling component is mounted: when
- * it's hidden, or when the page is unloading. A phone can kill a hidden tab without `pagehide`, so
- * hiding is the signal that matters most; a page closed while showing fires both, so `callback`
- * has to be safe to run twice.
+ * it's hidden, when its window loses focus, or when the page is unloading. A phone can kill a
+ * hidden tab without `pagehide`, so hiding is the signal that matters most; moving to a window
+ * beside this one only blurs it, the counterpart of `useTabReturn`'s focus. Leaving can fire all
+ * three, so `callback` has to be safe to run more than once.
  */
 export function useTabLeave(callback: () => void): void {
   function handleVisibility(): void {
@@ -35,11 +36,13 @@ export function useTabLeave(callback: () => void): void {
 
   onMounted(() => {
     document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('blur', callback)
     window.addEventListener('pagehide', callback)
   })
 
   onBeforeUnmount(() => {
     document.removeEventListener('visibilitychange', handleVisibility)
+    window.removeEventListener('blur', callback)
     window.removeEventListener('pagehide', callback)
   })
 }

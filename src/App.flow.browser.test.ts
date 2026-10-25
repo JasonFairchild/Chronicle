@@ -147,6 +147,21 @@ describe('App flows (browser)', () => {
     expect(docToPlainText(draft!.entry.content)).toBe('We drove up on Friday.')
   })
 
+  it('writes what was typed at once when the window loses focus', async () => {
+    const screen = await mountApp('/')
+    await screen.getByRole('textbox', { name: 'New entry' }).click()
+    await userEvent.keyboard('We drove up on Friday.')
+
+    // Two windows side by side both stay visible, so clicking into the other only blurs this one.
+    const flushAll = vi.spyOn(useDraftsStore(), 'flushAll')
+    window.dispatchEvent(new Event('blur'))
+
+    expect(flushAll).toHaveBeenCalledOnce()
+    await flushAll.mock.results[0]!.value
+    const [draft] = await draftRepository.list()
+    expect(docToPlainText(draft!.entry.content)).toBe('We drove up on Friday.')
+  })
+
   it('writes what was typed at once when the tab is hidden', async () => {
     const screen = await mountApp('/')
     await screen.getByRole('textbox', { name: 'New entry' }).click()

@@ -57,13 +57,13 @@ export type BeginDraftInput =
 
 /**
  * What another tab did to a draft open here, for the session showing it to catch up on. `gone`
- * means it was sealed or discarded there; `unsaved` is the document this tab held that couldn't be
+ * means it was sealed or discarded there; `unsaved` is the snapshot this tab held that couldn't be
  * kept, for the writer to copy from. Each one is a new object, which is how a watcher tells it from
  * the last.
  */
 interface ChangeElsewhere {
   gone: boolean
-  unsaved: string | null
+  unsaved: DraftSnapshot | null
 }
 
 /**
@@ -246,9 +246,9 @@ export const useDraftsStore = defineStore('drafts', () => {
   /**
    * Replaces an open session with what disk holds, or closes it if disk holds nothing, because
    * another tab has written it. The session showing it catches up through `changedElsewhere`.
-   * `unsaved` is the document this tab had that disk didn't take.
+   * `unsaved` is the snapshot this tab had that disk didn't take.
    */
-  async function adoptStored(sessionId: string, unsaved: string | null): Promise<void> {
+  async function adoptStored(sessionId: string, unsaved: DraftSnapshot | null): Promise<void> {
     const current = active.get(sessionId)
     if (current) cancelFlush(current)
 
@@ -315,7 +315,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       if (err instanceof DraftConflictError) {
         // Another tab wrote this draft since this one last did. Its version stands, and what this
         // tab had is offered for copying rather than written over it.
-        await adoptStored(sessionId, entry.draft.entry.content)
+        await adoptStored(sessionId, entry.draft)
         return
       }
 
@@ -517,7 +517,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       const stored = new Map(drafts.value.map((row) => [row.session_id, row.write_id]))
       for (const [sessionId, entry] of open) {
         if (stored.get(sessionId) === entry.draft.write_id) continue
-        await adoptStored(sessionId, entry.dirty ? entry.draft.entry.content : null)
+        await adoptStored(sessionId, entry.dirty ? entry.draft : null)
       }
     } catch (err) {
       error.value = toErrorMessage(err, 'Failed to check drafts')
@@ -543,7 +543,8 @@ export const useDraftsStore = defineStore('drafts', () => {
    * The explicit user action that ends a session: the immutable entries holding the final snapshot
    * and the completed traces, written in the same transaction that removes the draft. Never an idle
    * timeout — until someone seals, the work stays a draft, recoverable and absent from every
-   * timeline. A refused seal keeps the session open and its draft on disk.
+   * timeline. A refused seal keeps the session open and its draft on disk; refused for another
+   * tab's write, the session catches up with it instead (`adoptStored`).
    */
   async function sealDraft(sessionId: string): Promise<Entry> {
     const entry = requireActive(sessionId)
@@ -566,6 +567,13 @@ export const useDraftsStore = defineStore('drafts', () => {
       )
       written = await draftRepository.seal(sessionId, inputs, entry.draft.write_id)
     } catch (err) {
+      // Always with this tab's snapshot, typed since or not: the writer asked for a save that
+      // didn't happen. Adopting may close the session, so nothing here is left to flush.
+      if (err instanceof DraftConflictError) {
+        await adoptStored(sessionId, entry.draft)
+        throw err
+      }
+
       error.value = toErrorMessage(err, 'Failed to save entry')
       // Whatever was typed since the last flush still has to reach disk.
       if (entry.dirty) scheduleFlush(sessionId)
@@ -619,7 +627,8 @@ export const useDraftsStore = defineStore('drafts', () => {
   /**
    * Throws the session away. The one thing that ever removes work, and only on request. A draft no
    * session here holds is discarded as `seen`, the stored write its caller last read: a list row,
-   * or a draft that couldn't be reopened.
+   * or a draft that couldn't be reopened. Refused for another tab's write, an open session catches
+   * up with it, as a refused seal does; with none open, the list is reread to show it.
    */
   async function discardDraft(sessionId: string, seen: string | null): Promise<void> {
     const entry = active.get(sessionId)
@@ -628,7 +637,15 @@ export const useDraftsStore = defineStore('drafts', () => {
       await entry.flushing?.catch(() => {}) // Why, at `ActiveSession.flushing`.
     }
 
-    await draftRepository.delete(sessionId, entry ? entry.draft.write_id : seen)
+    try {
+      await draftRepository.delete(sessionId, entry ? entry.draft.write_id : seen)
+    } catch (err) {
+      if (err instanceof DraftConflictError) {
+        if (entry) await adoptStored(sessionId, entry.draft)
+        else await loadDrafts()
+      }
+      throw err
+    }
     active.delete(sessionId) // Only once the row is gone: a failed delete leaves the session open.
     await loadDrafts()
   }

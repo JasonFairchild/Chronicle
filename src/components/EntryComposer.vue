@@ -22,7 +22,7 @@ const props = defineProps<{
   // Props rather than emits, so they can be awaited: a failure is said here, beside the buttons,
   // and goes when this composer does. Bound as `@save` and `@discard` all the same.
   onSave: () => Promise<void> | void
-  onDiscard: () => Promise<void> | void
+  onDiscard: () => Promise<unknown> | void
 }>()
 
 const emit = defineEmits<{
@@ -38,7 +38,7 @@ function handleChange(change: EditorChange): void {
 }
 
 /** Runs the owner's handler for one button, saying why if it fails. */
-async function run(action: () => Promise<void> | void, fallback: string): Promise<void> {
+async function run(action: () => Promise<unknown> | void, fallback: string): Promise<void> {
   error.value = null
   try {
     await action()

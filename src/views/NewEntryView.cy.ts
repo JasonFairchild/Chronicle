@@ -146,6 +146,75 @@ describe('NewEntryView', () => {
     cy.findByText('This draft was saved or discarded elsewhere.').should('not.exist')
   })
 
+  it('shows the version another tab saved, and no error, when Save is refused for it', () => {
+    let stored: string
+    cy.then(async () => {
+      stored = await draftRepository.save(
+        makeDraft('session-1', {
+          entry: { content: textContent('Half a thought'), events: TYPED },
+        }),
+      )
+    })
+    cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-1' })
+
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
+
+    // Another tab writes the draft, and this one saves before catching up.
+    cy.then(() =>
+      draftRepository.save(
+        makeDraft('session-1', {
+          entry: { content: textContent('Half a thought, finished elsewhere'), events: TYPED },
+          writeId: stored,
+        }),
+      ),
+    )
+    cy.findByRole('button', { name: 'Save entry' }).click()
+
+    cy.findByText(
+      'This draft was changed elsewhere at the same time, and now shows what was saved ' +
+        'there. What you had here is below.',
+    ).should('be.visible')
+    cy.findByRole('textbox', { name: 'New entry' }).should(
+      'contain.text',
+      'Half a thought, finished elsewhere',
+    )
+    cy.findByRole('alert').should('not.exist')
+  })
+
+  it('keeps the version another tab saved when Discard is refused for it, and says so', () => {
+    let stored: string
+    cy.then(async () => {
+      stored = await draftRepository.save(
+        makeDraft('session-1', {
+          entry: { content: textContent('Half a thought'), events: TYPED },
+        }),
+      )
+    })
+    cy.mount(NewEntryView, { routePath: '/entries/new?draft=session-1' })
+
+    cy.findByRole('textbox', { name: 'New entry' }).should('contain.text', 'Half a thought')
+
+    cy.then(() =>
+      draftRepository.save(
+        makeDraft('session-1', {
+          entry: { content: textContent('Half a thought, finished elsewhere'), events: TYPED },
+          writeId: stored,
+        }),
+      ),
+    )
+    cy.findByRole('button', { name: 'Discard' }).click()
+
+    cy.findByText(
+      'This draft was changed elsewhere at the same time, and now shows what was saved ' +
+        'there. What you had here is below.',
+    ).should('be.visible')
+    cy.findByRole('textbox', { name: 'New entry' }).should(
+      'contain.text',
+      'Half a thought, finished elsewhere',
+    )
+    cy.findByRole('alert').should('not.exist')
+  })
+
   it('lets go of the draft it holds when it is left', () => {
     const router = createTestRouter()
     cy.mount(NewEntryView, { routePath: '/entries/new', router }).then(({ wrapper }) => {

@@ -38,3 +38,4 @@ Not decided; one line each so they're not lost.
 - **An end-to-end layer** (Playwright, whose pages in one context share IndexedDB) for what component specs fake: a real second tab, a real reload, the browser's own `pagehide`. Check Cypress's multi-tab support when this starts.
 - **A Vitest Browser Mode vs Cypress write-up**, the reason every spec is mirrored. Notes so far: `.claude/skills/write-tests/mechanics.md`.
 - **`contentDelta` walks the whole document several times per keystroke** (`DocumentEditor.vue`'s `onUpdate`). Fine today.
+- **Drafts shaped closer to entries.** Sealing is a set of decisions (`entriesStore.inputsForDraft`): a `new_related` draft seals into one entry or two, its relation type read off its anchors, and a revision is refused when nothing changed. Could `DraftOf` and `kind` sit closer to `CreateEntryInput`, so less is translated at the seal? Start by listing each draft field and where its entry counterpart comes from.

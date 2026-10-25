@@ -18,7 +18,7 @@ import type { DraftSession } from '@/composables/useDraftSession'
 defineProps<{
   session: DraftSession
   onSave: () => Promise<void> | void // Awaited by `EntryComposer`, which says why one fails.
-  onDiscard: () => Promise<void> | void
+  onDiscard: () => Promise<unknown> | void
 }>()
 </script>
 

@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { previewText } from '@/domain/entryDocument'
+import { DraftConflictError } from '@/repositories/draftRepository'
 import { draftLocation } from '@/router/draftQuery'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
@@ -88,7 +89,10 @@ async function discard(draft: DraftSnapshot): Promise<void> {
   try {
     await drafts.discardDraft(draft.session_id, draft.write_id)
   } catch (err) {
-    error.value = toErrorMessage(err, 'Failed to discard draft')
+    error.value =
+      err instanceof DraftConflictError
+        ? 'This draft was changed elsewhere, so it was kept. It now shows what was saved there.'
+        : toErrorMessage(err, 'Failed to discard draft')
   }
 }
 </script>

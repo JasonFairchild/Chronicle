@@ -1,6 +1,6 @@
 # A tab writes only over the draft it has seen
 
-Status: commits 0 and 1 landed. Commit 2 done in the working tree and green on the full suites, awaiting commit. Commit 3 next. This file is deleted when commit 3 lands, once anything that outlasts it is in the docs.
+Status: done 2026-10-25. This file is deleted when commit 3 lands, once anything that outlasts it is in the docs.
 
 ## Context
 

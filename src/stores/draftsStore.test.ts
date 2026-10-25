@@ -9,6 +9,7 @@ import {
   setDraftRepository,
   setEntryRepository,
 } from '@/repositories'
+import { DraftConflictError } from '@/repositories/draftRepository'
 import { InMemoryDraftRepository } from '@/repositories/inMemoryDraftRepository'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
@@ -222,6 +223,46 @@ describe('useDraftsStore', () => {
       expect(docToPlainText(stored!.entry.content)).toBe('I received the offer')
     })
 
+    it('refuses to seal a draft another tab has written since, showing that version', async () => {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
+      await store.flush(sessionId)
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, draftChangeTo('It snowed'))
+      await otherTab.flush(sessionId)
+
+      store.recordChange(sessionId, draftChangeTo('It rained all day'))
+      await expect(store.sealDraft(sessionId)).rejects.toThrow(DraftConflictError)
+
+      expect(store.currentDraft(sessionId)?.entry.content).toBe(textContent('It snowed'))
+      const change = store.changedElsewhere[sessionId]
+      expect(change?.gone).toBe(false)
+      expect(change?.unsaved?.entry.content).toBe(textContent('It rained all day'))
+      expect(store.error).toBeNull()
+    })
+
+    it('refuses to discard a draft another tab has written since, showing that version', async () => {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
+      await store.flush(sessionId)
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, draftChangeTo('It snowed'))
+      await otherTab.flush(sessionId)
+
+      await expect(store.discardDraft(sessionId, null)).rejects.toThrow(DraftConflictError)
+
+      expect(store.currentDraft(sessionId)?.entry.content).toBe(textContent('It snowed'))
+      const change = store.changedElsewhere[sessionId]
+      expect(change?.gone).toBe(false)
+      expect(change?.unsaved?.entry.content).toBe(textContent('It rained'))
+    })
+
     it('lists a draft as this tab last wrote it, so discarding it from the list follows that write', async () => {
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
@@ -375,7 +416,7 @@ describe('useDraftsStore', () => {
       expect(docToPlainText(resumed!.entry.content)).toBe('It snowed')
       const change = store.changedElsewhere[sessionId]
       expect(change?.gone).toBe(false)
-      expect(docToPlainText(change!.unsaved!)).toBe('It rained all day')
+      expect(change?.unsaved?.entry.content).toBe(textContent('It rained all day'))
     })
   })
 

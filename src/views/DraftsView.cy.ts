@@ -148,6 +148,35 @@ describe('DraftsView', () => {
     cy.findByText('Keep writing this').should('be.visible')
   })
 
+  it('keeps a draft changed elsewhere since it was listed, showing it as saved there', () => {
+    let stored: string
+    cy.then(async () => {
+      stored = await draftRepository.save(
+        makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
+      )
+    })
+    cy.mount(DraftsView, { routePath: '/drafts' })
+
+    cy.findByText('Never mind').should('be.visible')
+
+    // Another tab writes the draft after this list was read.
+    cy.then(() =>
+      draftRepository.save(
+        makeDraft('session-1', {
+          entry: { content: textContent('Never mind, I will finish it'), events: TYPED },
+          writeId: stored,
+        }),
+      ),
+    )
+    cy.findByRole('button', { name: 'Discard' }).click()
+
+    cy.findByRole('alert').should(
+      'have.text',
+      'This draft was changed elsewhere, so it was kept. It now shows what was saved there.',
+    )
+    cy.findByText('Never mind, I will finish it').should('be.visible')
+  })
+
   it('says so plainly when there is nothing in progress', () => {
     cy.mount(DraftsView, { routePath: '/drafts' })
 

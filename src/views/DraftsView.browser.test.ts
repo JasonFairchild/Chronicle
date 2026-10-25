@@ -150,6 +150,37 @@ describe('DraftsView (browser)', () => {
     await expect.element(screen.getByText('Keep writing this')).toBeVisible()
   })
 
+  it('keeps a draft changed elsewhere since it was listed, showing it as saved there', async () => {
+    const stored = await draftRepository.save(
+      makeDraft('session-1', { entry: { content: textContent('Never mind'), events: TYPED } }),
+    )
+    const screen = await mountDrafts()
+    await expect.element(screen.getByText('Never mind')).toBeVisible()
+
+    // Another tab writes the draft after this list was read.
+    await draftRepository.save(
+      makeDraft('session-1', {
+        entry: { content: textContent('Never mind, I will finish it'), events: TYPED },
+        writeId: stored,
+      }),
+    )
+    await screen.getByRole('button', { name: 'Discard' }).click()
+
+    await expect
+      .element(
+        screen
+          .getByRole('alert')
+          .and(
+            screen.getByText(
+              'This draft was changed elsewhere, so it was kept. It now shows what was saved there.',
+              { exact: true },
+            ),
+          ),
+      )
+      .toBeVisible()
+    await expect.element(screen.getByText('Never mind, I will finish it')).toBeVisible()
+  })
+
   it('says so plainly when there is nothing in progress', async () => {
     const screen = await mountDrafts()
 

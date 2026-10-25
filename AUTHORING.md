@@ -93,14 +93,16 @@ type Draft = {
 
 | Guard | What it prevents |
 | --- | --- |
-| A flush 300 ms after a change, and at once when a tab is left or a session let go | A crash costing more than a fraction of a second |
+| A flush 300 ms after a change, and at once when a session is let go or a tab is left: hidden, closed, or its window blurred | A crash costing more than a fraction of a second; a window beside this one reading the draft before this one's last write |
 | Every save, delete and seal names the stored write it follows (`write_id`, stamped by `DraftRepository` on each save), and is refused whole with a `DraftConflictError` if disk holds another or none; deleting a draft already gone is the one exception. A save appends only past the stored log | A tab writing over, deleting or sealing words it hasn't seen |
-| A flush that loses adopts the stored draft and shows its own text to copy | A lost race going unseen |
-| A tab being returned to (visibility or focus, wired in `App.vue`) reloads each open draft whose stored `write_id` isn't the one it last read or wrote, keeping its own unflushed text to copy, and closes one sealed or discarded elsewhere, saying so | A conflict at the first keystroke after another tab wrote |
+| A flush, seal or discard that loses adopts the stored draft and shows this tab's title and text to copy; a discard from the drafts list rereads it and says so | A lost race going unseen |
+| A tab being returned to (visibility or focus, wired in `App.vue`) reloads each open draft whose stored `write_id` isn't the one it last read or wrote, keeping its own unflushed title and text to copy, and closes one sealed or discarded elsewhere, saying so | A conflict at the first keystroke after another tab wrote |
 | `DraftRepository.seal` removes the draft and writes its entries in one transaction, the removal first | A crash leaving a draft to be saved twice, or a refused save losing the draft |
 | Sealing refuses a stale base version ("Drafts", above) | A save overwriting a newer version of the entry |
 
 Anything read for its `write_id` is read after this tab's writes in progress land (`writesLanded`, `draftsStore.ts`), or a write that follows it is refused for this tab's own.
+
+**Known limits**, both in the milliseconds while the return check reads disk: a flush starting then looks like another tab's write, so the draft reloads quietly to what that flush wrote; and anything typed before the check lands is offered to copy, as if another tab had written over it.
 
 ## Considered and rejected
 

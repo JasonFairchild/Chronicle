@@ -18,8 +18,9 @@ defineProps<{
     role="status"
   >
     <p>{{ session.elsewhereNotice }}</p>
-    <p v-if="session.unsavedText" class="mt-2 whitespace-pre-wrap text-[var(--color-text-muted)]">
-      {{ session.unsavedText }}
-    </p>
+    <div v-if="session.unsaved" class="mt-2 text-[var(--color-text-muted)]">
+      <p v-if="session.unsaved.title" class="font-medium">{{ session.unsaved.title }}</p>
+      <p class="whitespace-pre-wrap">{{ session.unsaved.text }}</p>
+    </div>
   </div>
 </template>

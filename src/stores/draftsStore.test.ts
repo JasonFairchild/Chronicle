@@ -288,9 +288,52 @@ describe('useDraftsStore', () => {
       )
 
       const resumed = await store.resumeDraft(sessionId)
+      const sealed = await store.sealDraft(sessionId)
 
       expect(docToPlainText(resumed!.entry.content)).toBe('Half a thought, finished elsewhere')
-      expect(resumed?.entry.events).toHaveLength(2)
+      const trace = (await entryRepository.getById(sealed.id))?.authoring_trace
+      expect(trace?.events).toHaveLength(2)
+    })
+
+    it('forgets what another tab changed once the draft is resumed, since the resume reads it', async () => {
+      vi.useFakeTimers()
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('Half a thought'))
+      await store.flush(sessionId)
+      // Same-millisecond writes share an `updated_at`, which a return can't tell apart.
+      await vi.advanceTimersByTimeAsync(1)
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, draftChangeTo('Half a thought, finished elsewhere'))
+      await otherTab.flush(sessionId)
+
+      await store.adoptChangesElsewhere()
+      expect(store.changedElsewhere[sessionId]).toEqual({ gone: false, unsaved: null })
+
+      await store.resumeDraft(sessionId)
+      expect(store.changedElsewhere[sessionId]).toBeUndefined()
+    })
+
+    it('reports a resume’s own write losing to another tab, with what this tab had', async () => {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
+      await store.flush(sessionId)
+      store.recordChange(sessionId, draftChangeTo('It rained all day'))
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, draftChangeTo('It snowed'))
+      await otherTab.flush(sessionId)
+
+      const resumed = await store.resumeDraft(sessionId)
+
+      expect(docToPlainText(resumed!.entry.content)).toBe('It snowed')
+      const change = store.changedElsewhere[sessionId]
+      expect(change?.gone).toBe(false)
+      expect(docToPlainText(change!.unsaved!)).toBe('It rained all day')
     })
   })
 

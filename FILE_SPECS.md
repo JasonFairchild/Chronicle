@@ -99,6 +99,8 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - save resolves null when nothing is open, a save is in flight, or the version is stale (and sets stale); it rethrows other failures and stays open, with `saving` false again
      - closes, with a notice, when another tab saved or discarded the draft
      - reloads another tab's version (`editorKey` changes), keeping this tab's text to copy, but only when it lost some
+     - shows a change another tab made while a draft was reopening
+     - shows no notice for a resumed draft another tab had already changed
      - `canSave` is false for a title alone or blank words
      - details and parent changes are recorded, and nothing is recorded with no session open
      - abandon keeps what reached disk; reset clears everything for the next entry

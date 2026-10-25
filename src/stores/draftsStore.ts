@@ -57,12 +57,12 @@ export type BeginDraftInput =
   | { kind: 'revision'; parent: AggregatedEntry }
 
 /**
- * What another tab did to a draft open here, for the session showing it to catch up on. `count`
- * rises each time; `gone` means it was sealed or discarded there; `unsaved` is the document this
- * tab held that couldn't be kept, for the writer to copy from.
+ * What another tab did to a draft open here, for the session showing it to catch up on. `gone`
+ * means it was sealed or discarded there; `unsaved` is the document this tab held that couldn't be
+ * kept, for the writer to copy from. Each one is a new object, which is how a watcher tells it from
+ * the last.
  */
-export interface ChangedElsewhere {
-  count: number
+interface ChangeElsewhere {
   gone: boolean
   unsaved: string | null
 }
@@ -178,8 +178,8 @@ function eventCounts(draft: Draft): PersistedEvents {
 export const useDraftsStore = defineStore('drafts', () => {
   const drafts = shallowRef<DraftSnapshot[]>([])
   const error = ref<string | null>(null)
-  /** Per open session, what another tab has done to its draft — see `adoptStored`. */
-  const elsewhere = shallowRef<Record<string, ChangedElsewhere>>({})
+  // Per session, the latest change another tab made since this tab opened it (`adoptStored`).
+  const changedElsewhere = shallowRef<Record<string, ChangeElsewhere>>({})
 
   // Not reactive: this holds timers and trace recorders, none of which a template reads, and
   // a Vue proxy over the draft would not survive structuredClone on its way into the repository.
@@ -255,8 +255,8 @@ export const useDraftsStore = defineStore('drafts', () => {
 
   /**
    * Replaces an open session with what disk holds, or closes it if disk holds nothing, because
-   * another tab has written it. The session showing it catches up through `elsewhere`. `unsaved`
-   * is the document this tab had that disk didn't take.
+   * another tab has written it. The session showing it catches up through `changedElsewhere`.
+   * `unsaved` is the document this tab had that disk didn't take.
    */
   async function adoptStored(sessionId: string, unsaved: string | null): Promise<void> {
     const current = active.get(sessionId)
@@ -267,8 +267,8 @@ export const useDraftsStore = defineStore('drafts', () => {
       if (stored) active.set(sessionId, open(stored, true))
       else active.delete(sessionId)
 
-      const count = (elsewhere.value[sessionId]?.count ?? 0) + 1
-      elsewhere.value = { ...elsewhere.value, [sessionId]: { count, gone: !stored, unsaved } }
+      const change = { gone: !stored, unsaved }
+      changedElsewhere.value = { ...changedElsewhere.value, [sessionId]: change }
     } catch (err) {
       error.value = toErrorMessage(err, 'Failed to reload draft')
     }
@@ -384,10 +384,15 @@ export const useDraftsStore = defineStore('drafts', () => {
    * carried it on since this one last held it. Anything this tab still holds is written first, so
    * the read includes it; if that write fails, what this tab holds is all there is.
    */
-  async function resumeDraft(sessionId: string): Promise<Draft | null> {
+  async function resumeDraft(sessionId: string): Promise<DraftSnapshot | null> {
+    // What another tab did before now is in what this reads. Only a change from here on is news,
+    // including the write below losing to one.
+    const { [sessionId]: _seen, ...unseen } = changedElsewhere.value
+    changedElsewhere.value = unseen
+
     if (active.has(sessionId)) await letGo(sessionId)
     const unwritten = active.get(sessionId)
-    if (unwritten) return structuredClone(materialize(unwritten))
+    if (unwritten) return structuredClone(unwritten.draft)
 
     const draft = await draftRepository.getById(sessionId)
     if (!draft) return null
@@ -395,13 +400,13 @@ export const useDraftsStore = defineStore('drafts', () => {
     // Nothing new to write until this session is typed in, but the row is already on disk, so
     // emptying it later has something to delete.
     active.set(sessionId, open(draft, true))
-    return structuredClone(draft)
+    return structuredClone(toSnapshot(draft))
   }
 
   /** The in-progress snapshot, without waiting for it to reach disk. */
-  function currentDraft(sessionId: string): Draft | null {
+  function currentDraft(sessionId: string): DraftSnapshot | null {
     const entry = active.get(sessionId)
-    return entry ? structuredClone(materialize(entry)) : null
+    return entry ? structuredClone(entry.draft) : null
   }
 
   /**
@@ -643,7 +648,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   return {
     drafts,
     error,
-    elsewhere,
+    changedElsewhere,
     loadDrafts,
     flush,
     beginDraft,

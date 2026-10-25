@@ -6,7 +6,7 @@ import { StaleVersionError } from '@/domain/entryValidation'
 import { currentVersionId } from '@/domain/reconstructEntryState'
 import { type BeginDraftInput, DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import { type Draft, type DraftSnapshot, versionsRevisedBy } from '@/types/draft'
+import { type DraftSnapshot, versionsRevisedBy } from '@/types/draft'
 import { emptyEntryDetails, type Entry, type EntryDetails, entryDetailsOf } from '@/types/entry'
 
 /**
@@ -73,8 +73,6 @@ export function useDraftSession() {
   /** The same condition `entriesStore.requireContent` enforces, asked before a save is attempted. */
   const canSave = computed(() => !isEmptyDocument(content.value))
 
-  /** How many of another tab's changes to this draft are caught up on (`drafts.elsewhere`). */
-  let changesSeen = 0
   /** Said when another tab changed this draft in a way the writer should know about. */
   const elsewhereNotice = ref<string | null>(null)
   /** What this tab held when another tab's version replaced it, for the writer to copy from. */
@@ -124,9 +122,8 @@ export function useDraftSession() {
     parentTitle.value = nextParentTitle
   }
 
-  /** Takes a draft as this session's from here on, with nothing another tab did before now. */
+  /** Takes a draft as this session's from here on, with the last one's notices cleared. */
   function openAs(id: string): void {
-    changesSeen = drafts.elsewhere[id]?.count ?? 0
     elsewhereNotice.value = null
     unsavedText.value = null
     unreadable.value = null
@@ -159,11 +156,11 @@ export function useDraftSession() {
    * or if it can't be reopened: then `unreadable` holds it, and its words are mirrored all the same,
    * since only its trace is out of reach, for a composer to show them read-only.
    */
-  async function resume(existingSessionId: string): Promise<Draft | null> {
+  async function resume(existingSessionId: string): Promise<DraftSnapshot | null> {
     unreadable.value = null
     stale.value = false
 
-    let resumed: Draft | null
+    let resumed: DraftSnapshot | null
     try {
       resumed = await drafts.resumeDraft(existingSessionId)
     } catch (err) {
@@ -184,11 +181,10 @@ export function useDraftSession() {
    * or discarded there closes here. Quiet unless this tab lost something or lost the draft.
    */
   watch(
-    () => (sessionId.value ? drafts.elsewhere[sessionId.value] : undefined),
+    () => (sessionId.value ? drafts.changedElsewhere[sessionId.value] : undefined),
     (change) => {
       const id = sessionId.value
-      if (!change || !id || change.count <= changesSeen) return
-      changesSeen = change.count
+      if (!change || !id) return
 
       unsavedText.value = change.unsaved ? docToPlainText(change.unsaved) : null
       if (change.gone) {

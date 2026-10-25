@@ -1,5 +1,5 @@
 ---
-name: commit-ready
+name: cr
 description: Getting uncommitted work in Chronicle ready to commit — review it, verify it, and draft its message. Use when the user asks to review uncommitted work, whether it's ready to commit, or for a commit message. Never commits.
 ---
 
@@ -8,21 +8,22 @@ description: Getting uncommitted work in Chronicle ready to commit — review it
 Run when the user asks, not after every turn. The review can change the code, so verification follows it and the message is written last, about what survived. Report in order: findings and fixes, verification, then size and message.
 
 1. **Scope.** The commit is everything uncommitted unless the user says otherwise: `git diff HEAD`, plus untracked files. If it reads as more than one commit, propose the split before reviewing.
-2. **Review** by answering each question for this diff, with evidence. "Nothing" is an answer; skipping a question isn't. Ordered by importance, and so an answer that removes code comes before questions about that code.
+2. **Review** by answering each question for this diff, with evidence. "Nothing" is an answer; skipping a question isn't. Ordered by importance, and so an answer that removes code comes before questions about that code. Scale the depth to the change, without being asked: a mechanical or small one (a rename, a call-site swap, a deleted wrapper) gets a line per question; anything else gets full answers. Say in one line which you chose and why.
 
    1. What goes beyond what was asked? Going further than a prompt states is often right; justify each such part, and drop only what has no reason to be there.
-   2. Does it build a second version of something that already exists — a screen hosting its own copy of what another screen owns, a helper parallel to an existing one? Should it reuse or unify with that instead?
-   3. Does it keep CLAUDE.md's rules and landmarks?
-   4. Does all new source code run in the app? Nothing unused, and nothing that only tests call (TESTING.md, "Test the code the app runs").
-   5. Is there a smaller diff: something reused or deleted instead of added?
-   6. Is each new guard needed by the feature, or does it only cover a rare race? If the latter, is it the smallest backstop?
-   7. Is each new or changed test at the right layer and in both runners (write-tests skill)? Was it seen to fail first, and seen again after any later change to what it checks or how it waits?
-   8. Do the docs in CLAUDE.md's table that cover this area still match the code? Do the names and comments?
-   9. Does any comment cite something that won't outlive the session, or run longer than its code needs?
-   10. Could the developer you're working with explain every line in an interview? Is anything clever that could be plain?
-   11. What in this work was redone, and would a line in a doc have got it right the first time? Flag it for the user to decide; don't add it.
+   2. Is it correct? Name the input, state or order of events most likely to break it (a second tab writing in between, a write landing mid-await, an empty or missing row) and say why it doesn't.
+   3. Does it build a second version of something that already exists — a screen hosting its own copy of what another screen owns, a helper parallel to an existing one? Should it reuse or unify with that instead?
+   4. Does it keep CLAUDE.md's rules and landmarks?
+   5. Does all new source code run in the app? Nothing unused, and nothing that only tests call (TESTING.md, "Test the code the app runs").
+   6. Is there a smaller diff: something reused or deleted instead of added?
+   7. Is each new guard needed by the feature, or does it only cover a rare race? If the latter, is it the smallest backstop?
+   8. Is each new or changed test at the right layer and in both runners (write-tests skill)? Was it seen to fail first, and seen again after any later change to what it checks or how it waits?
+   9. Do the docs in CLAUDE.md's table that cover this area still match the code? Do the names and comments?
+   10. Does any comment cite something that won't outlive the session, or run longer than its code needs?
+   11. Could the developer you're working with explain every line in an interview? Is anything clever that could be plain?
+   12. What in this work was redone, and would a line in a doc have got it right the first time? Flag it for the user to decide; don't add it.
 
-   <!-- To add before 7 once more tests are owned: do new and changed tests match the owned ones (REVIEW.md) in approach and simplicity? -->
+   <!-- To add before 8 once more tests are owned: do new and changed tests match the owned ones (REVIEW.md) in approach and simplicity? -->
 
    For a broad change, have a fresh agent answer the questions from the diff and the docs alone, without this session's reasoning, then weigh what it finds; it reads the code the way a reviewer will. Fix what's clearly wrong; raise judgment calls with the user.
 

@@ -1,5 +1,5 @@
-import { newEntryId, newEntryTimestamp } from '@/types/entry'
 import { compareMarkSets, type CreateMarkSetInput, type MarkSet } from '@/types/markSet'
+import { newId, newTimestamp } from '@/utils/id'
 
 import { type ChronicleDatabase, resolveDatabase } from './chronicleDatabase'
 import type { MarkSetRepository } from './markSetRepository'
@@ -12,7 +12,7 @@ export class DexieMarkSetRepository implements MarkSetRepository {
   }
 
   async create(input: CreateMarkSetInput): Promise<MarkSet> {
-    const set: MarkSet = { id: newEntryId(), created_at: newEntryTimestamp(), ...input }
+    const set: MarkSet = { id: newId(), created_at: newTimestamp(), ...input }
     await this.db.markSets.add(set)
     return set
   }

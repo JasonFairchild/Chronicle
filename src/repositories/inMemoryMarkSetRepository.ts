@@ -1,5 +1,5 @@
-import { newEntryId, newEntryTimestamp } from '@/types/entry'
 import { compareMarkSets, type CreateMarkSetInput, type MarkSet } from '@/types/markSet'
+import { newId, newTimestamp } from '@/utils/id'
 
 import type { MarkSetRepository } from './markSetRepository'
 
@@ -7,7 +7,7 @@ export class InMemoryMarkSetRepository implements MarkSetRepository {
   private sets = new Map<string, MarkSet>()
 
   async create(input: CreateMarkSetInput): Promise<MarkSet> {
-    const set: MarkSet = { id: newEntryId(), created_at: newEntryTimestamp(), ...input }
+    const set: MarkSet = { id: newId(), created_at: newTimestamp(), ...input }
     this.sets.set(set.id, structuredClone(set))
     return structuredClone(set)
   }

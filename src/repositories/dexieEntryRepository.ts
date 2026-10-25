@@ -1,11 +1,6 @@
 import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
-import {
-  compareEntries,
-  type CreateEntryInput,
-  type Entry,
-  newEntryId,
-  newEntryTimestamp,
-} from '@/types/entry'
+import { compareEntries, type CreateEntryInput, type Entry } from '@/types/entry'
+import { newId, newTimestamp } from '@/utils/id'
 
 import { type ChronicleDatabase, resolveDatabase, type StoredEntry } from './chronicleDatabase'
 import type { EntryRepository } from './entryRepository'
@@ -61,8 +56,8 @@ export class DexieEntryRepository implements EntryRepository {
         await assertValidRelation(input, { loadParent, latestVersionId })
 
         staged.push({
-          id: newEntryId(),
-          created_at: newEntryTimestamp(),
+          id: newId(),
+          created_at: newTimestamp(),
           ...input,
           is_root: input.relation_type === null ? 1 : 0,
         })

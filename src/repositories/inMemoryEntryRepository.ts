@@ -1,11 +1,6 @@
 import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
-import {
-  compareEntries,
-  type CreateEntryInput,
-  type Entry,
-  newEntryId,
-  newEntryTimestamp,
-} from '@/types/entry'
+import { compareEntries, type CreateEntryInput, type Entry } from '@/types/entry'
+import { newId, newTimestamp } from '@/utils/id'
 
 import type { EntryRepository } from './entryRepository'
 
@@ -39,8 +34,8 @@ export class InMemoryEntryRepository implements EntryRepository {
       await assertValidRelation(input, { loadParent, latestVersionId })
 
       const entry: Entry = {
-        id: newEntryId(),
-        created_at: newEntryTimestamp(),
+        id: newId(),
+        created_at: newTimestamp(),
         // Cloned on the way in as well as out. A plain spread is shallow, so `anchors`,
         // `media_refs`, and `metadata` would stay shared with the caller's object and mutating an
         // input after saving would quietly rewrite stored history.

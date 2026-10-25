@@ -22,10 +22,9 @@ import {
   type Entry,
   type EntryDetails,
   entryDetailsOf,
-  newEntryId,
-  newEntryTimestamp,
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
+import { newId, newTimestamp } from '@/utils/id'
 
 import { useEntriesStore } from './entriesStore'
 
@@ -357,8 +356,8 @@ export const useDraftsStore = defineStore('drafts', () => {
    * same version. `abandonDraft` releases it if nothing comes of it.
    */
   function beginDraft(start: BeginDraftInput): string {
-    const sessionId = newEntryId()
-    const snapshot = startingSnapshot(start, sessionId, newEntryTimestamp())
+    const sessionId = newId()
+    const snapshot = startingSnapshot(start, sessionId, newTimestamp())
     const entry = open(withEvents(snapshot, { entry: [], parent: [] }), false)
 
     active.set(sessionId, entry)
@@ -449,7 +448,7 @@ export const useDraftsStore = defineStore('drafts', () => {
 
   /** Swaps in a session's next snapshot, stamped now, and schedules the flush that writes it. */
   function replaceSnapshot(sessionId: string, entry: ActiveSession, next: DraftSnapshot): void {
-    entry.draft = { ...next, updated_at: newEntryTimestamp() }
+    entry.draft = { ...next, updated_at: newTimestamp() }
     entry.dirty = true
     scheduleFlush(sessionId)
   }

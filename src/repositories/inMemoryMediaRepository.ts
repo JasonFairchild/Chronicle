@@ -1,4 +1,4 @@
-import { newEntryId } from '@/types/entry'
+import { newId } from '@/utils/id'
 
 import { extensionForMime, type MediaRepository, mimeForMediaId } from './mediaRepository'
 
@@ -11,7 +11,7 @@ export class InMemoryMediaRepository implements MediaRepository {
   private blobs = new Map<string, Blob>()
 
   async put(blob: Blob): Promise<string> {
-    const id = `${newEntryId()}.${extensionForMime(blob.type)}`
+    const id = `${newId()}.${extensionForMime(blob.type)}`
     this.blobs.set(id, blob)
     return id
   }

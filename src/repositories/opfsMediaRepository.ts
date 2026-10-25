@@ -1,4 +1,4 @@
-import { newEntryId } from '@/types/entry'
+import { newId } from '@/utils/id'
 
 import { extensionForMime, type MediaRepository, mimeForMediaId } from './mediaRepository'
 
@@ -23,7 +23,7 @@ export class OpfsMediaRepository implements MediaRepository {
   }
 
   async put(blob: Blob): Promise<string> {
-    const id = `${newEntryId()}.${extensionForMime(blob.type)}`
+    const id = `${newId()}.${extensionForMime(blob.type)}`
     const directory = await this.directory()
     const handle = await directory.getFileHandle(id, { create: true })
 

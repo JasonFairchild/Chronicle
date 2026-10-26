@@ -77,13 +77,11 @@ export const useEntriesStore = defineStore('entries', () => {
    * The one thing that must be true of any document about to become an entry: its body has to say
    * something, in words or an image. A title doesn't count — it names an entry without being one.
    */
-  function requireContent(content: string): string {
+  function requireContent(content: string): void {
     error.value = null
-    const trimmed = content.trim()
-    if (isEmptyDocument(trimmed)) {
+    if (isEmptyDocument(content)) {
       throw new Error('Entry content cannot be empty')
     }
-    return trimmed
   }
 
   /**
@@ -101,13 +99,10 @@ export const useEntriesStore = defineStore('entries', () => {
    * emptied; sealing calls `requireContent` first.
    */
   function fieldsFromDraft(entry: DraftSnapshot['entry']): VersionedFields {
-    const content = entry.content.trim()
-
     return versionedFieldsOf({
       ...entry,
-      content,
       title: normalizeTitle(entry.title),
-      media_refs: collectMediaRefs(content),
+      media_refs: collectMediaRefs(entry.content),
     })
   }
 

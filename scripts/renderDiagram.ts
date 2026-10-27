@@ -1,9 +1,7 @@
-/**
- * Renders ARCHITECTURE.md's Mermaid diagram to light and dark PNGs, to check its layout before
- * handing it over. Mermaid and its ELK layout load from jsdelivr into the project's Playwright
- * Chromium, the same pairing VS Code's preview uses. Writes to the OS temp directory unless given a
- * directory as the first argument.
- */
+// Renders ARCHITECTURE.md's Mermaid diagram to light and dark PNGs, to check its layout before
+// handing it over. Mermaid and its ELK layout load from jsdelivr into the project's Playwright
+// Chromium, the same pairing VS Code's preview uses. Writes to the OS temp directory unless given a
+// directory as the first argument.
 import { mkdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

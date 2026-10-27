@@ -1,16 +1,14 @@
-/**
- * Which edits disturb an anchor.
- *
- * The rule is deliberately narrow: warn when the text **under** an anchor changes — something
- * inserted inside it, or part or all of it deleted or replaced — and stay silent when the anchor
- * merely shifts because of an edit somewhere else. A note about the third paragraph is still about
- * the third paragraph after you fix a typo in the first, and warning about that would train the
- * warning away.
- *
- * The measurement is ProseMirror's own step maps, not a text comparison: each range a step replaced
- * is checked against the span as it stood just before that step. This module holds only the
- * decision, so it stays pure and node-testable; the editor layer walks the maps to feed it.
- */
+// Which edits disturb an anchor.
+//
+// The rule is deliberately narrow: warn when the text **under** an anchor changes — something
+// inserted inside it, or part or all of it deleted or replaced — and stay silent when the anchor
+// merely shifts because of an edit somewhere else. A note about the third paragraph is still about
+// the third paragraph after you fix a typo in the first, and warning about that would train the
+// warning away.
+//
+// The measurement is ProseMirror's own step maps, not a text comparison: each range a step replaced
+// is checked against the span as it stood just before that step. This module holds only the
+// decision, so it stays pure and node-testable; the editor layer walks the maps to feed it.
 
 /** A stretch of document positions: an anchor's span, or the range one step replaced. */
 export interface PositionRange {

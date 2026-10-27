@@ -2,7 +2,8 @@ import type { AuthoringEvent, AuthoringTrace, ChangeSignals, EditEvent } from '@
 
 /** One editor change, as the recorder needs it. A signal left out reads as unset. */
 export interface AuthoringChange extends Partial<ChangeSignals> {
-  steps: unknown[] // Serialized ProseMirror steps, already JSON. Never interpreted here.
+  /** Serialized ProseMirror steps, already JSON. Never interpreted here. */
+  steps: unknown[]
 }
 
 /**
@@ -18,9 +19,11 @@ export class TraceRecorder {
   readonly sessionId: string
   readonly startedAt: string
   readonly baseContent: string
-  private readonly startedAtMs: number // Parsed once, so every offset measures from one instant.
+  /** Parsed once, so every offset measures from one instant. */
+  private readonly startedAtMs: number
   private readonly now: () => number
-  private lastReadAt: number // The floor `readClock` enforces: the latest instant already used.
+  /** The floor `readClock` enforces: the latest instant already used. */
+  private lastReadAt: number
   private readonly recorded: AuthoringEvent[] = []
 
   /** `now` is injected so tests can drive time instead of waiting for it. */

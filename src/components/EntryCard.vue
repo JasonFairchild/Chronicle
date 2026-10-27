@@ -10,7 +10,7 @@ const props = defineProps<{
   entry: AggregatedEntry
 }>()
 
-/** The same flattening the detail view and search use, so a card never shows raw serialized JSON. */
+/** The same flattening the detail view and search use, so a card never shows serialized JSON. */
 const summary = computed(() => previewText(props.entry.content))
 
 /**
@@ -22,7 +22,7 @@ const whenLines = computed(() => entryWhenLines(props.entry.dates))
 /** A short, stable name for the card as a whole — its accessible name, not its full text. */
 const label = computed(() => entryLabel(props.entry))
 
-/** Every version past the first is a revision, anchor revisions included, as the entry page counts. */
+/** Every version past the first is a revision, anchor ones included, as the entry page counts. */
 const revisedLine = computed(() => {
   const revisions = props.entry.version.total - 1
   if (revisions < 1) return null

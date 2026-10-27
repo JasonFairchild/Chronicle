@@ -7,12 +7,10 @@ import type { AuthoringTrace } from '@/types/entry'
 
 import { entryExtensions } from './extensions'
 
-/**
- * Replays a session's event log into the documents it passed through (AUTHORING.md, "Authoring
- * capture"). In the editor layer because a step only means something against a schema, and this
- * uses the editor's own. A step that no longer applies, because the schema moved on, ends replay at
- * the last whole event reached: the loss is scrubbing, never words.
- */
+// Replays a session's event log into the documents it passed through (AUTHORING.md, "Authoring
+// capture"). In the editor layer because a step only means something against a schema, and this
+// uses the editor's own. A step that no longer applies, because the schema moved on, ends replay at
+// the last whole event reached: the loss is scrubbing, never words.
 
 /** A trace, or a draft's log still in progress: whatever holds a base and the events after it. */
 export type ReplayLog = Pick<AuthoringTrace, 'base_content' | 'events'>

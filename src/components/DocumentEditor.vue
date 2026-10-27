@@ -140,12 +140,16 @@ const media = useMedia()
 const fileInput = ref<HTMLInputElement | null>(null)
 const attachError = ref<string | null>(null)
 
-// Seeded once, on mount: the editor owns the document after that, and the title field owns
-// `titleText` the same way.
+/**
+ * Seeded once, on mount: the editor owns the document after that, and the title field owns
+ * `titleText` the same way.
+ */
 const titleText = ref(props.withTitle ? (props.title ?? '') : '')
 
-// Captured once, so anchor mode can tell "placed this session" apart from "was already there" for
-// as long as this editor instance lives — the same document this editor opened, never reassigned.
+/**
+ * Captured once, so anchor mode can tell "placed this session" apart from "was already there" for
+ * as long as this editor instance lives — the same document this editor opened, never reassigned.
+ */
 const initialDocument = parseDocument(props.content)
 
 /**
@@ -169,7 +173,8 @@ let liveAnchorSpans: AnchorSpan[] | null = null
 /** Anchors this session has disturbed so far. Sticky: once flagged, an anchor stays flagged. */
 const affectedAnchorIds = new Set<string>()
 
-let heldSteps: unknown[] = [] // Scaffolding steps not yet reported; see `onUpdate`.
+/** Scaffolding steps not yet reported; see `onUpdate`. */
+let heldSteps: unknown[] = []
 
 /** Puts held steps first, so the log still replays to the document this change reports. */
 function withHeldSteps(steps: unknown[]): unknown[] {

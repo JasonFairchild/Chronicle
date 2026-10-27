@@ -164,11 +164,13 @@ function claimsEntry(draft: DraftSnapshot): boolean {
 export const useDraftsStore = defineStore('drafts', () => {
   const drafts = shallowRef<DraftSnapshot[]>([])
   const error = ref<string | null>(null)
-  // Per session, the latest change another tab made since this tab opened it (`adoptStored`).
+  /** Per session, the latest change another tab made since this tab opened it (`adoptStored`). */
   const changedElsewhere = shallowRef<Record<string, ChangeElsewhere>>({})
 
-  // Not reactive: this holds timers and trace recorders, none of which a template reads, and
-  // a Vue proxy over the draft would not survive structuredClone on its way into the repository.
+  /**
+   * Not reactive: this holds timers and trace recorders, none of which a template reads, and
+   * a Vue proxy over the draft would not survive structuredClone on its way into the repository.
+   */
   const active = new Map<string, ActiveSession>()
   let adopting: Promise<void> | null = null
 
@@ -384,8 +386,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     const draft = await draftRepository.getById(sessionId)
     if (!draft) return null
 
-    // Nothing new to write until this session is typed in.
-    active.set(sessionId, open(draft))
+    active.set(sessionId, open(draft)) // Nothing new to write until this session is typed in.
     return structuredClone(toSnapshot(draft))
   }
 
@@ -575,8 +576,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       }
 
       error.value = toErrorMessage(err, 'Failed to save entry')
-      // Whatever was typed since the last flush still has to reach disk.
-      if (entry.dirty) scheduleFlush(sessionId)
+      if (entry.dirty) scheduleFlush(sessionId) // Unflushed typing still has to reach disk.
       throw err
     }
 

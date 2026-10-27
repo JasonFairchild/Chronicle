@@ -1,13 +1,11 @@
-/**
- * The document layer: one canonical way to turn an entry's stored `content` into plain text.
- *
- * `Entry.content` is a serialized ProseMirror document. Search, timeline previews, and diffs all
- * need the same flat string and must agree to the character, so exactly one function produces it —
- * `docToPlainText` — and everything calls it (CLAUDE.md, Landmarks).
- *
- * Nothing here imports TipTap. The flattening is a walk over plain JSON, which keeps it pure,
- * runnable in node, and independent of whichever editor sits on top.
- */
+// The document layer: one canonical way to turn an entry's stored `content` into plain text.
+//
+// `Entry.content` is a serialized ProseMirror document. Search, timeline previews, and diffs all
+// need the same flat string and must agree to the character, so exactly one function produces it —
+// `docToPlainText` — and everything calls it (CLAUDE.md, Landmarks).
+//
+// Nothing here imports TipTap. The flattening is a walk over plain JSON, which keeps it pure,
+// runnable in node, and independent of whichever editor sits on top.
 
 import { collectAnchors, type DocumentAnchor } from './anchors'
 

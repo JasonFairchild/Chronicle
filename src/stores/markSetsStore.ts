@@ -11,7 +11,8 @@ import type { MarkSet } from '@/types/markSet'
  * growing, so it reads `deriveMarks` directly.
  */
 export const useMarkSetsStore = defineStore('markSets', () => {
-  const markSets = shallowRef<MarkSet[]>([]) // The sets of whichever entry was loaded last.
+  /** The sets of whichever entry was loaded last. */
+  const markSets = shallowRef<MarkSet[]>([])
 
   /**
    * Builds a set from the entry's trace and saves it. Always a new set, since a name is a label and

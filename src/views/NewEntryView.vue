@@ -9,10 +9,8 @@ import { useSealDraft } from '@/composables/useSealDraft'
 import { useDraftToResume } from '@/router/draftQuery'
 import { toErrorMessage } from '@/utils/format'
 
-/**
- * Where a new entry is written, and where the app opens. Its session opens at once, since the
- * editor needs one to report into; one never typed into writes nothing and is dropped on leaving.
- */
+// Where a new entry is written, and where the app opens. Its session opens at once, since the
+// editor needs one to report into; one never typed into writes nothing and is dropped on leaving.
 const session = useDraftSession()
 const resumeError = ref<string | null>(null)
 

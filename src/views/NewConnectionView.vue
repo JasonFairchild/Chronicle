@@ -23,7 +23,7 @@ const source = ref<AggregatedEntry | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-/** Everything on the timeline except the source entry. Direction is fixed by which end you start from. */
+/** Everything on the timeline but the source. Direction is fixed by which end you start from. */
 const candidates = computed(() =>
   store.rootEntries
     .filter((entry) => entry.id !== props.id)

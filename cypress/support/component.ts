@@ -1,8 +1,4 @@
-// ***********************************************************
-// This support/component.ts is processed and loaded automatically before your test files.
-//
-// You can read more here: https://on.cypress.io/configuration
-// ***********************************************************
+// Loaded automatically before every component spec: https://on.cypress.io/configuration
 
 import '@testing-library/cypress/add-commands'
 import '@/assets/main.css'

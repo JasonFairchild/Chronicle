@@ -1,14 +1,13 @@
+// Mirrored by `useMedia.cy.ts`, the ordinary duplicated pair. Nothing is mounted in either: this is
+// not a component, and `useMedia`'s only tie to one is `onScopeDispose`, which an effect scope
+// satisfies directly. It does need a real browser — object URLs and OPFS have nothing to fall back
+// to in node.
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { effectScope } from 'vue'
 
 import { useMedia } from '@/composables/useMedia'
 
-/**
- * Mirrored by `useMedia.cy.ts`, the ordinary duplicated pair. Nothing is mounted in either: this is
- * not a component, and `useMedia`'s only tie to one is `onScopeDispose`, which an effect scope
- * satisfies directly. It does need a real browser — object URLs and OPFS have nothing to fall back
- * to in node.
- */
 describe('useMedia (browser)', () => {
   let scope: ReturnType<typeof effectScope>
   let media: ReturnType<typeof useMedia>

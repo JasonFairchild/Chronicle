@@ -15,13 +15,11 @@ import { changesInside } from '@/domain/anchorWarnings'
 import { ANCHOR_INSERT_NODE, ANCHOR_MARK, type EntryDocument } from '@/domain/entryDocument'
 import type { AnchorKind } from '@/types/entry'
 
-/**
- * The imperative half of anchor-mode: commands that place, edit, or read anchors on an editor that
- * already exists, plus the guard predicate that recognises them. `extensions.ts` is the schema
- * these operate on — a mark and a node type, and the plugin that installs the guard below into an
- * anchor-mode editor — kept separate so each file answers one question: what an anchor *is*
- * (extensions.ts) versus what a session *does* with one (here).
- */
+// The imperative half of anchor-mode: commands that place, edit, or read anchors on an editor that
+// already exists, plus the guard predicate that recognises them. `extensions.ts` is the schema
+// these operate on — a mark and a node type, and the plugin that installs the guard below into an
+// anchor-mode editor — kept separate so each file answers one question: what an anchor *is*
+// (extensions.ts) versus what a session *does* with one (here).
 
 /**
  * Marks a transaction as one of this module's anchor commands, which is what `isAnchorEdit` lets

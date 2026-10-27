@@ -1,10 +1,8 @@
 import type { AuthoringEvent, EditEvent } from '@/types/entry'
 
-/**
- * Marks: the moments in a writing session worth stopping at when reviewing it (AUTHORING.md,
- * "Marks"). Derived from the session's event log rather than decided while the writer
- * types, so a recorded session can be read under any policy, including one written later.
- */
+// Marks: the moments in a writing session worth stopping at when reviewing it (AUTHORING.md,
+// "Marks"). Derived from the session's event log rather than decided while the writer
+// types, so a recorded session can be read under any policy, including one written later.
 
 export type MarkReason =
   | 'pause'
@@ -23,9 +21,11 @@ export type MarkReason =
  * `events.slice(0, index)` applied to the trace's `base_content`.
  */
 export interface AuthoringMark {
-  at: number // The `at` of the event that placed it.
+  /** The `at` of the event that placed it. */
+  at: number
   index: number
-  reasons: MarkReason[] // Never empty. By priority, so a single label reads `reasons[0]`.
+  /** Never empty. By priority, so a single label reads `reasons[0]`. */
+  reasons: MarkReason[]
 }
 
 /**
@@ -33,11 +33,16 @@ export interface AuthoringMark {
  * changing them re-reads every stored session rather than only the ones written afterwards.
  */
 export interface MarkPolicy {
-  pauseMs: number // A gap this long before an edit means the writer stopped and came back.
-  intervalMs: number // However steadily someone types, mark at least this often.
-  punctuation: string // Inserted text ending in any of these characters ends a markable unit.
-  triggerPatterns: RegExp[] // Inserted text matching any of these is worth a mark of its own.
-  minMarkGapMs: number // A mark this close to the previous one merges into it. See `place`.
+  /** A gap this long before an edit means the writer stopped and came back. */
+  pauseMs: number
+  /** However steadily someone types, mark at least this often. */
+  intervalMs: number
+  /** Inserted text ending in any of these characters ends a markable unit. */
+  punctuation: string
+  /** Inserted text matching any of these is worth a mark of its own. */
+  triggerPatterns: RegExp[]
+  /** A mark this close to the previous one merges into it. See `place`. */
+  minMarkGapMs: number
 }
 
 export const DEFAULT_MARK_POLICY: MarkPolicy = {

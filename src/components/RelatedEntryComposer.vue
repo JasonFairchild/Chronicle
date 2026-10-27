@@ -3,21 +3,20 @@ import DocumentEditor from '@/components/DocumentEditor.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 
-/**
- * The anchor-mode composer: the parent gaining provisional anchors on the left, the related
- * entry written in `EntryComposer` on the right, sealing atomically together (AUTHORING.md,
- * "Drafts"). The parent gets no fields: an anchor revision gains the anchors and nothing else
- * (PRODUCT.md §4.4).
- *
- * Its own component though `EntryDetailView` is its only host: the two halves, and how each reads
- * when the draft is read-only, are one unit apart from that page's choice of what to show.
- *
- * Deliberately holds no session of its own: whoever opens one decides whether it is beginning
- * (`session.begin`) or resuming (`session.resume`), and owns what happens after it is sealed.
- */
+// The anchor-mode composer: the parent gaining provisional anchors on the left, the related
+// entry written in `EntryComposer` on the right, sealing atomically together (AUTHORING.md,
+// "Drafts"). The parent gets no fields: an anchor revision gains the anchors and nothing else
+// (PRODUCT.md §4.4).
+//
+// Its own component though `EntryDetailView` is its only host: the two halves, and how each reads
+// when the draft is read-only, are one unit apart from that page's choice of what to show.
+//
+// Deliberately holds no session of its own: whoever opens one decides whether it is beginning
+// (`session.begin`) or resuming (`session.resume`), and owns what happens after it is sealed.
 defineProps<{
   session: DraftSession
-  onSave: () => Promise<void> | void // Awaited by `EntryComposer`, which says why one fails.
+  /** Awaited by `EntryComposer`, which says why one fails. */
+  onSave: () => Promise<void> | void
   onDiscard: () => Promise<unknown> | void
 }>()
 </script>

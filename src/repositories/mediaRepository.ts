@@ -15,7 +15,7 @@ export interface MediaRepository {
   list(): Promise<string[]>
 }
 
-/** Extensions are the only place OPFS can keep a file's type, so the map is shared by both adapters. */
+/** Extensions are the only place OPFS keeps a file's type, so both adapters share the map. */
 const MIME_EXTENSIONS: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',

@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import type { DraftSession } from '@/composables/useDraftSession'
 
-/**
- * What another tab did to a draft open here, when the writer needs to know: it was saved or
- * discarded there, or changed at the same moment, with what this tab had kept below for copying.
- * Outside any composer, since a draft closed elsewhere leaves no composer to show it in.
- */
+// What another tab did to a draft open here, when the writer needs to know: it was saved or
+// discarded there, or changed at the same moment, with what this tab had kept below for copying.
+// Outside any composer, since a draft closed elsewhere leaves no composer to show it in.
 defineProps<{
   session: DraftSession
 }>()

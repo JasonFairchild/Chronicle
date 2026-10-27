@@ -1,10 +1,8 @@
-/**
- * Drives the running app for a manual check: starts Vite, runs a flow module in the project's
- * Playwright Chromium, then stops both. The flow default-exports `async ({ page, shot }) => …`;
- * `page` starts at `/`, and `shot(name)` saves a full-page screenshot and prints its path.
- * Screenshots go to the OS temp directory unless given a directory as the second argument. Console
- * errors and uncaught page errors print at the end and fail the run.
- */
+// Drives the running app for a manual check: starts Vite, runs a flow module in the project's
+// Playwright Chromium, then stops both. The flow default-exports `async ({ page, shot }) => …`;
+// `page` starts at `/`, and `shot(name)` saves a full-page screenshot and prints its path.
+// Screenshots go to the OS temp directory unless given a directory as the second argument. Console
+// errors and uncaught page errors print at the end and fail the run.
 import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,7 +13,7 @@ import { chromium, type Page } from 'playwright'
 
 type Flow = (context: { page: Page; shot: (name: string) => Promise<void> }) => Promise<void>
 
-// Clear of 5173, where a plain `npm run dev` starts, and 5199, Cypress's dev server.
+/** Clear of 5173 (plain `npm run dev`) and 5199 (Cypress's dev server). */
 const port = 5188
 const baseURL = `http://localhost:${port}/`
 
@@ -38,7 +36,7 @@ async function waitForServer(server: ChildProcess) {
 }
 
 mkdirSync(outDir, { recursive: true })
-// Vite itself, not `npm run dev`: on Windows, killing the npm wrapper leaves Vite listening.
+/** Vite itself, not `npm run dev`: on Windows, killing the npm wrapper leaves Vite listening. */
 const server = spawn(
   process.execPath,
   ['node_modules/vite/bin/vite.js', '--port', String(port), '--strictPort'],

@@ -17,8 +17,7 @@ export const routes: RouteRecordRaw[] = [
     redirect: { name: 'new-entry' }, // Where the app opens.
   },
   {
-    // A static segment outranks `:id`, so this never reads as an entry called "new".
-    path: '/entries/new',
+    path: '/entries/new', // A static segment outranks `:id`, so never an entry called "new".
     name: 'new-entry',
     component: NewEntryView,
   },

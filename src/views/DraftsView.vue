@@ -10,12 +10,10 @@ import { useEntriesStore } from '@/stores/entriesStore'
 import type { DraftSnapshot } from '@/types/draft'
 import { entryLabel, formatDate, toErrorMessage } from '@/utils/format'
 
-/**
- * Every unsealed draft, each linked to the page it was started from, where it reopens just as it
- * would from there. Discarding is the one thing done here.
- */
+// Every unsealed draft, each linked to the page it was started from, where it reopens just as it
+// would from there. Discarding is the one thing done here.
 
-/** A draft's own text is shown at full width here, so it gets more room than a picker label would. */
+/** A draft's own text is shown full width here, so it gets more room than a picker label. */
 const PREVIEW_LIMIT = 120
 
 const drafts = useDraftsStore()

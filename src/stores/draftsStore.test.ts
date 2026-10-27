@@ -58,8 +58,7 @@ describe('useDraftsStore', () => {
       store.recordChange(sessionId, draftChangeTo('It rained'))
       expect(save).not.toHaveBeenCalled()
 
-      // A debounce would have restarted on the second change and still be waiting.
-      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1) // A debounce would have restarted and still be waiting.
 
       expect(save).toHaveBeenCalledOnce()
       const flushed = await draftRepository.getById(sessionId)
@@ -101,8 +100,7 @@ describe('useDraftsStore', () => {
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
       expect(await draftRepository.getById(sessionId)).not.toBeNull()
 
-      // Nothing else pending — a manual bookmark alone has to be enough to schedule a write.
-      store.addMark(sessionId)
+      store.addMark(sessionId) // Nothing else pending: the bookmark alone must schedule a write.
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
       const flushed = await draftRepository.getById(sessionId)
@@ -174,7 +172,7 @@ describe('useDraftsStore', () => {
         store.recordChange(sessionId, draftChangeTo('A day at the lake'))
 
         // Let the scheduled flush actually start its write, but hold it open so ending the
-        // session can race it — this is exactly the window the fix has to close.
+        // session can race it — this is exactly the window ending a session has to close.
         const originalSave = draftRepository.save.bind(draftRepository)
         let releaseSave: () => void = () => {}
         const held = new Promise<void>((resolve) => {
@@ -428,8 +426,7 @@ describe('useDraftsStore', () => {
       const parent = await existingEntry('The meeting went badly')
 
       const sessionId = store.beginDraft({ kind: 'new_related', parent })
-      // Nothing typed: the claim is written on its own, and this waits for it to land.
-      await store.flush(sessionId)
+      await store.flush(sessionId) // Nothing typed, so this only waits for the claim to land.
 
       const otherTab = anotherTab()
       await otherTab.loadDrafts()
@@ -468,8 +465,7 @@ describe('useDraftsStore', () => {
       otherTab.recordChange(sessionId, draftChangeTo('I received the offer'))
       await otherTab.flush(sessionId)
 
-      // Untouched here, but judged by what disk holds, not by what this tab did.
-      await store.abandonDraft(sessionId)
+      await store.abandonDraft(sessionId) // Untouched here, but judged by disk, not by this tab.
 
       const stored = await draftRepository.getById(sessionId)
       expect(docToPlainText(stored!.entry.content)).toBe('I received the offer')

@@ -1,9 +1,7 @@
-/**
- * Pre-commit typecheck and unit tests, judged on what's staged. When the tree also holds unstaged
- * or untracked changes, the index is exported to `.staged/` and checked there, so a partial commit
- * passes or fails on its own contents and the working tree is never touched. `.staged/` sits in the
- * repo so module resolution walks up to the real `node_modules`.
- */
+// Pre-commit typecheck and unit tests, judged on what's staged. When the tree also holds unstaged
+// or untracked changes, the index is exported to `.staged/` and checked there, so a partial commit
+// passes or fails on its own contents and the working tree is never touched. `.staged/` sits in the
+// repo so module resolution walks up to the real `node_modules`.
 import { spawnSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 

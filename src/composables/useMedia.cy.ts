@@ -1,14 +1,13 @@
+// The Cypress half of the duplicated pair, mirroring `useMedia.browser.test.ts`. Nothing is mounted:
+// `useMedia`'s only tie to a component is `onScopeDispose`, which an `effectScope` satisfies
+// directly, so a host component would add a wrapper to test through rather than reach anything a
+// scope can't. What it does need is the real browser both runners give it — object URLs and OPFS
+// have nothing to fall back to in node.
+
 import { effectScope } from 'vue'
 
 import { useMedia } from '@/composables/useMedia'
 
-/**
- * The Cypress half of the duplicated pair, mirroring `useMedia.browser.test.ts`. Nothing is mounted:
- * `useMedia`'s only tie to a component is `onScopeDispose`, which an `effectScope` satisfies
- * directly, so a host component would add a wrapper to test through rather than reach anything a
- * scope can't. What it does need is the real browser both runners give it — object URLs and OPFS
- * have nothing to fall back to in node.
- */
 describe('useMedia', () => {
   let scope: ReturnType<typeof effectScope>
   let media: ReturnType<typeof useMedia>

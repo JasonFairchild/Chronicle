@@ -14,16 +14,14 @@ import type { MarkSetRepository } from '@/repositories/markSetRepository'
 import type { MediaRepository } from '@/repositories/mediaRepository'
 import { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
 
-/**
- * Real, isolated storage for a test — a fresh Dexie database or OPFS directory per call, pointed at
- * by the composition root, exactly like production. Isolation comes from a unique name per call,
- * the same approach `dexieEntryRepository.browser.test.ts` and its siblings already use to prove
- * the adapters themselves.
- *
- * Setup and cleanup are global: `cypress/support/component.ts` and `src/testing/browserSetup.ts`
- * each call `freshRepositories()` in a `beforeEach` and `disposeTestRepositories()` in an
- * `afterEach`, so specs reach storage through `@/repositories` and never set it up themselves.
- */
+// Real, isolated storage for a test — a fresh Dexie database or OPFS directory per call, pointed at
+// by the composition root, exactly like production. Isolation comes from a unique name per call,
+// the same approach `dexieEntryRepository.browser.test.ts` and its siblings already use to prove
+// the adapters themselves.
+//
+// Setup and cleanup are global: `cypress/support/component.ts` and `src/testing/browserSetup.ts`
+// each call `freshRepositories()` in a `beforeEach` and `disposeTestRepositories()` in an
+// `afterEach`, so specs reach storage through `@/repositories` and never set it up themselves.
 
 let counter = 0
 const disposers: Array<() => Promise<void>> = []

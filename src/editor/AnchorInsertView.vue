@@ -1,29 +1,27 @@
 <script setup lang="ts">
-/**
- * The wording a related entry proposes at a point in the parent's document, in its own Vue node
- * view so there is one mechanism for typing wording whether it pairs with a highlight, a strike, or
- * stands alone.
- *
- * Committed, it renders the same markup `AnchorInsert.renderHTML` (`extensions.ts`) produces, so the
- * live editor and the read-only view agree on shape. Open — `editor.storage.anchorInsert` names this
- * node's `anchorId` as the one being edited — it becomes a bordered, auto-sizing input, an Accept
- * checkmark, Remove, and — for an anchor that has a mark to switch — Highlight/Strike toggles,
- * sitting inline right after the marked passage (`DocumentEditor.vue` has the CSS for both this
- * presentation and the dormant floated-with-a-caret-glyph one). The node itself stays an atom:
- * typing happens in a real `<input>`, never inside ProseMirror, so there is no in-document
- * text-editing to guard against and no IME trouble.
- *
- * Closed, an anchor this session may still edit (`isEditableAnchor`) is itself clickable, reopening
- * this same box with its current wording already in the input (PRODUCT.md §4.4). An anchor an
- * earlier related entry already sealed renders the same markup but is not clickable: only the entry
- * that placed one may change it.
- *
- * `contenteditable="false"` on the wrapper is load-bearing, not decorative: a native `<input>`
- * nested inside an ancestor `contenteditable` region is a known rough edge across browsers — the
- * surrounding contenteditable's own selection/caret management can intercept focus and keystrokes
- * meant for the nested control, leaving it visible but untypeable. Marking this node's own DOM
- * subtree as not editable tells the browser to leave it alone and manage the input normally.
- */
+// The wording a related entry proposes at a point in the parent's document, in its own Vue node
+// view so there is one mechanism for typing wording whether it pairs with a highlight, a strike, or
+// stands alone.
+//
+// Committed, it renders the same markup `AnchorInsert.renderHTML` (`extensions.ts`) produces, so the
+// live editor and the read-only view agree on shape. Open — `editor.storage.anchorInsert` names this
+// node's `anchorId` as the one being edited — it becomes a bordered, auto-sizing input, an Accept
+// checkmark, Remove, and — for an anchor that has a mark to switch — Highlight/Strike toggles,
+// sitting inline right after the marked passage (`DocumentEditor.vue` has the CSS for both this
+// presentation and the dormant floated-with-a-caret-glyph one). The node itself stays an atom:
+// typing happens in a real `<input>`, never inside ProseMirror, so there is no in-document
+// text-editing to guard against and no IME trouble.
+//
+// Closed, an anchor this session may still edit (`isEditableAnchor`) is itself clickable, reopening
+// this same box with its current wording already in the input (PRODUCT.md §4.4). An anchor an
+// earlier related entry already sealed renders the same markup but is not clickable: only the entry
+// that placed one may change it.
+//
+// `contenteditable="false"` on the wrapper is load-bearing, not decorative: a native `<input>`
+// nested inside an ancestor `contenteditable` region is a known rough edge across browsers — the
+// surrounding contenteditable's own selection/caret management can intercept focus and keystrokes
+// meant for the nested control, leaving it visible but untypeable. Marking this node's own DOM
+// subtree as not editable tells the browser to leave it alone and manage the input normally.
 import { Check, Highlighter, Strikethrough, Trash2 } from '@lucide/vue'
 import { nodeViewProps, NodeViewWrapper } from '@tiptap/vue-3'
 import { computed, nextTick, ref, watch } from 'vue'

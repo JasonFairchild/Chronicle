@@ -9,12 +9,13 @@ export interface FrameChange {
   kind: 'added' | 'removed' | 'formatted' | 'anchor'
   from: number
   to: number
-  removed?: string // What a 'removed' change took out, to show struck at `from`.
+  /** What a 'removed' change took out, to show struck at `from`. */
+  removed?: string
 }
 
 /** One mark's stop: what changed since the previous mark's document. */
 export interface MarkFrame extends AuthoringMark {
-  // Usually one replace step. A whole document only when that step failed its build-time check.
+  /** Usually one replace step. A whole document only when that step failed its build-time check. */
   net: { steps: unknown[] } | { document: EntryDocument }
   changes: FrameChange[]
 }
@@ -28,8 +29,10 @@ export interface MarkSet {
   entry_id: string
   name: string
   created_at: string
-  policy: MarkPolicy // Kept so the set can be explained or rebuilt.
-  base_content: string // The trace's, so the frames can be viewed without it.
+  /** Kept so the set can be explained or rebuilt. */
+  policy: MarkPolicy
+  /** The trace's, so the frames can be viewed without it. */
+  base_content: string
   frames: MarkFrame[]
 }
 

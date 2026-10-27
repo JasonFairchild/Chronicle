@@ -16,10 +16,8 @@ import type { FrameChange, MarkFrame, MarkSet } from '@/types/markSet'
 
 import { applySteps, replayDocument, type ReplayLog } from './replay'
 
-/**
- * Frames for a mark set (AUTHORING.md, "Mark sets"): what changed between one mark's document
- * and the next, built once from the raw log and viewed without it.
- */
+// Frames for a mark set (AUTHORING.md, "Mark sets"): what changed between one mark's document
+// and the next, built once from the raw log and viewed without it.
 
 /** Whether `step` turns `before` into exactly `after`: each frame's build-time check. */
 export type NetStepCheck = (step: Step, before: ProseMirrorNode, after: ProseMirrorNode) => boolean

@@ -7,8 +7,7 @@ import App from './App.vue'
 import { requestPersistentStorage } from './composables/useStoragePersistence'
 import router from './router'
 
-// Before anything is written, so the first draft is already covered.
-void requestPersistentStorage()
+void requestPersistentStorage() // Before any write, so the first draft is already covered.
 
 const app = createApp(App)
 

@@ -1,13 +1,11 @@
-/**
- * The editor schema: node and mark types, and the extensions list assembled from them.
- *
- * The entry **body** only. A title is an ordinary `<input>` beside the editing surface and a plain
- * field on the entry, so no title node exists here or in the stored document (ENTRY_MODEL.md,
- * "Fields"). `entryDocument.ts` reads what this produces as plain JSON, which is what keeps the
- * flattening pure and node-testable. `anchorCommands.ts` is this module's companion, kept separate
- * so each file answers one question: what an anchor *is* (here) versus what a session *does* with
- * one (there).
- */
+// The editor schema: node and mark types, and the extensions list assembled from them.
+//
+// The entry **body** only. A title is an ordinary `<input>` beside the editing surface and a plain
+// field on the entry, so no title node exists here or in the stored document (ENTRY_MODEL.md,
+// "Fields"). `entryDocument.ts` reads what this produces as plain JSON, which is what keeps the
+// flattening pure and node-testable. `anchorCommands.ts` is this module's companion, kept separate
+// so each file answers one question: what an anchor *is* (here) versus what a session *does* with
+// one (there).
 
 import { Extension, type Extensions, Mark, mergeAttributes, Node } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
@@ -31,8 +29,10 @@ import {
 } from './anchorCommands'
 import AnchorInsertView from './AnchorInsertView.vue'
 
-// An image whose bytes live in the media store, referenced by blob id only — no data/object URL or
-// path — so `media_refs` can be derived from the document and a reload never finds a dead URL.
+/**
+ * An image whose bytes live in the media store, referenced by blob id only — no data/object URL or
+ * path — so `media_refs` can be derived from the document and a reload never finds a dead URL.
+ */
 const MediaImage = Node.create({
   name: MEDIA_NODE,
   group: 'block',
@@ -142,10 +142,12 @@ const AnchorInsert = Node.create({
     return [{ tag: 'ins[data-anchor-id]' }]
   },
 
-  // The wording sits in its own inner span, separate from the `<ins>` wrapper, so the dormant
-  // interlinear presentation (`DocumentEditor.vue`) can later raise it above the line with a
-  // baseline caret — a CSS `::before` on the `<ins>`, not a DOM node, so it never reaches
-  // `textContent`, a copy, or `parseHTML` above, which keeps finding the nested span's text.
+  /**
+   * The wording sits in its own inner span, separate from the `<ins>` wrapper, so the dormant
+   * interlinear presentation (`DocumentEditor.vue`) can later raise it above the line with a
+   * baseline caret — a CSS `::before` on the `<ins>`, not a DOM node, so it never reaches
+   * `textContent`, a copy, or `parseHTML` above, which keeps finding the nested span's text.
+   */
   renderHTML({ node, HTMLAttributes }) {
     return [
       'ins',
@@ -154,12 +156,16 @@ const AnchorInsert = Node.create({
     ]
   },
 
-  // Which anchor's wording is open for editing — UI state, never a node attribute, so it can't
-  // reach the stored document. See `AnchorInsertStorage` (`anchorCommands.ts`) for why it's a `Ref`.
+  /**
+   * Which anchor's wording is open for editing — UI state, never a node attribute, so it can't
+   * reach the stored document. See `AnchorInsertStorage` (`anchorCommands.ts`) for why it's a `Ref`.
+   */
   addStorage: createAnchorInsertStorage,
 
-  // The Vue node view (`AnchorInsertView.vue`) renders this node as plain text or a live input,
-  // depending on that storage.
+  /**
+   * The Vue node view (`AnchorInsertView.vue`) renders this node as plain text or a live input,
+   * depending on that storage.
+   */
   addNodeView() {
     return VueNodeViewRenderer(AnchorInsertView)
   },

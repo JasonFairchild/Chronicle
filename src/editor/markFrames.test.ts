@@ -8,7 +8,7 @@ import { documentsAt, replayDocument, type ReplayLog } from '@/editor/replay'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import type { AuthoringEvent } from '@/types/entry'
 
-// "rained" is 4–10, "all" 11–14, "day" 15–18.
+/** "rained" is 4–10, "all" 11–14, "day" 15–18. */
 const base = serializeDocument(plainTextDocument('It rained all day'))
 
 /** A log of one edit per operation, the way the editor emits one per transaction. */

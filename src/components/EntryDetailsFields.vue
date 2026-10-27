@@ -5,7 +5,8 @@ import type { EntryDates, EntryDetails } from '@/types/entry'
 
 defineProps<{
   disabled?: boolean
-  readonly?: boolean // Shown to copy, not change: unlike disabled, legible and selectable.
+  /** Shown to copy, not change: unlike disabled, legible and selectable. */
+  readonly?: boolean
 }>()
 
 const details = defineModel<EntryDetails>({ required: true })
@@ -52,7 +53,7 @@ const originalMediumNote = textField('original_medium_note')
 
 const legendClass =
   'mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]'
-// One label column width for both groups, so their fields line up across the divider.
+/** One label column width for both groups, so their fields line up across the divider. */
 const gridClass =
   'grid gap-x-3 gap-y-1.5 sm:grid-cols-[9rem_minmax(0,11rem)_minmax(0,1fr)] sm:items-center'
 const inputClass =

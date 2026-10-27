@@ -42,9 +42,11 @@ const error = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const mediaEl = ref<HTMLElement | null>(null)
 
-// Holds an immutable snapshot, replaced wholesale and never mutated in place, so a shallow ref is
-// the right tool. It also keeps Vue's reactive proxy off this data, which matters once it travels
-// into the repository: a proxy is not structured-cloneable.
+/**
+ * Holds an immutable snapshot, replaced wholesale and never mutated in place, so a shallow ref is
+ * the right tool. It also keeps Vue's reactive proxy off this data, which matters once it travels
+ * into the repository: a proxy is not structured-cloneable.
+ */
 const aggregated = shallowRef<AggregatedEntry | null>(null)
 
 /**
@@ -61,9 +63,9 @@ const breadcrumbKind = computed<'about' | 'connects' | null>(() => {
   return null
 })
 
-/** The open revision session, if the entry's own text is being edited. `isOpen` false means it is being read. */
+/** The revision session: `isOpen` while the entry's text is being edited, not while it's read. */
 const revisionSession = useDraftSession()
-/** Anchors this revision session has disturbed so far (PRODUCT.md §4.5). Sticky across the session. */
+/** Anchors this revision session has disturbed so far, sticky once flagged (PRODUCT.md §4.5). */
 const revisionAffectedAnchorIds = ref<string[]>([])
 
 /**
@@ -108,7 +110,7 @@ const versionLabel = computed(() => {
   return `Version ${version.index} of ${version.total}`
 })
 
-/** The muted line under the heading. An untitled entry's heading is already the day, so only the time. */
+/** The muted line under the heading. An untitled entry's heading is the day, so only the time. */
 const metaLine = computed(() => {
   const entry = aggregated.value
   if (!entry) return ''

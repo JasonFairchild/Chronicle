@@ -6,18 +6,17 @@ import EntryDetailsFields from '@/components/EntryDetailsFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 import { toErrorMessage } from '@/utils/format'
 
-/**
- * The one way an entry is written: its document, then its detail fields, then Discard and Save.
- *
- * Holds no session of its own, like `RelatedEntryComposer`: whoever mounts it begins or resumes the
- * session and decides what a save or a discard leads to.
- *
- * Not a `<form>`: Enter in a field (a time note, the link address) would submit it and save the
- * entry mid-thought.
- */
+// The one way an entry is written: its document, then its detail fields, then Discard and Save.
+//
+// Holds no session of its own, like `RelatedEntryComposer`: whoever mounts it begins or resumes the
+// session and decides what a save or a discard leads to.
+//
+// Not a `<form>`: Enter in a field (a time note, the link address) would submit it and save the
+// entry mid-thought.
 const props = defineProps<{
   session: DraftSession
-  label: string // The editor's accessible name.
+  /** The editor's accessible name. */
+  label: string
   saveLabel: string
   // Props rather than emits, so they can be awaited: a failure is said here, beside the buttons,
   // and goes when this composer does. Bound as `@save` and `@discard` all the same.
@@ -26,10 +25,12 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  change: [change: EditorChange] // After the session has it, for an owner that reads more of it.
+  /** After the session has it, for an owner that reads more of it. */
+  change: [change: EditorChange]
 }>()
 
-const error = ref<string | null>(null) // Why Save or Discard did nothing; cleared by any change.
+/** Why Save or Discard did nothing; cleared by any change. */
+const error = ref<string | null>(null)
 
 function handleChange(change: EditorChange): void {
   error.value = null

@@ -50,11 +50,9 @@ export function useDraftSession() {
    * before a reload still reads as this session's own rather than as an earlier related entry's.
    */
   const parentBaseContent = ref('')
-  /**
-   * What the open draft is, and whether the entry it could revise has moved past the version it
-   * started from. A claim keeps that from happening (PRODUCT.md §4.8) all but in a race, so it is
-   * learned when the draft is reopened, or when a save is refused for it.
-   */
+  // What the open draft is, and whether the entry it could revise has moved past the version it
+  // started from. A claim keeps that from happening (PRODUCT.md §4.8) all but in a race, so it is
+  // learned when the draft is reopened, or when a save is refused for it.
   const kind = ref<DraftSnapshot['kind'] | null>(null)
   const stale = ref(false)
 
@@ -71,7 +69,7 @@ export function useDraftSession() {
       : null,
   )
 
-  /** The same condition `entriesStore.requireContent` enforces, asked before a save is attempted. */
+  /** The same condition `entriesStore.requireContent` enforces, asked before a save. */
   const canSave = computed(() => !isEmptyDocument(content.value))
 
   /** Said when another tab changed this draft in a way the writer should know about. */
@@ -102,12 +100,12 @@ export function useDraftSession() {
   /** What a host mounts its composer on: a draft open for editing, or one shown read-only. */
   const hasDraft = computed(() => isOpen.value || readOnly.value)
 
+  const reloads = ref(0)
   /**
    * What an editor showing this session is keyed on. It changes when the draft is reloaded from
    * disk under it, or turns read-only: `DocumentEditor` reads its content and whether it can be
    * typed in once, on mount, so a remount is the swap.
    */
-  const reloads = ref(0)
   const editorKey = computed(
     () => `${sessionId.value ?? ''}:${reloads.value}:${readOnly.value ? 'read' : 'write'}`,
   )
@@ -177,10 +175,8 @@ export function useDraftSession() {
     return resumed
   }
 
-  /**
-   * Catches up when another tab changed this draft: a reload shows its version, and a draft sealed
-   * or discarded there closes here. Quiet unless this tab lost something or lost the draft.
-   */
+  // Catches up when another tab changed this draft: a reload shows its version, and a draft sealed
+  // or discarded there closes here. Quiet unless this tab lost something or lost the draft.
   watch(
     () => (sessionId.value ? drafts.changedElsewhere[sessionId.value] : undefined),
     (change) => {

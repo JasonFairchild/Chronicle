@@ -55,8 +55,7 @@ export class OpfsMediaRepository implements MediaRepository {
     try {
       await directory.removeEntry(id)
     } catch (error) {
-      // Deleting something already gone is the outcome the caller wanted.
-      if (!isNotFound(error)) throw error
+      if (!isNotFound(error)) throw error // Already gone is the outcome the caller wanted.
     }
   }
 

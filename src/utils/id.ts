@@ -1,4 +1,4 @@
-/** Ids and timestamps for anything stored: entries, draft sessions, mark sets, media files. */
+// Ids and timestamps for anything stored: entries, draft sessions, mark sets, media files.
 
 /** Which millisecond an id lands in, and its place within that millisecond. */
 export interface IdClock {
@@ -20,7 +20,8 @@ export function advanceIdClock(previous: IdClock, now: number): IdClock {
   return { ms: previous.ms, counter: previous.counter + 1 }
 }
 
-let idClock: IdClock = { ms: -1, counter: 0 } // -1 sorts before any real timestamp.
+/** -1 sorts before any real timestamp. */
+let idClock: IdClock = { ms: -1, counter: 0 }
 
 /** UUIDv7 — sortable as plain text since the millisecond timestamp leads. */
 export function newId(): string {

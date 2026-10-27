@@ -3,8 +3,10 @@ import { emptyEntryDetails, versionedFieldsOf } from './entry'
 
 /** One document a session is writing: where it started and where it is. */
 export interface DraftDocument {
-  base_version_id: string | null // The version it started from; null for a new entry.
-  base_content: string // The document as this session found it, never rewritten.
+  /** The version it started from; null for a new entry. */
+  base_version_id: string | null
+  /** The document as this session found it, never rewritten. */
+  base_content: string
   content: string
   events: AuthoringEvent[]
 }
@@ -22,9 +24,11 @@ export type DraftFields = Omit<VersionedFields, 'content' | 'media_refs'>
  */
 type DraftOf<Doc> = {
   session_id: string
-  started_at: string // Shared by both documents' traces when sealing.
+  /** Shared by both documents' traces when sealing. */
+  started_at: string
   updated_at: string
-  write_id: string | null // The stored write it follows, if any (AUTHORING.md, "Draft safety").
+  /** The stored write it follows, if any (AUTHORING.md, "Draft safety"). */
+  write_id: string | null
   entry: Doc & DraftFields
 } & (
   | { kind: 'new_root' }

@@ -4,7 +4,7 @@ import { onMounted } from 'vue'
 import EntryList from '@/components/EntryList.vue'
 import { useEntriesStore } from '@/stores/entriesStore'
 
-/** A plain list for now; what the timeline is meant to become is PRODUCT.md §5.6. */
+// A plain list for now; what the timeline is meant to become is PRODUCT.md §5.6.
 const store = useEntriesStore()
 
 onMounted(() => {

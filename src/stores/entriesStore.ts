@@ -26,9 +26,11 @@ import {
 import { toErrorMessage } from '@/utils/format'
 
 export const useEntriesStore = defineStore('entries', () => {
-  // Immutable snapshots, replaced wholesale and never mutated in place, so deep reactivity would
-  // only cost proxies. Keeping them raw also stops a proxy from reaching the repository, which
-  // clones with structuredClone and cannot clone one.
+  /**
+   * Immutable snapshots, replaced wholesale and never mutated in place, so deep reactivity would
+   * only cost proxies. Keeping them raw also stops a proxy from reaching the repository, which
+   * clones with structuredClone and cannot clone one.
+   */
   const rootEntries = shallowRef<AggregatedEntry[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)

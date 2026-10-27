@@ -1,9 +1,7 @@
 import type { DocNode, EntryDocument } from '@/domain/entryDocument'
 
-/**
- * Documents for test data, built from bare strings. The app never builds one this way: every
- * document it stores comes out of the editor.
- */
+// Documents for test data, built from bare strings. The app never builds one this way: every
+// document it stores comes out of the editor.
 
 /** Wraps plain text as a document, one paragraph per line. */
 export function plainTextDocument(text: string): EntryDocument {

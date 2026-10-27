@@ -1,16 +1,14 @@
-/**
- * Anchors, read out of the document that owns them.
- *
- * An anchor's position is a fact about the **parent's** document, so that is where it is stored: a
- * span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is an
- * `anchorInsert` node carrying `{ anchorId, text }`. A related entry keeps only ids and the wording
- * each one covered when it was sealed (ENTRY_MODEL.md, "Related entries and anchors").
- *
- * So there is no stored offset to reinterpret and nothing to resolve positionally: the editor
- * maintains anchor positions the way it maintains everything else, and this module only reads the
- * structure back out. Nothing here imports TipTap; it walks the same plain JSON `entryDocument.ts`
- * does.
- */
+// Anchors, read out of the document that owns them.
+//
+// An anchor's position is a fact about the **parent's** document, so that is where it is stored: a
+// span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is an
+// `anchorInsert` node carrying `{ anchorId, text }`. A related entry keeps only ids and the wording
+// each one covered when it was sealed (ENTRY_MODEL.md, "Related entries and anchors").
+//
+// So there is no stored offset to reinterpret and nothing to resolve positionally: the editor
+// maintains anchor positions the way it maintains everything else, and this module only reads the
+// structure back out. Nothing here imports TipTap; it walks the same plain JSON `entryDocument.ts`
+// does.
 
 import type { AnchorKind, AnchorRef, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
 

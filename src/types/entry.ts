@@ -1,4 +1,4 @@
-/** The unified Entry model. See ENTRY_MODEL.md for the reasoning behind these shapes. */
+// The unified Entry model. See ENTRY_MODEL.md for the reasoning behind these shapes.
 
 export type NarrativeRelation = 'annotation' | 'update'
 export type EdgeRelation = 'connection'
@@ -20,12 +20,18 @@ export type RevisionMode = 'direct' | 'anchor'
  * change.
  */
 export interface ChangeSignals {
-  inserted_text: string // Empty for a deletion or a pure formatting change.
-  removed_chars: number // Measured against the document each step saw before it applied.
-  is_formatting: boolean // A mark or node-type change rather than text.
-  is_anchor_op: boolean // Placing, switching or removing an anchor; not typing its wording.
-  is_paste: boolean // The transaction's own `uiEvent` meta, so a drop doesn't count.
-  media_changed: boolean // An image attached or removed.
+  /** Empty for a deletion or a pure formatting change. */
+  inserted_text: string
+  /** Measured against the document each step saw before it applied. */
+  removed_chars: number
+  /** A mark or node-type change rather than text. */
+  is_formatting: boolean
+  /** Placing, switching or removing an anchor; not typing its wording. */
+  is_anchor_op: boolean
+  /** The transaction's own `uiEvent` meta, so a drop doesn't count. */
+  is_paste: boolean
+  /** An image attached or removed. */
+  media_changed: boolean
 }
 
 /**
@@ -34,8 +40,10 @@ export interface ChangeSignals {
  */
 export interface EditEvent extends Partial<ChangeSignals> {
   kind: 'edit'
-  at: number // Milliseconds since the trace's `started_at`.
-  steps: unknown[] // Serialized ProseMirror steps, in order.
+  /** Milliseconds since the trace's `started_at`. */
+  at: number
+  /** Serialized ProseMirror steps, in order. */
+  steps: unknown[]
 }
 
 /** A bookmark the writer asked for. */
@@ -52,7 +60,8 @@ export interface AuthoringTrace {
   session_id: string
   started_at: string
   ended_at: string
-  base_content: string // The document the first event applies to.
+  /** The document the first event applies to. */
+  base_content: string
   events: AuthoringEvent[]
 }
 
@@ -75,13 +84,17 @@ export function emptyEntryDates(): EntryDates {
 /** Everything a revision replaces. See ENTRY_MODEL.md, "Version chains". */
 export interface VersionedFields {
   dates: EntryDates
-  location: string | null // A name the author reuses, not coordinates.
-  original_medium: string | null // Where it was first written, for imports and recreations.
+  /** A name the author reuses, not coordinates. */
+  location: string | null
+  /** Where it was first written, for imports and recreations. */
+  original_medium: string | null
   original_medium_note: string | null
   title: string | null
   content: string
-  media_refs: string[] // Blob ids in the media store.
-  metadata: Record<string, unknown> // Only what neither drives domain logic nor gets queried.
+  /** Blob ids in the media store. */
+  media_refs: string[]
+  /** Only what neither drives domain logic nor gets queried. */
+  metadata: Record<string, unknown>
 }
 
 /** What a writer sets beside an entry's title and document: when, where, and what it was first written in. */
@@ -124,14 +137,20 @@ export function versionedFieldsOf(source: VersionedFields): VersionedFields {
 }
 
 export interface Entry extends VersionedFields {
-  id: string // UUIDv7 — sortable as text.
-  created_at: string // System-set, immutable.
+  /** UUIDv7 — sortable as text. */
+  id: string
+  /** System-set, immutable. */
+  created_at: string
   parent_id: string | null
   relation_type: RelationType | null
-  target_id: string | null // Connections only.
-  anchors: AnchorRef[] // Empty means the entry is about its parent at large.
-  revision_mode: RevisionMode | null // Revisions only.
-  base_version_id: string | null // Revisions only: the version this one replaced.
+  /** Connections only. */
+  target_id: string | null
+  /** Empty means the entry is about its parent at large. */
+  anchors: AnchorRef[]
+  /** Revisions only. */
+  revision_mode: RevisionMode | null
+  /** Revisions only: the version this one replaced. */
+  base_version_id: string | null
   authoring_trace: AuthoringTrace | null
 }
 
@@ -145,8 +164,10 @@ export type AnchorStatus = 'present' | 'orphaned'
 export interface ResolvedAnchor {
   anchor_id: string
   status: AnchorStatus
-  quote: string // Current wording if present, the sealed quote if orphaned.
-  kind: AnchorKind | null // Null when orphaned or a bare insertion.
+  /** Current wording if present, the sealed quote if orphaned. */
+  quote: string
+  /** Null when orphaned or a bare insertion. */
+  kind: AnchorKind | null
   insertion: string | null
 }
 
@@ -164,13 +185,16 @@ export interface EntryVersion extends VersionedFields {
 export interface ResolvedRelatedEntry {
   entry: AggregatedEntry
   relation_type: RelationType
-  anchors: ResolvedAnchor[] // Its anchors, read out of the parent's current document.
-  has_children: boolean // Grandchildren are indicated, not expanded.
+  /** Its anchors, read out of the parent's current document. */
+  anchors: ResolvedAnchor[]
+  /** Grandchildren are indicated, not expanded. */
+  has_children: boolean
 }
 
 export interface ResolvedConnection {
   entry: AggregatedEntry
-  other_id: string // The endpoint that is not the entry being viewed.
+  /** The endpoint that is not the entry being viewed. */
+  other_id: string
   direction: 'outgoing' | 'incoming'
 }
 
@@ -181,9 +205,11 @@ export interface ResolvedConnection {
 export interface AggregatedEntry extends VersionedFields {
   id: string
   created_at: string
-  parent_id: string | null // Null for a root entry.
+  /** Null for a root entry. */
+  parent_id: string | null
   relation_type: RelationType | null
-  target_id: string | null // Connections only.
+  /** Connections only. */
+  target_id: string | null
   version: { index: number; total: number; at: string; revision_id: string | null }
   related_entries: ResolvedRelatedEntry[]
   connections: ResolvedConnection[]

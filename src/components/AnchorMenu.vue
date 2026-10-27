@@ -1,19 +1,17 @@
 <script setup lang="ts">
-/**
- * Anchor mode's whole action set, as a floating menu over the current selection. Built on TipTap's
- * `BubbleMenu` so positioning and show/hide timing come from the library rather than being
- * reinvented here.
- *
- * Actions are derived from the **selection** on every render, never remembered between clicks: a
- * range of ordinary text offers the two mark actions; a selected media node offers none yet
- * (PRODUCT.md §6, image anchoring); an empty selection shows nothing at all, since placing a mark
- * opens its own wording box immediately (`markAnchor`) and leaves no in-between state to cover.
- *
- * Anchors are exclusive (PRODUCT.md §4.4): either button opens that anchor's wording box instead of
- * marking a new one whenever the selection touches an anchor already there, this session's own or an
- * earlier related entry's sealed one — `markAnchor` (`editor/anchorCommands.ts`) decides which, so
- * this menu stays two plain buttons with no state of its own to track.
- */
+// Anchor mode's whole action set, as a floating menu over the current selection. Built on TipTap's
+// `BubbleMenu` so positioning and show/hide timing come from the library rather than being
+// reinvented here.
+//
+// Actions are derived from the **selection** on every render, never remembered between clicks: a
+// range of ordinary text offers the two mark actions; a selected media node offers none yet
+// (PRODUCT.md §6, image anchoring); an empty selection shows nothing at all, since placing a mark
+// opens its own wording box immediately (`markAnchor`) and leaves no in-between state to cover.
+//
+// Anchors are exclusive (PRODUCT.md §4.4): either button opens that anchor's wording box instead of
+// marking a new one whenever the selection touches an anchor already there, this session's own or an
+// earlier related entry's sealed one — `markAnchor` (`editor/anchorCommands.ts`) decides which, so
+// this menu stays two plain buttons with no state of its own to track.
 import { Highlighter, type LucideIcon, Strikethrough } from '@lucide/vue'
 import type { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
@@ -51,10 +49,8 @@ function shouldShow({ state }: { state: { selection: Editor['state']['selection'
   return !state.selection.empty && state.selection instanceof TextSelection
 }
 
-/**
- * Roving tabindex: one Tab stop for the whole toolbar, arrow keys move within it. Worth doing
- * properly rather than leaving each button independently tabbable, even with only two controls here.
- */
+// Roving tabindex: one Tab stop for the whole toolbar, arrow keys move within it. Worth doing
+// properly rather than leaving each button independently tabbable, even with only two controls here.
 const buttons = ref<(HTMLButtonElement | null)[]>([])
 const activeIndex = ref(0)
 

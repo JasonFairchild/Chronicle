@@ -696,8 +696,7 @@ describe('DocumentEditor (browser)', () => {
         const editorLocator = await placeHighlightWithWording(screen)
         const placed = changes[changes.length - 1]!
 
-        // The same range the highlight covers, selected again from scratch.
-        selectTextRange(editorLocator.element(), 10, 20)
+        selectTextRange(editorLocator.element(), 10, 20) // The highlight's range, selected afresh.
         await screen.getByRole('button', { name: 'Strike', exact: true }).click()
 
         await expect

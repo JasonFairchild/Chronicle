@@ -160,6 +160,48 @@ describe('useDraftsStore', () => {
       const stored = await draftRepository.getById(sessionId)
       expect(stored?.entry.content).toBe(textContent('It rained all day'))
     })
+
+    it('writes nothing more once a write loses to another tab, offering what this tab had', async () => {
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('It rained'))
+      await store.flush(sessionId)
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, draftChangeTo('It snowed'))
+      await otherTab.flush(sessionId)
+
+      // Hold this tab's write open, so typing goes on and queues another while the first is losing.
+      const originalSave = draftRepository.save.bind(draftRepository)
+      let releaseSave: () => void = () => {}
+      const held = new Promise<void>((resolve) => {
+        releaseSave = resolve
+      })
+      const save = vi.spyOn(draftRepository, 'save').mockImplementationOnce(async (draft) => {
+        await held
+        return originalSave(draft)
+      })
+      // In-memory calls resolve within microtasks, where IndexedDB takes a macrotask. Delay the
+      // catch-up's read as disk would, or it ends before the queued write starts and nothing races.
+      const read = draftRepository.getById.bind(draftRepository)
+      vi.spyOn(draftRepository, 'getById').mockImplementationOnce(async (id) => {
+        await new Promise((resolve) => setTimeout(resolve))
+        return read(id)
+      })
+      store.recordChange(sessionId, draftChangeTo('It rained all'))
+      const losing = store.flush(sessionId)
+      store.recordChange(sessionId, draftChangeTo('It rained all day'))
+      const queued = store.flush(sessionId)
+      releaseSave()
+      await Promise.all([losing, queued])
+
+      expect(save).toHaveBeenCalledOnce() // The queued write belonged to the session the loss replaced.
+      expect(store.currentDraft(sessionId)?.entry.content).toBe(textContent('It snowed'))
+      expect(store.changedElsewhere[sessionId]?.unsaved?.entry.content).toBe(
+        textContent('It rained all day'),
+      )
+    })
   })
 
   describe('ending a session', () => {

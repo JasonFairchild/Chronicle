@@ -89,15 +89,14 @@ interface ActiveSession {
   /** The parent document's log, present exactly when the draft has a `parent`. */
   parentRecorder: TraceRecorder | null
   timer: ReturnType<typeof setTimeout> | null
-  /** True once anything has actually been typed, so an opened-and-abandoned composer saves nothing. */
+  /** Holds changes no write has taken yet. */
   dirty: boolean
   /**
-   * The repository write `flush` is currently awaiting, if any. Cancelling the timer stops a
-   * flush that hasn't started; it does nothing for one already mid-write. Sealing or discarding
-   * waits on this too: a session's first write, following none, would recreate the row if it
-   * landed after, and a later one would refuse the seal or discard as a conflict.
+   * This session's writes, each queued behind the last. Sealing and discarding wait on it, since
+   * cancelling the timer only stops a write not yet queued: a first write landing after would
+   * recreate the row, and a later one would refuse the seal or discard as a conflict.
    */
-  flushing: Promise<void> | null
+  flushing: Promise<void>
 }
 
 /** An existing entry's document as a session finds it: its current version. */
@@ -176,7 +175,7 @@ export const useDraftsStore = defineStore('drafts', () => {
 
   /** Resolves once every write this tab has under way has landed, so a read of disk includes it. */
   async function writesLanded(): Promise<void> {
-    await Promise.all([...active.values()].map((entry) => entry.flushing?.catch(() => {})))
+    await Promise.all([...active.values()].map((entry) => entry.flushing))
   }
 
   /**
@@ -218,7 +217,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       parentRecorder: draft.kind === 'new_related' ? recorderFor(draft.parent) : null,
       timer: null,
       dirty: false,
-      flushing: null,
+      flushing: Promise.resolve(),
     }
   }
 
@@ -267,33 +266,14 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * Writes the pending snapshot now, cancelling any scheduled flush, and resolves once everything
-   * this tab holds is on disk, including a write already under way.
-   *
-   * An empty new entry never reaches disk. A draft is a piece of writing in progress, and a row
-   * holding no writing is noise in the drafts list at best and a false promise of recoverable work
-   * at worst. Emptying one that had words *deletes* its row rather than skipping the write, because
-   * leaving the last non-empty snapshot behind would show a draft that no longer matches anything
-   * the writer can see. A claim on an entry is the exception: it stays while its session is open,
-   * however empty, and is judged when the session ends (`abandonDraft`).
+   * One queued write of what a session holds. Never rejects: a rejection would skip every write
+   * queued after it, and the session would silently stop saving.
    */
-  async function flush(sessionId: string): Promise<void> {
-    const entry = active.get(sessionId)
-    if (!entry) return
+  async function write(sessionId: string, entry: ActiveSession): Promise<void> {
+    // One that lost to another tab has already replaced this session with what disk holds.
+    if (active.get(sessionId) !== entry) return
 
-    cancelFlush(entry)
-    const previous = entry.flushing
-    if (!entry.dirty) {
-      await previous?.catch(() => {})
-      return
-    }
-    entry.dirty = false
-
-    const write = (async () => {
-      // One write at a time: each follows the one before it. One that lost to another tab has
-      // already replaced this session with what disk holds.
-      await previous?.catch(() => {})
-      if (active.get(sessionId) !== entry) return
+    try {
       const draft = materialize(entry)
 
       // Each write's id goes on the snapshot as it is by then: one replaced while the write was
@@ -308,11 +288,6 @@ export const useDraftsStore = defineStore('drafts', () => {
 
       const writeId = await draftRepository.save(draft)
       entry.draft = { ...entry.draft, write_id: writeId }
-    })()
-
-    entry.flushing = write
-    try {
-      await write
     } catch (err) {
       if (err instanceof DraftConflictError) {
         // Another tab wrote this draft since this one last did. Its version stands, and what this
@@ -321,21 +296,28 @@ export const useDraftsStore = defineStore('drafts', () => {
         return
       }
 
-      // The snapshot never reached disk, so it is still pending. `dirty` was cleared optimistically
-      // above to keep a burst of typing from queueing a second write of the same state; leaving it
-      // cleared after a failure would retire these words unwritten, and a session that has stopped
-      // typing would never try again. Restoring it means the next flush — the next keystroke, or
-      // the composer closing — carries them.
-      //
-      // Deliberately not rescheduling here: a permanently full disk would turn that into a write
-      // attempt every 300ms for as long as the tab is open. And deliberately not rethrown, since
-      // every caller reaches this through `void flush(...)` or a fire-and-forget abandon, where a
-      // rejection becomes an unhandled one rather than anything anybody sees.
+      // Still pending, for the next flush to carry. Not rescheduled, or a full disk would retry
+      // every DRAFT_FLUSH_MS for as long as the tab is open.
       entry.dirty = true
       error.value = toErrorMessage(err, 'Failed to save draft')
-    } finally {
-      if (entry.flushing === write) entry.flushing = null
     }
+  }
+
+  /**
+   * Writes what a session holds now, without waiting for its timer, and resolves once every write
+   * it has queued has landed. A new entry with no words never reaches disk, and emptying one deletes
+   * its row, so the drafts list holds only writing someone can see; a claim stays however empty.
+   */
+  async function flush(sessionId: string): Promise<void> {
+    const entry = active.get(sessionId)
+    if (!entry) return
+
+    cancelFlush(entry)
+    if (entry.dirty) {
+      entry.dirty = false
+      entry.flushing = entry.flushing.then(() => write(sessionId, entry))
+    }
+    await entry.flushing
   }
 
   /**
@@ -550,7 +532,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   async function sealDraft(sessionId: string): Promise<Entry> {
     const entry = requireActive(sessionId)
     cancelFlush(entry)
-    await entry.flushing?.catch(() => {}) // Why, at `ActiveSession.flushing`.
+    await entry.flushing
 
     if (isEmptyDocument(entry.draft.entry.content)) {
       throw new Error('Entry content cannot be empty')
@@ -634,7 +616,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     const entry = active.get(sessionId)
     if (entry) {
       cancelFlush(entry)
-      await entry.flushing?.catch(() => {}) // Why, at `ActiveSession.flushing`.
+      await entry.flushing
     }
 
     try {

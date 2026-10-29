@@ -63,7 +63,7 @@ const breadcrumbKind = computed<'about' | 'connects' | null>(() => {
   return null
 })
 
-/** The revision session: `isOpen` while the entry's text is being edited, not while it's read. */
+/** The revision session: `isOpen` while a revision draft is shown, not while the entry is read. */
 const revisionSession = useDraftSession()
 /** Anchors this revision session has disturbed so far, sticky once flagged (PRODUCT.md §4.5). */
 const revisionAffectedAnchorIds = ref<string[]>([])
@@ -369,7 +369,7 @@ watch(
 // Raised only while the side-by-side session is shown, and lowered again however it ends — saved,
 // discarded, or navigated away from.
 watch(
-  () => relatedSession.hasDraft,
+  () => relatedSession.isOpen,
   (shown) => {
     layoutWidth.value = shown ? 'wide' : 'normal'
   },
@@ -431,7 +431,7 @@ onBeforeUnmount(() => {
             </h1>
 
             <div
-              v-if="!revisionSession.hasDraft && !relatedSession.hasDraft"
+              v-if="!revisionSession.isOpen && !relatedSession.isOpen"
               class="flex flex-wrap gap-2"
             >
               <button
@@ -459,7 +459,7 @@ onBeforeUnmount(() => {
           <p v-if="metaLine" class="mt-1 text-sm text-[var(--color-text-muted)]">{{ metaLine }}</p>
         </header>
 
-        <template v-if="revisionSession.hasDraft">
+        <template v-if="revisionSession.isOpen">
           <p v-if="!revisionSession.readOnly" class="mb-2 text-sm text-[var(--color-text-muted)]">
             Editing appends a new version. The current text stays in the entry's history either way.
           </p>
@@ -485,7 +485,7 @@ onBeforeUnmount(() => {
           </EntryComposer>
         </template>
 
-        <template v-else-if="relatedSession.hasDraft">
+        <template v-else-if="relatedSession.isOpen">
           <RelatedEntryComposer
             :session="relatedSession"
             @save="saveRelatedEntry"

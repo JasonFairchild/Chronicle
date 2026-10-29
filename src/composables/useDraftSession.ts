@@ -56,13 +56,18 @@ export function useDraftSession() {
   const stale = ref(false)
 
   const isOpen = computed(() => sessionId.value !== null)
+  /**
+   * Set while the open draft is one `resume` couldn't carry on, shown read-only. The store holds no
+   * session for it, so `discard` names the stored write itself.
+   */
+  const unreadable = shallowRef<DraftUnreadableError | null>(null)
 
   /**
    * Why a stale related entry's marks can't be saved. The entry itself still can, once they're
    * removed, so unlike a stale revision it stays open for editing (`readOnlyReason`).
    */
   const staleNotice = computed(() =>
-    stale.value && kind.value === 'new_related'
+    stale.value && kind.value === 'new_related' && !unreadable.value
       ? 'This entry was revised after this draft began, so passages marked here can’t be saved. ' +
         'The related entry itself still can, with nothing marked.'
       : null,
@@ -76,18 +81,14 @@ export function useDraftSession() {
   /** What this tab held when another tab's version replaced it, for the writer to copy from. */
   const unsaved = ref<{ title: string | null; text: string } | null>(null)
   /**
-   * The draft `resume` found but couldn't reopen, held here so every composer says so the same way,
-   * and so `discard` can still throw it away.
-   */
-  const unreadable = shallowRef<DraftUnreadableError | null>(null)
-  /**
    * Why the draft is shown only to copy from, with nothing that could change it; null while it can
    * be written. Its words are all there either way, but a change would have nowhere to go: one that
    * can't be reopened has no trace to carry on, and a stale revision could never be saved.
    */
   const readOnlyReason = computed(() => {
+    if (!isOpen.value) return null // Hosts mount on `isOpen`; `abandon` leaves `unreadable` set.
     if (unreadable.value) return unreadable.value.message
-    if (isOpen.value && stale.value && kind.value === 'revision') {
+    if (stale.value && kind.value === 'revision') {
       return (
         'This entry was revised after this draft began, so saving this would overwrite ' +
         'that version.'
@@ -96,8 +97,6 @@ export function useDraftSession() {
     return null
   })
   const readOnly = computed(() => readOnlyReason.value !== null)
-  /** What a host mounts its composer on: a draft open for editing, or one shown read-only. */
-  const hasDraft = computed(() => isOpen.value || readOnly.value)
 
   const reloads = ref(0)
   /**
@@ -159,9 +158,8 @@ export function useDraftSession() {
   }
 
   /**
-   * Reopens a draft left behind by a reload, with its event log intact. Null if it no longer exists,
-   * or if it can't be reopened: then `unreadable` holds it, and its words are mirrored all the same,
-   * since only its trace is out of reach, for a composer to show them read-only.
+   * Reopens a draft left behind by a reload, with its event log intact. Null if it no longer exists.
+   * One that can't be reopened opens all the same, read-only, since only its trace is out of reach.
    */
   async function resume(existingSessionId: string): Promise<DraftSnapshot | null> {
     unreadable.value = null
@@ -173,8 +171,9 @@ export function useDraftSession() {
     } catch (err) {
       if (!(err instanceof DraftUnreadableError)) throw err
       await mirrorReopened(err.draft)
-      unreadable.value = err
-      return null
+      openAs(existingSessionId)
+      unreadable.value = err // After `openAs`, which clears it.
+      return err.draft
     }
     if (!resumed) return null
 
@@ -283,15 +282,16 @@ export function useDraftSession() {
   }
 
   /**
-   * Throws the session away on request — an explicit "Discard" click — or the draft it couldn't
-   * reopen. Either is let go only once it's gone, so a failure is said where it was clicked.
-   * Resolves to whether it went: one another tab wrote since stays, reloaded as that tab left it.
+   * Throws the session away on request — an explicit "Discard" click — read-only or not. It's let
+   * go only once it's gone, so a failure is said where it was clicked. Resolves to whether it went:
+   * one another tab wrote since stays, reloaded as that tab left it.
    */
   async function discard(): Promise<boolean> {
-    const id = sessionId.value ?? unreadable.value?.draft.session_id
+    const id = sessionId.value
     if (!id) return false
 
     try {
+      // `seen` counts only for a draft the store doesn't hold: one it couldn't reopen.
       await drafts.discardDraft(id, unreadable.value?.draft.write_id ?? null)
     } catch (err) {
       if (err instanceof DraftConflictError) return false
@@ -343,11 +343,9 @@ export function useDraftSession() {
     editorKey,
     elsewhereNotice,
     unsaved,
-    unreadable,
     isOpen,
     readOnlyReason,
     readOnly,
-    hasDraft,
     canSave,
     begin,
     resume,

@@ -14,14 +14,14 @@ import { toErrorMessage } from '@/utils/format'
 const session = useDraftSession()
 const resumeError = ref<string | null>(null)
 
-/** Reopens the linked draft, or starts afresh if it's gone. One that can't reopen shows read-only. */
+/** Reopens the linked draft, or starts afresh if it's gone. */
 async function reopen(id: string): Promise<void> {
   try {
     if (await session.resume(id)) return
   } catch (err) {
     resumeError.value = toErrorMessage(err, 'Failed to resume draft')
   }
-  if (!session.readOnly) session.begin({ kind: 'new_root' })
+  session.begin({ kind: 'new_root' })
 }
 
 const resumeDraftId = useDraftToResume().value
@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
     <DraftElsewhereNotice :session="session" />
 
     <button
-      v-if="!session.hasDraft && session.elsewhereNotice"
+      v-if="!session.isOpen && session.elsewhereNotice"
       type="button"
       class="btn-secondary px-3 py-1.5"
       @click="session.begin({ kind: 'new_root' })"
@@ -70,7 +70,7 @@ onBeforeUnmount(() => {
 
     <!-- Not before a resume lands, or what's typed meanwhile is lost. -->
     <EntryComposer
-      v-if="session.hasDraft"
+      v-if="session.isOpen"
       :session="session"
       label="New entry"
       save-label="Save entry"

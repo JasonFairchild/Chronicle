@@ -40,7 +40,7 @@ const heading = computed(() =>
 
 /** Reopens the draft this page was linked to, showing the entry it connects to in the picker. */
 async function reopen(id: string): Promise<void> {
-  const draft = (await session.resume(id)) ?? session.unreadable?.draft
+  const draft = await session.resume(id)
   if (draft?.kind === 'new_connection') targetId.value = draft.target_id
 }
 
@@ -68,7 +68,7 @@ onMounted(async () => {
  * in front of their own sessions before calling `begin`.
  */
 function pickTarget(): void {
-  if (!targetId.value || session.hasDraft) return
+  if (!targetId.value || session.isOpen) return
 
   session.begin({ kind: 'new_connection', parent_id: props.id, target_id: targetId.value })
 }
@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
           id="connection-target"
           v-model="targetId"
           class="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)] px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="session.hasDraft"
+          :disabled="session.isOpen"
           @change="pickTarget"
         >
           <option value="">Choose an entry</option>
@@ -126,7 +126,7 @@ onBeforeUnmount(() => {
         </select>
 
         <EntryComposer
-          v-if="session.hasDraft"
+          v-if="session.isOpen"
           :session="session"
           label="New connection"
           save-label="Add connection"

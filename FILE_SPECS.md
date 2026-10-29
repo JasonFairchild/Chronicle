@@ -39,7 +39,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - AppLayout provides through an exported `layoutWidthKey`. That's an app use, not a test entry point.
   - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it (TESTING.md, Don'ts), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
   - `useLayoutWidth` gets a node spec under `app.runWithContext()` with `app.provide(layoutWidthKey, …)`. Vue 3.5's `provide()` does nothing outside a component and only warns; `inject()` works under `runWithContext`.
-  - EntryDetailView raising and lowering the width (its `relatedSession.hasDraft` watch, and the reset in `onBeforeUnmount`) is that view's own code and is untested, so it gains a test in its pair.
+  - EntryDetailView raising and lowering the width (its `relatedSession.isOpen` watch, and the reset in `onBeforeUnmount`) is that view's own code and is untested, so it gains a test in its pair.
   - Rejected: a browser host spec. The file has no lifecycle hooks and no browser API, and the spec would prove the plumbing while missing the view's behavior.
 - **`useDraftSession` needs no host.**
   - It injects nothing and has no lifecycle hooks, and Pinia's `useStore` falls back to the active Pinia. Its `DocumentEditor` import is type-only.

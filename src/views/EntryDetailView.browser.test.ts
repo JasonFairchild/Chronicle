@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
+import { nextTick } from 'vue'
 import type { Router } from 'vue-router'
 
 import { ANCHOR_MARK } from '@/domain/entryDocument'
@@ -531,6 +532,7 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByRole('textbox', { name: 'Wording' })).not.toBeInTheDocument()
 
     await annotated.getByText('Lake Tahoe').click()
+    await nextTick() // A box the click opened would have rendered by now.
     expect(screen.getByRole('textbox', { name: 'Wording' }).query()).toBeNull()
   })
 

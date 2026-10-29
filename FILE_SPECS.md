@@ -25,7 +25,6 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "A repository read doesn't retry").
 - **Editor files wait for Track B.** `extensions.ts`, `anchorCommands.ts`, `AnchorInsertView.vue` and `AnchorMenu.vue` get their specs as Track B reviews them, once CHRONICLE_PLAN.md items 3–4 are decided. Item 4 would replace the AnchorInsert node and its view. DocumentEditor's specs stay as they are until then. What was learned goes into Track B unit 2 in CODE_REVIEW.md (commit 18):
   - Browser project alone, with a bare TipTap `Editor`.
-  - A headless node `Editor` (`element: null`) never emits `create`, so `AnchorMode.onCreate` wouldn't seed `sealedAnchorIds`.
   - `anchorSpans`, `anchorMarkRanges` and `mapAnchorSpans` are pure and could run in node over `replayDocument`.
   - Unproven today: the guard actually rejecting an edit, `excludes: ''`, `Mod-Alt-s`, the live region, AnchorMenu's roving tabindex, and the box committing on focus-out.
   - The ED flows click Accept wording in Browser Mode but press Enter in Cypress, which is drift.

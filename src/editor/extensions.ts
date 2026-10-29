@@ -12,7 +12,6 @@ import { Plugin } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
 
-import { anchorIdsIn } from '@/domain/anchors'
 import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
@@ -179,19 +178,17 @@ const AnchorInsert = Node.create({
  * undoing them may produce a step; everything else is rejected first.
  *
  * Also where "which anchors may still be edited" lives (`AnchorModeStorage`, `anchorCommands.ts`):
- * seeded once, on creation, with every anchor the session's base document already carried. Falling
- * back to the mounted document is right for a fresh session and wrong for a resumed one, which is
- * exactly why a resumed draft passes its own base rather than letting the editor assume one.
+ * every anchor the session's base document already carried. Seeded in `addStorage`, which runs
+ * before the view exists; `onCreate` runs after the node views first render, and they'd show a
+ * sealed anchor's wording as editable.
  */
-const AnchorMode = Extension.create<{ baseContent?: string }, AnchorModeStorage>({
+const AnchorMode = Extension.create<{ baseContent: string | EntryDocument }, AnchorModeStorage>({
   name: 'anchorMode',
   addOptions() {
-    return { baseContent: undefined }
+    return { baseContent: '' }
   },
-  addStorage: createAnchorModeStorage,
-  onCreate() {
-    const base = this.options.baseContent ?? (this.editor.getJSON() as EntryDocument)
-    this.storage.sealedAnchorIds = new Set(anchorIdsIn(base))
+  addStorage() {
+    return createAnchorModeStorage(this.options.baseContent)
   },
   addProseMirrorPlugins() {
     return [new Plugin({ filterTransaction: isAnchorEdit })]
@@ -208,13 +205,12 @@ export interface EntryExtensionOptions {
   /** True for an anchor-mode session: installs the guard that blocks every other kind of edit. */
   anchorMode?: boolean
   /**
-   * The document as it stood when this **session** began — for a resumed draft, the version
-   * `Draft.parent.base_version_id` names. Omitted for a fresh session, where the document the editor opens
-   * with is already that base. Every anchor it carries belongs to an earlier, already-sealed
-   * related entry; everything that appears afterward is this session's own. See AUTHORING.md,
-   * "Drafts".
+   * The document as it stood when this **session** began, in anchor mode — for a resumed draft,
+   * the version `Draft.parent.base_version_id` names. Every anchor it carries belongs to an
+   * earlier, already-sealed related entry; everything that appears afterward is this session's own.
+   * See AUTHORING.md, "Drafts".
    */
-  baseContent?: string
+  baseContent?: string | EntryDocument
 }
 
 export function entryExtensions({

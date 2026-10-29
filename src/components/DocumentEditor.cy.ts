@@ -1,3 +1,5 @@
+import { nextTick } from 'vue'
+
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
 import {
@@ -778,9 +780,32 @@ describe('DocumentEditor', () => {
         )
 
         cy.findByText('Lake Tahoe').click()
+        cy.then(() => nextTick()) // A box the click opened would have rendered by now.
 
-        cy.findByRole('button', { name: 'Edit wording' }).should('not.exist')
+        cy.findByRole('textbox', { name: 'Wording' }).should('not.exist')
         cy.get('@change').should('not.have.been.called')
+      })
+
+      it('shows a sealed anchor’s wording as plain text that a click does not open', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(
+          onChange,
+          withAnchorMarkAndWording(
+            'I went to Lake Tahoe with Dad',
+            'sealed-1',
+            10,
+            20,
+            'Donner Lake',
+          ),
+        )
+        // The wording and its role render together, so the wording showing is the baseline.
+        cy.findByText('Donner Lake').should('be.visible')
+        cy.findByRole('button', { name: 'Edit wording' }).should('not.exist')
+
+        cy.findByText('Donner Lake').click()
+        cy.then(() => nextTick())
+
+        cy.findByRole('textbox', { name: 'Wording' }).should('not.exist')
       })
 
       it('reopens a placed anchor selected exactly, instead of changing its kind or layering a second one over it', () => {

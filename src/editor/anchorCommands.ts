@@ -5,6 +5,7 @@ import type { StepMap } from '@tiptap/pm/transform'
 import { type Ref, ref } from 'vue'
 
 import {
+  anchorIdsIn,
   type AnchorRange,
   anchorRangeOverlapping,
   collectAnchors,
@@ -109,15 +110,19 @@ function openWordingBox(editor: Editor, anchorId: string, openedText: string): v
  * Which anchors in the document an anchor-mode session may still edit — every id not sealed in from
  * an earlier related entry (`sealedAnchorIds`, `domain/anchors.ts`). Storage rather than a
  * plain field because the commands and node views that read it only ever have the `Editor` instance
- * to work from — `extensions.ts`'s `AnchorMode` extension seeds it once, at creation.
+ * to work from. A plain set, not a `Ref`, because it never changes: it's filled before the view
+ * exists, so the node views' first render already reads it.
  */
 export interface AnchorModeStorage {
   sealedAnchorIds: Set<string>
 }
 
-/** The value `AnchorMode.addStorage` (`extensions.ts`) installs for an anchor-mode editor. */
-export function createAnchorModeStorage(): AnchorModeStorage {
-  return { sealedAnchorIds: new Set() }
+/**
+ * The value `AnchorMode.addStorage` (`extensions.ts`) installs for an anchor-mode editor: every
+ * anchor in the session's base is sealed.
+ */
+export function createAnchorModeStorage(base: string | EntryDocument): AnchorModeStorage {
+  return { sealedAnchorIds: new Set(anchorIdsIn(base)) }
 }
 
 /** Undefined for any editor anchor mode was never turned on for — a text-mode revision, chiefly. */

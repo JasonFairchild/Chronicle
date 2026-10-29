@@ -264,7 +264,7 @@ const editor = useEditor({
   // is destructive" a property of the editor rather than a rule the UI is trusted to follow.
   extensions: entryExtensions({
     anchorMode: props.anchorMode,
-    baseContent: props.anchorBaseContent,
+    baseContent: props.anchorBaseContent ?? initialDocument,
   }),
   content: initialDocument,
   editable: !props.disabled && !props.displayOnly,

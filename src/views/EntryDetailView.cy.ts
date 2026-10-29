@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import type { Router } from 'vue-router'
 
 import { ANCHOR_MARK } from '@/domain/entryDocument'
@@ -525,6 +526,7 @@ describe('EntryDetailView', () => {
       cy.findByRole('textbox', { name: 'Wording' }).should('not.exist')
 
       cy.findByRole('textbox', { name: 'Entry being annotated' }).findByText('Lake Tahoe').click()
+      cy.then(() => nextTick()) // A box the click opened would have rendered by now.
       cy.findByRole('textbox', { name: 'Wording' }).should('not.exist')
     })
   })

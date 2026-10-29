@@ -25,6 +25,143 @@ import {
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 
+async function aggregateRoots(): Promise<AggregatedEntry[]> {
+  const roots = await entryRepository.listRootEntries()
+
+  // A card needs each root folded over its own revisions and nothing else, so it asks for
+  // exactly that rather than loading the whole table to render a list. The revision fetches are
+  // independent, so they run concurrently rather than one root's round trip waiting on the last.
+  const states = await Promise.all(
+    roots.map(async (root) => {
+      const revisions = await entryRepository.listRevisions(root.id)
+      return reconstructEntryState(root.id, [root, ...revisions], { depth: 0 })
+    }),
+  )
+
+  return states.filter((state): state is AggregatedEntry => state !== null)
+}
+
+/**
+ * Blank collapses to null, the same as an untyped field: whitespace left behind in a title input
+ * is not a name any more than it would be if typed into the body and abandoned. Every write path
+ * funnels through here, rather than trusting each caller to have normalized it already.
+ */
+function normalizeTitle(title: string | null): string | null {
+  return title?.trim() || null
+}
+
+/**
+ * The version a draft seals into: the fields the writer set beside the document, and the media
+ * the document references. Unguarded, so `draftHoldsWork` can compare a revision whose body was
+ * emptied; sealing calls `requireContent` first.
+ */
+function fieldsFromDraft(entry: DraftSnapshot['entry']): VersionedFields {
+  return versionedFieldsOf({
+    ...entry,
+    title: normalizeTitle(entry.title),
+    media_refs: collectMediaRefs(entry.content),
+  })
+}
+
+/**
+ * Whether a new version would change nothing a version holds. Documents compare by `sameDocument`,
+ * so formatting alone is a change; `media_refs` follows from the document.
+ */
+function sameVersion(a: VersionedFields, b: VersionedFields): boolean {
+  const dateKeys = Object.keys(a.dates) as (keyof EntryDates)[]
+
+  return (
+    sameDocument(a.content, b.content) &&
+    a.title === b.title &&
+    dateKeys.every((key) => a.dates[key] === b.dates[key]) &&
+    a.location === b.location &&
+    a.original_medium === b.original_medium &&
+    a.original_medium_note === b.original_medium_note &&
+    JSON.stringify(a.metadata) === JSON.stringify(b.metadata)
+  )
+}
+
+function rootInput(fields: VersionedFields, trace: AuthoringTrace | null): CreateEntryInput {
+  return createEntryInput({ ...fields, authoring_trace: trace })
+}
+
+function relatedInput(
+  fields: VersionedFields,
+  parentId: string,
+  relationType: NarrativeRelation,
+  extra: Partial<CreateEntryInput>,
+): CreateEntryInput {
+  return createEntryInput({
+    ...fields,
+    parent_id: parentId,
+    relation_type: relationType,
+    ...extra,
+  })
+}
+
+/**
+ * A revision's `CreateEntryInput`. `fields` is the whole new version, not only what changed: a
+ * version carries the author's dates, location, medium, and title as well as the document, and
+ * the fold reads the newest one alone, so anything a revision leaves out would read as null.
+ */
+function revisionInput(
+  entryId: string,
+  fields: VersionedFields,
+  revisionMode: RevisionMode,
+  baseVersionId: string | null,
+  trace: AuthoringTrace | null,
+): CreateEntryInput {
+  return createEntryInput({
+    ...fields,
+    parent_id: entryId,
+    relation_type: 'revision',
+    revision_mode: revisionMode,
+    base_version_id: baseVersionId,
+    authoring_trace: trace,
+  })
+}
+
+/**
+ * An anchor-mode seal: a parent revision carrying the new anchors, plus the related entry
+ * referencing them. Written in one `createMany`, the pair can never land half-written
+ * (AUTHORING.md, "Drafts").
+ *
+ * Whether it reads as an annotation or an update is derived from what was anchored rather than
+ * asked for up front — see `relationTypeForAnchors`. `anchorIds` is likewise derived, by the
+ * caller, from the difference between `base`, the parent's base version, and the draft's parent
+ * document.
+ */
+function anchoredInputs(
+  draft: Extract<DraftSnapshot, { kind: 'new_related' }>,
+  base: VersionedFields,
+  fields: VersionedFields,
+  anchorIds: string[],
+  trace: AuthoringTrace | null,
+  parentTrace: AuthoringTrace | null,
+): CreateEntryInput[] {
+  const parentContent = draft.parent.content
+
+  return [
+    // Anchor mode changes nothing about the parent but its document, so every other field is the
+    // base version's. The write refuses it if that is no longer the current version.
+    revisionInput(
+      draft.parent_id,
+      {
+        ...base,
+        content: parentContent,
+        media_refs: collectMediaRefs(parentContent),
+      },
+      'anchor',
+      draft.parent.base_version_id,
+      parentTrace,
+    ),
+    relatedInput(fields, draft.parent_id, relationTypeForAnchors(anchorIds, parentContent), {
+      anchors: anchorRefsFor(anchorIds, parentContent),
+      authoring_trace: trace,
+    }),
+  ]
+}
+
 export const useEntriesStore = defineStore('entries', () => {
   /**
    * Immutable snapshots, replaced wholesale and never mutated in place, so deep reactivity would
@@ -34,22 +171,6 @@ export const useEntriesStore = defineStore('entries', () => {
   const rootEntries = shallowRef<AggregatedEntry[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
-
-  async function aggregateRoots(): Promise<AggregatedEntry[]> {
-    const roots = await entryRepository.listRootEntries()
-
-    // A card needs each root folded over its own revisions and nothing else, so it asks for
-    // exactly that rather than loading the whole table to render a list. The revision fetches are
-    // independent, so they run concurrently rather than one root's round trip waiting on the last.
-    const states = await Promise.all(
-      roots.map(async (root) => {
-        const revisions = await entryRepository.listRevisions(root.id)
-        return reconstructEntryState(root.id, [root, ...revisions], { depth: 0 })
-      }),
-    )
-
-    return states.filter((state): state is AggregatedEntry => state !== null)
-  }
 
   /**
    * Timeline rows are aggregated, not raw, so a revised entry shows its current text. Reading the
@@ -91,127 +212,6 @@ export const useEntriesStore = defineStore('entries', () => {
     if (isEmptyDocument(content)) {
       throw new Error('Entry content cannot be empty')
     }
-  }
-
-  /**
-   * Blank collapses to null, the same as an untyped field: whitespace left behind in a title input
-   * is not a name any more than it would be if typed into the body and abandoned. Every write path
-   * funnels through here, rather than trusting each caller to have normalized it already.
-   */
-  function normalizeTitle(title: string | null): string | null {
-    return title?.trim() || null
-  }
-
-  /**
-   * The version a draft seals into: the fields the writer set beside the document, and the media
-   * the document references. Unguarded, so `draftHoldsWork` can compare a revision whose body was
-   * emptied; sealing calls `requireContent` first.
-   */
-  function fieldsFromDraft(entry: DraftSnapshot['entry']): VersionedFields {
-    return versionedFieldsOf({
-      ...entry,
-      title: normalizeTitle(entry.title),
-      media_refs: collectMediaRefs(entry.content),
-    })
-  }
-
-  function rootInput(fields: VersionedFields, trace: AuthoringTrace | null): CreateEntryInput {
-    return createEntryInput({ ...fields, authoring_trace: trace })
-  }
-
-  function relatedInput(
-    fields: VersionedFields,
-    parentId: string,
-    relationType: NarrativeRelation,
-    extra: Partial<CreateEntryInput>,
-  ): CreateEntryInput {
-    return createEntryInput({
-      ...fields,
-      parent_id: parentId,
-      relation_type: relationType,
-      ...extra,
-    })
-  }
-
-  /**
-   * A revision's `CreateEntryInput`. `fields` is the whole new version, not only what changed: a
-   * version carries the author's dates, location, medium, and title as well as the document, and
-   * the fold reads the newest one alone, so anything a revision leaves out would read as null.
-   */
-  function revisionInput(
-    entryId: string,
-    fields: VersionedFields,
-    revisionMode: RevisionMode,
-    baseVersionId: string | null,
-    trace: AuthoringTrace | null,
-  ): CreateEntryInput {
-    return createEntryInput({
-      ...fields,
-      parent_id: entryId,
-      relation_type: 'revision',
-      revision_mode: revisionMode,
-      base_version_id: baseVersionId,
-      authoring_trace: trace,
-    })
-  }
-
-  /**
-   * An anchor-mode seal: a parent revision carrying the new anchors, plus the related entry
-   * referencing them. Written in one `createMany`, the pair can never land half-written
-   * (AUTHORING.md, "Drafts").
-   *
-   * Whether it reads as an annotation or an update is derived from what was anchored rather than
-   * asked for up front — see `relationTypeForAnchors`. `anchorIds` is likewise derived, by the
-   * caller, from the difference between `base`, the parent's base version, and the draft's parent
-   * document.
-   */
-  function anchoredInputs(
-    draft: Extract<DraftSnapshot, { kind: 'new_related' }>,
-    base: VersionedFields,
-    fields: VersionedFields,
-    anchorIds: string[],
-    trace: AuthoringTrace | null,
-    parentTrace: AuthoringTrace | null,
-  ): CreateEntryInput[] {
-    const parentContent = draft.parent.content
-
-    return [
-      // Anchor mode changes nothing about the parent but its document, so every other field is the
-      // base version's. The write refuses it if that is no longer the current version.
-      revisionInput(
-        draft.parent_id,
-        {
-          ...base,
-          content: parentContent,
-          media_refs: collectMediaRefs(parentContent),
-        },
-        'anchor',
-        draft.parent.base_version_id,
-        parentTrace,
-      ),
-      relatedInput(fields, draft.parent_id, relationTypeForAnchors(anchorIds, parentContent), {
-        anchors: anchorRefsFor(anchorIds, parentContent),
-        authoring_trace: trace,
-      }),
-    ]
-  }
-
-  /**
-   * Whether a new version would change nothing a version holds. Documents compare by `sameDocument`,
-   * so formatting alone is a change; `media_refs` follows from the document.
-   */
-  function sameVersion(a: VersionedFields, b: VersionedFields): boolean {
-    const dateKeys = Object.keys(a.dates) as (keyof EntryDates)[]
-
-    return (
-      sameDocument(a.content, b.content) &&
-      a.title === b.title &&
-      dateKeys.every((key) => a.dates[key] === b.dates[key]) &&
-      a.location === b.location &&
-      a.original_medium === b.original_medium &&
-      a.original_medium_note === b.original_medium_note &&
-      JSON.stringify(a.metadata) === JSON.stringify(b.metadata)
-    )
   }
 
   /**

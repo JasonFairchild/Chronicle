@@ -159,6 +159,67 @@ function claimsEntry(draft: DraftSnapshot): boolean {
   return versionsRevisedBy(draft).length > 0
 }
 
+/** Holds a draft open: its snapshot, and a recorder per document carrying on from its log. */
+function open(draft: Draft): ActiveSession {
+  const recorderFor = (events: AuthoringEvent[]) => {
+    try {
+      return TraceRecorder.resume(draft.session_id, draft.started_at, events)
+    } catch {
+      throw new DraftUnreadableError(toSnapshot(draft))
+    }
+  }
+
+  return {
+    draft: toSnapshot(draft),
+    recorder: recorderFor(draft.entry.events),
+    parentRecorder: draft.kind === 'new_related' ? recorderFor(draft.parent.events) : null,
+    timer: null,
+    dirty: false,
+    flushing: Promise.resolve(),
+  }
+}
+
+/**
+ * Appends a change into a `TraceRecorder` — shared by `recordChange` (the entry's own prose) and
+ * `recordParentChange` (the parent's provisional document in an anchor-mode session), so both
+ * streams are recorded exactly the same way. Anchor mode limits what the *editor* can produce
+ * (ENTRY_MODEL.md, "Two creation experiences, kept separate"); this is the recorder that takes
+ * whatever it does produce, and it has no notion of which mode a change came from.
+ *
+ * A change with no steps did not touch the traced document — a retitling is the one that does
+ * this for `recordChange`, since the title is a plain field beside the editor rather than part of
+ * it. It is skipped entirely: an event for it would let a policy mark a stream for something that
+ * never entered it.
+ */
+function recordInto(recorder: TraceRecorder, change: DraftChange): void {
+  if (change.steps.length === 0) return
+
+  recorder.record(change)
+}
+
+/**
+ * Builds the whole draft from its snapshot and the recorders' live event logs — the one place
+ * those logs are read, right before something needs the whole draft. Keeping it out of the
+ * per-change paths matters because `TraceRecorder.events` hands back a defensive copy, so reading
+ * it on every keystroke would clone the entire log each time.
+ *
+ * Always fresh documents, never the snapshot's by reference, so a draft already handed to an
+ * in-flight `save()` can't be mutated out from under it.
+ */
+function materialize(entry: ActiveSession): Draft {
+  return withEvents(entry.draft, {
+    entry: entry.recorder.events,
+    parent: entry.parentRecorder?.events ?? [],
+  })
+}
+
+function cancelFlush(entry: ActiveSession): void {
+  if (entry.timer === null) return
+
+  clearTimeout(entry.timer)
+  entry.timer = null
+}
+
 export const useDraftsStore = defineStore('drafts', () => {
   const drafts = shallowRef<DraftSnapshot[]>([])
   const error = ref<string | null>(null)
@@ -193,49 +254,6 @@ export const useDraftsStore = defineStore('drafts', () => {
       error.value = toErrorMessage(err, 'Failed to load drafts')
       throw err
     }
-  }
-
-  /** Holds a draft open: its snapshot, and a recorder per document carrying on from its log. */
-  function open(draft: Draft): ActiveSession {
-    const recorderFor = (events: AuthoringEvent[]) => {
-      try {
-        return TraceRecorder.resume(draft.session_id, draft.started_at, events)
-      } catch {
-        throw new DraftUnreadableError(toSnapshot(draft))
-      }
-    }
-
-    return {
-      draft: toSnapshot(draft),
-      recorder: recorderFor(draft.entry.events),
-      parentRecorder: draft.kind === 'new_related' ? recorderFor(draft.parent.events) : null,
-      timer: null,
-      dirty: false,
-      flushing: Promise.resolve(),
-    }
-  }
-
-  function cancelFlush(entry: ActiveSession): void {
-    if (entry.timer === null) return
-
-    clearTimeout(entry.timer)
-    entry.timer = null
-  }
-
-  /**
-   * Builds the whole draft from its snapshot and the recorders' live event logs — the one place
-   * those logs are read, right before something needs the whole draft. Keeping it out of the
-   * per-change paths matters because `TraceRecorder.events` hands back a defensive copy, so reading
-   * it on every keystroke would clone the entire log each time.
-   *
-   * Always fresh documents, never the snapshot's by reference, so a draft already handed to an
-   * in-flight `save()` can't be mutated out from under it.
-   */
-  function materialize(entry: ActiveSession): Draft {
-    return withEvents(entry.draft, {
-      entry: entry.recorder.events,
-      parent: entry.parentRecorder?.events ?? [],
-    })
   }
 
   /**
@@ -373,24 +391,6 @@ export const useDraftsStore = defineStore('drafts', () => {
     return entry ? structuredClone(entry.draft) : null
   }
 
-  /**
-   * Appends a change into a `TraceRecorder` — shared by `recordChange` (the entry's own prose) and
-   * `recordParentChange` (the parent's provisional document in an anchor-mode session), so both
-   * streams are recorded exactly the same way. Anchor mode limits what the *editor* can produce
-   * (ENTRY_MODEL.md, "Two creation experiences, kept separate"); this is the recorder that takes
-   * whatever it does produce, and it has no notion of which mode a change came from.
-   *
-   * A change with no steps did not touch the traced document — a retitling is the one that does
-   * this for `recordChange`, since the title is a plain field beside the editor rather than part of
-   * it. It is skipped entirely: an event for it would let a policy mark a stream for something that
-   * never entered it.
-   */
-  function recordInto(recorder: TraceRecorder, change: DraftChange): void {
-    if (change.steps.length === 0) return
-
-    recorder.record(change)
-  }
-
   function requireActive(sessionId: string): ActiveSession {
     const entry = active.get(sessionId)
     if (!entry) {
@@ -488,12 +488,12 @@ export const useDraftsStore = defineStore('drafts', () => {
     // A write of this tab's still landing would read as someone else's, and one that deletes a row
     // takes its session off disk, so which sessions are asked about is settled after them.
     await writesLanded()
-    const open = [...active.entries()].filter(([, entry]) => entry.draft.write_id !== null)
+    const written = [...active.entries()].filter(([, entry]) => entry.draft.write_id !== null)
 
     try {
       drafts.value = await draftRepository.list()
       const stored = new Map(drafts.value.map((row) => [row.session_id, row.write_id]))
-      for (const [sessionId, entry] of open) {
+      for (const [sessionId, entry] of written) {
         if (stored.get(sessionId) === entry.draft.write_id) continue
         await adoptStored(sessionId, entry.dirty ? entry.draft : null)
       }

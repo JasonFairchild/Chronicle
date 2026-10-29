@@ -60,8 +60,6 @@ export interface AuthoringTrace {
   session_id: string
   started_at: string
   ended_at: string
-  /** The document the first event applies to. */
-  base_content: string
   events: AuthoringEvent[]
 }
 

@@ -44,9 +44,8 @@ export function useDraftSession() {
    */
   const parentTitle = ref<string | null>(null)
   /**
-   * The parent as it stood when this session began — `Draft.parent.base_content`, mirrored here the
-   * same way `parentContent` itself is, and never reassigned while the session runs. What
-   * `DocumentEditor`'s `anchor-base-content` prop is seeded from on a resume, so an anchor placed
+   * The document of the version `Draft.parent.base_version_id` names, never reassigned while the
+   * session runs. Seeds `DocumentEditor`'s `anchor-base-content` on a resume, so an anchor placed
    * before a reload still reads as this session's own rather than as an earlier related entry's.
    */
   const parentBaseContent = ref('')
@@ -110,15 +109,16 @@ export function useDraftSession() {
     () => `${sessionId.value ?? ''}:${reloads.value}:${readOnly.value ? 'read' : 'write'}`,
   )
 
-  /** Mirrors a draft into the refs an editor binds to, whether it is beginning or resuming. */
-  function mirror(draft: DraftSnapshot, nextParentTitle: string | null): void {
+  /**
+   * Mirrors what a draft stores into the refs an editor binds to, whether it is beginning or
+   * resuming. The parent's title and base are read off entries, so whoever opens it sets those.
+   */
+  function mirror(draft: DraftSnapshot): void {
     kind.value = draft.kind
     content.value = draft.entry.content
     title.value = draft.entry.title
     details.value = entryDetailsOf(draft.entry)
     parentContent.value = draft.kind === 'new_related' ? draft.parent.content : ''
-    parentBaseContent.value = draft.kind === 'new_related' ? draft.parent.base_content : ''
-    parentTitle.value = nextParentTitle
   }
 
   /** Takes a draft as this session's from here on, with the last one's notices cleared. */
@@ -133,20 +133,28 @@ export function useDraftSession() {
   function begin(start: BeginDraftInput): void {
     const id = drafts.beginDraft(start)
 
-    mirror(drafts.currentDraft(id)!, start.kind === 'new_related' ? start.parent.title : null)
+    mirror(drafts.currentDraft(id)!)
+    parentTitle.value = start.kind === 'new_related' ? start.parent.title : null
+    parentBaseContent.value = start.kind === 'new_related' ? start.parent.content : ''
     stale.value = false
     openAs(id)
   }
 
   /**
    * Mirrors a stored draft, reading the entry it could revise: for its title, which anchor mode
-   * never changes, and to say at once if it has moved on, rather than only when Save is refused.
+   * never changes, and to say at once if it has moved on, rather than only when Save is refused. A
+   * related entry's draft also reads its parent's base version, which may no longer be current.
    */
   async function mirrorReopened(draft: DraftSnapshot): Promise<void> {
     const [revises] = versionsRevisedBy(draft)
-    const parent = revises ? await entries.getAggregatedEntry(revises.entry_id) : null
+    const [parent, base] = await Promise.all([
+      revises ? entries.getAggregatedEntry(revises.entry_id) : null,
+      draft.kind === 'new_related' ? entries.getVersion(draft.parent.base_version_id) : null,
+    ])
 
-    mirror(draft, draft.kind === 'new_related' ? (parent?.title ?? null) : null)
+    mirror(draft)
+    parentTitle.value = draft.kind === 'new_related' ? (parent?.title ?? null) : null
+    parentBaseContent.value = base?.content ?? ''
     stale.value = parent !== null && currentVersionId(parent) !== revises?.base_version_id
   }
 
@@ -195,7 +203,7 @@ export function useDraftSession() {
         return
       }
 
-      mirror(drafts.currentDraft(id)!, parentTitle.value)
+      mirror(drafts.currentDraft(id)!)
       reloads.value += 1
       elsewhereNotice.value = unsaved.value
         ? 'This draft was changed elsewhere at the same time, and now shows what was saved ' +

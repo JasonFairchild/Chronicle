@@ -140,7 +140,7 @@ export function pairableAnchorAt(
  * with the document.
  *
  * `sealed` is the ids the document already carried when the session began — `anchorIdsIn` of its
- * base (`Draft.parent.base_content`). Taking it as a set rather than a document is what lets the
+ * base (the version `Draft.parent.base_version_id` names). Taking it as a set rather than a document is what lets the
  * editor compute it once, at mount, and answer "may I still edit this one?" per keystroke.
  */
 export function sessionAnchorIds(
@@ -154,7 +154,7 @@ export function sessionAnchorIds(
  * The anchors placed in `current` since `base` — the same question `sessionAnchorIds` answers, asked
  * of two documents rather than a precomputed set, for callers holding the session's base document.
  *
- * A session's base is persisted (`Draft.parent.base_content`) rather than inferred from whatever the
+ * A session's base is named (`Draft.parent.base_version_id`) rather than inferred from whatever the
  * editor happened to mount with, which is what makes this survive a resume: a reload reseeds the
  * editor from the draft's *current* parent document, where an anchor this session placed before the
  * reload is indistinguishable from one an earlier related entry sealed. Against the base it stays

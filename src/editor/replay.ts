@@ -3,7 +3,7 @@ import type { Node as ProseMirrorNode, Schema } from '@tiptap/pm/model'
 import { Step, Transform } from '@tiptap/pm/transform'
 
 import { type EntryDocument, parseDocument } from '@/domain/entryDocument'
-import type { AuthoringTrace } from '@/types/entry'
+import type { AuthoringEvent } from '@/types/entry'
 
 import { entryExtensions } from './extensions'
 
@@ -12,8 +12,11 @@ import { entryExtensions } from './extensions'
 // uses the editor's own. A step that no longer applies, because the schema moved on, ends replay at
 // the last whole event reached: the loss is scrubbing, never words.
 
-/** A trace, or a draft's log still in progress: whatever holds a base and the events after it. */
-export type ReplayLog = Pick<AuthoringTrace, 'base_content' | 'events'>
+/** A trace's events with the base they apply to, which whoever replays them reads and passes in. */
+export interface ReplayLog {
+  base_content: string
+  events: AuthoringEvent[]
+}
 
 let schema: Schema | null = null
 

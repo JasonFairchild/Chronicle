@@ -2,6 +2,7 @@ import { Transform } from '@tiptap/pm/transform'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { emptyDocument, type EntryDocument } from '@/domain/entryDocument'
 import { DEFAULT_MARK_POLICY } from '@/domain/marks'
 import { documentsFromFrames } from '@/editor/markFrames'
 import { replayDocument } from '@/editor/replay'
@@ -14,26 +15,24 @@ import {
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { InMemoryMarkSetRepository } from '@/repositories/inMemoryMarkSetRepository'
 import { useMarkSetsStore } from '@/stores/markSetsStore'
-import { plainTextDocument, serializeDocument, textContent } from '@/testing/documents'
+import { plainTextDocument, textContent } from '@/testing/documents'
 import { type AuthoringTrace, createEntryInput } from '@/types/entry'
 
-/** A session that finished "It rained" with " all day.", as one edit. */
-function traceOfOneSentence(): AuthoringTrace {
-  const base = serializeDocument(plainTextDocument('It rained'))
+/** A session that typed `typed` at the end of `base`, as one edit. */
+function traceOfTyping(base: EntryDocument, typed: string): AuthoringTrace {
   const transform = new Transform(replayDocument(base)!)
-  transform.insert(10, transform.doc.type.schema.text(' all day.'))
+  transform.insert(transform.doc.content.size - 1, transform.doc.type.schema.text(typed))
 
   return {
     session_id: 'session-1',
     started_at: '2026-09-22T10:00:00.000Z',
     ended_at: '2026-09-22T10:00:05.000Z',
-    base_content: base,
     events: [
       {
         kind: 'edit',
         at: 1_000,
         steps: transform.steps.map((step) => step.toJSON()),
-        inserted_text: ' all day.',
+        inserted_text: typed,
       },
     ],
   }
@@ -46,11 +45,19 @@ describe('useMarkSetsStore', () => {
     setMarkSetRepository(new InMemoryMarkSetRepository())
   })
 
-  function typedEntry() {
+  /** A revision that finished "It rained" with " all day.", so its trace starts from that version. */
+  async function typedEntry() {
+    const first = await entryRepository.create(
+      createEntryInput({ content: textContent('It rained') }),
+    )
     return entryRepository.create(
       createEntryInput({
         content: textContent('It rained all day.'),
-        authoring_trace: traceOfOneSentence(),
+        parent_id: first.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: first.id,
+        authoring_trace: traceOfTyping(plainTextDocument('It rained'), ' all day.'),
       }),
     )
   }
@@ -79,6 +86,20 @@ describe('useMarkSetsStore', () => {
     await store.createMarkSet(entry.id, 'Default', { ...DEFAULT_MARK_POLICY, punctuation: '' })
 
     expect(store.markSets.map((set) => set.frames.length)).toEqual([1, 0])
+  })
+
+  it('builds a new entry’s set from an empty document', async () => {
+    const entry = await entryRepository.create(
+      createEntryInput({
+        content: textContent('It rained.'),
+        authoring_trace: traceOfTyping(emptyDocument(), 'It rained.'),
+      }),
+    )
+    const store = useMarkSetsStore()
+
+    await store.loadMarkSets(entry.id)
+
+    expect(store.markSets.map(documentsFromFrames)).toEqual([[plainTextDocument('It rained.')]])
   })
 
   it('has no set for an entry nothing was typed into', async () => {

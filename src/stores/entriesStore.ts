@@ -75,6 +75,13 @@ export const useEntriesStore = defineStore('entries', () => {
     return reconstructEntryState(id, relevant, { asOf })
   }
 
+  /** The version `versionId` names: one row read, not a fold. Throws if there is none. */
+  async function getVersion(versionId: string | null): Promise<VersionedFields> {
+    const row = versionId === null ? null : await entryRepository.getById(versionId)
+    if (!row) throw new Error(`Version ${versionId} does not exist`)
+    return versionedFieldsOf(row)
+  }
+
   /**
    * The one thing that must be true of any document about to become an entry: its body has to say
    * something, in words or an image. A title doesn't count — it names an entry without being one.
@@ -155,29 +162,26 @@ export const useEntriesStore = defineStore('entries', () => {
    *
    * Whether it reads as an annotation or an update is derived from what was anchored rather than
    * asked for up front — see `relationTypeForAnchors`. `anchorIds` is likewise derived, by the
-   * caller, from the difference between the draft's base and current parent documents.
+   * caller, from the difference between `base`, the parent's base version, and the draft's parent
+   * document.
    */
-  async function anchoredInputs(
+  function anchoredInputs(
     draft: Extract<DraftSnapshot, { kind: 'new_related' }>,
+    base: VersionedFields,
     fields: VersionedFields,
     anchorIds: string[],
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null,
-  ): Promise<CreateEntryInput[]> {
+  ): CreateEntryInput[] {
     const parentContent = draft.parent.content
-
-    const current = await getAggregatedEntry(draft.parent_id)
-    if (!current) {
-      throw new Error('Cannot annotate an entry that does not exist')
-    }
 
     return [
       // Anchor mode changes nothing about the parent but its document, so every other field is the
-      // current version's. The write refuses it if that isn't the version the draft started from.
+      // base version's. The write refuses it if that is no longer the current version.
       revisionInput(
-        current.id,
+        draft.parent_id,
         {
-          ...versionedFieldsOf(current),
+          ...base,
           content: parentContent,
           media_refs: collectMediaRefs(parentContent),
         },
@@ -236,9 +240,10 @@ export const useEntriesStore = defineStore('entries', () => {
         // Read off the two documents rather than a list kept alongside them, so an anchor placed
         // and then removed before sealing leaves nothing behind to subtract — see
         // `anchorsPlacedSince`.
-        const anchorIds = anchorsPlacedSince(draft.parent.base_content, draft.parent.content)
+        const base = await getVersion(draft.parent.base_version_id)
+        const anchorIds = anchorsPlacedSince(base.content, draft.parent.content)
         if (anchorIds.length > 0) {
-          return anchoredInputs(draft, fields, anchorIds, trace, parentTrace)
+          return anchoredInputs(draft, base, fields, anchorIds, trace, parentTrace)
         }
 
         // Nothing was placed on the parent, so this is about the parent at large: one entry, no
@@ -253,11 +258,9 @@ export const useEntriesStore = defineStore('entries', () => {
       }
 
       case 'revision': {
-        const current = await getAggregatedEntry(draft.parent_id)
-        if (!current) {
-          throw new Error('Cannot revise an entry that does not exist')
-        }
-        if (sameVersion(current, fields)) {
+        // Against the base, not the current version: a change is what this draft did to the
+        // version it started from. Whether that is still current is the write's to refuse.
+        if (sameVersion(await getVersion(draft.entry.base_version_id), fields)) {
           throw new Error('No changes to save')
         }
 
@@ -284,18 +287,20 @@ export const useEntriesStore = defineStore('entries', () => {
 
   /**
    * Whether a draft holds anything worth keeping: words, anchors placed on its parent, or for a
-   * revision, some difference from the version it would follow. A draft let go without being saved
+   * revision, some difference from the version it started from. A draft let go without being saved
    * is kept only if it does.
    */
   async function draftHoldsWork(draft: DraftSnapshot): Promise<boolean> {
-    const anchored =
-      draft.kind === 'new_related' &&
-      anchorsPlacedSince(draft.parent.base_content, draft.parent.content).length > 0
-    if (isBlankDraft(draft.entry.content, draft.entry.title)) return anchored
+    if (isBlankDraft(draft.entry.content, draft.entry.title)) {
+      if (draft.kind !== 'new_related') return false
+
+      const base = await getVersion(draft.parent.base_version_id)
+      return anchorsPlacedSince(base.content, draft.parent.content).length > 0
+    }
     if (draft.kind !== 'revision') return true
 
-    const current = await getAggregatedEntry(draft.parent_id)
-    return !current || !sameVersion(current, fieldsFromDraft(draft.entry))
+    const base = await getVersion(draft.entry.base_version_id)
+    return !sameVersion(base, fieldsFromDraft(draft.entry))
   }
 
   /**
@@ -355,6 +360,7 @@ export const useEntriesStore = defineStore('entries', () => {
     error,
     loadRootEntries,
     getAggregatedEntry,
+    getVersion,
     inputsForDraft,
     draftHoldsWork,
     showWritten,

@@ -109,8 +109,8 @@ const props = withDefaults(
      */
     anchorMode?: boolean
     /**
-     * The document as it stood when this **session** began, in `anchor-mode` only — a resumed
-     * draft's `Draft.parent.base_content`. Omitted for a fresh session, where `content` is already
+     * The document as it stood when this **session** began, in `anchor-mode` only — for a resumed
+     * draft, the version `Draft.parent.base_version_id` names. Omitted for a fresh session, where `content` is already
      * that base. Read once, on mount, alongside `content`: it is what tells an anchor this session
      * placed before a reload apart from one an earlier related entry sealed, since both are simply
      * *there* in the document a resumed editor mounts with (AUTHORING.md, "Drafts").

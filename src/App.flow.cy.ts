@@ -128,7 +128,6 @@ describe('App flows', () => {
           makeDraft('session-1', {
             entry: {
               base_version_id: entry.id,
-              base_content: entry.content,
               content: entry.content,
               title: entry.title,
             },

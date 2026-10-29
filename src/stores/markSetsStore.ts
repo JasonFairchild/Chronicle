@@ -6,6 +6,8 @@ import { buildFrames } from '@/editor/markFrames'
 import { entryRepository, markSetRepository } from '@/repositories'
 import type { MarkSet } from '@/types/markSet'
 
+import { useEntriesStore } from './entriesStore'
+
 /**
  * Mark sets for sealed entries (AUTHORING.md, "Mark sets"). A draft has none: its log is still
  * growing, so it reads `deriveMarks` directly.
@@ -24,15 +26,22 @@ export const useMarkSetsStore = defineStore('markSets', () => {
     name: string,
     policy: MarkPolicy = DEFAULT_MARK_POLICY,
   ): Promise<MarkSet | null> {
-    const trace = (await entryRepository.getById(entryId))?.authoring_trace
-    if (!trace) return null
+    const entry = await entryRepository.getById(entryId)
+    const events = entry?.authoring_trace?.events
+    if (!entry || !events) return null
+
+    // The version the entry revised; a new entry's session starts from `''`, the empty document.
+    const base =
+      entry.base_version_id === null
+        ? ''
+        : (await useEntriesStore().getVersion(entry.base_version_id)).content
 
     const created = await markSetRepository.create({
       entry_id: entryId,
       name,
       policy,
-      base_content: trace.base_content,
-      frames: buildFrames(trace, deriveMarks(trace.events, policy)),
+      base_content: base,
+      frames: buildFrames({ base_content: base, events }, deriveMarks(events, policy)),
     })
 
     markSets.value = await markSetRepository.listForEntry(entryId)

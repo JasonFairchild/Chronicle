@@ -1,11 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import type { Router } from 'vue-router'
 
+import { ANCHOR_MARK } from '@/domain/entryDocument'
 import { draftRepository, entryRepository, mediaRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { textContent } from '@/testing/documents'
+import { serializeDocument, textContent } from '@/testing/documents'
 import { makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
@@ -401,7 +402,6 @@ describe('EntryDetailView', () => {
         ...makeDraft('session-1', {
           entry: {
             base_version_id: parent.id,
-            base_content: parent.content,
             content: textContent(`${PARENT_TEXT}, and Mom`),
             events: TYPED,
           },
@@ -472,6 +472,63 @@ describe('EntryDetailView', () => {
     })
   })
 
+  it('tells a stale related draft’s own anchor from one sealed in the version it started from', () => {
+    const comment = (anchorId: string) => [
+      { type: ANCHOR_MARK, attrs: { anchorId, kind: 'comment' } },
+    ]
+
+    cy.then(async () => {
+      const parent = await seed({ content: withAnchorMark(PARENT_TEXT, 'sealed-1', 10, 20) })
+      await seed({
+        content: textContent('Wrong lake'),
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'sealed-1', quote: 'Lake Tahoe' }],
+      })
+      // Placed "own-1" before the reload.
+      await draftRepository.save(
+        makeDraft('session-1', {
+          entry: { content: textContent('He drove'), events: TYPED },
+          kind: relatedTo(parent, {
+            content: serializeDocument({
+              type: 'doc',
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [
+                    { type: 'text', text: 'I went to ' },
+                    { type: 'text', text: 'Lake Tahoe', marks: comment('sealed-1') },
+                    { type: 'text', text: ' with ' },
+                    { type: 'text', text: 'Dad', marks: comment('own-1') },
+                  ],
+                },
+              ],
+            }),
+            events: TYPED,
+          }),
+        }),
+      )
+      // A later version dropped "sealed-1", so the current document can't say it was sealed.
+      await seed({
+        content: PARENT_CONTENT,
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: parent.id,
+      })
+      return parent
+    }).then((parent) => {
+      mountDetail(parent.id, { draft: 'session-1' })
+
+      cy.findByRole('textbox', { name: 'Entry being annotated' }).findByText('Dad').click()
+      cy.findByRole('textbox', { name: 'Wording' }).should('be.visible').type('{esc}')
+      cy.findByRole('textbox', { name: 'Wording' }).should('not.exist')
+
+      cy.findByRole('textbox', { name: 'Entry being annotated' }).findByText('Lake Tahoe').click()
+      cy.findByRole('textbox', { name: 'Wording' }).should('not.exist')
+    })
+  })
+
   it('opens a revision it was linked to read-only, and says why, when the entry was revised since', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })
@@ -479,7 +536,6 @@ describe('EntryDetailView', () => {
         makeDraft('session-1', {
           entry: {
             base_version_id: parent.id,
-            base_content: parent.content,
             content: textContent(`${PARENT_TEXT}, and Mom`),
             events: TYPED,
           },

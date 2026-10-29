@@ -5,8 +5,6 @@ import { emptyEntryDetails, versionedFieldsOf } from './entry'
 export interface DraftDocument {
   /** The version it started from; null for a new entry. */
   base_version_id: string | null
-  /** The document as this session found it, never rewritten. */
-  base_content: string
   content: string
   events: AuthoringEvent[]
 }
@@ -76,7 +74,6 @@ export function versionsRevisedBy(
 export function newDraftEntry(): DraftSnapshot['entry'] {
   return {
     base_version_id: null,
-    base_content: '',
     content: '',
     ...emptyEntryDetails(),
     title: null,

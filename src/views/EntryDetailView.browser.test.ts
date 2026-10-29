@@ -3,11 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import type { Router } from 'vue-router'
 
+import { ANCHOR_MARK } from '@/domain/entryDocument'
 import { draftRepository, entryRepository, mediaRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
-import { textContent } from '@/testing/documents'
+import { serializeDocument, textContent } from '@/testing/documents'
 import { makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { selectTextRange } from '@/testing/selectTextRange'
@@ -394,7 +395,6 @@ describe('EntryDetailView (browser)', () => {
       ...makeDraft('session-1', {
         entry: {
           base_version_id: parent.id,
-          base_content: parent.content,
           content: textContent(`${PARENT_TEXT}, and Mom`),
           events: TYPED,
         },
@@ -473,13 +473,73 @@ describe('EntryDetailView (browser)', () => {
       .toHaveTextContent(PARENT_TEXT)
   })
 
+  it('tells a stale related draft’s own anchor from one sealed in the version it started from', async () => {
+    const comment = (anchorId: string) => [
+      { type: ANCHOR_MARK, attrs: { anchorId, kind: 'comment' } },
+    ]
+    const parent = await entryRepository.create(
+      createEntryInput({ content: withAnchorMark(PARENT_TEXT, 'sealed-1', 10, 20) }),
+    )
+    await entryRepository.create(
+      createEntryInput({
+        content: textContent('Wrong lake'),
+        parent_id: parent.id,
+        relation_type: 'annotation',
+        anchors: [{ anchor_id: 'sealed-1', quote: 'Lake Tahoe' }],
+      }),
+    )
+    // Placed "own-1" before the reload.
+    await draftRepository.save(
+      makeDraft('session-1', {
+        entry: { content: textContent('He drove'), events: TYPED },
+        kind: relatedTo(parent, {
+          content: serializeDocument({
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: 'I went to ' },
+                  { type: 'text', text: 'Lake Tahoe', marks: comment('sealed-1') },
+                  { type: 'text', text: ' with ' },
+                  { type: 'text', text: 'Dad', marks: comment('own-1') },
+                ],
+              },
+            ],
+          }),
+          events: TYPED,
+        }),
+      }),
+    )
+    // A later version dropped "sealed-1", so the current document can't say it was sealed.
+    await entryRepository.create(
+      createEntryInput({
+        content: PARENT_CONTENT,
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: parent.id,
+      }),
+    )
+
+    const screen = await mountDetail(parent.id, { draft: 'session-1' })
+
+    const annotated = screen.getByRole('textbox', { name: 'Entry being annotated' })
+    await annotated.getByText('Dad').click()
+    await expect.element(screen.getByRole('textbox', { name: 'Wording' })).toBeVisible()
+    await userEvent.keyboard('{Escape}')
+    await expect.element(screen.getByRole('textbox', { name: 'Wording' })).not.toBeInTheDocument()
+
+    await annotated.getByText('Lake Tahoe').click()
+    expect(screen.getByRole('textbox', { name: 'Wording' }).query()).toBeNull()
+  })
+
   it('opens a revision it was linked to read-only, and says why, when the entry was revised since', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
     await draftRepository.save(
       makeDraft('session-1', {
         entry: {
           base_version_id: parent.id,
-          base_content: parent.content,
           content: textContent(`${PARENT_TEXT}, and Mom`),
           events: TYPED,
         },

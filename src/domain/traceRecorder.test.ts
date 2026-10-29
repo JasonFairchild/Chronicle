@@ -16,7 +16,7 @@ function fakeClock(start: number) {
 describe('TraceRecorder', () => {
   it('records every edit and manual mark in order, stamped by how far into the session it happened', () => {
     const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const recorder = new TraceRecorder('session-1', '2026-09-05T10:00:00.000Z', '', clock.now)
+    const recorder = new TraceRecorder('session-1', '2026-09-05T10:00:00.000Z', clock.now)
 
     recorder.record({ steps: [{ n: 1 }], inserted_text: 'It rained' })
     clock.advance(2_500)
@@ -33,7 +33,7 @@ describe('TraceRecorder', () => {
 
   it('stores only the signals that are set', () => {
     const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const recorder = new TraceRecorder('session-2', '2026-09-05T10:00:00.000Z', '', clock.now)
+    const recorder = new TraceRecorder('session-2', '2026-09-05T10:00:00.000Z', clock.now)
 
     recorder.record({
       steps: [{ n: 1 }],
@@ -50,19 +50,18 @@ describe('TraceRecorder', () => {
     ])
   })
 
-  it('seals the document it started from along with the log', () => {
-    const recorder = new TraceRecorder('session-seal', new Date().toISOString(), '{"base":1}')
+  it('seals the session with its log', () => {
+    const recorder = new TraceRecorder('session-seal', new Date().toISOString())
 
     recorder.record({ steps: [{ n: 1 }] })
     const trace = recorder.seal()
 
     expect(trace?.session_id).toBe('session-seal')
-    expect(trace?.base_content).toBe('{"base":1}')
     expect(trace?.events).toHaveLength(1)
   })
 
   it('seals to null when nothing was typed, even with a manual mark', () => {
-    const recorder = new TraceRecorder('session-empty', new Date().toISOString(), '')
+    const recorder = new TraceRecorder('session-empty', new Date().toISOString())
     expect(recorder.seal()).toBeNull()
 
     recorder.mark()
@@ -76,7 +75,6 @@ describe('TraceRecorder', () => {
     const recorder = TraceRecorder.resume(
       'session-resume',
       '2026-09-05T09:00:00.000Z',
-      '{"base":1}',
       [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
       clock.now,
     )
@@ -86,7 +84,6 @@ describe('TraceRecorder', () => {
     const trace = recorder.seal()
 
     expect(trace?.started_at).toBe('2026-09-05T09:00:00.000Z')
-    expect(trace?.base_content).toBe('{"base":1}')
     expect(trace?.events.map((event) => event.at)).toEqual([1_000, 2_500])
   })
 
@@ -96,7 +93,6 @@ describe('TraceRecorder', () => {
       const recorder = new TraceRecorder(
         'session-clock-back',
         '2026-09-05T10:00:00.000Z',
-        '',
         clock.now,
       )
 
@@ -118,7 +114,6 @@ describe('TraceRecorder', () => {
       const recorder = new TraceRecorder(
         'session-clock-before-start',
         '2026-09-05T10:00:00.000Z',
-        '',
         clock.now,
       )
 
@@ -135,7 +130,6 @@ describe('TraceRecorder', () => {
       const recorder = TraceRecorder.resume(
         'session-clock-resume',
         '2026-09-05T09:00:00.000Z',
-        '',
         [
           { kind: 'edit', at: 4_500, steps: [] },
           { kind: 'manual', at: 5_000 },

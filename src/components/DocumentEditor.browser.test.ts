@@ -41,10 +41,10 @@ describe('DocumentEditor (browser)', () => {
 
   /** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
   function replayAll(base: string) {
-    const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z', base)
+    const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z')
     for (const change of changes) recorder.record(change)
-    const trace = recorder.seal()!
-    return documentsAt(trace, [trace.events.length])
+    const { events } = recorder.seal()!
+    return documentsAt({ base_content: base, events }, [events.length])
   }
 
   it('reports the document it holds along with the steps that produced it', async () => {
@@ -724,8 +724,8 @@ describe('DocumentEditor (browser)', () => {
       it('lets a session placed before a resume keep editing an anchor placed before the resume', async () => {
         // Stands for a draft resumed after a reload: "resumed-1" was placed and persisted before
         // the reload, so it's already in the document this editor mounts with. The base — the
-        // parent as the session first found it, `Draft.parent.base_content` — is what still tells
-        // it apart from an anchor an earlier related entry sealed.
+        // parent as the session first found it, the version `Draft.parent.base_version_id` names —
+        // is what still tells it apart from an anchor an earlier related entry sealed.
         const base = serializeDocument(plainTextDocument('I went to Lake Tahoe with Dad'))
         const seeded = withAnchorMarkAndWording(
           'I went to Lake Tahoe with Dad',

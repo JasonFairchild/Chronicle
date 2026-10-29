@@ -21,10 +21,10 @@ function lastChange(stub: unknown): EditorChange {
 
 /** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
 function replayAll(base: string, stub: unknown) {
-  const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z', base)
+  const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z')
   for (const [change] of (stub as { args: [EditorChange][] }).args) recorder.record(change)
-  const trace = recorder.seal()!
-  return documentsAt(trace, [trace.events.length])
+  const { events } = recorder.seal()!
+  return documentsAt({ base_content: base, events }, [events.length])
 }
 
 describe('DocumentEditor', () => {
@@ -837,8 +837,9 @@ describe('DocumentEditor', () => {
           20,
           'Donner Lake',
         )
-        // The base — the parent as the session first found it, `Draft.parent.base_content` — is
-        // what still tells it apart from an anchor an earlier related entry sealed.
+        // The base — the parent as the session first found it, the version
+        // `Draft.parent.base_version_id` names — is what still tells it apart from an anchor an
+        // earlier related entry sealed.
         expect(anchorsPlacedSince(base, seeded)).to.deep.equal(['resumed-1'])
 
         const onChange = cy.stub().as('change')

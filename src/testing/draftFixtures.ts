@@ -72,7 +72,6 @@ export function relatedTo(
     parent_id: parent.id,
     parent: {
       base_version_id: parent.id,
-      base_content: parent.content,
       content: parent.content,
       events: [],
       ...since,

@@ -208,8 +208,8 @@ export interface EntryExtensionOptions {
   /** True for an anchor-mode session: installs the guard that blocks every other kind of edit. */
   anchorMode?: boolean
   /**
-   * The document as it stood when this **session** began — a resumed draft's
-   * `Draft.parent.base_content`. Omitted for a fresh session, where the document the editor opens
+   * The document as it stood when this **session** began — for a resumed draft, the version
+   * `Draft.parent.base_version_id` names. Omitted for a fresh session, where the document the editor opens
    * with is already that base. Every anchor it carries belongs to an earlier, already-sealed
    * related entry; everything that appears afterward is this session's own. See AUTHORING.md,
    * "Drafts".

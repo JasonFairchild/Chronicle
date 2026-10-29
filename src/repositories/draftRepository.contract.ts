@@ -169,7 +169,7 @@ export function runDraftRepositoryContract(
         occurred_at: '1994-06-11',
         occurred_time_note: 'morning',
       })
-      expect(fetched.parent.base_content).toBe('The full parent document, as this session found it')
+      expect(fetched.parent.base_version_id).toBe('entry-9')
       expect(fetched.parent.content).toBe(
         'The full parent document, with a provisional anchor mark',
       )

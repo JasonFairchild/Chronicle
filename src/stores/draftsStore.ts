@@ -18,6 +18,7 @@ import {
 } from '@/types/draft'
 import {
   type AggregatedEntry,
+  type AuthoringEvent,
   type ChangeSignals,
   type Entry,
   type EntryDetails,
@@ -89,7 +90,6 @@ interface ActiveSession {
   /** The parent document's log, present exactly when the draft has a `parent`. */
   parentRecorder: TraceRecorder | null
   timer: ReturnType<typeof setTimeout> | null
-  /** Holds changes no write has taken yet. */
   dirty: boolean
   /**
    * This session's writes, each queued behind the last. Sealing and discarding wait on it, since
@@ -103,16 +103,15 @@ interface ActiveSession {
 function startingDocument(entry: AggregatedEntry): Omit<DraftDocument, 'events'> {
   return {
     base_version_id: currentVersionId(entry),
-    base_content: entry.content,
     content: entry.content,
   }
 }
 
 /**
  * A new session's snapshot. Revising starts from a copy of the current version, so whatever the
- * writer leaves alone saves unchanged. Each `base_*` starts equal to what it describes and never
- * moves: it is what a trace replays from, and for the parent also what `anchorsPlacedSince` diffs
- * against.
+ * writer leaves alone saves unchanged. Each `base_version_id` names the version its document starts
+ * from and never moves: that version is what a trace replays from, and for the parent also what
+ * `anchorsPlacedSince` diffs against.
  */
 function startingSnapshot(
   start: BeginDraftInput,
@@ -198,14 +197,9 @@ export const useDraftsStore = defineStore('drafts', () => {
 
   /** Holds a draft open: its snapshot, and a recorder per document carrying on from its log. */
   function open(draft: Draft): ActiveSession {
-    const recorderFor = (document: DraftDocument) => {
+    const recorderFor = (events: AuthoringEvent[]) => {
       try {
-        return TraceRecorder.resume(
-          draft.session_id,
-          draft.started_at,
-          document.base_content,
-          document.events,
-        )
+        return TraceRecorder.resume(draft.session_id, draft.started_at, events)
       } catch {
         throw new DraftUnreadableError(toSnapshot(draft))
       }
@@ -213,8 +207,8 @@ export const useDraftsStore = defineStore('drafts', () => {
 
     return {
       draft: toSnapshot(draft),
-      recorder: recorderFor(draft.entry),
-      parentRecorder: draft.kind === 'new_related' ? recorderFor(draft.parent) : null,
+      recorder: recorderFor(draft.entry.events),
+      parentRecorder: draft.kind === 'new_related' ? recorderFor(draft.parent.events) : null,
       timer: null,
       dirty: false,
       flushing: Promise.resolve(),
@@ -266,8 +260,9 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * One queued write of what a session holds. Never rejects: a rejection would skip every write
-   * queued after it, and the session would silently stop saving.
+   * One queued write of what a session holds, or a delete once a new entry is emptied, so the
+   * drafts list shows only writing someone can see. Never rejects: a rejection would skip every
+   * write queued after it, and the session would silently stop saving.
    */
   async function write(sessionId: string, entry: ActiveSession): Promise<void> {
     // One that lost to another tab has already replaced this session with what disk holds.
@@ -304,9 +299,8 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * Writes what a session holds now, without waiting for its timer, and resolves once every write
-   * it has queued has landed. A new entry with no words never reaches disk, and emptying one deletes
-   * its row, so the drafts list holds only writing someone can see; a claim stays however empty.
+   * Queues a write of what a session holds, without waiting for its timer, and resolves once every
+   * write it has queued has landed.
    */
   async function flush(sessionId: string): Promise<void> {
     const entry = active.get(sessionId)
@@ -315,6 +309,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     cancelFlush(entry)
     if (entry.dirty) {
       entry.dirty = false
+      // The queue's new tail: runs once the last write settles, reading the session as it is then.
       entry.flushing = entry.flushing.then(() => write(sessionId, entry))
     }
     await entry.flushing
@@ -442,8 +437,8 @@ export const useDraftsStore = defineStore('drafts', () => {
   /**
    * Records a change to the **parent's** provisional document, for an anchor-mode session only —
    * an ordinary `DraftChange` like the entry's own, against the session's second document. Which
-   * anchors the session has placed is nowhere in here: it is the difference between
-   * `parent.base_content` and `parent.content` (`anchorsPlacedSince`), read when someone asks.
+   * anchors the session has placed is nowhere in here: it is the difference between the parent's
+   * base version and `parent.content` (`anchorsPlacedSince`), read when someone asks.
    */
   function recordParentChange(sessionId: string, change: DraftChange): void {
     const entry = requireActive(sessionId)

@@ -31,7 +31,7 @@ export interface MarkSet {
   created_at: string
   /** Kept so the set can be explained or rebuilt. */
   policy: MarkPolicy
-  /** The trace's, so the frames can be viewed without it. */
+  /** A copy of the trace's base version, so the frames can be viewed without reading it. */
   base_content: string
   frames: MarkFrame[]
 }

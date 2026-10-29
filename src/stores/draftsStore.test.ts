@@ -386,14 +386,10 @@ describe('useDraftsStore', () => {
 
       const [parentRevision] = await entryRepository.listRevisions(parent.id)
       // Resumed intact, not restarted: the parent's log and its base survived the reload.
-      expect(parentRevision?.authoring_trace).toEqual(
-        expect.objectContaining({
-          base_content: textContent(parentContent),
-          events: [
-            { kind: 'edit', at: 1_000, steps: [{ stepType: 'addMark' }], is_anchor_op: true },
-          ],
-        }),
-      )
+      expect(parentRevision?.base_version_id).toBe(parent.id)
+      expect(parentRevision?.authoring_trace?.events).toEqual([
+        { kind: 'edit', at: 1_000, steps: [{ stepType: 'addMark' }], is_anchor_op: true },
+      ])
     })
 
     it('resumes what is on disk, not what this tab held when it last let the draft go', async () => {
@@ -543,7 +539,6 @@ describe('useDraftsStore', () => {
         makeDraft('interrupted-revision', {
           entry: {
             base_version_id: original.id,
-            base_content: original.content,
             content: textContent('I received the offer'),
           },
           kind: { kind: 'revision', parent_id: original.id },
@@ -563,7 +558,7 @@ describe('useDraftsStore', () => {
 
       await draftRepository.save(
         makeDraft('claimed-elsewhere', {
-          entry: { base_version_id: original.id, base_content: original.content },
+          entry: { base_version_id: original.id },
           kind: { kind: 'revision', parent_id: original.id },
         }),
       )

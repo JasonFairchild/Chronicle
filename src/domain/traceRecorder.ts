@@ -11,14 +11,13 @@ export interface AuthoringChange extends Partial<ChangeSignals> {
  * signals, and every mark the writer asks for. Which moments are worth stopping at is not decided
  * here; `deriveMarks` reads that off the log under whichever policy is asked for.
  *
- * Holds the document it started from but never the live one: the snapshot is the draft's job, and
- * keeping the two apart is what lets the snapshot stay authoritative if a schema change ever makes
- * old steps unreplayable. The loss then is scrubbing, never words.
+ * Holds no document: the snapshot is the draft's job, and keeping the two apart is what lets the
+ * snapshot stay authoritative if a schema change ever makes old steps unreplayable. The loss then
+ * is scrubbing, never words.
  */
 export class TraceRecorder {
   readonly sessionId: string
   readonly startedAt: string
-  readonly baseContent: string
   /** Parsed once, so every offset measures from one instant. */
   private readonly startedAtMs: number
   private readonly now: () => number
@@ -27,15 +26,9 @@ export class TraceRecorder {
   private readonly recorded: AuthoringEvent[] = []
 
   /** `now` is injected so tests can drive time instead of waiting for it. */
-  constructor(
-    sessionId: string,
-    startedAt: string,
-    baseContent: string,
-    now: () => number = () => Date.now(),
-  ) {
+  constructor(sessionId: string, startedAt: string, now: () => number = () => Date.now()) {
     this.sessionId = sessionId
     this.startedAt = startedAt
-    this.baseContent = baseContent
     this.now = now
     this.startedAtMs = Date.parse(startedAt)
     if (Number.isNaN(this.startedAtMs)) {
@@ -89,11 +82,10 @@ export class TraceRecorder {
   static resume(
     sessionId: string,
     startedAt: string,
-    baseContent: string,
     events: AuthoringEvent[],
     now?: () => number,
   ): TraceRecorder {
-    const recorder = new TraceRecorder(sessionId, startedAt, baseContent, now)
+    const recorder = new TraceRecorder(sessionId, startedAt, now)
     recorder.recorded.push(...events)
     recorder.lastReadAt += events[events.length - 1]?.at ?? 0
     return recorder
@@ -110,7 +102,6 @@ export class TraceRecorder {
       session_id: this.sessionId,
       started_at: this.startedAt,
       ended_at: new Date(this.readClock()).toISOString(),
-      base_content: this.baseContent,
       events: this.events,
     }
   }

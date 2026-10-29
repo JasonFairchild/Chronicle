@@ -18,7 +18,7 @@ export type MarkReason =
 
 /**
  * A moment worth stopping at. `index` counts the events before it, so the marked document is
- * `events.slice(0, index)` applied to the trace's `base_content`.
+ * `events.slice(0, index)` applied to the trace's base.
  */
 export interface AuthoringMark {
   /** The `at` of the event that placed it. */

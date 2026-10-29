@@ -38,6 +38,8 @@ Revising an entry's own text and creating a related entry are modes that never m
 
 That makes "no related entry is destructive" hold by construction, for two independent reasons. A `filterTransaction` guard (`isAnchorEdit`, `editor/anchorCommands.ts`) rejects everything in anchor mode except the anchor commands and undoing them. And `docToPlainText` is blind to what those commands produce — marks aren't text, and it skips `anchorInsert` — so `sameContent(before, after)` holds for any anchor-mode session.
 
+Both protect the parent's text. An earlier related entry's anchors are protected only by the editor treating every anchor in the session's base as sealed (`sealedAnchorIds`): a wrong base unlocks them, and the seal writes their removal into the parent's next version.
+
 An anchor-mode session edits two documents and seals atomically, via `EntryRepository.createMany`, into a parent revision (`revision_mode: 'anchor'`) and the related entry. If nothing was anchored, only the related entry is written. `createMany` is all-or-nothing, so a revision whose anchors no entry explains, or an entry pointing at ids nothing carries, is never representable. `revision_mode` is a real column because a card's revision count reads only `'direct'` revisions.
 
 **Annotation vs update is derived at seal time.** `relationTypeForAnchors` (`domain/anchors.ts`) reads the anchors the session placed: a `strike` or proposed wording makes an `update`; only `comment`s, or no anchors, make an `annotation`. So a `new_related` draft carries no `relation_type`.

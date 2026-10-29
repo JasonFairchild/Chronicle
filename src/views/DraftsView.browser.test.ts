@@ -53,7 +53,6 @@ describe('DraftsView (browser)', () => {
       makeDraft('revision', {
         entry: {
           base_version_id: parent.id,
-          base_content: parent.content,
           content: textContent('The meeting went well'),
           events: TYPED,
         },

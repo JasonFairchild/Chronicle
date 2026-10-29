@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { docToPlainText, type EntryDocument } from '@/domain/entryDocument'
+import { ANCHOR_MARK, docToPlainText, type EntryDocument } from '@/domain/entryDocument'
+import { StaleVersionError } from '@/domain/entryValidation'
 import { entryRepository, setEntryRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { useEntriesStore } from '@/stores/entriesStore'
@@ -14,6 +15,19 @@ import { createEntryInput, type Entry } from '@/types/entry'
 /** An entry already on record, written straight to storage. */
 function seedEntry(text: string): Promise<Entry> {
   return entryRepository.create(createEntryInput({ content: textContent(text) }))
+}
+
+/** A direct revision of `entry` saved straight to storage, as another tab's save would land. */
+function seedRevision(entry: Entry, text: string): Promise<Entry> {
+  return entryRepository.create(
+    createEntryInput({
+      content: textContent(text),
+      parent_id: entry.id,
+      relation_type: 'revision',
+      revision_mode: 'direct',
+      base_version_id: entry.id,
+    }),
+  )
 }
 
 /** A draft of `kind` holding `body`; a revision starts from its parent's first version. */
@@ -107,6 +121,63 @@ describe('useEntriesStore', () => {
     ])
     // The anchors went into a new version; the row the parent was written as is untouched.
     expect((await entryRepository.getById(parent.id))?.content).toBe(parent.content)
+  })
+
+  it('references only the anchors this session placed over a base that already carries one', async () => {
+    const parent = await seedEntry('I went to Lake Tahoe with Dad')
+    await sealDraft(
+      makeDraft('session-0', {
+        entry: { content: textContent('An earlier note') },
+        kind: relatedTo(parent, {
+          content: withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20),
+        }),
+      }),
+    )
+    // The version that sealed anchor-1, which this session starts from.
+    const [base] = await entryRepository.listRevisions(parent.id)
+
+    const comment = (anchorId: string) => [
+      { type: ANCHOR_MARK, attrs: { anchorId, kind: 'comment' } },
+    ]
+    const sealed = await sealDraft(
+      makeDraft('session-1', {
+        entry: { content: textContent('Dad drove') },
+        kind: {
+          kind: 'new_related',
+          parent_id: parent.id,
+          parent: {
+            base_version_id: base!.id,
+            content: serializeDocument({
+              type: 'doc',
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [
+                    { type: 'text', text: 'I went to ' },
+                    { type: 'text', text: 'Lake Tahoe', marks: comment('anchor-1') },
+                    { type: 'text', text: ' with ' },
+                    { type: 'text', text: 'Dad', marks: comment('anchor-2') },
+                  ],
+                },
+              ],
+            }),
+            events: [],
+          },
+        },
+      }),
+    )
+
+    expect(sealed.anchors).toEqual([{ anchor_id: 'anchor-2', quote: 'Dad' }])
+  })
+
+  it('holds no work in a revision draft unchanged from its base, though the entry has moved on', async () => {
+    const store = useEntriesStore()
+    const created = await seedEntry('I recieved the offer')
+    await seedRevision(created, 'I received the offer')
+
+    const draft = draftFor({ kind: 'revision', parent_id: created.id }, 'I recieved the offer')
+
+    expect(await store.draftHoldsWork(draft)).toBe(false)
   })
 
   it('surfaces a connection on both entries it joins', async () => {
@@ -215,22 +286,25 @@ describe('useEntriesStore', () => {
     it('will not revise an entry that is not there', async () => {
       await expect(
         sealDraft(draftFor({ kind: 'revision', parent_id: 'never-created' }, 'Words')),
-      ).rejects.toThrow('Cannot revise an entry that does not exist')
+      ).rejects.toThrow('Version never-created does not exist')
     })
 
     it('will not annotate an entry that is not there', async () => {
-      const parentText = 'I went to Lake Tahoe'
-      // An anchor placed since the session began is what sends this down the sealing path at all;
-      // without one it would be an ordinary unanchored note and never look the parent up.
       const draft = draftFor(
-        relatedTo(
-          { id: 'never-created', content: textContent(parentText) },
-          { content: withAnchorMark(parentText, 'anchor-1', 10, 20) },
-        ),
+        relatedTo({ id: 'never-created', content: textContent('I went to Lake Tahoe') }),
         'A note',
       )
 
-      await expect(sealDraft(draft)).rejects.toThrow('Cannot annotate an entry that does not exist')
+      await expect(sealDraft(draft)).rejects.toThrow('Version never-created does not exist')
+    })
+
+    it('refuses a revision edited to match a version saved since as stale, not as unchanged', async () => {
+      const created = await seedEntry('I recieved the offer')
+      await seedRevision(created, 'I received the offer')
+
+      await expect(
+        sealDraft(draftFor({ kind: 'revision', parent_id: created.id }, 'I received the offer')),
+      ).rejects.toThrow(StaleVersionError)
     })
 
     it('will not seal a revision draft that changed nothing the version holds', async () => {

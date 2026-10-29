@@ -55,7 +55,7 @@ flowchart TB
     AGG["<b>AggregatedEntry</b><br/>current version i of n<br/>related_entries · connections"]
     HIST["<b>buildEntryHistory</b><br/>EntryVersion[] · no UI yet"]
     DM["<b>deriveMarks</b>(events, policy)<br/>AuthoringMark[]"]
-    BF["<b>buildFrames</b>(trace, marks)<br/>replay.ts · ChangeSet"]
+    BF["<b>buildFrames</b>(log, marks)<br/>replay.ts · ChangeSet"]
     MSS["<b>markSetsStore</b><br/>Default set built on first open"]
     SCRUB["<b>Scrubbable history view</b><br/>documentsFromFrames · planned"]
 
@@ -107,6 +107,7 @@ flowchart TB
   DV2 --> NCV
   OPFS -->|"useMedia.applyTo"| DV
   T_ENTRIES -->|"authoring_trace"| DM
+  T_ENTRIES -->|"base version's content"| BF
   DM --> BF
   BF -->|"MarkFrame[]"| MSS
   T_MARKSETS <-->|"create · listForEntry"| MSS

@@ -52,8 +52,14 @@ export class TraceRecorder {
     return [...this.recorded]
   }
 
-  /** Appends an edit, storing only the signals that are set. */
+  /**
+   * Appends an edit, storing only the signals that are set. A change with no steps never touched
+   * the document, as when only the title beside it changed, so it records nothing: an event for it
+   * would let a policy mark the log for something that never entered it.
+   */
   record(change: AuthoringChange): void {
+    if (change.steps.length === 0) return
+
     const edit: EditEvent = {
       kind: 'edit',
       at: this.readClock() - this.startedAtMs,

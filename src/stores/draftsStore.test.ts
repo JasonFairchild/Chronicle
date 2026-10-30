@@ -107,14 +107,14 @@ describe('useDraftsStore', () => {
       expect(flushed?.entry.events.map((event) => event.kind)).toEqual(['edit', 'manual'])
     })
 
-    it('moves the snapshot but not the trace for a change that produced no steps', async () => {
+    it('writes a retitling, which changes the draft but not its document', async () => {
       vi.useFakeTimers()
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
 
       store.recordChange(sessionId, draftChangeTo('We drove up on Friday'))
       // What retitling looks like from here: the title is a plain field beside the editor, so it
-      // produces no steps and the body's own chain has nothing to record.
+      // produces no steps.
       store.recordChange(
         sessionId,
         draftChangeTo('We drove up on Friday', { title: 'Lake Tahoe', steps: [] }),
@@ -125,7 +125,6 @@ describe('useDraftsStore', () => {
       const flushed = await draftRepository.getById(sessionId)
       expect(flushed?.entry.content).toBe(textContent('We drove up on Friday'))
       expect(flushed?.entry.title).toBe('Lake Tahoe')
-      expect(flushed?.entry.events).toHaveLength(1)
     })
 
     it('writes a draft again once it is typed in after being emptied', async () => {

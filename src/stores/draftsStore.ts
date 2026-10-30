@@ -180,24 +180,6 @@ function open(draft: Draft): ActiveSession {
 }
 
 /**
- * Appends a change into a `TraceRecorder` — shared by `recordChange` (the entry's own prose) and
- * `recordParentChange` (the parent's provisional document in an anchor-mode session), so both
- * streams are recorded exactly the same way. Anchor mode limits what the *editor* can produce
- * (ENTRY_MODEL.md, "Two creation experiences, kept separate"); this is the recorder that takes
- * whatever it does produce, and it has no notion of which mode a change came from.
- *
- * A change with no steps did not touch the traced document — a retitling is the one that does
- * this for `recordChange`, since the title is a plain field beside the editor rather than part of
- * it. It is skipped entirely: an event for it would let a policy mark a stream for something that
- * never entered it.
- */
-function recordInto(recorder: TraceRecorder, change: DraftChange): void {
-  if (change.steps.length === 0) return
-
-  recorder.record(change)
-}
-
-/**
  * Builds the whole draft from its snapshot and the recorders' live event logs — the one place
  * those logs are read, right before something needs the whole draft. Keeping it out of the
  * per-change paths matters because `TraceRecorder.events` hands back a defensive copy, so reading
@@ -353,6 +335,12 @@ export const useDraftsStore = defineStore('drafts', () => {
     return sessionId
   }
 
+  /** The in-progress snapshot, without waiting for it to reach disk. */
+  function currentDraft(sessionId: string): DraftSnapshot | null {
+    const entry = active.get(sessionId)
+    return entry ? structuredClone(entry.draft) : null
+  }
+
   /** Writes what a session holds, then drops it from memory. Returns it, or null if it was kept. */
   async function letGo(sessionId: string): Promise<ActiveSession | null> {
     await flush(sessionId)
@@ -374,21 +362,14 @@ export const useDraftsStore = defineStore('drafts', () => {
     const { [sessionId]: _seen, ...unseen } = changedElsewhere.value
     changedElsewhere.value = unseen
 
-    if (active.has(sessionId)) await letGo(sessionId)
-    const unwritten = active.get(sessionId)
-    if (unwritten) return structuredClone(unwritten.draft)
+    await letGo(sessionId)
+    if (!active.has(sessionId)) {
+      const draft = await draftRepository.getById(sessionId)
+      if (!draft) return null
 
-    const draft = await draftRepository.getById(sessionId)
-    if (!draft) return null
-
-    active.set(sessionId, open(draft)) // Nothing new to write until this session is typed in.
-    return structuredClone(toSnapshot(draft))
-  }
-
-  /** The in-progress snapshot, without waiting for it to reach disk. */
-  function currentDraft(sessionId: string): DraftSnapshot | null {
-    const entry = active.get(sessionId)
-    return entry ? structuredClone(entry.draft) : null
+      active.set(sessionId, open(draft)) // Nothing new to write until this session is typed in.
+    }
+    return currentDraft(sessionId)
   }
 
   function requireActive(sessionId: string): ActiveSession {
@@ -399,8 +380,9 @@ export const useDraftsStore = defineStore('drafts', () => {
     return entry
   }
 
-  function scheduleFlush(sessionId: string): void {
-    const entry = requireActive(sessionId)
+  /** Marks a session as holding something unwritten, and schedules the flush that writes it. */
+  function markDirty(sessionId: string, entry: ActiveSession): void {
+    entry.dirty = true
     if (entry.timer !== null) return
 
     // A throttle, not a debounce: later keystrokes don't restart the timer, so continuous typing
@@ -414,8 +396,7 @@ export const useDraftsStore = defineStore('drafts', () => {
   /** Swaps in a session's next snapshot, stamped now, and schedules the flush that writes it. */
   function replaceSnapshot(sessionId: string, entry: ActiveSession, next: DraftSnapshot): void {
     entry.draft = { ...next, updated_at: newTimestamp() }
-    entry.dirty = true
-    scheduleFlush(sessionId)
+    markDirty(sessionId, entry)
   }
 
   /**
@@ -425,7 +406,7 @@ export const useDraftsStore = defineStore('drafts', () => {
    */
   function recordChange(sessionId: string, change: DraftChange): void {
     const entry = requireActive(sessionId)
-    recordInto(entry.recorder, change)
+    entry.recorder.record(change)
 
     const { draft } = entry
     replaceSnapshot(sessionId, entry, {
@@ -447,7 +428,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       throw new Error('recordParentChange called on a session with no parent document')
     }
 
-    recordInto(parentRecorder, change)
+    parentRecorder.record(change)
 
     replaceSnapshot(sessionId, entry, {
       ...draft,
@@ -475,8 +456,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     const entry = requireActive(sessionId)
 
     entry.recorder.mark()
-    entry.dirty = true
-    scheduleFlush(sessionId)
+    markDirty(sessionId, entry)
   }
 
   /** Writes everything pending now, for a tab being left: whatever opens a draft next reads disk. */
@@ -553,7 +533,7 @@ export const useDraftsStore = defineStore('drafts', () => {
       }
 
       error.value = toErrorMessage(err, 'Failed to save entry')
-      if (entry.dirty) scheduleFlush(sessionId) // Unflushed typing still has to reach disk.
+      if (entry.dirty) markDirty(sessionId, entry) // Unflushed typing still has to reach disk.
       throw err
     }
 
@@ -634,8 +614,8 @@ export const useDraftsStore = defineStore('drafts', () => {
     loadDrafts,
     flush,
     beginDraft,
-    resumeDraft,
     currentDraft,
+    resumeDraft,
     recordChange,
     recordParentChange,
     recordDetails,

@@ -417,7 +417,7 @@ onBeforeUnmount(() => editor.value?.destroy())
 /**
  * A title change is content, but it is not an edit to the traced document: it produces no
  * ProseMirror steps, so the authoring trace records nothing of it (see
- * `draftsStore.recordChange`). That is the deal the title is held to — a coarser record than the
+ * `TraceRecorder.record`). That is the deal the title is held to — a coarser record than the
  * body's, its history being the value at each save point rather than a keystroke-level chain.
  * Held scaffolding steps still ride along, since the content reported here already includes them.
  *

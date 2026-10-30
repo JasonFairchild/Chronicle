@@ -50,6 +50,15 @@ describe('TraceRecorder', () => {
     ])
   })
 
+  it('records nothing for a change with no steps, which never touched the document', () => {
+    const recorder = new TraceRecorder('session-no-steps', new Date().toISOString())
+
+    recorder.record({ steps: [{ n: 1 }], inserted_text: 'We drove up' })
+    recorder.record({ steps: [] }) // A retitling: the title is a field beside the document.
+
+    expect(recorder.events).toHaveLength(1)
+  })
+
   it('seals the session with its log', () => {
     const recorder = new TraceRecorder('session-seal', new Date().toISOString())
 
@@ -96,13 +105,13 @@ describe('TraceRecorder', () => {
         clock.now,
       )
 
-      recorder.record({ steps: [] })
+      recorder.record({ steps: [{ n: 1 }] })
       clock.advance(3_000)
-      recorder.record({ steps: [] })
+      recorder.record({ steps: [{ n: 2 }] })
       clock.advance(-2_000) // An NTP correction, a resume from sleep, a hand-set clock.
       recorder.mark()
       clock.advance(5_000)
-      recorder.record({ steps: [] })
+      recorder.record({ steps: [{ n: 3 }] })
 
       // The mark reads as having happened at the same instant as the second edit rather than 1s
       // before it, and the last edit goes back to the corrected clock once that passes the floor.
@@ -118,7 +127,7 @@ describe('TraceRecorder', () => {
       )
 
       clock.advance(-10_000)
-      recorder.record({ steps: [] })
+      recorder.record({ steps: [{ n: 1 }] })
 
       expect(recorder.events[0]?.at).toBe(0)
       expect(recorder.seal()?.ended_at).toBe('2026-09-05T10:00:00.000Z')
@@ -138,7 +147,7 @@ describe('TraceRecorder', () => {
       )
 
       clock.advance(1_000)
-      recorder.record({ steps: [] })
+      recorder.record({ steps: [{ n: 2 }] })
 
       // Floored at the manual mark, the latest thing the previous run stamped.
       expect(recorder.events.map((event) => event.at)).toEqual([4_500, 5_000, 5_000])

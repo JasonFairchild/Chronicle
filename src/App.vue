@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import AppLayout from '@/components/AppLayout.vue'
-import { useTabLeave, useTabReturn } from '@/composables/useTabVisibility'
+import { useTabCloseGuard, useTabLeave, useTabReturn } from '@/composables/useTabLifecycle'
 import { useDraftsStore } from '@/stores/draftsStore'
 
-// One draft open in two tabs stays one draft: a tab being left writes everything it holds at once,
-// and a tab being returned to reads back whatever another wrote since (AUTHORING.md, "Draft safety").
-// Listened for here, once, rather than by each composer.
+// Listened for here, once, rather than by each composer. (AUTHORING.md, "Draft safety")
 const drafts = useDraftsStore()
 
 useTabLeave(() => void drafts.flushAll())
 useTabReturn(() => void drafts.adoptChangesElsewhere())
+useTabCloseGuard(() => Object.keys(drafts.writeFailed).length > 0)
 </script>
 
 <template>

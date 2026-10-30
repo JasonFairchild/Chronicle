@@ -46,3 +46,17 @@ export function useTabLeave(callback: () => void): void {
     window.removeEventListener('pagehide', callback)
   })
 }
+
+/**
+ * Has the browser ask before this tab closes or reloads whenever `shouldAsk` says to, for as long
+ * as the calling component is mounted. The browser words the question, and asks only once the page
+ * has been used.
+ */
+export function useTabCloseGuard(shouldAsk: () => boolean): void {
+  function handleBeforeUnload(event: BeforeUnloadEvent): void {
+    if (shouldAsk()) event.preventDefault()
+  }
+
+  onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload))
+  onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload))
+}

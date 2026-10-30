@@ -175,4 +175,25 @@ describe('App flows (browser)', () => {
     const [draft] = await draftRepository.list()
     expect(docToPlainText(draft!.entry.content)).toBe('We drove up on Friday.')
   })
+
+  it('asks before the tab closes only while a draft isn’t being saved', async () => {
+    /** Starts closing this tab as the browser would, and says whether the page asked to stay. */
+    function askedBeforeClosing(): boolean {
+      const closing = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(closing)
+      return closing.defaultPrevented
+    }
+
+    const screen = await mountApp('/')
+    await screen.getByRole('textbox', { name: 'New entry' }).click()
+    await userEvent.keyboard('We drove up on Friday.')
+    await useDraftsStore().flushAll()
+    expect(askedBeforeClosing()).toBe(false)
+
+    // A full disk, say: from here on, what's typed is only in this tab.
+    vi.spyOn(draftRepository, 'save').mockRejectedValue(new Error('Quota'))
+    await userEvent.keyboard(' Then it rained.')
+    await useDraftsStore().flushAll()
+    expect(askedBeforeClosing()).toBe(true)
+  })
 })

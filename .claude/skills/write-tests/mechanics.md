@@ -7,7 +7,7 @@ How-to that TESTING.md's rules leave to the writer: where the two runners differ
 - **Retrying.** `vi.waitFor` retries an async block, repository reads included. Cypress retries queries and `.should`, but not a `cy.then` callback. So to wait on a write no UI shows, outside a let-go session, Vitest retries the read; Cypress aliases a spy on the repository method, waits on `should('have.been.called')`, then on the call's returned promise.
 - **Spies.** `vi.spyOn` and `cy.spy` both work on a Pinia store's actions after mounting. Each exposes the call's returned promise: `mock.results[0].value` / `firstCall.returnValue`.
 - **Seeding.** Inline `await` in Vitest; one `cy.then(async …)` yielding what the test uses in Cypress, not nested chains.
-- **Exact text.** `toHaveTextContent` is partial; `have.text` is exact. Vitest's exact form is a locator intersection asserted visible: `getByRole('alert').and(getByText(text, { exact: true }))`.
+- **Exact text.** `toHaveTextContent` is partial; `have.text` is exact, down to the space Vue keeps around static template text (it trims around `{{ }}`), so static text takes `contain.text`. Vitest's exact form is a locator intersection asserted visible: `getByRole('alert').and(getByText(text, { exact: true }))`.
 - **Another tab.** A second Pinia over the same database. In Cypress, set it active in a `cy.then` before `cy.mount`, which installs its own. Returning to the tab is `focus` on `window` (`cy.window()` in Cypress).
 - **Component internals.** `cy.mount` yields the Vue Test Utils wrapper (`findComponent`, `props`, `setProps`); `vitest-browser-vue`'s `render` exposes only `rerender` and `emitted`.
 

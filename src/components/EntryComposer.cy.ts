@@ -105,4 +105,19 @@ describe('EntryComposer', () => {
     cy.findByRole('button', { name: 'Discard' }).click()
     cy.findByRole('alert').should('have.text', 'discard rejected')
   })
+
+  it('says the draft isn’t being saved, until trying again saves it', () => {
+    const save = cy.stub(draftRepository, 'save').rejects(new Error('Quota'))
+    cy.mount(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy() },
+    })
+
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
+    cy.findByRole('alert').should('contain.text', 'This draft isn’t being saved right now.')
+
+    cy.then(() => save.restore())
+    cy.findByRole('button', { name: 'Try again' }).click()
+    cy.findByRole('alert').should('not.exist')
+  })
 })

@@ -194,4 +194,27 @@ describe('App flows', () => {
       expect(docToPlainText(draft!.entry.content)).to.equal('We drove up on Friday.')
     })
   })
+
+  it('asks before the tab closes only while a draft isn’t being saved', () => {
+    /** Starts closing this tab as the browser would, and says whether the page asked to stay. */
+    function askedBeforeClosing(win: Window): boolean {
+      const closing = new Event('beforeunload', { cancelable: true })
+      win.dispatchEvent(closing)
+      return closing.defaultPrevented
+    }
+
+    cy.mount(App, { routePath: '/' })
+
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
+    cy.then(() => useDraftsStore().flushAll())
+    cy.window().then((win) => expect(askedBeforeClosing(win)).to.equal(false))
+
+    // A full disk, say: from here on, what's typed is only in this tab.
+    cy.then(() => {
+      cy.stub(draftRepository, 'save').rejects(new Error('Quota'))
+    })
+    cy.findByRole('textbox', { name: 'New entry' }).type(' Then it rained.')
+    cy.then(() => useDraftsStore().flushAll())
+    cy.window().then((win) => expect(askedBeforeClosing(win)).to.equal(true))
+  })
 })

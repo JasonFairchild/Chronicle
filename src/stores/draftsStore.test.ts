@@ -44,6 +44,7 @@ describe('useDraftsStore', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   describe('writing while the writer types', () => {
@@ -66,7 +67,7 @@ describe('useDraftsStore', () => {
       expect(flushed?.entry.events).toHaveLength(2)
     })
 
-    it('leaves a snapshot pending when its write fails, rather than retiring it unwritten', async () => {
+    it('leaves a snapshot pending when its write fails, marked as failed until a later write lands', async () => {
       vi.useFakeTimers()
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
@@ -80,15 +81,16 @@ describe('useDraftsStore', () => {
 
       expect(save).toHaveBeenCalledTimes(1)
       expect(await draftRepository.getById(sessionId)).toBeNull()
-      expect(store.error).toBe('Quota')
+      expect(store.writeFailed[sessionId]).toBe(true)
 
-      // Still pending, so the next chance to write takes it — here, the composer closing.
-      // Counting the failed attempt as written would have retired these words unsaved.
-      await store.abandonDraft(sessionId)
+      // Still pending, so the next chance to write takes it. Counting the failed attempt as
+      // written would have retired these words unsaved.
+      await store.flush(sessionId)
 
       expect(docToPlainText((await draftRepository.getById(sessionId))!.entry.content)).toBe(
         'It rained all day.',
       )
+      expect(store.writeFailed[sessionId]).toBeUndefined()
     })
 
     it('writes a bookmark taken between flushes, rather than dropping it with the timer', async () => {
@@ -280,7 +282,6 @@ describe('useDraftsStore', () => {
       const change = store.changedElsewhere[sessionId]
       expect(change?.gone).toBe(false)
       expect(change?.unsaved?.entry.content).toBe(textContent('It rained all day'))
-      expect(store.error).toBeNull()
     })
 
     it('refuses to discard a draft another tab has written since, showing that version', async () => {
@@ -509,6 +510,7 @@ describe('useDraftsStore', () => {
     })
 
     it('keeps a claim another tab writes in while this one releases it, saying nothing', async () => {
+      const warn = vi.spyOn(console, 'warn')
       const store = useDraftsStore()
       const original = await existingEntry('I recieved the offer')
       const sessionId = store.beginDraft({ kind: 'revision', parent: original })
@@ -528,7 +530,7 @@ describe('useDraftsStore', () => {
 
       const stored = await draftRepository.getById(sessionId)
       expect(stored?.entry.content).toBe(textContent('I received the offer'))
-      expect(store.error).toBeNull()
+      expect(warn).not.toHaveBeenCalled()
     })
 
     it('keeps a resumed draft that holds work when it is let go untouched', async () => {

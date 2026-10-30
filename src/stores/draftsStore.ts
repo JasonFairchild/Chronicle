@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, shallowRef } from 'vue'
+import { shallowRef } from 'vue'
 
 import { isBlankDraft, isEmptyDocument } from '@/domain/entryDocument'
 import { currentVersionId } from '@/domain/reconstructEntryState'
@@ -24,7 +24,6 @@ import {
   type EntryDetails,
   entryDetailsOf,
 } from '@/types/entry'
-import { toErrorMessage } from '@/utils/format'
 import { newId, newTimestamp } from '@/utils/id'
 
 import { useEntriesStore } from './entriesStore'
@@ -202,11 +201,21 @@ function cancelFlush(entry: ActiveSession): void {
   entry.timer = null
 }
 
+/** Runs work that may fail safely: a failure is logged with `recovery`, never thrown. */
+async function bestEffort(recovery: string, work: () => Promise<void>): Promise<void> {
+  try {
+    await work()
+  } catch (err) {
+    console.warn(recovery, err)
+  }
+}
+
 export const useDraftsStore = defineStore('drafts', () => {
   const drafts = shallowRef<DraftSnapshot[]>([])
-  const error = ref<string | null>(null)
   /** Per session, the latest change another tab made since this tab opened it (`adoptStored`). */
   const changedElsewhere = shallowRef<Record<string, ChangeElsewhere>>({})
+  /** Sessions whose last write failed: what each has held since is in this tab's memory alone. */
+  const writeFailed = shallowRef<Record<string, true>>({})
 
   /**
    * Not reactive: this holds timers and trace recorders, none of which a template reads, and
@@ -227,15 +236,14 @@ export const useDraftsStore = defineStore('drafts', () => {
    * it from here would be refused.
    */
   async function loadDrafts(): Promise<void> {
-    error.value = null
+    await writesLanded()
+    drafts.value = await draftRepository.list()
+  }
 
-    try {
-      await writesLanded()
-      drafts.value = await draftRepository.list()
-    } catch (err) {
-      error.value = toErrorMessage(err, 'Failed to load drafts')
-      throw err
-    }
+  /** Notes whether a session's last write failed, for the composer and the tab to say so. */
+  function setWriteFailed(sessionId: string, failed: boolean): void {
+    const { [sessionId]: _was, ...others } = writeFailed.value
+    writeFailed.value = failed ? { ...others, [sessionId]: true } : others
   }
 
   /**
@@ -247,16 +255,15 @@ export const useDraftsStore = defineStore('drafts', () => {
     const current = active.get(sessionId)
     if (current) cancelFlush(current)
 
-    try {
+    await bestEffort('The next write meets the same conflict and retries.', async () => {
       const stored = await draftRepository.getById(sessionId)
       if (stored) active.set(sessionId, open(stored))
       else active.delete(sessionId)
+      setWriteFailed(sessionId, false) // What it held is offered through `unsaved` instead.
 
       const change = { gone: !stored, unsaved }
       changedElsewhere.value = { ...changedElsewhere.value, [sessionId]: change }
-    } catch (err) {
-      error.value = toErrorMessage(err, 'Failed to reload draft')
-    }
+    })
   }
 
   /**
@@ -278,11 +285,11 @@ export const useDraftsStore = defineStore('drafts', () => {
           await draftRepository.delete(sessionId, draft.write_id)
           entry.draft = { ...entry.draft, write_id: null }
         }
-        return
+      } else {
+        const writeId = await draftRepository.save(draft)
+        entry.draft = { ...entry.draft, write_id: writeId }
       }
-
-      const writeId = await draftRepository.save(draft)
-      entry.draft = { ...entry.draft, write_id: writeId }
+      setWriteFailed(sessionId, false)
     } catch (err) {
       if (err instanceof DraftConflictError) {
         // Another tab wrote this draft since this one last did. Its version stands, and what this
@@ -291,10 +298,10 @@ export const useDraftsStore = defineStore('drafts', () => {
         return
       }
 
-      // Still pending, for the next flush to carry. Not rescheduled, or a full disk would retry
-      // every DRAFT_FLUSH_MS for as long as the tab is open.
+      // Still pending, for the next change, a retry or leaving the tab to carry. Not rescheduled,
+      // or a full disk would retry every DRAFT_FLUSH_MS for as long as the tab is open.
       entry.dirty = true
-      error.value = toErrorMessage(err, 'Failed to save draft')
+      setWriteFailed(sessionId, true)
     }
   }
 
@@ -470,16 +477,14 @@ export const useDraftsStore = defineStore('drafts', () => {
     await writesLanded()
     const written = [...active.entries()].filter(([, entry]) => entry.draft.write_id !== null)
 
-    try {
+    await bestEffort('Saves, seals and discards still refuse another tab’s write.', async () => {
       drafts.value = await draftRepository.list()
       const stored = new Map(drafts.value.map((row) => [row.session_id, row.write_id]))
       for (const [sessionId, entry] of written) {
         if (stored.get(sessionId) === entry.draft.write_id) continue
         await adoptStored(sessionId, entry.dirty ? entry.draft : null)
       }
-    } catch (err) {
-      error.value = toErrorMessage(err, 'Failed to check drafts')
-    }
+    })
   }
 
   /**
@@ -513,7 +518,6 @@ export const useDraftsStore = defineStore('drafts', () => {
       throw new Error('Entry content cannot be empty')
     }
 
-    error.value = null
     const entries = useEntriesStore()
 
     let written: Entry[]
@@ -532,20 +536,17 @@ export const useDraftsStore = defineStore('drafts', () => {
         throw err
       }
 
-      error.value = toErrorMessage(err, 'Failed to save entry')
       if (entry.dirty) markDirty(sessionId, entry) // Unflushed typing still has to reach disk.
       throw err
     }
 
     active.delete(sessionId)
+    setWriteFailed(sessionId, false)
 
-    // The save has landed; a list that fails to refresh after it doesn't make it a failure.
-    try {
+    await bestEffort('The entry is saved; each list reloads when next shown.', async () => {
       await entries.showWritten(written)
       await loadDrafts()
-    } catch (err) {
-      error.value = toErrorMessage(err, 'Saved, but failed to refresh')
-    }
+    })
 
     return written[written.length - 1]!
   }
@@ -556,16 +557,18 @@ export const useDraftsStore = defineStore('drafts', () => {
    * refuses the delete and keeps the claim.
    */
   async function releaseIfEmpty(sessionId: string): Promise<void> {
-    try {
+    await bestEffort('The claim stays, and the drafts list offers to discard it.', async () => {
       const stored = await draftRepository.getById(sessionId)
       if (!stored || (await useEntriesStore().draftHoldsWork(stored))) return
 
-      await draftRepository.delete(sessionId, stored.write_id)
+      try {
+        await draftRepository.delete(sessionId, stored.write_id)
+      } catch (err) {
+        if (err instanceof DraftConflictError) return
+        throw err
+      }
       await loadDrafts()
-    } catch (err) {
-      if (err instanceof DraftConflictError) return
-      error.value = toErrorMessage(err, 'Failed to release draft')
-    }
+    })
   }
 
   /**
@@ -604,13 +607,14 @@ export const useDraftsStore = defineStore('drafts', () => {
       throw err
     }
     active.delete(sessionId) // Only once the row is gone: a failed delete leaves the session open.
+    setWriteFailed(sessionId, false)
     await loadDrafts()
   }
 
   return {
     drafts,
-    error,
     changedElsewhere,
+    writeFailed,
     loadDrafts,
     flush,
     beginDraft,

@@ -91,7 +91,25 @@ async function handleSave(): Promise<void> {
       </p>
     </div>
 
-    <p v-if="!session.readOnly" class="text-xs text-[var(--color-text-muted)]">
+    <!-- In place of the line saying it's saved, which isn't true until a write lands. -->
+    <div
+      v-if="session.writeFailed"
+      class="rounded-lg border border-[var(--color-error)] px-3 py-2 text-sm"
+    >
+      <p class="font-medium text-[var(--color-error)]" role="alert">
+        This draft isn’t being saved right now.
+      </p>
+      <p class="mt-1">
+        What you’ve written is still here, but only in this tab: closing or reloading it would lose
+        what came after the last save, writing history included. If trying again doesn’t help, copy
+        your writing first, then reopen this draft rather than starting over. It keeps whatever was
+        saved, so paste back only what’s missing.
+      </p>
+      <button type="button" class="btn-secondary mt-2 px-3 py-1" @click="session.retryWrite()">
+        Try again
+      </button>
+    </div>
+    <p v-else-if="!session.readOnly" class="text-xs text-[var(--color-text-muted)]">
       Saved as a draft while you write. Nothing is added to your record until you save it.
     </p>
 

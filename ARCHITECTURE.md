@@ -24,7 +24,7 @@ flowchart TB
     DE["<b>DocumentEditor.vue</b><br/>TipTap · extensions.ts · anchorCommands.ts<br/>anchor-mode guard · affected-anchor tracking"]
     EC["<b>EntryComposer.vue</b><br/>DocumentEditor · EntryDetailsFields<br/>Discard · Save, or why it can't"]
     SES["<b>useDraftSession</b><br/>one per composer on a screen below:<br/>begin · resume · save · discard<br/>stale / elsewhere notices"]
-    TAB["<b>App.vue · useTabLeave · useTabReturn</b>"]
+    TAB["<b>App.vue · useTabLeave · useTabReturn · useTabCloseGuard</b>"]
     DS["<b>draftsStore</b><br/>ActiveSession = DraftSnapshot<br/>+ TraceRecorder · entry<br/>+ TraceRecorder · parent"]
     INPUTS["<b>entriesStore.inputsForDraft</b><br/>draft kind → CreateEntryInput[]<br/>anchorsPlacedSince · relationTypeForAnchors"]
   end
@@ -74,7 +74,7 @@ flowchart TB
   EC ==>|"handleChange<br/>handleDetailsChange"| SES
   DE -->|"anchor mode, the parent:<br/>handleParentChange"| SES
   SES ==>|"recordChange · recordParentChange<br/>recordDetails"| DS
-  TAB -->|"tab hidden: flushAll<br/>tab back: adoptChangesElsewhere"| DS
+  TAB -->|"tab hidden: flushAll<br/>tab back: adoptChangesElsewhere<br/>tab closing: asks while writeFailed"| DS
   DS <-->|"save, throttled 300ms: upsert<br/>getById: resume · another tab's"| T_DRAFTS
   DS <-->|"save: append new events only<br/>getById: rejoin the log"| T_EVENTS
   DS ==>|"sealDraft: snapshot<br/>+ recorder.seal() = AuthoringTrace"| INPUTS

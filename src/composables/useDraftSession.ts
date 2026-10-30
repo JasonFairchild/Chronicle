@@ -80,6 +80,10 @@ export function useDraftSession() {
   const elsewhereNotice = ref<string | null>(null)
   /** What this tab held when another tab's version replaced it, for the writer to copy from. */
   const unsaved = ref<{ title: string | null; text: string } | null>(null)
+  /** Whether the session's last write failed, leaving what it holds since in this tab alone. */
+  const writeFailed = computed(() =>
+    sessionId.value ? drafts.writeFailed[sessionId.value] === true : false,
+  )
   /**
    * Why the draft is shown only to copy from, with nothing that could change it; null while it can
    * be written. Its words are all there either way, but a change would have nowhere to go: one that
@@ -240,6 +244,11 @@ export function useDraftSession() {
     if (sessionId.value) drafts.recordDetails(sessionId.value, next)
   }
 
+  /** Writes what the session holds now, rather than at its next change. */
+  async function retryWrite(): Promise<void> {
+    if (sessionId.value) await drafts.flush(sessionId.value)
+  }
+
   /**
    * Seals the session. Resolves to `null` — rather than running at all — when there is nothing
    * open or a save is already in flight, so a caller can guard a button's click handler with
@@ -343,6 +352,7 @@ export function useDraftSession() {
     editorKey,
     elsewhereNotice,
     unsaved,
+    writeFailed,
     isOpen,
     readOnlyReason,
     readOnly,
@@ -352,6 +362,7 @@ export function useDraftSession() {
     handleChange,
     handleParentChange,
     handleDetailsChange,
+    retryWrite,
     save,
     abandon,
     discard,

@@ -29,8 +29,8 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - Unproven today: the guard actually rejecting an edit, `excludes: ''`, `Mod-Alt-s`, the live region, AnchorMenu's roving tabindex, and the box committing on focus-out.
   - The ED flows click Accept wording in Browser Mode but press Enter in Cypress, which is drift.
   - Rejected for now: a third Vitest project on happy-dom/jsdom. The browser project already runs these for real.
-- **App.vue: App.flow is its spec.** `useTabVisibility` gets its own spec for the event mapping. App.flow keeps one test per direction as App's wiring.
-- **`useTabVisibility`: browser-only spec with a host.** Its point is real `pagehide`/`visibilitychange`/`focus` events listened for in `onMounted`, which need a mounted instance and a browser.
+- **App.vue: App.flow is its spec.** `useTabLifecycle` gets its own spec for the event mapping. App.flow keeps one test per direction as App's wiring.
+- **`useTabLifecycle`: browser-only spec with a host.** Its point is real `pagehide`/`visibilitychange`/`focus` events listened for in `onMounted`, which need a mounted instance and a browser.
   - The spec mounts, through `renderComponent`, a host component that only calls the composable.
   - There's no Cypress mirror, since nothing user-facing is mounted. This matches the Dexie and OPFS adapters.
   - TESTING.md says otherwise today (non-components get a node spec; every mounting `.browser.test.ts` has a mirror; no `defineComponent` in component tests). So commit 9 amends it then, not later.
@@ -166,7 +166,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
    - Cuts: DraftsView "lists drafts newest first…" keeps one Resume `href` of four, as wiring.
    - Verify: the new spec and the DraftsView pair.
 
-9. **`useTabVisibility` spec**, `src/composables/useTabVisibility.browser.test.ts`, browser-only with a host. Amends TESTING.md as in Decisions.
+9. **`useTabLifecycle` spec**, `src/composables/useTabLifecycle.browser.test.ts`, browser-only with a host. Amends TESTING.md as in Decisions.
    - Tests:
      - return fires on `focus` and on becoming visible, not on hiding
      - leave fires on `pagehide` and on hiding, not on showing

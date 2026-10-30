@@ -126,4 +126,25 @@ describe('EntryComposer (browser)', () => {
       .element(screen.getByRole('alert').and(screen.getByText('discard rejected', { exact: true })))
       .toBeVisible()
   })
+
+  it('says the draft isn’t being saved, until trying again saves it', async () => {
+    const save = vi.spyOn(draftRepository, 'save').mockRejectedValue(new Error('Quota'))
+    const screen = renderComponent(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn() },
+    })
+
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
+    await expect
+      .element(
+        screen
+          .getByRole('alert')
+          .and(screen.getByText('This draft isn’t being saved right now.', { exact: true })),
+      )
+      .toBeVisible()
+
+    save.mockRestore()
+    await screen.getByRole('button', { name: 'Try again' }).click()
+    await expect.element(screen.getByRole('alert')).not.toBeInTheDocument()
+  })
 })

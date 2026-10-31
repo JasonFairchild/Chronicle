@@ -227,5 +227,3 @@ export function entryExtensions({
     ...(anchorMode ? [AnchorMode.configure({ baseContent })] : []),
   ]
 }
-
-export { Anchor, AnchorInsert, MediaImage }

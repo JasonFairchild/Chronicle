@@ -3,7 +3,7 @@ import { serializeDocument } from '@/testing/documents'
 
 /**
  * A hand-built document carrying one anchor mark over `[from, to)`, standing in for what
- * `addAnchorMark` (`editor/extensions.ts`) would produce. Shared because more than one node test
+ * `addAnchorMark` (`editor/anchorCommands.ts`) would produce. Shared because more than one node test
  * needs a marked document and none of them has an editor to run one against.
  */
 export function withAnchorMark(

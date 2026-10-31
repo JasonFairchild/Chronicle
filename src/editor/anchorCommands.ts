@@ -281,7 +281,7 @@ interface AnchorMarkExtent extends AnchorRange {
  * finds in the range. Passing the bare mark *type* there instead would strip a different, unrelated
  * anchor's mark out from under it.
  */
-export function anchorMarkRanges(
+function anchorMarkRanges(
   doc: ProseMirrorNode,
   anchorId: string,
 ): { from: number; to: number; mark: Mark }[] {
@@ -337,13 +337,9 @@ function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
 }
 
 /**
- * Marks a range as an anchor and returns its new id, or null when there is nothing to mark.
- *
- * `range` defaults to the current selection, which is what lets one command serve both entry
- * points: `AnchorMenu`'s buttons read the live selection, while the `Mod-Alt-h` / `Mod-Alt-s`
- * keyboard shortcuts (`extensions.ts`) call this with no range at all. Called through `markAnchor`
- * below, which is what routes a selection matching an anchor already placed to editing it instead —
- * this function itself always creates a new one.
+ * Marks a range as an anchor and returns its new id, or null when there is nothing to mark. Always
+ * creates a new one; reached only through `markAnchor` below, which routes a selection touching an
+ * anchor already placed to editing it instead.
  *
  * A wording box opens immediately after the mark, empty and focused, in the **same** transaction —
  * one undo removes both, and there is no hidden "type to discover it" step between marking a
@@ -351,16 +347,15 @@ function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
  * is what keeps that box's position outside the anchor's own range, so accepting it empty and later
  * widening the highlight can never absorb it.
  */
-export function addAnchorMark(
+function addAnchorMark(
   editor: Editor,
   kind: AnchorKind,
-  range?: { from: number; to: number },
+  raw: { from: number; to: number },
 ): string | null {
   const { state } = editor
-  const raw = range ?? state.selection
   const markType = state.schema.marks[ANCHOR_MARK]
   const insertType = state.schema.nodes[ANCHOR_INSERT_NODE]
-  if (raw.from === raw.to || !markType || !insertType) return null
+  if (!markType || !insertType) return null
 
   // A drag-selection routinely swallows a word's neighboring space without meaning to. Trimming it
   // off here keeps a highlight's background from bleeding onto whitespace, and makes the wording

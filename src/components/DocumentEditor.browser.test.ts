@@ -396,7 +396,6 @@ describe('DocumentEditor (browser)', () => {
       await userEvent.keyboard('Donner Lake{Enter}')
 
       const latest = changes[changes.length - 1]!
-      expect(latest.anchorIds).toHaveLength(1)
       const [anchor] = collectAnchors(latest.content)
       expect(anchor).toMatchObject({
         kind: 'comment',
@@ -420,7 +419,6 @@ describe('DocumentEditor (browser)', () => {
       await userEvent.keyboard('Donner Lake{Enter}')
 
       const latest = changes[changes.length - 1]!
-      expect(latest.anchorIds).toHaveLength(1)
       const [anchor] = collectAnchors(latest.content)
       expect(anchor).toMatchObject({
         kind: 'strike',
@@ -441,7 +439,6 @@ describe('DocumentEditor (browser)', () => {
       await userEvent.keyboard('perhaps{Enter}')
 
       const latest = changes[changes.length - 1]!
-      expect(latest.anchorIds).toHaveLength(1)
       const [anchor] = collectAnchors(latest.content)
       expect(anchor).toMatchObject({ kind: null, insertion: 'perhaps' })
     })
@@ -457,7 +454,7 @@ describe('DocumentEditor (browser)', () => {
       await screen.getByRole('button', { name: 'Remove anchor' }).click()
 
       const latest = changes[changes.length - 1]!
-      expect(latest.anchorIds).toEqual([])
+      expect(collectAnchors(latest.content)).toEqual([])
       // The node shrinks the document, but its wording was never the parent's text to begin with
       // (`nodeText` skips `anchorInsert`) — `textBetween` over its range reads as empty, not removed.
       expect(latest.removed_chars).toBe(0)
@@ -530,8 +527,6 @@ describe('DocumentEditor (browser)', () => {
       })
       const bare = anchors.find((anchor) => anchor.anchor_id !== 'sealed-1')
       expect(bare).toMatchObject({ kind: null, insertion: '!' })
-      // The sealed anchor was already there — only the bare insertion is this session's own.
-      expect(latest.anchorIds).toEqual([bare?.anchor_id])
     })
 
     it('drops an anchor back out on undo', async () => {
@@ -541,7 +536,7 @@ describe('DocumentEditor (browser)', () => {
       editorLocator.element().focus()
       selectTextRange(editorLocator.element(), 10, 20)
       await screen.getByRole('button', { name: 'Highlight' }).click()
-      expect(changes[changes.length - 1]!.anchorIds).toHaveLength(1)
+      expect(collectAnchors(changes[changes.length - 1]!.content)).toHaveLength(1)
 
       // Placing a mark opens its wording box focused and ready to type, so undoing from the
       // keyboard needs focus back in the document first — same as a real reader clicking back in.
@@ -549,7 +544,7 @@ describe('DocumentEditor (browser)', () => {
       await userEvent.keyboard('{Control>}z{/Control}')
 
       const change = changes[changes.length - 1]!
-      expect(change.anchorIds).toEqual([])
+      expect(collectAnchors(change.content)).toEqual([])
       // Judged by outcome, not by transaction provenance (`contentDelta`): undoing a placement
       // removes the anchor from the document's anchor set the same as `removeAnchor` would, so this
       // reads as an anchor change rather than formatting, with no undo-specific case needed.
@@ -645,14 +640,13 @@ describe('DocumentEditor (browser)', () => {
       it('removes a placed anchor entirely from its reopened wording box', async () => {
         const screen = mountAnchorEditor()
         await placeHighlightWithWording(screen)
-        expect(changes[changes.length - 1]!.anchorIds).toHaveLength(1)
+        expect(collectAnchors(changes[changes.length - 1]!.content)).toHaveLength(1)
 
         await screen.getByRole('button', { name: 'Edit wording' }).click()
         await screen.getByRole('button', { name: 'Remove anchor' }).click()
 
         const latest = changes[changes.length - 1]!
         expect(collectAnchors(latest.content)).toEqual([])
-        expect(latest.anchorIds).toEqual([])
         expect(latest.is_anchor_op).toBe(true)
         // The marked text itself is never touched — only the mark on it.
         expect(docToPlainText(latest.content)).toBe('I went to Lake Tahoe with Dad')
@@ -769,15 +763,15 @@ describe('DocumentEditor (browser)', () => {
           .toHaveValue('Donner Lake')
         await userEvent.keyboard('{Escape}')
 
-        // ...and placing a new one this session reports both ids as this session's own.
+        // ...and after placing a new one, the base still counts both as this session's own.
         editorLocator.element().focus()
         selectTextRange(editorLocator.element(), 21, 25)
         await screen.getByRole('button', { name: 'Highlight' }).click()
         await userEvent.keyboard('note{Enter}')
 
-        const latest = changes[changes.length - 1]!
-        expect(latest.anchorIds).toContain('resumed-1')
-        expect(latest.anchorIds).toHaveLength(2)
+        const placed = anchorsPlacedSince(base, changes[changes.length - 1]!.content)
+        expect(placed).toContain('resumed-1')
+        expect(placed).toHaveLength(2)
       })
     })
   })

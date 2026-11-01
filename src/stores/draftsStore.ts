@@ -424,9 +424,7 @@ export const useDraftsStore = defineStore('drafts', () => {
 
   /**
    * Records a change to the **parent's** provisional document, for an anchor-mode session only —
-   * an ordinary `DraftChange` like the entry's own, against the session's second document. Which
-   * anchors the session has placed is nowhere in here: it is the difference between the parent's
-   * base version and `parent.content` (`anchorsPlacedSince`), read when someone asks.
+   * an ordinary `DraftChange` like the entry's own, against the session's second document.
    */
   function recordParentChange(sessionId: string, change: DraftChange): void {
     const entry = requireActive(sessionId)

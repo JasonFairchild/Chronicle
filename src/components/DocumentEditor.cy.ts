@@ -480,7 +480,6 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
-        expect(change.anchorIds).to.have.length(1)
         const [anchor] = collectAnchors(change.content)
         expect(anchor).to.include({
           kind: 'comment',
@@ -503,7 +502,6 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
-        expect(change.anchorIds).to.have.length(1)
         const [anchor] = collectAnchors(change.content)
         expect(anchor).to.include({ kind: 'strike', quote: 'Lake Tahoe', insertion: 'Donner Lake' })
         expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad')
@@ -521,7 +519,6 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
-        expect(change.anchorIds).to.have.length(1)
         const [anchor] = collectAnchors(change.content)
         expect(anchor).to.include({ kind: null, insertion: 'perhaps' })
       })
@@ -539,7 +536,7 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
-        expect(change.anchorIds).to.deep.equal([])
+        expect(collectAnchors(change.content)).to.deep.equal([])
         // The node shrinks the document, but its wording was never the parent's text to begin with
         // (`nodeText` skips `anchorInsert`) — `textBetween` over its range reads as empty, not
         // removed.
@@ -619,7 +616,6 @@ describe('DocumentEditor', () => {
         })
         const bare = anchors.find((anchor) => anchor.anchor_id !== 'sealed-1')
         expect(bare).to.include({ kind: null, insertion: '!' })
-        expect(change.anchorIds).to.deep.equal([bare?.anchor_id])
       })
     })
 
@@ -631,13 +627,15 @@ describe('DocumentEditor', () => {
         selectTextRange($editor[0]!, 10, 20),
       )
       cy.findByRole('button', { name: 'Highlight' }).click()
-      cy.get('@change').then((stub) => expect(lastChange(stub).anchorIds).to.have.length(1))
+      cy.get('@change').then((stub) =>
+        expect(collectAnchors(lastChange(stub).content)).to.have.length(1),
+      )
 
       cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+z}')
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
-        expect(change.anchorIds).to.deep.equal([])
+        expect(collectAnchors(change.content)).to.deep.equal([])
         // Judged by outcome, not by transaction provenance (`contentDelta`): undoing a placement
         // removes the anchor from the document's anchor set the same as `removeAnchor` would, so
         // this reads as an anchor change rather than formatting, with no undo-specific case needed.
@@ -736,7 +734,9 @@ describe('DocumentEditor', () => {
         const onChange = cy.stub().as('change')
         mountAnchorEditor(onChange)
         placeHighlightWithWording()
-        cy.get('@change').then((stub) => expect(lastChange(stub).anchorIds).to.have.length(1))
+        cy.get('@change').then((stub) =>
+          expect(collectAnchors(lastChange(stub).content)).to.have.length(1),
+        )
 
         cy.findByRole('button', { name: 'Edit wording' }).click()
         cy.findByRole('button', { name: 'Remove anchor' }).click()
@@ -744,7 +744,6 @@ describe('DocumentEditor', () => {
         cy.get('@change').then((stub) => {
           const change = lastChange(stub)
           expect(collectAnchors(change.content)).to.deep.equal([])
-          expect(change.anchorIds).to.deep.equal([])
           expect(change.is_anchor_op).to.equal(true)
           expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad')
         })
@@ -880,10 +879,11 @@ describe('DocumentEditor', () => {
         cy.findByRole('button', { name: 'Highlight' }).click()
         cy.findByRole('textbox', { name: 'Wording' }).type('note{enter}')
 
+        // The base still counts both as this session's own.
         cy.get('@change').then((stub) => {
-          const change = lastChange(stub)
-          expect(change.anchorIds).to.include('resumed-1')
-          expect(change.anchorIds).to.have.length(2)
+          const placed = anchorsPlacedSince(base, lastChange(stub).content)
+          expect(placed).to.include('resumed-1')
+          expect(placed).to.have.length(2)
         })
       })
     })

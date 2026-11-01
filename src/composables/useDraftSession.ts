@@ -227,9 +227,7 @@ export function useDraftSession() {
   /**
    * Forwards one change to the **parent's** provisional document, anchor-mode only. The whole
    * change is passed through — not a hand-picked subset — so the parent's own authoring stream is
-   * recorded exactly the way the entry's own is. Which anchors this session placed is not
-   * forwarded at all: it is derived from the base whenever it's asked for (`anchorsPlacedSince`),
-   * so there is no second copy to keep in step with the document.
+   * recorded exactly the way the entry's own is.
    */
   function handleParentChange(change: EditorChange): void {
     if (!sessionId.value) return

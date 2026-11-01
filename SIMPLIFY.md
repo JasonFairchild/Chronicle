@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commit 0 done (this file, and the order in CHRONICLE_PLAN.md).
+Status: commits 0–1 done.
 
 ## Context
 

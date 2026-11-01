@@ -10,7 +10,6 @@ import {
   pairableAnchorAt,
   relationTypeForAnchors,
   resolveAnchors,
-  sessionAnchorIds,
 } from '@/domain/anchors'
 import type { DocMark, EntryDocument } from '@/domain/entryDocument'
 import { serializeDocument } from '@/testing/documents'
@@ -109,27 +108,6 @@ describe('collectAnchors', () => {
 
   it('returns nothing for a document with no anchors', () => {
     expect(collectAnchors(doc('Plain text'))).toEqual([])
-  })
-})
-
-describe('sessionAnchorIds', () => {
-  const marked = doc('The meeting went badly', {
-    anchorId: 'a1',
-    kind: 'comment',
-    from: 4,
-    to: 11,
-  })
-
-  it('reports the ids present now that are not sealed', () => {
-    expect(sessionAnchorIds(new Set(), marked)).toEqual(['a1'])
-  })
-
-  it('drops back out once undone, since it reads the document rather than tallying', () => {
-    expect(sessionAnchorIds(new Set(['a1']), doc('The meeting went badly'))).toEqual([])
-  })
-
-  it('leaves out an anchor an earlier related entry sealed into the same document', () => {
-    expect(sessionAnchorIds(new Set(['a1']), marked)).toEqual([])
   })
 })
 

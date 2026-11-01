@@ -134,25 +134,9 @@ export function pairableAnchorAt(
 }
 
 /**
- * The anchors this session has placed, read off the document as it stands right now: everything
- * present that isn't sealed. Derived rather than tallied as the user works, so undoing an anchor
- * drops it from this list for free — there is no second record of what was placed to keep in step
- * with the document.
- *
- * `sealed` is the ids the document already carried when the session began — `anchorIdsIn` of its
- * base (the version `Draft.parent.base_version_id` names). Taking it as a set rather than a document is what lets the
- * editor compute it once, at mount, and answer "may I still edit this one?" per keystroke.
- */
-export function sessionAnchorIds(
-  sealed: ReadonlySet<string>,
-  content: string | EntryDocument,
-): string[] {
-  return anchorIdsIn(content).filter((anchorId) => !sealed.has(anchorId))
-}
-
-/**
- * The anchors placed in `current` since `base` — the same question `sessionAnchorIds` answers, asked
- * of two documents rather than a precomputed set, for callers holding the session's base document.
+ * The anchors placed in `current` since `base`: everything present that the base didn't carry.
+ * Derived rather than tallied as the user works, so undoing an anchor drops it from this list for
+ * free — there is no second record of what was placed to keep in step with the document.
  *
  * A session's base is named (`Draft.parent.base_version_id`) rather than inferred from whatever the
  * editor happened to mount with, which is what makes this survive a resume: a reload reseeds the
@@ -164,7 +148,8 @@ export function anchorsPlacedSince(
   base: string | EntryDocument,
   current: string | EntryDocument,
 ): string[] {
-  return sessionAnchorIds(new Set(anchorIdsIn(base)), current)
+  const sealed = new Set(anchorIdsIn(base))
+  return anchorIdsIn(current).filter((anchorId) => !sealed.has(anchorId))
 }
 
 /**

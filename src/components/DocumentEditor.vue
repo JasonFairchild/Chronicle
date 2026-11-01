@@ -15,13 +15,6 @@ export interface EditorChange extends ChangeSignals {
   /** Serialized ProseMirror steps for this change, in order. */
   steps: unknown[]
   /**
-   * Anchors this session has placed, in `anchor-mode` only. Derived by reading which of the
-   * document's current ids aren't sealed (`sessionAnchorIds`, `domain/anchors.ts`) rather than
-   * tallied as commands run, so undoing an anchor drops back out on its own — nothing here has to
-   * notice an undo and subtract it.
-   */
-  anchorIds?: string[]
-  /**
    * Pre-existing anchors whose covered text this session has disturbed so far, outside anchor
    * mode. Cumulative across the whole session: once an edit changes what an anchor covers, that
    * anchor stays flagged even if a later edit moves the surrounding text back (PRODUCT.md §4.5).
@@ -54,12 +47,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } fro
 
 import AnchorMenu from '@/components/AnchorMenu.vue'
 import { useMedia } from '@/composables/useMedia'
-import {
-  collectAnchors,
-  innermostAnchorAt,
-  pairableAnchorAt,
-  sessionAnchorIds as sessionAnchorIdsIn,
-} from '@/domain/anchors'
+import { collectAnchors, innermostAnchorAt, pairableAnchorAt } from '@/domain/anchors'
 import {
   contentDelta,
   type DocMark,
@@ -392,9 +380,6 @@ const editor = useEditor({
       // `AnchorInsertView`'s own `<input>`, never through this editor's clipboard handling.
       is_paste: transaction.getMeta('uiEvent') === 'paste',
       media_changed: !delta.sameMedia,
-      anchorIds: props.anchorMode
-        ? sessionAnchorIdsIn(sealedAnchorIdsOf(instance), document)
-        : undefined,
       affectedAnchorIds: props.anchorMode ? undefined : [...affectedAnchorIds],
     })
 

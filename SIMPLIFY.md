@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–2 done.
+Status: commits 0–3 done.
 
 ## Context
 
@@ -63,12 +63,18 @@ The domain and read side are lean: `marks`, `replay`, `markFrames`, `documentDif
   Each step is green and readable on its own. The dual reading lives two commits and is never a fallback for stored data: old local data with `anchorInsert` nodes is cleared, not tolerated (CLAUDE.md). Rejected: one commit, which would be the plan's largest diff by far.
 
 - **The guard is pure** (`editor/anchorGuard.ts`), judged per step against ranges as they stand before that step, and node-tested on a bare `EditorState`. CLAUDE.md's landmark "schema and the guarded, anchor-aware document commands live only in `extensions.ts` and `anchorCommands.ts`" gains `anchorGuard.ts`.
-- **The title leaves `EditorChange`.**
+- **The title is its own field, beside the editor, as the details are** (commit 3).
   - The problem: ENTRY_MODEL.md calls the title a plain field beside the document, but `handleTitleInput` emits a fake change with every signal false. Because that change's content already includes held scaffolding steps, they ride along with it, and `TraceRecorder.record` grew a step-less guard (3c75475) for it.
-  - The change: DocumentEditor keeps the field, inside its box above the toolbar, but reports the raw value as `update:title`. `isBlankDraft` and `normalizeTitle` already trim.
-  - In the store: `recordDetails` widens to `recordFields(sessionId, Partial<DraftFields>)`, the one way in for every field beside the document. That includes item 2's targets later.
+  - EntryComposer holds the title's `<input>` above the editor, as prominent as before, and reports the raw value. `isBlankDraft` and `normalizeTitle` already trim. While a save is in flight the input is disabled, as the editor is, rather than swapped for text; only a read-only draft shows it as text. DocumentEditor drops the title and is left with the document alone, plus an exposed `focus()` for Enter and Tab to hand over to.
+  - RelatedEntryComposer shows the parent's title itself, as static text above the parent's editor.
+  - In the session, title and details are one shallow `fields` value with one `handleFieldsChange`. In the store, `recordDetails` widens to `recordFields(sessionId, Partial<DraftFields>)`, the one way in for every field beside the document, including item 2's targets later. Since the session hands over plain data, the store's copy of `dates` and `entryDetailsOf` go.
   - The recorder's step-less guard goes: nothing sends a step-less change any more, so it fails CLAUDE.md's remove-the-line check.
-  - Rejected: moving the field into EntryComposer through a slot, which moves seven title tests per runner for no further gain.
+  - Rejected:
+    - keeping the field in DocumentEditor, reporting through `update:title`, which leaves the editor relaying a field that isn't its document;
+    - a header slot inside the editor's box, which keeps the relay as a slot prop;
+    - folding the title into EntryDetailsFields, which renders below the body and whose details §4.3 lists under the text;
+    - its own component, which only EntryComposer would use: every view that shows a title renders it its own way, and their shared text logic is `entryLabel`.
+- **The formatting toolbar is one Tab stop** (commit 4), by the APG toolbar pattern that AnchorMenu already follows: a roving tabindex, with arrow keys moving within it. It declares `role="toolbar"` today but makes every control a Tab stop. Once it costs one press, the title's Tab-skips-the-toolbar shortcut goes, and focus order is the same both ways. Enter still moves from the title into the body.
 - **The toolbar is its own component**, `EditorToolbar.vue`, as AnchorMenu is for anchor mode. Its `editor` prop is `@tiptap/vue-3`'s `Editor`, whose state is reactive; `@tiptap/core`'s is not. The same goes for AnchorMenu once it reads the anchor at the caret.
 - **Remove the Attachments list on an entry's page.** Images already show inline, where they were placed.
 - **One Dexie schema version.** Dexie diffs a lone declared version against the installed schema: `updateTablesAndIndexes` rebuilds the old schema, and `deleteRemovedTables` drops `draftSteps`. Keeping the number at 5 means an existing browser opens with no upgrade.
@@ -84,7 +90,7 @@ Order and dependencies:
 - 8 is the spike. 9–12 are item 4, in order, after 7.
 - 13 comes after 12.
 - 14–20 are independent.
-- FILE_SPECS.md commit 2 (the `useDraftSession` spec) comes after commits 3 and 5 here, and covers `handleTitleChange` and `bookmark`.
+- FILE_SPECS.md commit 2 (the `useDraftSession` spec) comes after commits 3 and 5 here, and covers `handleFieldsChange` and `bookmark`.
 - Commits here and in FILE_SPECS.md that touch EntryDetailView's pairs rebase on whichever lands first.
 - Last, once the rest are in: delete this file, and every citation of it in CHRONICLE_PLAN.md, CODE_REVIEW.md and FILE_SPECS.md.
 
@@ -110,21 +116,28 @@ Order and dependencies:
    - AnchorMenu already holds the `editor`, so it calls `markAnchor(editor, kind)` itself, as AnchorInsertView calls its commands. The `mark` emit and `handleAnchorMark` go.
    - Verify: DocumentEditor pair (anchor mode).
 
-3. **The title reports through `update:title`.**
-   - DocumentEditor: `handleTitleInput` emits the raw value. Its fake change, `emittedTitle` and `EditorChange.title` go, and `withHeldSteps` is inlined into its one caller. `EditorChange`'s doc stops citing `handleTitleInput`.
-   - Store and session: `DraftChange` loses `title`. `recordDetails` becomes `recordFields`. `useDraftSession` gains `handleTitleChange`, and `handleChange` stops setting `title`.
-   - Composers: EntryComposer binds the emit and clears its `error` on it. RelatedEntryComposer's parent editor binds nothing.
+3. **The title is its own field** (Decisions).
+   - DocumentEditor: the title field, its props, `handleTitleInput`, the fake change, `emittedTitle` and `EditorChange.title` go, and `withHeldSteps` is inlined into its one caller. `focusBody` becomes the exposed `focus()`.
+   - EntryComposer: the title's `<input>` above DocumentEditor, raw, disabled while saving, and text when read-only, or nothing when blank. Enter and Tab call the editor's `focus()`. The title and EntryDetailsFields share one `handleFieldsChange`, which clears `error`. RelatedEntryComposer renders `parentTitle` itself.
+   - Store and session: `DraftChange` loses `title`, and `recordDetails` becomes `recordFields`, with no copy. `useDraftSession`'s `title` and `details` become one shallow `fields`, with `handleFieldsChange`. `entryDetailsOf` goes.
    - `TraceRecorder.record` loses its step-less guard and that test.
-   - One behavior change, intended: a title-only revision of a document ending in a heading seals a null trace instead of one scaffolding-only edit.
+   - Behavior changes:
+     - Intended: a title-only revision of a document ending in a heading seals a null trace instead of one scaffolding-only edit.
+     - Newly, a change to a detail field clears why Save did nothing, as `error`'s doc already said.
+     - Newly, the title stays an input while saving, disabled, rather than turning into text.
    - Tests:
-     - DocumentEditor's title tests read the emit.
-     - `draftChangeTo` drops `title`.
-     - `draftsStore.test.ts`'s retitle case uses `recordFields`.
-     - EntryComposer gains "clears why it couldn't save once the title changes" (Title only, Save, then retype the title).
-   - Docs: ARCHITECTURE.md's write-path labels, then `npm run diagram` and look at both renders. draftsStore is reviewed (REVIEW.md, 2026-10-30), so the summary names the rename.
+     - DocumentEditor's title tests go.
+     - EntryComposer gains:
+       - the title reaching the draft as typed, spaces and all;
+       - Enter, and Tab, into the body;
+       - the title kept in place, disabled, while a save is in flight;
+       - "clears why it couldn't save once the title changes";
+       - in the unreadable-draft case, no Title textbox.
+     - `draftChangeTo` drops `title`, and `draftsStore.test.ts`'s retitle case uses `recordFields`.
+   - Docs: ARCHITECTURE.md's write-path labels and EntryComposer box, then `npm run diagram` and look at both renders. draftsStore is reviewed (REVIEW.md, 2026-10-30), so the summary names the rename.
    - Verify: `npm run test -- src/stores/draftsStore.test.ts src/domain/traceRecorder.test.ts`. It's a store change, so the full component suites (`npm run test:browser`, `npm run cy:run`).
 
-4. **Extract `EditorToolbar.vue`.**
+4. **Extract `EditorToolbar.vue`, as one Tab stop** (Decisions).
    - What moves: `ToolbarAction`, `toolbarGroups`, the text-style select, the link field with `openLink`/`applyLink`, the More menu with its outside-pointerdown listener, `clearFormatting`, and the image attach (`fileInput`, `handleFiles`, `attachError`, `useMedia().store`), each with its template. One root element.
    - DocumentEditor keeps `media.applyTo`.
    - The link input's hard-coded `id="editor-link-url"` takes `useId()`, so two text-mode editors on a page can't share it.
@@ -137,7 +150,13 @@ Order and dependencies:
      - `disabled` disables every control;
      - Add image stores the file and inserts its node.
    - DocumentEditor's pair keeps its image test for `media_changed` and the filled-in `src`, and its link test's `is_formatting`. "Leaves the caret in the document after a toolbar click" moves to the new pair.
-   - Verify: the EditorToolbar, DocumentEditor and EntryComposer pairs.
+   - The Tab stop:
+     - AnchorMenu's roving tabindex moves into a composable that both toolbars use.
+     - Check what Left and Right do in the text-style select before choosing its place in the roving order, since a closed `<select>` may take them itself.
+     - The title's Tab shortcut in EntryComposer goes; Enter stays.
+     - PRODUCT.md §4.1: "Enter or Tab moves into the body" becomes Enter alone, with the toolbar one Tab stop between them.
+     - Tests: the EditorToolbar pair proves one Tab stop and the arrow keys; EntryComposer's Tab case becomes a Tab that lands on the toolbar.
+   - Verify: the EditorToolbar, AnchorMenu, DocumentEditor and EntryComposer pairs.
 
 5. **A Bookmark button in the toolbar** (Decisions).
    - EditorToolbar gains "Bookmark this moment" (lucide `Bookmark`), in the same bar as bold and italic, just before More, and disabled with the rest while saving. A visible polite status beside it says "Bookmarked at 3:41 PM" (`formatTime`) until the next bookmark.

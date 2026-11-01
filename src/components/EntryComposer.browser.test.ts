@@ -1,8 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
+import { userEvent } from 'vitest/browser'
 
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
+import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
@@ -58,6 +60,7 @@ describe('EntryComposer (browser)', () => {
       )
       .toBeVisible()
     await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
+    await expect.element(screen.getByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
     await expect.element(screen.getByText(text)).toBeVisible()
     // Exact, or "Happened" would also match the "Time it happened" beside it.
     const happened = screen.getByLabelText('Happened', { exact: true })
@@ -68,6 +71,64 @@ describe('EntryComposer (browser)', () => {
 
     await screen.getByRole('button', { name: 'Discard' }).click()
     expect(onDiscard).toHaveBeenCalledOnce()
+  })
+
+  it('passes the title on as typed, spaces and all', async () => {
+    const session = beginSession()
+    const handleFieldsChange = vi.spyOn(session, 'handleFieldsChange')
+    const screen = renderComponent(EntryComposer, {
+      props: { session, label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn() },
+    })
+
+    const title = screen.getByRole('textbox', { name: 'Title' })
+    await title.fill('Lake Tahoe ')
+
+    expect(handleFieldsChange).toHaveBeenLastCalledWith({ title: 'Lake Tahoe ' })
+    await expect.element(title).toHaveValue('Lake Tahoe ')
+  })
+
+  it('keeps the title in place, disabled, while a save is in flight', async () => {
+    vi.spyOn(draftRepository, 'seal').mockReturnValue(new Promise<never>(() => {}))
+    const session = beginSession()
+    const screen = renderComponent(EntryComposer, {
+      props: { session, label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: () => session.save(), onDiscard: vi.fn() },
+    })
+
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+
+    const title = screen.getByRole('textbox', { name: 'Title' })
+    await expect.element(title).toBeDisabled()
+    await expect.element(title).toHaveValue('Lake Tahoe')
+  })
+
+  it('moves from the title into the body on Enter', async () => {
+    const onChange = vi.fn()
+    const screen = renderComponent(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn(), onChange },
+    })
+
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await userEvent.keyboard('{Enter}We drove up on Friday.')
+
+    expect(docToPlainText(onChange.mock.lastCall![0].content)).toBe('We drove up on Friday.')
+  })
+
+  it('moves from the title into the body on Tab, skipping the toolbar between them', async () => {
+    const onChange = vi.fn()
+    const screen = renderComponent(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn(), onChange },
+    })
+
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await userEvent.keyboard('{Tab}We drove up on Friday.')
+
+    expect(docToPlainText(onChange.mock.lastCall![0].content)).toBe('We drove up on Friday.')
   })
 
   it('says why an entry with nothing written can’t be saved, even with a title', async () => {
@@ -101,6 +162,33 @@ describe('EntryComposer (browser)', () => {
     await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
     await screen.getByRole('button', { name: 'Save entry' }).click()
     expect(onSave).toHaveBeenCalledOnce()
+  })
+
+  it('clears why it couldn’t save once the title changes', async () => {
+    const screen = renderComponent(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn() },
+    })
+
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+    await expect.element(screen.getByRole('alert')).toBeVisible()
+
+    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe, 1994')
+    await expect.element(screen.getByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('clears why it couldn’t save once a detail changes', async () => {
+    const screen = renderComponent(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn() },
+    })
+
+    await screen.getByRole('button', { name: 'Save entry' }).click()
+    await expect.element(screen.getByRole('alert')).toBeVisible()
+
+    await screen.getByLabelText('Where', { exact: true }).fill('Lake Tahoe')
+    await expect.element(screen.getByRole('alert')).not.toBeInTheDocument()
   })
 
   it('says why a save or a discard failed, until the next change', async () => {

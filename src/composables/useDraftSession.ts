@@ -7,8 +7,19 @@ import { currentVersionId } from '@/domain/reconstructEntryState'
 import { DraftConflictError } from '@/repositories/draftRepository'
 import { type BeginDraftInput, DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
-import { type DraftSnapshot, versionsRevisedBy } from '@/types/draft'
-import { emptyEntryDetails, type Entry, type EntryDetails, entryDetailsOf } from '@/types/entry'
+import {
+  type DraftFields,
+  type DraftSnapshot,
+  newDraftEntry,
+  versionsRevisedBy,
+} from '@/types/draft'
+import type { Entry } from '@/types/entry'
+
+/** A draft entry's fields beside its document. */
+function fieldsOf(entry: DraftSnapshot['entry']): DraftFields {
+  const { base_version_id: _base, content: _content, ...fields } = entry
+  return fields
+}
 
 /**
  * One single-document draft session: begin or resume it, mirror an editor's changes into it, seal
@@ -26,8 +37,11 @@ export function useDraftSession() {
 
   const sessionId = ref<string | null>(null)
   const content = ref('')
-  const title = ref<string | null>(null)
-  const details = ref<EntryDetails>(emptyEntryDetails())
+  /**
+   * Title and details. Shallow, and replaced whole on every change, so it stays plain data: the store
+   * clones what it's given on the way to disk, and a deep ref's proxies can't be cloned.
+   */
+  const fields = shallowRef<DraftFields>(fieldsOf(newDraftEntry()))
   const saving = ref(false)
   /**
    * The parent document as an anchor-mode session has provisionally marked it — `Draft.parent`,
@@ -119,8 +133,7 @@ export function useDraftSession() {
   function mirror(draft: DraftSnapshot): void {
     kind.value = draft.kind
     content.value = draft.entry.content
-    title.value = draft.entry.title
-    details.value = entryDetailsOf(draft.entry)
+    fields.value = fieldsOf(draft.entry)
     parentContent.value = draft.kind === 'new_related' ? draft.parent.content : ''
   }
 
@@ -220,8 +233,13 @@ export function useDraftSession() {
     if (!sessionId.value) return
 
     content.value = change.content
-    title.value = change.title
     drafts.recordChange(sessionId.value, change)
+  }
+
+  /** Mirrors fields set beside the document, such as the title or a date, into the session. */
+  function handleFieldsChange(next: Partial<DraftFields>): void {
+    fields.value = { ...fields.value, ...next }
+    if (sessionId.value) drafts.recordFields(sessionId.value, next)
   }
 
   /**
@@ -234,12 +252,6 @@ export function useDraftSession() {
 
     parentContent.value = change.content
     drafts.recordParentChange(sessionId.value, change)
-  }
-
-  /** Mirrors the details a form holds into the session, so a reload keeps them too. */
-  function handleDetailsChange(next: EntryDetails): void {
-    details.value = next
-    if (sessionId.value) drafts.recordDetails(sessionId.value, next)
   }
 
   /** Writes what the session holds now, rather than at its next change. */
@@ -323,11 +335,10 @@ export function useDraftSession() {
   function reset(): void {
     void abandon()
     content.value = ''
-    title.value = null
+    fields.value = fieldsOf(newDraftEntry())
     parentContent.value = ''
     parentTitle.value = null
     parentBaseContent.value = ''
-    details.value = emptyEntryDetails()
     saving.value = false
     kind.value = null
     stale.value = false
@@ -339,11 +350,10 @@ export function useDraftSession() {
   return reactive({
     sessionId,
     content,
-    title,
+    fields,
     parentContent,
     parentTitle,
     parentBaseContent,
-    details,
     saving,
     kind,
     staleNotice,
@@ -358,8 +368,8 @@ export function useDraftSession() {
     begin,
     resume,
     handleChange,
+    handleFieldsChange,
     handleParentChange,
-    handleDetailsChange,
     retryWrite,
     save,
     abandon,

@@ -9,6 +9,7 @@ import { DraftConflictError } from '@/repositories/draftRepository'
 import {
   type Draft,
   type DraftDocument,
+  type DraftFields,
   draftFieldsOf,
   type DraftSnapshot,
   newDraftEntry,
@@ -21,8 +22,6 @@ import {
   type AuthoringEvent,
   type ChangeSignals,
   type Entry,
-  type EntryDetails,
-  entryDetailsOf,
 } from '@/types/entry'
 import { newId, newTimestamp } from '@/utils/id'
 
@@ -39,8 +38,6 @@ export const DRAFT_FLUSH_MS = 300
 export interface DraftChange extends ChangeSignals {
   /** The document as it now stands. */
   content: string
-  /** The title field as it now stands, when the editor offers one; null when it doesn't. */
-  title: string | null
   /** Serialized ProseMirror steps for this change. The session never interprets them. */
   steps: unknown[]
 }
@@ -418,7 +415,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     const { draft } = entry
     replaceSnapshot(sessionId, entry, {
       ...draft,
-      entry: { ...draft.entry, content: change.content, title: change.title },
+      entry: { ...draft.entry, content: change.content },
     })
   }
 
@@ -442,17 +439,16 @@ export const useDraftsStore = defineStore('drafts', () => {
   }
 
   /**
-   * Records the details set alongside the words. Copied into plain objects rather than stored by
-   * reference: these arrive from a form's reactive state, and a Vue proxy does not survive the
-   * `structuredClone` on the way into the repository.
+   * Records fields set beside the document, such as the title or a date. Plain data only, never a
+   * Vue proxy: the draft is cloned on its way into the repository.
    */
-  function recordDetails(sessionId: string, details: EntryDetails): void {
+  function recordFields(sessionId: string, fields: Partial<DraftFields>): void {
     const entry = requireActive(sessionId)
     const { draft } = entry
 
     replaceSnapshot(sessionId, entry, {
       ...draft,
-      entry: { ...draft.entry, ...entryDetailsOf(details) },
+      entry: { ...draft.entry, ...fields },
     })
   }
 
@@ -620,7 +616,7 @@ export const useDraftsStore = defineStore('drafts', () => {
     resumeDraft,
     recordChange,
     recordParentChange,
-    recordDetails,
+    recordFields,
     addMark,
     flushAll,
     adoptChangesElsewhere,

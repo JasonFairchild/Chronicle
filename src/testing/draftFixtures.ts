@@ -6,13 +6,12 @@ import type { Entry } from '@/types/entry'
 const DRAFT_STARTED_AT = '2026-09-05T10:00:00.000Z'
 
 /**
- * One editor change to an untitled draft, leaving its body reading `body`: a placeholder step, and
- * every signal unset.
+ * One editor change, leaving a draft's body reading `body`: a placeholder step, and every signal
+ * unset.
  */
 export function draftChangeTo(body: string, change: Partial<DraftChange> = {}): DraftChange {
   return {
     content: textContent(body),
-    title: null,
     steps: [{ stepType: 'replace' }],
     inserted_text: '',
     removed_chars: 0,

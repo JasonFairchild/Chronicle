@@ -50,15 +50,6 @@ describe('TraceRecorder', () => {
     ])
   })
 
-  it('records nothing for a change with no steps, which never touched the document', () => {
-    const recorder = new TraceRecorder('session-no-steps', new Date().toISOString())
-
-    recorder.record({ steps: [{ n: 1 }], inserted_text: 'We drove up' })
-    recorder.record({ steps: [] }) // A retitling: the title is a field beside the document.
-
-    expect(recorder.events).toHaveLength(1)
-  })
-
   it('seals the session with its log', () => {
     const recorder = new TraceRecorder('session-seal', new Date().toISOString())
 

@@ -115,18 +115,14 @@ describe('useDraftsStore', () => {
       const sessionId = store.beginDraft({ kind: 'new_root' })
 
       store.recordChange(sessionId, draftChangeTo('We drove up on Friday'))
-      // What retitling looks like from here: the title is a plain field beside the editor, so it
-      // produces no steps.
-      store.recordChange(
-        sessionId,
-        draftChangeTo('We drove up on Friday', { title: 'Lake Tahoe', steps: [] }),
-      )
+      store.recordFields(sessionId, { title: 'Lake Tahoe' })
 
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
       const flushed = await draftRepository.getById(sessionId)
       expect(flushed?.entry.content).toBe(textContent('We drove up on Friday'))
       expect(flushed?.entry.title).toBe('Lake Tahoe')
+      expect(flushed?.entry.events).toHaveLength(1)
     })
 
     it('writes a draft again once it is typed in after being emptied', async () => {

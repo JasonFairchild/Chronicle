@@ -44,80 +44,6 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('reports the title beside the body it types into, as a separate field', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, {
-      props: { label: 'New entry', withTitle: true },
-      attrs: { onChange },
-    })
-
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
-    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
-
-    cy.get('@change').then((stub) => {
-      const change = lastChange(stub)
-      expect(change.title).to.equal('Lake Tahoe')
-      expect(docToPlainText(change.content)).to.equal('We drove up on Friday.')
-    })
-  })
-
-  it('moves from the title into the body on Enter, rather than submitting the form', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, {
-      props: { label: 'New entry', withTitle: true },
-      attrs: { onChange },
-    })
-
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
-    cy.focused().type('We drove up on Friday.')
-
-    cy.get('@change').then((stub) => {
-      const change = lastChange(stub)
-      expect(change.title).to.equal('Lake Tahoe')
-      expect(docToPlainText(change.content)).to.equal('We drove up on Friday.')
-    })
-  })
-
-  it('moves from the title into the body on Tab, skipping the toolbar between them', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, {
-      props: { label: 'New entry', withTitle: true },
-      attrs: { onChange },
-    })
-
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
-    cy.press(Cypress.Keyboard.Keys.TAB)
-    cy.focused().type('We drove up on Friday.')
-
-    cy.get('@change').then((stub) => {
-      const change = lastChange(stub)
-      expect(change.title).to.equal('Lake Tahoe')
-      expect(docToPlainText(change.content)).to.equal('We drove up on Friday.')
-    })
-  })
-
-  it('leaves the title untouched by the toolbar, which is the body’s alone', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, {
-      props: { label: 'New entry', withTitle: true },
-      attrs: { onChange },
-    })
-
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
-    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.{selectall}')
-    cy.findByRole('combobox', { name: 'Text style' }).select('Heading')
-
-    // The title is not in the editor's document at all, so a block-type command cannot reach it.
-    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
-    cy.get('@change').then((stub) => {
-      expect(lastChange(stub).title).to.equal('Lake Tahoe')
-    })
-  })
-
   it('reports a formatting change as formatting, since it inserts no words', () => {
     const onChange = cy.stub().as('change')
 
@@ -182,59 +108,15 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('reports a title change, but produces no steps for it', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, {
-      props: { label: 'New entry', withTitle: true },
-      attrs: { onChange },
-    })
-
-    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
-
-    cy.get('@change').then((stub) => {
-      const change = lastChange(stub)
-      expect(change.title).to.equal('Lake Tahoe')
-      // The title is a plain field beside the editor, so there is no step chain it belongs to. Its
-      // history is the value at each save point, read back from the entry's version chain.
-      expect(change.steps).to.deep.equal([])
-    })
-  })
-
-  it('shows a disabled entry’s title as text, not a textbox someone could try to type into', () => {
-    cy.mount(DocumentEditor, {
-      props: {
-        label: 'New entry',
-        withTitle: true,
-        disabled: true,
-        title: 'Lake Tahoe',
-        content: serializeDocument(plainTextDocument('We drove up on Friday.')),
-      },
-    })
-
-    cy.findByRole('textbox', { name: 'Title' }).should('not.exist')
-    cy.findByText('Lake Tahoe').should('be.visible')
-  })
-
-  it('omits the title entirely once it is not editable and was never given one', () => {
-    cy.mount(DocumentEditor, { props: { label: 'New entry', withTitle: true, disabled: true } })
-
-    cy.findByRole('textbox', { name: 'Title' }).should('not.exist')
-    cy.findByText('Lake Tahoe').should('not.exist')
-  })
-
   it('shows a document that is only displayed as text, with no toolbar or field to type in', () => {
     cy.mount(DocumentEditor, {
       props: {
         label: 'Entry content',
         displayOnly: true,
-        withTitle: true,
-        title: 'Lake Tahoe',
         content: serializeDocument(plainTextDocument('We drove up on Friday.')),
       },
     })
 
-    cy.findByText('Lake Tahoe').should('be.visible')
     cy.findByText('We drove up on Friday.').should('be.visible')
     cy.findByRole('toolbar').should('not.exist')
     cy.findByRole('textbox').should('not.exist')
@@ -263,7 +145,7 @@ describe('DocumentEditor', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, {
-      props: { label: 'New entry', withTitle: true, disabled: true },
+      props: { label: 'New entry', disabled: true },
       attrs: { onChange },
     }).then(({ wrapper }) => wrapper.setProps({ disabled: false }))
 
@@ -305,13 +187,10 @@ describe('DocumentEditor', () => {
     cy.mount(DocumentEditor, {
       props: {
         label: 'New entry',
-        withTitle: true,
-        title: 'Lake Tahoe',
         content: serializeDocument(plainTextDocument('We drove up on Friday.')),
       },
     })
 
-    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe')
     cy.findByText('We drove up on Friday.').should('be.visible')
   })
 

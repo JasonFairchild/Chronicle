@@ -22,7 +22,7 @@ flowchart TB
   subgraph WRITE["WRITE · a session, until it's sealed"]
     direction LR
     DE["<b>DocumentEditor.vue</b><br/>TipTap · extensions.ts · anchorCommands.ts<br/>anchor-mode guard · affected-anchor tracking"]
-    EC["<b>EntryComposer.vue</b><br/>DocumentEditor · EntryDetailsFields<br/>Discard · Save, or why it can't"]
+    EC["<b>EntryComposer.vue</b><br/>title · DocumentEditor<br/>EntryDetailsFields<br/>Discard · Save, or why it can't"]
     SES["<b>useDraftSession</b><br/>one per composer on a screen below:<br/>begin · resume · save · discard<br/>stale / elsewhere notices"]
     TAB["<b>App.vue · useTabLeave · useTabReturn · useTabCloseGuard</b>"]
     DS["<b>draftsStore</b><br/>ActiveSession = DraftSnapshot<br/>+ TraceRecorder · entry<br/>+ TraceRecorder · parent"]
@@ -70,10 +70,10 @@ flowchart TB
   end
 
   %% write path
-  DE ==>|"@change: EditorChange<br/>content · title · steps · signals"| EC
-  EC ==>|"handleChange<br/>handleDetailsChange"| SES
+  DE ==>|"@change: EditorChange<br/>content · steps · signals"| EC
+  EC ==>|"handleChange<br/>handleFieldsChange"| SES
   DE -->|"anchor mode, the parent:<br/>handleParentChange"| SES
-  SES ==>|"recordChange · recordParentChange<br/>recordDetails"| DS
+  SES ==>|"recordChange · recordParentChange<br/>recordFields"| DS
   TAB -->|"tab hidden: flushAll<br/>tab back: adoptChangesElsewhere<br/>tab closing: asks while writeFailed"| DS
   DS <-->|"save, throttled 300ms: upsert<br/>getById: resume · another tab's"| T_DRAFTS
   DS <-->|"save: append new events only<br/>getById: rejoin the log"| T_EVENTS

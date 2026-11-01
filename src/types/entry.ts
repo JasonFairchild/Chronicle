@@ -110,16 +110,6 @@ export function emptyEntryDetails(): EntryDetails {
   }
 }
 
-/** Copies the details off any carrier into plain objects, dates included, so the copy aliases nothing. */
-export function entryDetailsOf(source: EntryDetails): EntryDetails {
-  return {
-    dates: { ...source.dates },
-    location: source.location,
-    original_medium: source.original_medium,
-    original_medium_note: source.original_medium_note,
-  }
-}
-
 /** Shallow-copies the versioned fields off any carrier, so a version never aliases the row it came from. */
 export function versionedFieldsOf(source: VersionedFields): VersionedFields {
   return {

@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
+import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
@@ -49,6 +50,7 @@ describe('EntryComposer', () => {
         'This draft can’t be reopened because its start time is unreadable. Discard it and start again.',
       )
       cy.findByText('Lake Tahoe').should('be.visible')
+      cy.findByRole('textbox', { name: 'Title' }).should('not.exist')
       cy.findByText(text).should('be.visible')
       cy.findByLabelText('Happened').should('have.value', '1994-06-11').and('have.attr', 'readonly')
       cy.findByRole('textbox', { name: 'New entry' }).should('not.exist')
@@ -57,6 +59,68 @@ describe('EntryComposer', () => {
       cy.findByRole('button', { name: 'Discard' }).click()
       cy.get('@onDiscard').should('have.been.calledOnce')
     })
+  })
+
+  it('passes the title on as typed, spaces and all', () => {
+    const session = beginSession()
+    cy.spy(session, 'handleFieldsChange').as('handleFieldsChange')
+    cy.mount(EntryComposer, {
+      props: { session, label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy() },
+    })
+
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe ')
+
+    cy.get('@handleFieldsChange')
+      .its('lastCall.args.0')
+      .should('deep.equal', { title: 'Lake Tahoe ' })
+    cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe ')
+  })
+
+  it('keeps the title in place, disabled, while a save is in flight', () => {
+    cy.stub(draftRepository, 'seal').returns(new Promise<never>(() => {}))
+    const session = beginSession()
+    cy.mount(EntryComposer, {
+      props: { session, label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: () => session.save(), onDiscard: cy.spy() },
+    })
+
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
+    cy.findByRole('button', { name: 'Save entry' }).click()
+
+    cy.findByRole('textbox', { name: 'Title' })
+      .should('be.disabled')
+      .and('have.value', 'Lake Tahoe')
+  })
+
+  it('moves from the title into the body on Enter', () => {
+    cy.mount(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy(), onChange: cy.spy().as('change') },
+    })
+
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
+    cy.focused().type('We drove up on Friday.')
+
+    cy.get('@change')
+      .its('lastCall.args.0.content')
+      .then((content) => expect(docToPlainText(content)).to.equal('We drove up on Friday.'))
+  })
+
+  it('moves from the title into the body on Tab, skipping the toolbar between them', () => {
+    cy.mount(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy(), onChange: cy.spy().as('change') },
+    })
+
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.press(Cypress.Keyboard.Keys.TAB)
+    cy.focused().type('We drove up on Friday.')
+
+    cy.get('@change')
+      .its('lastCall.args.0.content')
+      .then((content) => expect(docToPlainText(content)).to.equal('We drove up on Friday.'))
   })
 
   it('says why an entry with nothing written can’t be saved, even with a title', () => {
@@ -84,6 +148,33 @@ describe('EntryComposer', () => {
     cy.findByRole('textbox', { name: 'New entry' }).type('We drove up on Friday.')
     cy.findByRole('button', { name: 'Save entry' }).click()
     cy.get('@onSave').should('have.been.calledOnce')
+  })
+
+  it('clears why it couldn’t save once the title changes', () => {
+    cy.mount(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy() },
+    })
+
+    cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
+    cy.findByRole('button', { name: 'Save entry' }).click()
+    cy.findByRole('alert').should('be.visible')
+
+    cy.findByRole('textbox', { name: 'Title' }).type(', 1994')
+    cy.findByRole('alert').should('not.exist')
+  })
+
+  it('clears why it couldn’t save once a detail changes', () => {
+    cy.mount(EntryComposer, {
+      props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy() },
+    })
+
+    cy.findByRole('button', { name: 'Save entry' }).click()
+    cy.findByRole('alert').should('be.visible')
+
+    cy.findByLabelText('Where').type('Lake Tahoe')
+    cy.findByRole('alert').should('not.exist')
   })
 
   it('says why a save or a discard failed, until the next change', () => {

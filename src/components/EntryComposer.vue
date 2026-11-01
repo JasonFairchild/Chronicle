@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
 
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import EntryDetailsFields from '@/components/EntryDetailsFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
+import type { DraftFields } from '@/types/draft'
 import { toErrorMessage } from '@/utils/format'
 
-// The one way an entry is written: its document, then its detail fields, then Discard and Save.
+// The one way an entry is written: its title, its document, then its detail fields, then Discard
+// and Save.
 //
 // Holds no session of its own, like `RelatedEntryComposer`: whoever mounts it begins or resumes the
 // session and decides what a save or a discard leads to.
@@ -29,8 +31,23 @@ const emit = defineEmits<{
   change: [change: EditorChange]
 }>()
 
+const titleId = useId()
 /** Why Save or Discard did nothing; cleared by any change. */
 const error = ref<string | null>(null)
+const documentEditor = ref<InstanceType<typeof DocumentEditor> | null>(null)
+
+function handleFieldsChange(next: Partial<DraftFields>): void {
+  error.value = null
+  props.session.handleFieldsChange(next)
+}
+
+/**
+ * Raw as typed, since a trimmed value would come back as the field's own and swallow the space
+ * before each next word. The seal trims it (`normalizeTitle`).
+ */
+function handleTitleInput(event: Event): void {
+  handleFieldsChange({ title: (event.target as HTMLInputElement).value })
+}
 
 function handleChange(change: EditorChange): void {
   error.value = null
@@ -70,12 +87,30 @@ async function handleSave(): Promise<void> {
       <p class="mt-1">Everything it holds is below, to copy before you discard it.</p>
     </div>
 
+    <div
+      v-if="!session.readOnly"
+      class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)] px-3 py-2"
+    >
+      <label :for="titleId" class="sr-only">Title</label>
+      <input
+        :id="titleId"
+        type="text"
+        class="w-full rounded bg-transparent text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
+        placeholder="Title"
+        :value="session.fields.title ?? ''"
+        :disabled="session.saving"
+        @input="handleTitleInput"
+        @keydown.enter.prevent="documentEditor?.focus()"
+        @keydown.tab.exact.prevent="documentEditor?.focus()"
+      />
+    </div>
+    <p v-else-if="session.fields.title" class="text-xl font-bold">{{ session.fields.title }}</p>
+
     <div>
       <DocumentEditor
         :key="session.editorKey"
+        ref="documentEditor"
         :label="label"
-        with-title
-        :title="session.title"
         :content="session.content"
         :disabled="session.saving"
         :display-only="session.readOnly"
@@ -116,10 +151,10 @@ async function handleSave(): Promise<void> {
     <slot v-if="!session.readOnly" name="notices" />
 
     <EntryDetailsFields
-      :model-value="session.details"
+      :model-value="session.fields"
       :disabled="session.saving"
       :readonly="session.readOnly"
-      @update:model-value="session.handleDetailsChange"
+      @update:model-value="handleFieldsChange"
     />
 
     <div class="flex justify-end gap-2">

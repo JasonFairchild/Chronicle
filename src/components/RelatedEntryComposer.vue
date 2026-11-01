@@ -36,14 +36,14 @@ defineProps<{
         changed from here.
       </p>
 
+      <p v-if="session.parentTitle" class="mb-2 text-xl font-bold">{{ session.parentTitle }}</p>
+
       <!-- A read-only draft shows the anchors it placed, for reading alongside its related entry. -->
       <DocumentEditor
         :key="session.editorKey"
         label="Entry being annotated"
         :anchor-mode="!session.readOnly"
         :display-only="session.readOnly"
-        with-title
-        :title="session.parentTitle"
         :content="session.parentContent"
         :anchor-base-content="session.parentBaseContent"
         :disabled="session.saving"

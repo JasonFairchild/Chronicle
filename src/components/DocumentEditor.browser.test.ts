@@ -59,52 +59,6 @@ describe('DocumentEditor (browser)', () => {
     expect(latest.is_formatting).toBe(false)
   })
 
-  it('reports the title beside the body it types into, as a separate field', async () => {
-    const screen = mountEditor({ withTitle: true })
-
-    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
-
-    const latest = changes[changes.length - 1]!
-    expect(latest.title).toBe('Lake Tahoe')
-    expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
-  })
-
-  it('moves from the title into the body on Enter, rather than submitting the form', async () => {
-    const screen = mountEditor({ withTitle: true })
-
-    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await userEvent.keyboard('{Enter}We drove up on Friday.')
-
-    const latest = changes[changes.length - 1]!
-    expect(latest.title).toBe('Lake Tahoe')
-    expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
-  })
-
-  it('moves from the title into the body on Tab, skipping the toolbar between them', async () => {
-    const screen = mountEditor({ withTitle: true })
-
-    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await userEvent.keyboard('{Tab}We drove up on Friday.')
-
-    const latest = changes[changes.length - 1]!
-    expect(latest.title).toBe('Lake Tahoe')
-    expect(docToPlainText(latest.content)).toBe('We drove up on Friday.')
-  })
-
-  it('leaves the title untouched by the toolbar, which is the body’s alone', async () => {
-    const screen = mountEditor({ withTitle: true })
-
-    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('We drove up on Friday.')
-    await userEvent.keyboard('{Control>}a{/Control}')
-    await screen.getByRole('combobox', { name: 'Text style' }).selectOptions('Heading')
-
-    // The title is not in the editor's document at all, so a block-type command cannot reach it.
-    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
-    expect(changes[changes.length - 1]!.title).toBe('Lake Tahoe')
-  })
-
   it('reports a formatting change as formatting, since it inserts no words', async () => {
     const screen = mountEditor()
 
@@ -157,18 +111,6 @@ describe('DocumentEditor (browser)', () => {
     expect(docToPlainText(latest.content).trim()).toBe('Worth remembering, and worth keeping')
   })
 
-  it('reports a title change, but produces no steps for it', async () => {
-    const screen = mountEditor({ withTitle: true })
-
-    await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-
-    const latest = changes[changes.length - 1]!
-    expect(latest.title).toBe('Lake Tahoe')
-    // The title is a plain field beside the editor, so there is no step chain it belongs to. Its
-    // history is the value at each save point, read back from the entry's version chain.
-    expect(latest.steps).toEqual([])
-  })
-
   it('turns a selection into a link at the address it is given', async () => {
     const screen = mountEditor()
 
@@ -187,7 +129,7 @@ describe('DocumentEditor (browser)', () => {
   it('reports nothing when only its editability changes', async () => {
     // Rendered directly rather than through the helper, so `rerender` knows these exact props.
     const screen = renderComponent(DocumentEditor, {
-      props: { label: 'New entry', withTitle: true, disabled: true },
+      props: { label: 'New entry', disabled: true },
       attrs: {
         onChange: (change: EditorChange) => {
           changes.push(change)
@@ -224,43 +166,18 @@ describe('DocumentEditor (browser)', () => {
 
   it('opens an existing document where its author left it', async () => {
     const screen = mountEditor({
-      withTitle: true,
-      title: 'Lake Tahoe',
       content: serializeDocument(plainTextDocument('We drove up on Friday.')),
     })
 
-    await expect.element(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Lake Tahoe')
     await expect.element(screen.getByText('We drove up on Friday.')).toBeVisible()
-  })
-
-  it('shows a disabled entry’s title as text, not a textbox someone could try to type into', async () => {
-    const screen = mountEditor({
-      withTitle: true,
-      disabled: true,
-      title: 'Lake Tahoe',
-      content: serializeDocument(plainTextDocument('We drove up on Friday.')),
-    })
-
-    expect(screen.getByRole('textbox', { name: 'Title' }).query()).toBeNull()
-    await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
-  })
-
-  it('omits the title entirely once it is not editable and was never given one', async () => {
-    const screen = mountEditor({ withTitle: true, disabled: true })
-
-    expect(screen.getByRole('textbox', { name: 'Title' }).query()).toBeNull()
-    expect(screen.getByText('Lake Tahoe').query()).toBeNull()
   })
 
   it('shows a document that is only displayed as text, with no toolbar or field to type in', async () => {
     const screen = mountEditor({
       displayOnly: true,
-      withTitle: true,
-      title: 'Lake Tahoe',
       content: serializeDocument(plainTextDocument('We drove up on Friday.')),
     })
 
-    await expect.element(screen.getByText('Lake Tahoe')).toBeVisible()
     await expect.element(screen.getByText('We drove up on Friday.')).toBeVisible()
     expect(screen.getByRole('toolbar').query()).toBeNull()
     expect(screen.getByRole('textbox').query()).toBeNull()

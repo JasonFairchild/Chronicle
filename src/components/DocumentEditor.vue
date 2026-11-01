@@ -4,14 +4,11 @@ import type { ChangeSignals } from '@/types/entry'
 /**
  * One editor change, as the draft buffer records it. `ChangeSignals` are required here, not
  * optional as they are on `AuthoringChange`: this is the one emit site actually producing them, so
- * the compiler should catch a call that forgets one when a signal is added, such as
- * `handleTitleInput` below.
+ * the compiler should catch a call that forgets one when a signal is added.
  */
 export interface EditorChange extends ChangeSignals {
   /** The document's body as it now stands, serialized the way an entry stores it. */
   content: string
-  /** The title field as it now stands, when this editor offers one; null when it doesn't. */
-  title: string | null
   /** Serialized ProseMirror steps for this change, in order. */
   steps: unknown[]
   /**
@@ -75,10 +72,6 @@ const props = withDefaults(
     label: string
     /** Seed content, serialized. Read once, on mount: the editor owns the document after that. */
     content?: string
-    /** Seed title, when `withTitle` is set. Read once, on mount, same as `content`. */
-    title?: string | null
-    /** Titled entries get the title field above the toolbar; untitled ones do not. */
-    withTitle?: boolean
     /** Editing paused, as while a save is in flight; the editor keeps its look. */
     disabled?: boolean
     /**
@@ -107,8 +100,6 @@ const props = withDefaults(
   }>(),
   {
     content: '',
-    title: null,
-    withTitle: false,
     disabled: false,
     displayOnly: false,
     anchorMode: false,
@@ -127,26 +118,10 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const attachError = ref<string | null>(null)
 
 /**
- * Seeded once, on mount: the editor owns the document after that, and the title field owns
- * `titleText` the same way.
- */
-const titleText = ref(props.withTitle ? (props.title ?? '') : '')
-
-/**
  * Captured once, so anchor mode can tell "placed this session" apart from "was already there" for
  * as long as this editor instance lives — the same document this editor opened, never reassigned.
  */
 const initialDocument = parseDocument(props.content)
-
-/**
- * The title half of every emitted change. Blank collapses to null the same way a stored title
- * always has, so an abandoned keystroke in the field doesn't outlive the session as an empty
- * string, and a session where the field isn't offered at all can never report one.
- */
-function emittedTitle(): string | null {
-  if (!props.withTitle) return null
-  return titleText.value.trim() || null
-}
 
 /**
  * The anchors already in the document, moved forward one transaction at a time — text mode only.
@@ -161,13 +136,6 @@ const affectedAnchorIds = new Set<string>()
 
 /** Scaffolding steps not yet reported; see `onUpdate`. */
 let heldSteps: unknown[] = []
-
-/** Puts held steps first, so the log still replays to the document this change reports. */
-function withHeldSteps(steps: unknown[]): unknown[] {
-  const all = [...heldSteps, ...steps]
-  heldSteps = []
-  return all
-}
 
 /**
  * Two presentations for anchor wording exist in the CSS below: inline (trailing the marked text, in
@@ -343,6 +311,9 @@ const editor = useEditor({
       heldSteps.push(...steps)
       return
     }
+    // Held steps go first, so the log still replays to the document this change reports.
+    const reported = [...heldSteps, ...steps]
+    heldSteps = []
 
     if (props.anchorMode) {
       const announcement = readAnchorAnnouncement(transaction)
@@ -364,8 +335,7 @@ const editor = useEditor({
 
     emit('change', {
       content: JSON.stringify(document),
-      title: emittedTitle(),
-      steps: withHeldSteps(steps),
+      steps: reported,
       // The wording box's whole text serves: the punctuation check reads only its last character.
       inserted_text: wordingText ?? insertedTextOf(transaction),
       removed_chars: removedTextOf(transaction),
@@ -397,51 +367,14 @@ watch(
 
 onBeforeUnmount(() => editor.value?.destroy())
 
-/**
- * A title change is content, but it is not an edit to the traced document: it produces no
- * ProseMirror steps, so the authoring trace records nothing of it (see
- * `TraceRecorder.record`). That is the deal the title is held to — a coarser record than the
- * body's, its history being the value at each save point rather than a keystroke-level chain.
- * Held scaffolding steps still ride along, since the content reported here already includes them.
- *
- * `affectedAnchorIds` is carried through unchanged rather than omitted: it is the session's running
- * total, and a reader that treats a missing list as an empty one would have this change clear
- * warnings the body's edits had earned.
- */
-function handleTitleInput(event: Event): void {
-  titleText.value = (event.target as HTMLInputElement).value
-
-  const instance = editor.value
-  if (!instance) return
-
-  emit('change', {
-    content: JSON.stringify(instance.getJSON() as EntryDocument),
-    title: emittedTitle(),
-    steps: withHeldSteps([]),
-    inserted_text: '',
-    removed_chars: 0,
-    is_formatting: false,
-    is_anchor_op: false,
-    is_paste: false,
-    media_changed: false,
-    affectedAnchorIds: [...affectedAnchorIds],
-  })
-}
-
-/**
- * Enter and Tab both leave the title for the body.
- *
- * Enter because a title is one line — and because every composer around this is a `<form>`, where
- * the browser's own answer to Enter in a text field is to submit it, saving the entry from the
- * title field. Tab because the toolbar sits between the two and belongs to the body: moving on from
- * a title means the body, not eleven formatting buttons. Neither is trapped — Shift+Tab from the
- * body reaches the toolbar, and Shift+Tab again the title.
- */
-function focusBody(): void {
+/** Puts the caret in the document, for a field beside it to hand over to, such as the title. */
+function focus(): void {
   // The view's own focus rather than `commands.focus()`, which defers to the next animation frame:
-  // a character typed within ~16ms of Tab would land back in the title field.
+  // a character typed within ~16ms would land back in the field that handed over.
   editor.value?.view.focus()
 }
+
+defineExpose({ focus })
 
 const linkOpen = ref(false)
 const linkUrl = ref('')
@@ -665,39 +598,6 @@ async function handleFiles(event: Event): Promise<void> {
       'rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-muted)]': !displayOnly,
     }"
   >
-    <!--
-      Its own field, above the toolbar rather than inside the editing surface, because none of the
-      toolbar applies to it: a title is one line of plain text, and an ordinary `<input>` is the one
-      thing no formatting command, markdown shortcut, or paste can turn into something else.
-
-      Editable only when the title can actually change here. A `readonly` input still announces as a
-      textbox and still looks like somewhere to type, which is the confusion the static branch below
-      exists to avoid — for a document being merely displayed, or anchor mode, where nothing in the
-      parent's document may change.
-    -->
-    <div
-      v-if="withTitle && !disabled && !displayOnly && !anchorMode"
-      class="border-b border-[var(--color-border)] px-3 py-2"
-    >
-      <label :for="`${id}-title`" class="sr-only">Title</label>
-      <input
-        :id="`${id}-title`"
-        type="text"
-        class="w-full rounded bg-transparent text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
-        placeholder="Title"
-        :value="titleText"
-        @input="handleTitleInput"
-        @keydown.enter.prevent="focusBody"
-        @keydown.tab.exact.prevent="focusBody"
-      />
-    </div>
-    <div
-      v-else-if="withTitle && titleText"
-      class="border-b border-[var(--color-border)] px-3 py-2 text-xl font-bold"
-    >
-      {{ titleText }}
-    </div>
-
     <AnchorMenu v-if="editor && anchorMode" :editor="editor" />
 
     <!-- Mounted with the mode rather than with its first message: a live region has to be in the

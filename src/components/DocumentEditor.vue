@@ -60,7 +60,6 @@ import {
   anchorSpans,
   editableAnchorRanges,
   mapAnchorSpans,
-  markAnchor,
   openAnchorInsert,
   openAnchorWording,
   readAnchorAnnouncement,
@@ -68,7 +67,6 @@ import {
   sealedAnchorIdsOf,
 } from '@/editor/anchorCommands'
 import { entryExtensions } from '@/editor/extensions'
-import type { AnchorKind } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 
 const props = withDefaults(
@@ -445,21 +443,6 @@ function focusBody(): void {
   editor.value?.view.focus()
 }
 
-/**
- * `AnchorMenu`'s one entry point back into the editor. The range is read explicitly rather than
- * left to `markAnchor`'s own default, because the button that calls this lives in a menu whose
- * own controls can hold focus — see `anchorCommands.ts`'s note on why the range is an explicit,
- * optional parameter there. Opens an existing anchor's wording box rather than marking a new one
- * when the selection overlaps one at all — see `markAnchor`.
- */
-function handleAnchorMark(kind: AnchorKind): void {
-  const instance = editor.value
-  if (!instance) return
-
-  const { from, to } = instance.state.selection
-  markAnchor(instance, kind, { from, to })
-}
-
 const linkOpen = ref(false)
 const linkUrl = ref('')
 
@@ -715,7 +698,7 @@ async function handleFiles(event: Event): Promise<void> {
       {{ titleText }}
     </div>
 
-    <AnchorMenu v-if="editor && anchorMode" :editor="editor" @mark="handleAnchorMark" />
+    <AnchorMenu v-if="editor && anchorMode" :editor="editor" />
 
     <!-- Mounted with the mode rather than with its first message: a live region has to be in the
          DOM before it updates to be announced reliably. -->

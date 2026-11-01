@@ -461,12 +461,8 @@ export function openAnchorWording(
  * there is no "layer a second opinion over it" gesture — write a new related entry instead. A
  * selection touching no anchor at all marks a fresh one, same as always.
  */
-export function markAnchor(
-  editor: Editor,
-  kind: AnchorKind,
-  range?: { from: number; to: number },
-): string | null {
-  const { from, to } = range ?? editor.state.selection
+export function markAnchor(editor: Editor, kind: AnchorKind): string | null {
+  const { from, to } = editor.state.selection
   if (from === to) return null
 
   const overlapping = anchorRangeOverlapping(allMarkExtents(editor), from, to)

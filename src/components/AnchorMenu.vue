@@ -18,14 +18,11 @@ import { TextSelection } from '@tiptap/pm/state'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import { ref } from 'vue'
 
+import { markAnchor } from '@/editor/anchorCommands'
 import type { AnchorKind } from '@/types/entry'
 
 defineProps<{
   editor: Editor
-}>()
-
-const emit = defineEmits<{
-  mark: [kind: AnchorKind]
 }>()
 
 /** Mirrors `DocumentEditor`'s `ToolbarAction` shape, so this reads like the rest of the file. */
@@ -97,7 +94,7 @@ function handleToolbarKeydown(event: KeyboardEvent): void {
         :title="`${action.label} (${action.shortcut})`"
         @mousedown.prevent
         @focus="activeIndex = index"
-        @click="emit('mark', action.kind)"
+        @click="markAnchor(editor, action.kind)"
       >
         <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />
       </button>

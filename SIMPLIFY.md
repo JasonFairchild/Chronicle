@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–1 done.
+Status: commits 0–2 done.
 
 ## Context
 

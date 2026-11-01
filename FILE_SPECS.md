@@ -23,7 +23,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - An owner test that is part session behavior and part wiring is shrunk to the wiring: which session method a control calls, what the owner renders from the session, where it navigates, and the order its own handler does things in.
   - A test is deleted outright only when what remains is already owned elsewhere.
   - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "A repository read doesn't retry").
-- **Editor files wait for Track B.** `extensions.ts`, `anchorCommands.ts`, `AnchorInsertView.vue` and `AnchorMenu.vue` get their specs as Track B reviews them, once CHRONICLE_PLAN.md items 3–4 are decided. Item 4 would replace the AnchorInsert node and its view. DocumentEditor's specs stay as they are until then. What was learned goes into Track B unit 2 in CODE_REVIEW.md (commit 18):
+- **Editor files wait for Track B.** `extensions.ts`, `anchorCommands.ts`, `AnchorInsertView.vue` and `AnchorMenu.vue` get their specs as Track B reviews them, once SIMPLIFY.md has reshaped them: it replaces the AnchorInsert node and its view. DocumentEditor's specs stay as they are until then. What was learned goes into Track B unit 2 in CODE_REVIEW.md (commit 18):
   - Browser project alone, with a bare TipTap `Editor`.
   - `anchorSpans`, `anchorMarkRanges` and `mapAnchorSpans` are pure and could run in node over `replayDocument`.
   - Unproven today: the guard actually rejecting an edit, `excludes: ''`, `Mod-Alt-s`, the live region, AnchorMenu's roving tabindex, and the box committing on focus-out.

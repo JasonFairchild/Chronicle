@@ -25,7 +25,7 @@ Further out, with no order yet: everything else in PRODUCT.md §5.
 
 ## Engineering maybes
 
-Not decided; one line each so they're not lost.
+Not decided; noted so they're not lost.
 
 - **Automatic backup to a folder the writer picks** (File System Access; Chromium desktop only), so clearing the browser can't take the only copy, and a synced folder gives an off-device one without Chronicle touching a network. Incremental by nature, since entries never change. Elsewhere it falls back to a downloaded file. Pairs with PRODUCT.md §5.8's export.
 - **A desktop shell** (Tauri, say) holding the SQLite database as an ordinary file, beside the PWA rather than replacing it.
@@ -35,4 +35,5 @@ Not decided; one line each so they're not lost.
 - **An end-to-end layer** (Playwright, whose pages in one context share IndexedDB) for what component specs fake: a real second tab, a real reload, the browser's own `pagehide`. Check Cypress's multi-tab support when this starts.
 - **A Vitest Browser Mode vs Cypress write-up**, the reason every spec is mirrored. Notes so far: `.claude/skills/write-tests/mechanics.md`.
 - **`documentsAt` and `buildFrames` taking a base and events rather than a `ReplayLog`**, now that a trace doesn't carry its base: the interface goes, and so does building one just to call them (`markSetsStore.ts`). Most of the cost is the replay and markFrames specs' `record` helpers, which return one, so do it when those specs are next simplified.
+- **Mark sets replaced by filter presets.** A writing history is one continuous chain, and marks are only ways of cutting it, which `deriveMarks` already reads from the immutable log under any policy. So store the policy, not the frames. A writer likely settles on a few readings they like, so these would be global presets to pick between, perhaps with a per-entry choice. This is the user-facing tuning PRODUCT.md §6 ("Writing history") leaves open, and it would replace "retuning makes a new set beside the old one". Frames are then rebuilt in memory when the history opens or a filter changes. A filter re-derives rather than hiding rows: merging and deletion runs move with the policy, and each frame's `changes` are measured from the previous mark shown. That's `buildFrames`, measured at 111 ms for 31.5k events and 696 marks (AUTHORING.md, "Mark sets"). Gains: the mark-set table, repository, adapters and contract suite go, leaving three repositories, and a draft in progress plays through the same path (PRODUCT.md §6, the history view on a draft). Loses: opening a long history replays it rather than reading one row. A cache of built frames keyed by entry and policy, in memory or in browser storage that may be evicted freely, could hide that without being a store anything depends on. Decide before the history view is planned.
 - **`contentDelta` walks the whole document several times per keystroke** (`DocumentEditor.vue`'s `onUpdate`). Fine today.

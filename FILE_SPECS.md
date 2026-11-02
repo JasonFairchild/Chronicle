@@ -102,7 +102,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - shows no notice for a resumed draft another tab had already changed
      - `canSave` is false for a title alone or blank words
      - field changes (`handleFieldsChange`: title and details alike) and parent changes are recorded, and nothing is recorded with no session open
-     - a bookmark reaches `drafts.addMark` (SIMPLIFY.md commit 5)
+     - a bookmark reaches `drafts.addMark` and sets `bookmarkedAt`, which the next session opened, a reload from another tab, and `reset` each clear (SIMPLIFY.md commit 5)
      - abandon keeps what reached disk; reset clears everything for the next entry
    - Verify: the new spec.
 

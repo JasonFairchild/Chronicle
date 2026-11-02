@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { Bookmark } from '@lucide/vue'
 import { ref, useId } from 'vue'
 
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import EntryDetailsFields from '@/components/EntryDetailsFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 import type { DraftFields } from '@/types/draft'
-import { toErrorMessage } from '@/utils/format'
+import { formatTime, toErrorMessage } from '@/utils/format'
 
 // The one way an entry is written: its title, its document, then its detail fields, then Discard
 // and Save.
@@ -143,9 +144,34 @@ async function handleSave(): Promise<void> {
         Try again
       </button>
     </div>
-    <p v-else-if="!session.readOnly" class="text-xs text-[var(--color-text-muted)]">
-      Saved as a draft while you write. Nothing is added to your record until you save it.
-    </p>
+    <div
+      v-else-if="!session.readOnly"
+      class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-muted)]"
+    >
+      <p>
+        Saved as a draft while you write, writing history and all. Nothing is added to your record
+        until you save it.
+      </p>
+      <!-- `mousedown.prevent` keeps the caret where it was, as the toolbar's buttons do. -->
+      <button
+        type="button"
+        class="btn-secondary inline-flex items-center gap-1 px-2 py-1"
+        title="Marks this point in the draft’s writing history"
+        :disabled="session.saving"
+        @mousedown.prevent
+        @click="session.bookmark()"
+      >
+        <Bookmark class="h-3.5 w-3.5" aria-hidden="true" />
+        Bookmark this moment
+      </button>
+      <!-- Empty until the first bookmark: a live region has to be in the DOM before it updates to
+           be announced reliably. -->
+      <p role="status">
+        <template v-if="session.bookmarkedAt">
+          Bookmarked at {{ formatTime(session.bookmarkedAt) }}
+        </template>
+      </p>
+    </div>
 
     <slot v-if="!session.readOnly" name="notices" />
 

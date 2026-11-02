@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–4 done.
+Status: commits 0–5 done.
 
 ## Context
 
@@ -51,7 +51,9 @@ The domain and read side are lean: `marks`, `replay`, `markFrames`, `documentDif
   To propose wording with no passage, place the caret anywhere and type, as now. Screen readers hear the wording as part of the document, and the live region still announces placing, switching and removing.
 
 - **The title is a plain field per version, with no steps and no writing history.** ENTRY_MODEL.md already says this: edited in an `<input>`, "absent from the authoring trace", "folded through the version chain like the dates". The draft holds its latest value, and sealing copies it, whole, into the new version. Commit 3 makes the code match. Today each title keystroke travels as a step-less document change, and after commit 3 it goes straight into the draft's fields.
-- **A Bookmark button in the toolbar** (commit 5). `draftsStore.addMark`, the trace's `manual` event and `deriveMarks`' top-priority `manual` reason are all built, but nothing in the UI calls them. A bookmark shows nowhere until the history view (§5.1), but it's recorded from now on.
+- **A Bookmark button in EntryComposer** (commit 5). `draftsStore.addMark`, the trace's `manual` event and `deriveMarks`' top-priority `manual` reason are all built, but nothing in the UI calls them. A bookmark shows nowhere until the history view (§5.1), but it's recorded from now on.
+  - It sits on the draft's "Saved as a draft" line, not in the toolbar: it acts on the draft's trace, not the document, and the toolbar's every action is a command on its editor. In the toolbar, DocumentEditor would relay something that isn't its document, which is what commit 3 takes the title out of.
+  - Rejected: a marker in the text, since a bookmark is a moment of the whole document rather than a place in it, and a position would vanish on reload unless `ManualEvent` stored one.
 - **AnchorMenu is the one control surface.** Over a selection it offers Highlight and Strike, as now. With the caret on an anchor this session placed, it offers Highlight/Strike pressed for that anchor's kind (absent for a bare insertion), plus Remove. Ctrl+Alt+H/S switch the kind from the caret.
 - **Sealed wording, in any editor, can be removed only whole.** That is today's rule for the atom: a revision can't type into it, but a deletion that covers it goes through and warns. §5.4 later locks passage and wording together.
 - **The interlinear presentation stays parked.** The wording mark renders the same `<ins class="chronicle-anchor-insert"><span class="chronicle-anchor-wording">` shape, so the parked CSS keeps applying. Only its `.chronicle-anchor-insert-box` selector becomes the open-wording decoration's class. If it's ever revived, wording would show raised only while the caret is elsewhere, since typing into absolutely positioned text is unreliable.
@@ -158,15 +160,12 @@ Order and dependencies:
      - Tests: the EditorToolbar pair proves one Tab stop and the arrow keys; EntryComposer's Tab case becomes a Tab that lands on the toolbar.
    - Verify: the EditorToolbar, AnchorMenu, DocumentEditor and EntryComposer pairs.
 
-5. **A Bookmark button in the toolbar** (Decisions).
-   - EditorToolbar gains "Bookmark this moment" (lucide `Bookmark`), in the same bar as bold and italic, just before More, and disabled with the rest while saving. A visible polite status beside it says "Bookmarked at 3:41 PM" (`formatTime`) until the next bookmark.
-   - Wiring: the toolbar emits `bookmark`, DocumentEditor passes it on, EntryComposer calls `session.bookmark()`, and `useDraftSession.bookmark` calls `drafts.addMark`, which is already built and tested. So it works wherever a composer's editor shows the toolbar: a new entry, a revision, and a related entry's own prose.
-   - Tests:
-     - EditorToolbar pair: Bookmark emits `bookmark` and shows its status.
-     - DocumentEditor pair: a bookmark is passed on.
-     - EntryComposer pair: a bookmark reaches `session.bookmark`, using a stand-in session as its notice specs do.
+5. **A Bookmark button in EntryComposer** (Decisions).
+   - EntryComposer's "Saved as a draft" line gains "Bookmark this moment" (lucide `Bookmark`), disabled while saving, keeping the caret where it was. A visible polite status beside it says "Bookmarked at 3:41 PM" (`formatTime`) until the next bookmark. The time alone: it lasts only for one page visit, so it's from another day only in a tab left open past midnight. The line's sentence says the draft keeps its writing history, and the button's tooltip says the bookmark marks a point in it.
+   - Wiring: the button calls `session.bookmark()`, which calls `drafts.addMark`, already built and tested, and sets the session's `bookmarkedAt`. That lives on the session, cleared in `openAs`, because NewEntryView's Discard begins the next session in the same tick, so the composer isn't remounted and a ref of its own would outlive its draft. It works in every composer: a new entry, a revision, a connection, and a related entry's own prose.
+   - Tests: the EntryComposer pair. A bookmark reaches `session.bookmark` and shows its time, and the in-flight save test finds Bookmark disabled.
    - Docs: PRODUCT.md §4.1 gains the button, and that nothing shows a bookmark until the history view (§5.1). AUTHORING.md's "a `manual` event is a bookmark the writer asked for" names the button.
-   - Verify: the EditorToolbar, DocumentEditor and EntryComposer pairs.
+   - Verify: the EntryComposer pair, and the EditorToolbar and DocumentEditor pairs unchanged.
 
 6. **One document walk.** `walk` is defined twice, verbatim. Export it from `entryDocument.ts`, which `anchors.ts` already imports from.
    - Verify: `npm run test -- src/domain/`.

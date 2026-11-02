@@ -14,6 +14,7 @@ import {
   versionsRevisedBy,
 } from '@/types/draft'
 import type { Entry } from '@/types/entry'
+import { newTimestamp } from '@/utils/id'
 
 /** A draft entry's fields beside its document. */
 function fieldsOf(entry: DraftSnapshot['entry']): DraftFields {
@@ -92,6 +93,8 @@ export function useDraftSession() {
 
   /** Said when another tab changed this draft in a way the writer should know about. */
   const elsewhereNotice = ref<string | null>(null)
+  /** When this session was last bookmarked, said until the next: nothing else shows one yet. */
+  const bookmarkedAt = ref<string | null>(null)
   /** What this tab held when another tab's version replaced it, for the writer to copy from. */
   const unsaved = ref<{ title: string | null; text: string } | null>(null)
   /** Whether the session's last write failed, leaving what it holds since in this tab alone. */
@@ -140,6 +143,7 @@ export function useDraftSession() {
   /** Takes a draft as this session's from here on, with the last one's notices cleared. */
   function openAs(id: string): void {
     elsewhereNotice.value = null
+    bookmarkedAt.value = null
     unsaved.value = null
     unreadable.value = null
     sessionId.value = id
@@ -221,6 +225,7 @@ export function useDraftSession() {
 
       mirror(drafts.currentDraft(id)!)
       reloads.value += 1
+      bookmarkedAt.value = null // The version shown may not hold the bookmark it would claim.
       elsewhereNotice.value = unsaved.value
         ? 'This draft was changed elsewhere at the same time, and now shows what was saved ' +
           'there. What you had here is below.'
@@ -252,6 +257,14 @@ export function useDraftSession() {
 
     parentContent.value = change.content
     drafts.recordParentChange(sessionId.value, change)
+  }
+
+  /** Marks this moment of the writing as one the writer asked to come back to. */
+  function bookmark(): void {
+    if (!sessionId.value) return
+
+    drafts.addMark(sessionId.value)
+    bookmarkedAt.value = newTimestamp()
   }
 
   /** Writes what the session holds now, rather than at its next change. */
@@ -343,6 +356,7 @@ export function useDraftSession() {
     kind.value = null
     stale.value = false
     elsewhereNotice.value = null
+    bookmarkedAt.value = null
     unsaved.value = null
     unreadable.value = null
   }
@@ -359,6 +373,7 @@ export function useDraftSession() {
     staleNotice,
     editorKey,
     elsewhereNotice,
+    bookmarkedAt,
     unsaved,
     writeFailed,
     isOpen,
@@ -370,6 +385,7 @@ export function useDraftSession() {
     handleChange,
     handleFieldsChange,
     handleParentChange,
+    bookmark,
     retryWrite,
     save,
     abandon,

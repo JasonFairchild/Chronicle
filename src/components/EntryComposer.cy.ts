@@ -7,6 +7,7 @@ import { draftRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
 import { emptyEntryDates } from '@/types/entry'
+import { formatTime } from '@/utils/format'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -55,6 +56,7 @@ describe('EntryComposer', () => {
       cy.findByLabelText('Happened').should('have.value', '1994-06-11').and('have.attr', 'readonly')
       cy.findByRole('textbox', { name: 'New entry' }).should('not.exist')
       cy.findByRole('button', { name: 'Save entry' }).should('not.exist')
+      cy.findByRole('button', { name: 'Bookmark this moment' }).should('not.exist')
 
       cy.findByRole('button', { name: 'Discard' }).click()
       cy.get('@onDiscard').should('have.been.calledOnce')
@@ -77,7 +79,7 @@ describe('EntryComposer', () => {
     cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'Lake Tahoe ')
   })
 
-  it('keeps the title in place, disabled, while a save is in flight', () => {
+  it('keeps the title in place, disabled, and Bookmark disabled, while a save is in flight', () => {
     cy.stub(draftRepository, 'seal').returns(new Promise<never>(() => {}))
     const session = beginSession()
     cy.mount(EntryComposer, {
@@ -92,6 +94,25 @@ describe('EntryComposer', () => {
     cy.findByRole('textbox', { name: 'Title' })
       .should('be.disabled')
       .and('have.value', 'Lake Tahoe')
+    cy.findByRole('button', { name: 'Bookmark this moment' }).should('be.disabled')
+  })
+
+  it('bookmarks this moment of the draft, and says when', () => {
+    const at = new Date(2026, 10, 2, 15, 41)
+    cy.clock(at, ['Date'])
+    const session = beginSession()
+    cy.spy(session, 'bookmark').as('bookmark')
+    cy.mount(EntryComposer, {
+      props: { session, label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy() },
+    })
+
+    cy.findByRole('button', { name: 'Bookmark this moment' }).click()
+
+    cy.get('@bookmark').should('have.been.calledOnce')
+    cy.findByRole('status')
+      .should('be.visible')
+      .and('contain.text', `Bookmarked at ${formatTime(at.toISOString())}`)
   })
 
   it('moves from the title into the body on Enter', () => {

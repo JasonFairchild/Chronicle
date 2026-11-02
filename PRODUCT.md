@@ -51,6 +51,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
   - **When and where:** when the thing **happened**, and **where**.
   - **Written before, somewhere else:** when it was **originally written**, and what it was **written in** ("paper journal"), with a note ("blue Moleskine, 2014–2016").
 - The toolbar offers undo/redo, two heading levels, bold, italic, underline, strikethrough, bulleted and numbered lists, quotes, links, clear formatting, and adding an image. All of it works from the keyboard too, including markdown shortcuts such as `## ` and `- `.
+- **Bookmark this moment**, on the line saying the draft is saved as you write, marks where the writing stands, for the history view (§5.1) to stop at, wherever the caret is. Beside it, "Bookmarked at 3:41 PM" stays until the next one; nothing else shows a bookmark until that view exists. It belongs to the draft rather than the formatting, so it isn't in the toolbar.
 - Strikethrough here is ordinary formatting, like bold. A strike delivered by a related entry (§4.4) is a different gesture with its own presentation (§6, "Making anchor ops unmistakable").
 - **Everything typed is saved as a draft continuously**, within a fraction of a second.
 - Nothing appears on the timeline until **Save entry** is pressed. No autosave into history, no idle timeout.
@@ -217,7 +218,8 @@ Chronicle is built for a desktop window first. Fitting narrow screens happens la
 
 - **Scrubbing backward** could fade later marks out after a slight delay rather than cutting them.
 - **Zooming in on the scrubber:** between two bookmarks, replay one keystroke at a time. More curiosity than reading tool, but the capture already supports it.
-- Tuning how often moments get bookmarked, re-reading an old session under new rules, or turning capture off — and whether any of that is a user-facing setting at all.
+- Tuning how often moments get bookmarked, re-reading an old session under new rules, or turning capture off — and whether any of that is a user-facing setting at all. Most likely as a few saved presets for which kinds of moment to stop at, picked between while scrubbing (CHRONICLE_PLAN.md, "Mark sets replaced by filter presets").
+- **The history view on a draft in progress:** §5.1's scrubber in a collapsible section of the composer, playing the session's live log, for the writer curious how writing history is made. Marks are derived from the log, so it can stop at them before anything is saved. Bookmark this moment would move into its header, visible even while it's collapsed. Beyond §5.1 it needs a live feed of the log and a replay that keeps up with typing.
 - **Sittings:** a draft picked up again later records that it was, so the history view can show how many sittings a piece took. Without it, a return is only a long pause, indistinguishable from a tab left open.
 
 ### Drafts

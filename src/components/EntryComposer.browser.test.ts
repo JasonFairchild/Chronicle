@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
 import EntryComposer from '@/components/EntryComposer.vue'
@@ -10,6 +10,7 @@ import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { emptyEntryDates } from '@/types/entry'
+import { formatTime } from '@/utils/format'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -68,6 +69,9 @@ describe('EntryComposer (browser)', () => {
     await expect.element(happened).toHaveAttribute('readonly')
     await expect.element(screen.getByRole('textbox', { name: 'New entry' })).not.toBeInTheDocument()
     await expect.element(screen.getByRole('button', { name: 'Save entry' })).not.toBeInTheDocument()
+    await expect
+      .element(screen.getByRole('button', { name: 'Bookmark this moment' }))
+      .not.toBeInTheDocument()
 
     await screen.getByRole('button', { name: 'Discard' }).click()
     expect(onDiscard).toHaveBeenCalledOnce()
@@ -88,7 +92,7 @@ describe('EntryComposer (browser)', () => {
     await expect.element(title).toHaveValue('Lake Tahoe ')
   })
 
-  it('keeps the title in place, disabled, while a save is in flight', async () => {
+  it('keeps the title in place, disabled, and Bookmark disabled, while a save is in flight', async () => {
     vi.spyOn(draftRepository, 'seal').mockReturnValue(new Promise<never>(() => {}))
     const session = beginSession()
     const screen = renderComponent(EntryComposer, {
@@ -103,6 +107,35 @@ describe('EntryComposer (browser)', () => {
     const title = screen.getByRole('textbox', { name: 'Title' })
     await expect.element(title).toBeDisabled()
     await expect.element(title).toHaveValue('Lake Tahoe')
+    await expect
+      .element(screen.getByRole('button', { name: 'Bookmark this moment' }))
+      .toBeDisabled()
+  })
+
+  it('bookmarks this moment of the draft, and says when', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    const at = new Date(2026, 10, 2, 15, 41)
+    vi.setSystemTime(at)
+    const session = beginSession()
+    const bookmark = vi.spyOn(session, 'bookmark')
+    const screen = renderComponent(EntryComposer, {
+      props: { session, label: 'New entry', saveLabel: 'Save entry' },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn() },
+    })
+
+    await screen.getByRole('button', { name: 'Bookmark this moment' }).click()
+
+    expect(bookmark).toHaveBeenCalledOnce()
+    await expect
+      .element(
+        screen
+          .getByRole('status')
+          .and(screen.getByText(`Bookmarked at ${formatTime(at.toISOString())}`, { exact: true })),
+      )
+      .toBeVisible()
   })
 
   it('moves from the title into the body on Enter', async () => {

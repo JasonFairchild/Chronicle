@@ -9,6 +9,7 @@ How-to that TESTING.md's rules leave to the writer: where the two runners differ
 - **Seeding.** Inline `await` in Vitest; one `cy.then(async …)` yielding what the test uses in Cypress, not nested chains.
 - **Exact text.** `toHaveTextContent` is partial; `have.text` is exact, down to the space Vue keeps around static template text (it trims around `{{ }}`), so static text takes `contain.text`. Vitest's exact form is a locator intersection asserted visible: `getByRole('alert').and(getByText(text, { exact: true }))`.
 - **Another tab.** A second Pinia over the same database. In Cypress, set it active in a `cy.then` before `cy.mount`, which installs its own. Returning to the tab is `focus` on `window` (`cy.window()` in Cypress).
+- **Enter on a button.** `cy.press(Enter)` doesn't activate a focused button; click it instead.
 - **Component internals.** `cy.mount` yields the Vue Test Utils wrapper (`findComponent`, `props`, `setProps`); `vitest-browser-vue`'s `render` exposes only `rerender` and `emitted`.
 
 ## Setup
@@ -17,7 +18,3 @@ How-to that TESTING.md's rules leave to the writer: where the two runners differ
 - **A persistence test cleans up after itself.** The adapter specs' persistence tests open storage under a name of their own, to reopen it, so the global hook never sees it. Delete it by name with `onTestFinished` where it's created, not at the end of the body, where a failed assertion skips it.
 - **Read a router's address before unmounting the app.** When its last app unmounts, vue-router returns it to `/`, so a reload simulated by remounting at `currentRoute.fullPath` lands at the start instead.
 - **Fail a write by stubbing the `@/repositories` binding before mounting** — `cy.stub(entryRepository, 'create').rejects(…)`, `vi.spyOn(…).mockRejectedValue(…)`. The global `beforeEach` has already put that test's instance there.
-
-## Waiting on the editor
-
-A disabled editor shows its title as text, so "no Title textbox" passes the moment a save starts. To wait for a save to finish, wait on the body textbox closing or emptying.

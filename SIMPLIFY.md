@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–3 done.
+Status: commits 0–4 done.
 
 ## Context
 
@@ -255,7 +255,7 @@ Order and dependencies:
       - CHRONICLE_PLAN.md: the anchor wording entry goes. Its "give the walk a way to include wording" moves under search, which has no caller yet.
       - CLAUDE.md: the landmark gains `anchorGuard.ts`.
       - ARCHITECTURE.md: the DocumentEditor box.
-      - CODE_REVIEW.md: Track B's file lists (AnchorInsertView gone; EditorToolbar, `changeSignals`, `anchorGuard` added).
+      - CODE_REVIEW.md: Track B's file lists (AnchorInsertView gone; EditorToolbar, `useRovingTabindex`, `changeSignals`, `anchorGuard` added).
       - FILE_SPECS.md: its "Editor files wait for Track B" bullet.
     - Verify: full component suites.
 
@@ -318,7 +318,7 @@ Order and dependencies:
 
 `npm run drive` (the run-app skill), in one flow:
 
-- **New entry.** Type a title, Tab into the body, type, bold a word, and add a link. Open More and Escape out of it. Press Bookmark: "Bookmarked at …" shows. Reload: the draft resumes with its title and formatting. Save.
+- **New entry.** Type a title, Tab onto the toolbar, arrow within it, Tab into the body, type, bold a word, and add a link. Open More and Escape out of it, then attach an image through More → Add image. Press Bookmark: "Bookmarked at …" shows. Reload: the draft resumes with its title and formatting. Save.
 - **Related entry, on that entry.**
   1. Highlight a passage. The caret waits beside an "Add wording…" placeholder. Type wording, Backspace a letter, and undo.
   2. Click elsewhere, then click the wording: the caret returns and the menu offers Highlight/Strike/Remove. Switch it to Strike with Ctrl+Alt+S.

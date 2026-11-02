@@ -18,6 +18,7 @@ import { TextSelection } from '@tiptap/pm/state'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import { ref } from 'vue'
 
+import { useRovingTabindex } from '@/composables/useRovingTabindex'
 import { markAnchor } from '@/editor/anchorCommands'
 import type { AnchorKind } from '@/types/entry'
 
@@ -25,7 +26,7 @@ defineProps<{
   editor: Editor
 }>()
 
-/** Mirrors `DocumentEditor`'s `ToolbarAction` shape, so this reads like the rest of the file. */
+/** Mirrors `EditorToolbar`'s `ToolbarAction` shape. */
 interface AnchorMenuAction {
   label: string
   icon: LucideIcon
@@ -41,59 +42,41 @@ const actions: AnchorMenuAction[] = [
 /** True while a control inside the menu holds focus, so tabbing into it doesn't hide the menu. */
 const menuFocused = ref(false)
 
+const toolbar = ref<HTMLElement | null>(null)
+const { handleFocusin, handleKeydown } = useRovingTabindex(toolbar)
+
 function shouldShow({ state }: { state: { selection: Editor['state']['selection'] } }): boolean {
   if (menuFocused.value) return true
   return !state.selection.empty && state.selection instanceof TextSelection
 }
 
-// Roving tabindex: one Tab stop for the whole toolbar, arrow keys move within it. Worth doing
-// properly rather than leaving each button independently tabbable, even with only two controls here.
-const buttons = ref<(HTMLButtonElement | null)[]>([])
-const activeIndex = ref(0)
-
-function setButtonRef(el: unknown, index: number): void {
-  buttons.value[index] = el instanceof HTMLButtonElement ? el : null
-}
-
-function focusIndex(index: number): void {
-  const count = actions.length
-  activeIndex.value = (index + count) % count
-  buttons.value[activeIndex.value]?.focus()
-}
-
-function handleToolbarKeydown(event: KeyboardEvent): void {
-  if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    focusIndex(activeIndex.value + 1)
-  } else if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    focusIndex(activeIndex.value - 1)
-  }
+function handleMenuFocusin(event: FocusEvent): void {
+  menuFocused.value = true
+  handleFocusin(event)
 }
 </script>
 
 <template>
   <BubbleMenu :editor="editor" :should-show="shouldShow" :options="{ placement: 'top' }">
     <div
+      ref="toolbar"
       class="flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md"
       role="toolbar"
       aria-label="Anchor actions"
-      @focusin="menuFocused = true"
+      @focusin="handleMenuFocusin"
       @focusout="menuFocused = false"
-      @keydown="handleToolbarKeydown"
+      @keydown="handleKeydown"
     >
       <button
-        v-for="(action, index) in actions"
+        v-for="action in actions"
         :key="action.label"
-        :ref="(el) => setButtonRef(el, index)"
         type="button"
         class="rounded p-1.5 hover:bg-[var(--color-bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
-        :tabindex="index === activeIndex ? 0 : -1"
+        data-toolbar-control
         :aria-label="action.label"
         :aria-keyshortcuts="action.shortcut"
         :title="`${action.label} (${action.shortcut})`"
         @mousedown.prevent
-        @focus="activeIndex = index"
         @click="markAnchor(editor, action.kind)"
       >
         <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />

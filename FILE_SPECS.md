@@ -1,6 +1,6 @@
 # Every file with a spec of its own
 
-Status: commit 1 written, not yet committed. Coverage baseline recorded under commit 17.
+Status: commit 1 written, not yet committed. Coverage baseline recorded under commit 18.
 
 ## Context
 
@@ -8,7 +8,7 @@ TESTING.md says each source file has a spec of its own, proving that file's code
 
 This plan gives every `src` file a spec of its own, merges it into its caller, or notes why it has neither. For each spec there are two steps: write it, then cut whatever it now makes redundant, wherever that is. Flows that repeat a screen's own spec are cut too. A coverage pass comes last.
 
-It is independent of the review units: each commit stands alone, so a file's spec can be written in its review unit or on its own. This file is deleted when the last commit lands, once anything that outlasts it has moved into the docs (commit 18).
+It is independent of the review units: each commit stands alone, so a file's spec can be written in its review unit or on its own. This file is deleted when the last commit lands, once anything that outlasts it has moved into the docs (commit 19).
 
 ## Decisions
 
@@ -23,10 +23,10 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - An owner test that is part session behavior and part wiring is shrunk to the wiring: which session method a control calls, what the owner renders from the session, where it navigates, and the order its own handler does things in.
   - A test is deleted outright only when what remains is already owned elsewhere.
   - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "A repository read doesn't retry").
-- **Editor files wait for Track B.** `extensions.ts`, `anchorCommands.ts`, `AnchorInsertView.vue` and `AnchorMenu.vue` get their specs as Track B reviews them, once SIMPLIFY.md has reshaped them: it replaces the AnchorInsert node and its view. DocumentEditor's specs stay as they are until then. What was learned goes into Track B unit 2 in CODE_REVIEW.md (commit 18):
+- **Editor files wait for Track B.** `extensions.ts`, `anchorCommands.ts`, `AnchorInsertView.vue` and `AnchorMenu.vue` get their specs as Track B reviews them, once SIMPLIFY.md has reshaped them: it replaces the AnchorInsert node and its view. DocumentEditor's specs stay as they are until then. What was learned goes into Track B unit 2 in CODE_REVIEW.md (commit 19):
   - Browser project alone, with a bare TipTap `Editor`.
   - `anchorSpans`, `anchorMarkRanges` and `mapAnchorSpans` are pure and could run in node over `replayDocument`.
-  - Unproven today: the guard actually rejecting an edit, `excludes: ''`, `Mod-Alt-s`, the live region, AnchorMenu's roving tabindex, and the box committing on focus-out.
+  - Unproven today: the guard actually rejecting an edit, `excludes: ''`, `Mod-Alt-s`, the live region, AnchorMenu's arrow keys (now `useRovingTabindex`'s, commit 16), and the box committing on focus-out.
   - The ED flows click Accept wording in Browser Mode but press Enter in Cypress, which is drift.
   - Rejected for now: a third Vitest project on happy-dom/jsdom. The browser project already runs these for real.
 - **App.vue: App.flow is its spec.** `useTabLifecycle` gets its own spec for the event mapping. App.flow keeps one test per direction as App's wiring.
@@ -34,7 +34,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - The spec mounts, through `renderComponent`, a host component that only calls the composable.
   - There's no Cypress mirror, since nothing user-facing is mounted. This matches the Dexie and OPFS adapters.
   - TESTING.md says otherwise today (non-components get a node spec; every mounting `.browser.test.ts` has a mirror; no `defineComponent` in component tests). So commit 9 amends it then, not later.
-  - Proposed line, to decide at that commit: _"A composable whose point is a browser event in a lifecycle hook is proven in the browser project alone, through a host component that only calls it; the host is scaffolding, not the subject, so it has no Cypress mirror."_
+  - Proposed line, to decide at that commit: _"A composable whose point is a browser's events or focus, needing a mounted instance, is proven in the browser project alone, through a host component that only calls it; the host is scaffolding, not the subject, so it has no Cypress mirror."_ `useRovingTabindex` (commit 16) is the second. Developer note: When we get to anything that actually implements this, I want to talk about it as I don't know that I fully agree.
 - **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, its only caller.**
   - AppLayout provides through an exported `layoutWidthKey`. That's an app use, not a test entry point.
   - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it (TESTING.md, Don'ts), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
@@ -62,7 +62,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
 
 ## Mechanics found so far
 
-These move to the write-tests skill's `mechanics.md` in commit 18, wherever it doesn't already say them.
+These move to the write-tests skill's `mechanics.md` in commit 19, wherever it doesn't already say them.
 
 - A composable calling `useRouter()` runs in node under `app.runWithContext()`, with a hand-built router (`useSealDraft.test.ts`).
 - `src/router/index.ts` can't load in node: `createWebHistory` runs at import and reads `window`. So `createTestRouter()` is browser-only.
@@ -71,7 +71,7 @@ These move to the write-tests skill's `mechanics.md` in commit 18, wherever it d
 
 ## Applies beyond its file
 
-Changes one commit made to how a test is written that other specs should get too. Each entry gives the change, the commit it came from, and the specs a grep found the same pattern in. A later commit that reworks one of those specs applies the change there and takes the spec off the list; commit 16 applies the rest.
+Changes one commit made to how a test is written that other specs should get too. Each entry gives the change, the commit it came from, and the specs a grep found the same pattern in. A later commit that reworks one of those specs applies the change there and takes the spec off the list; commit 17 applies the rest.
 
 - None yet.
 
@@ -101,7 +101,8 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - shows a change another tab made while a draft was reopening
      - shows no notice for a resumed draft another tab had already changed
      - `canSave` is false for a title alone or blank words
-     - details and parent changes are recorded, and nothing is recorded with no session open
+     - field changes (`handleFieldsChange`: title and details alike) and parent changes are recorded, and nothing is recorded with no session open
+     - a bookmark reaches `drafts.addMark` (SIMPLIFY.md commit 5)
      - abandon keeps what reached disk; reset clears everything for the next entry
    - Verify: the new spec.
 
@@ -219,10 +220,19 @@ When a commit changes how a test is written, not just what it proves, grep the o
     - Least value: every flow already leans on all three.
     - Verify: the new spec.
 
-16. **Apply what's left under "Applies beyond its file."** It comes before the coverage pass, so coverage measures the finished specs.
+16. **`useRovingTabindex` spec**, `src/composables/useRovingTabindex.browser.test.ts`, browser-only with a host, as commit 9. The host renders marked controls, one disabled, and a `<select>`, between two inputs.
+    - Tests:
+      - one Tab stop, on the first enabled control; Tab and Shift+Tab from any control leave it
+      - the arrows wrap, and Home and End reach the ends, skipping disabled controls
+      - the stop stays on the control last focused, and moves off it once that control is disabled
+      - Left and Right leave a closed `<select>`'s value alone
+    - Cuts: EditorToolbar's three keyboard tests shrink to one wiring test (one Tab stop, an arrow moves within it). AnchorMenu's arrow-key test is wiring too.
+    - Verify: the new spec and the EditorToolbar pair.
+
+17. **Apply what's left under "Applies beyond its file."** It comes before the coverage pass, so coverage measures the finished specs.
     - Verify: each spec it touched, in the runners that spec runs in.
 
-17. **Coverage pass.** `npm run test:coverage` over the whole suite. Any line the cuts left unreached either gets a test in the spec of the file it belongs to, or is judged a gap that TESTING.md's "Coverage" says doesn't earn one. Then the full component suites once (`npm run test:browser`, `npm run cy:run`), since the cuts touched shared views.
+18. **Coverage pass.** `npm run test:coverage` over the whole suite. Any line the cuts left unreached either gets a test in the spec of the file it belongs to, or is judged a gap that TESTING.md's "Coverage" says doesn't earn one. Then the full component suites once (`npm run test:browser`, `npm run cy:run`), since the cuts touched shared views.
     - Compare with the baseline taken before commit 1 (2026-10-23; 39 files, 431 tests):
 
       |              | Stmts             | Branch            | Funcs          | Lines             |
@@ -237,7 +247,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
       | utils        | 100               | 96.96             | 100            | 100               |
       | views        | 93                | 85.77             | 97.56          | 95.54             |
 
-18. **Docs.**
+19. **Docs.**
     - TESTING.md gains a short "Files without a spec of their own" list, with the reasons above.
     - CODE_REVIEW.md:
       - Each unit's "Specs:" list gains the new specs (Track A units 1–5; Track B unit 4 for `markSet.test`).

@@ -21,7 +21,7 @@ config:
 flowchart TB
   subgraph WRITE["WRITE · a session, until it's sealed"]
     direction LR
-    DE["<b>DocumentEditor.vue</b><br/>TipTap · extensions.ts · anchorCommands.ts<br/>anchor-mode guard · affected-anchor tracking"]
+    DE["<b>DocumentEditor.vue</b><br/>TipTap · EditorToolbar<br/>extensions.ts · anchorCommands.ts<br/>anchor-mode guard · affected-anchor tracking"]
     EC["<b>EntryComposer.vue</b><br/>title · DocumentEditor<br/>EntryDetailsFields<br/>Discard · Save, or why it can't"]
     SES["<b>useDraftSession</b><br/>one per composer on a screen below:<br/>begin · resume · save · discard<br/>stale / elsewhere notices"]
     TAB["<b>App.vue · useTabLeave · useTabReturn · useTabCloseGuard</b>"]
@@ -82,7 +82,7 @@ flowchart TB
   SEALTX ==>|insert| T_ENTRIES
   SEALTX -->|delete| T_DRAFTS
   SEALTX -->|delete| T_EVENTS
-  DE -->|"image: useMedia.put"| OPFS
+  DE -->|"EditorToolbar's image:<br/>useMedia.store"| OPFS
 
   %% entry model
   MODEL -.-|"rows, for example"| T_ENTRIES

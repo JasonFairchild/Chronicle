@@ -101,7 +101,6 @@ async function handleSave(): Promise<void> {
         :disabled="session.saving"
         @input="handleTitleInput"
         @keydown.enter.prevent="documentEditor?.focus()"
-        @keydown.tab.exact.prevent="documentEditor?.focus()"
       />
     </div>
     <p v-else-if="session.fields.title" class="text-xl font-bold">{{ session.fields.title }}</p>

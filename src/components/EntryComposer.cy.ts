@@ -108,19 +108,18 @@ describe('EntryComposer', () => {
       .then((content) => expect(docToPlainText(content)).to.equal('We drove up on Friday.'))
   })
 
-  it('moves from the title into the body on Tab, skipping the toolbar between them', () => {
+  it('moves from the title onto the toolbar on Tab', () => {
     cy.mount(EntryComposer, {
       props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
-      attrs: { onSave: cy.spy(), onDiscard: cy.spy(), onChange: cy.spy().as('change') },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy() },
     })
 
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe')
     cy.press(Cypress.Keyboard.Keys.TAB)
-    cy.focused().type('We drove up on Friday.')
 
-    cy.get('@change')
-      .its('lastCall.args.0.content')
-      .then((content) => expect(docToPlainText(content)).to.equal('We drove up on Friday.'))
+    cy.focused()
+      .closest('[role="toolbar"]')
+      .should('have.attr', 'aria-label', 'New entry formatting')
   })
 
   it('says why an entry with nothing written can’t be saved, even with a title', () => {

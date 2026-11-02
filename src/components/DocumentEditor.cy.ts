@@ -10,7 +10,6 @@ import {
 } from '@/domain/entryDocument'
 import { TraceRecorder } from '@/domain/traceRecorder'
 import { documentsAt } from '@/editor/replay'
-import { mediaRepository } from '@/repositories'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { selectTextRange } from '@/testing/selectTextRange'
@@ -92,22 +91,6 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('leaves the caret in the document after a toolbar click, so typing carries on', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
-
-    cy.findByRole('textbox', { name: 'New entry' }).type('Worth remembering')
-    cy.findByRole('button', { name: 'Quote' }).click()
-    cy.focused().type(', and worth keeping')
-
-    cy.get('@change').then((stub) => {
-      expect(docToPlainText(lastChange(stub).content).trim()).to.equal(
-        'Worth remembering, and worth keeping',
-      )
-    })
-  })
-
   it('shows a document that is only displayed as text, with no toolbar or field to type in', () => {
     cy.mount(DocumentEditor, {
       props: {
@@ -122,7 +105,7 @@ describe('DocumentEditor', () => {
     cy.findByRole('textbox').should('not.exist')
   })
 
-  it('turns a selection into a link at the address it is given', () => {
+  it('reports a link as formatting', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
@@ -132,9 +115,7 @@ describe('DocumentEditor', () => {
     cy.findByLabelText('Link address').type('https://example.com/trail')
     cy.findByRole('button', { name: 'Apply link' }).click()
 
-    cy.findByRole('link', { name: 'The trail report' })
-      .should('be.visible')
-      .and('have.attr', 'href', 'https://example.com/trail')
+    cy.findByRole('link', { name: 'The trail report' }).should('be.visible')
 
     cy.get('@change').then((stub) => {
       expect(lastChange(stub).is_formatting).to.equal(true)
@@ -194,13 +175,13 @@ describe('DocumentEditor', () => {
     cy.findByText('We drove up on Friday.').should('be.visible')
   })
 
-  it('stores an attached image in the media store and refers to it by id alone', () => {
+  it('shows an attached image from its stored bytes, and refers to it by id alone', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
 
-    // The input is visually hidden behind the toolbar button, which is why this is forced.
-    cy.findByLabelText('Attach an image').selectFile(
+    // Forced because the input is hidden behind Add image.
+    cy.findByTestId('image-file-input').selectFile(
       {
         contents: Cypress.Buffer.from([0x89, 0x50, 0x4e, 0x47]),
         fileName: 'lake.png',
@@ -209,24 +190,21 @@ describe('DocumentEditor', () => {
       { force: true },
     )
 
-    cy.findByRole('img').should('be.visible')
+    cy.findByRole('img')
+      .should('have.attr', 'src')
+      .and('match', /^blob:/)
 
-    cy.get('@change')
-      .then((stub) => {
-        const change = lastChange(stub)
-        const mediaRefs = collectMediaRefs(change.content)
-        expect(mediaRefs).to.have.length(1)
-        // An attachment adds no words, but it is content all the same.
-        expect(change.is_formatting).to.equal(false)
-        expect(change.media_changed).to.equal(true)
-        // The bytes never enter the document: an object URL is minted per page load and would be a
-        // broken reference the moment this entry was read again.
-        expect(change.content).to.not.contain('blob:')
-        expect(change.content).to.not.contain('data:')
-        // Read back because storing is this editor's own output (TESTING.md, "Layers").
-        return mediaRepository.get(mediaRefs[0]!)
-      })
-      .should('not.be.null')
+    cy.get('@change').then((stub) => {
+      const change = lastChange(stub)
+      expect(collectMediaRefs(change.content)).to.have.length(1)
+      // An attachment adds no words, but it is content all the same.
+      expect(change.is_formatting).to.equal(false)
+      expect(change.media_changed).to.equal(true)
+      // The bytes never enter the document: an object URL is minted per page load and would be a
+      // broken reference the moment this entry was read again.
+      expect(change.content).to.not.contain('blob:')
+      expect(change.content).to.not.contain('data:')
+    })
   })
 
   it('bookmarks a paste, distinct from ordinary typing', () => {

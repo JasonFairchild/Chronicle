@@ -45,7 +45,7 @@ Tests are one design, judged together rather than file by file. There are three 
 - **Fail it** by stubbing one repository method to reject, when what the screen shows for a failure is the point.
 - **Never read it back.** Assert through the UI and the component's own outputs — what it emits, where it navigates. What reached storage is a flow's to check. If a spec needs storage to see a result, first ask whether the screen should show it.
 
-The exception is a unit whose job is storage, such as `useMedia`, or `DocumentEditor` storing an attached image: what it stores is its output, so its spec reads it back.
+The exception is a unit whose job is storage, such as `useMedia`, or `EditorToolbar` storing an attached image: what it stores is its output, so its spec reads it back.
 
 A component spec owns everything its own code produces: every state its screen can show, how it responds — empty and error states, validation, what each control does there — and where it sends the writer next. It owns them even when a flow walks through them. A link is checked by its `href`, not followed: landing there is the destination's to prove.
 

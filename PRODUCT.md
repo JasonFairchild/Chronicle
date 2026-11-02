@@ -46,7 +46,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 ### 4.1 Writing a new entry
 
 - The app opens on the **New entry** page, ready to write. No "new entry" step first.
-- A title field sits above the toolbar: one line, plain text, no formatting. Enter or Tab moves into the body. **A title is optional** — much journal writing has no name worth giving, and a required field produces "Tuesday". Where only one line can be shown, an entry is named by its title, else its opening words. Related entries (§4.4) get the same optional field.
+- A title field sits above the toolbar: one line, plain text, no formatting. Enter moves into the body; Tab reaches the toolbar first, which is one Tab stop, with the arrow keys moving within it. **A title is optional** — much journal writing has no name worth giving, and a required field produces "Tuesday". Where only one line can be shown, an entry is named by its title, else its opening words. Related entries (§4.4) get the same optional field.
 - Optional details sit below the writing area, never collapsed, everywhere an entry is written, revising included. Each date is a day plus a free line for the time ("morning", "3:30 pm"), the way a paper journal says it. Two groups:
   - **When and where:** when the thing **happened**, and **where**.
   - **Written before, somewhere else:** when it was **originally written**, and what it was **written in** ("paper journal"), with a note ("blue Moleskine, 2014–2016").

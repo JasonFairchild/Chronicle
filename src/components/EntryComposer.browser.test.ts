@@ -118,17 +118,18 @@ describe('EntryComposer (browser)', () => {
     expect(docToPlainText(onChange.mock.lastCall![0].content)).toBe('We drove up on Friday.')
   })
 
-  it('moves from the title into the body on Tab, skipping the toolbar between them', async () => {
-    const onChange = vi.fn()
+  it('moves from the title onto the toolbar on Tab', async () => {
     const screen = renderComponent(EntryComposer, {
       props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
-      attrs: { onSave: vi.fn(), onDiscard: vi.fn(), onChange },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn() },
     })
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
-    await userEvent.keyboard('{Tab}We drove up on Friday.')
+    await userEvent.keyboard('{Tab}')
 
-    expect(docToPlainText(onChange.mock.lastCall![0].content)).toBe('We drove up on Friday.')
+    await expect
+      .poll(() => document.activeElement?.closest('[role="toolbar"]')?.getAttribute('aria-label'))
+      .toBe('New entry formatting')
   })
 
   it('says why an entry with nothing written can’t be saved, even with a title', async () => {

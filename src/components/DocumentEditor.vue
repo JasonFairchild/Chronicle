@@ -21,7 +21,6 @@ export interface EditorChange extends ChangeSignals {
 </script>
 
 <script setup lang="ts">
-import type { Transaction } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
@@ -30,12 +29,7 @@ import AnchorMenu from '@/components/AnchorMenu.vue'
 import EditorToolbar from '@/components/EditorToolbar.vue'
 import { useMedia } from '@/composables/useMedia'
 import { collectAnchors, innermostAnchorAt, pairableAnchorAt } from '@/domain/anchors'
-import {
-  contentDelta,
-  type DocMark,
-  type EntryDocument,
-  parseDocument,
-} from '@/domain/entryDocument'
+import { type DocMark, type EntryDocument, parseDocument } from '@/domain/entryDocument'
 import {
   type AnchorSpan,
   anchorSpans,
@@ -44,9 +38,9 @@ import {
   openAnchorInsert,
   openAnchorWording,
   readAnchorAnnouncement,
-  readAnchorWordingText,
   sealedAnchorIdsOf,
 } from '@/editor/anchorCommands'
+import { changeSignals } from '@/editor/changeSignals'
 import { entryExtensions } from '@/editor/extensions'
 
 const props = withDefaults(
@@ -142,55 +136,6 @@ function anchorMarkupAttr(document: EntryDocument): Record<string, string> {
  * change inside a contenteditable, which assistive tech cannot see, so each one is spoken instead.
  */
 const liveRegionMessage = ref('')
-
-/**
- * The text a change added, for the mark policy's punctuation and pattern checks. The steps remain
- * the authoritative record of what happened.
- */
-function insertedTextOf(transaction: Transaction): string {
-  let inserted = ''
-
-  for (const step of transaction.steps) {
-    const slice = (
-      step as {
-        slice?: {
-          content: {
-            size: number
-            textBetween: (from: number, to: number, separator?: string) => string
-          }
-        }
-      }
-    ).slice
-    if (slice) inserted += slice.content.textBetween(0, slice.content.size, '')
-  }
-
-  return inserted
-}
-
-/**
- * Characters this change removed, for the deletion runs `deriveMarks` finds. Measured against the
- * document each step saw *before* it applied (`transaction.docs[i]`), not the flattened text
- * before and after: a selection replaced by something longer would net
- * positive there, missing the destructive edit it actually was, and an anchor op would misregister
- * as one too, which the non-destructive invariant forbids.
- *
- * Filtered to `stepType === 'replace'` — a `replaceAround` (wrapping a paragraph in a list) spans
- * the whole block with its content reinserted through the gap, and naive arithmetic would report
- * the entire paragraph as deleted. `textBetween` returns 0 for an `anchorInsert` node on its own,
- * since it is an atom carrying its text as an attribute rather than as document text.
- */
-function removedTextOf(transaction: Transaction): number {
-  let removed = 0
-
-  transaction.steps.forEach((step, i) => {
-    if (step.toJSON().stepType !== 'replace') return
-
-    const { from, to } = step as unknown as { from: number; to: number }
-    removed += transaction.docs[i]!.textBetween(from, to, '').length
-  })
-
-  return removed
-}
 
 const editor = useEditor({
   // In anchor mode, `entryExtensions` installs the guard that lets through only the anchor
@@ -300,34 +245,10 @@ const editor = useEditor({
       if (announcement) liveRegionMessage.value = announcement
     }
 
-    // Judged by what the document says before and after, not by which steps produced it — no step
-    // type reliably tells an anchor command, a heading, a list, or an alignment change apart from a
-    // real edit (see `contentDelta`). `is_anchor_op` is an outcome, not a transaction's provenance:
-    // it survives undo/redo for free, since a history transaction carries no meta of its own for
-    // this to read.
-    const delta = contentDelta(transaction.before.toJSON() as EntryDocument, document)
-    // A wording-box keystroke has the identical fingerprint to real formatting — same text, same
-    // media, same anchor set, since wording is excluded from all three — so outcome alone cannot
-    // tell them apart, the same way it cannot tell an anchor command from formatting without
-    // `sameAnchors`. `readAnchorWordingText` is what actually distinguishes them: only a wording
-    // keystroke carries it, since it is not a text-insertion step this loop could otherwise read.
-    const wordingText = readAnchorWordingText(transaction)
-
     emit('change', {
       content: JSON.stringify(document),
       steps: reported,
-      // The wording box's whole text serves: the punctuation check reads only its last character.
-      inserted_text: wordingText ?? insertedTextOf(transaction),
-      removed_chars: removedTextOf(transaction),
-      is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors && wordingText === null,
-      is_anchor_op: !delta.sameAnchors,
-      // ProseMirror's own clipboard handling stamps this, so a real paste is told apart from a
-      // drop (`uiEvent: 'drop'`, deliberately not counted — PRODUCT.md §4.10) or from content
-      // inserted programmatically (`insertContent`, as `EditorToolbar` attaches an image), which
-      // carries no `uiEvent` at all. A paste into an open wording box is not counted either: it goes through
-      // `AnchorInsertView`'s own `<input>`, never through this editor's clipboard handling.
-      is_paste: transaction.getMeta('uiEvent') === 'paste',
-      media_changed: !delta.sameMedia,
+      ...changeSignals(transaction, document),
       affectedAnchorIds: props.anchorMode ? undefined : [...affectedAnchorIds],
     })
 

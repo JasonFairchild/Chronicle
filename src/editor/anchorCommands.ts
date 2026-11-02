@@ -579,7 +579,7 @@ export function readAnchorWordingText(transaction: Transaction): string | null {
  *
  * Not a structural anchor op: typing wording is typing, and is marked the way prose is
  * (AUTHORING.md, "Authoring capture"). `ANCHOR_WORDING_TEXT_META` is what lets `DocumentEditor`
- * report its text, since an attribute step has no slice for `insertedTextOf` to read.
+ * report its text, since an attribute step has no slice for `changeSignals` to read.
  */
 export function updateAnchorInsertText(editor: Editor, pos: number, text: string): void {
   const transaction = editor.state.tr.setNodeAttribute(pos, 'text', text)

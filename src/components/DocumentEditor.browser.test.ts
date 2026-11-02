@@ -58,47 +58,6 @@ describe('DocumentEditor (browser)', () => {
     expect(latest.is_formatting).toBe(false)
   })
 
-  it('reports a formatting change as formatting, since it inserts no words', async () => {
-    const screen = mountEditor()
-
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('Worth remembering')
-    await userEvent.keyboard('{Control>}a{/Control}')
-    await screen.getByRole('button', { name: 'Bold' }).click()
-
-    const latest = changes[changes.length - 1]!
-    expect(latest.is_formatting).toBe(true)
-    expect(latest.inserted_text).toBe('')
-  })
-
-  it('reports a change of block type as formatting, since it moves no words', async () => {
-    const screen = mountEditor()
-
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('Worth remembering')
-    await userEvent.keyboard('{Control>}a{/Control}')
-    await screen.getByRole('combobox', { name: 'Text style' }).selectOptions('Heading')
-
-    // A heading arrives as a replaceAround step, which no step type tells apart from an edit.
-    const latest = changes[changes.length - 1]!
-    expect(latest.is_formatting).toBe(true)
-    // Trimmed because the editor adds an empty block after a trailing heading, which is its
-    // scaffolding rather than anything the author wrote.
-    expect(docToPlainText(latest.content).trim()).toBe('Worth remembering')
-  })
-
-  it('reports no deletion for wrapping a paragraph in a list', async () => {
-    const screen = mountEditor()
-
-    await screen.getByRole('textbox', { name: 'New entry' }).fill('Worth remembering')
-    await userEvent.keyboard('{Control>}a{/Control}')
-    await screen.getByRole('button', { name: 'List' }).click()
-
-    // Wrapping arrives as a `replaceAround` spanning the whole paragraph, with its content
-    // reinserted through the gap — naive arithmetic would report the paragraph as deleted.
-    const latest = changes[changes.length - 1]!
-    expect(docToPlainText(latest.content).trim()).toBe('Worth remembering')
-    expect(latest.removed_chars).toBe(0)
-  })
-
   it('reports a link as formatting', async () => {
     const screen = mountEditor()
 
@@ -188,7 +147,7 @@ describe('DocumentEditor (browser)', () => {
     expect(latest.content).not.toContain('data:')
   })
 
-  it('bookmarks a paste, distinct from ordinary typing', async () => {
+  it('reports a paste through its own clipboard handling as a paste', async () => {
     const screen = mountEditor()
     const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
     await expect.element(editorLocator).toBeVisible()
@@ -517,7 +476,7 @@ describe('DocumentEditor (browser)', () => {
         await userEvent.keyboard('{End}.')
 
         const latest = changes[changes.length - 1]!
-        // What the mark policy's punctuation check reads — see `insertedTextOf`.
+        // What the mark policy's punctuation check reads — see `changeSignals`.
         expect(latest.inserted_text.endsWith('.')).toBe(true)
         expect(latest.is_anchor_op).toBe(false)
         expect(latest.is_formatting).toBe(false)

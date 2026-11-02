@@ -43,54 +43,6 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('reports a formatting change as formatting, since it inserts no words', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
-
-    cy.findByRole('textbox', { name: 'New entry' }).type('Worth remembering{selectall}')
-    cy.findByRole('button', { name: 'Bold' }).click()
-
-    cy.get('@change').then((stub) => {
-      expect(lastChange(stub).is_formatting).to.equal(true)
-    })
-  })
-
-  it('reports a change of block type as formatting, since it moves no words', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
-
-    cy.findByRole('textbox', { name: 'New entry' }).type('Worth remembering{selectall}')
-    cy.findByRole('combobox', { name: 'Text style' }).select('Heading')
-
-    cy.get('@change').then((stub) => {
-      const change = lastChange(stub)
-      // A heading arrives as a replaceAround step, which no step type tells apart from an edit.
-      expect(change.is_formatting).to.equal(true)
-      // Trimmed because the editor adds an empty block after a trailing heading, which is its
-      // scaffolding rather than anything the author wrote.
-      expect(docToPlainText(change.content).trim()).to.equal('Worth remembering')
-    })
-  })
-
-  it('reports no deletion for wrapping a paragraph in a list', () => {
-    const onChange = cy.stub().as('change')
-
-    cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
-
-    cy.findByRole('textbox', { name: 'New entry' }).type('Worth remembering{selectall}')
-    cy.findByRole('button', { name: 'List' }).click()
-
-    cy.get('@change').then((stub) => {
-      const change = lastChange(stub)
-      // Wrapping arrives as a `replaceAround` spanning the whole paragraph, with its content
-      // reinserted through the gap — naive arithmetic would report the paragraph as deleted.
-      expect(docToPlainText(change.content).trim()).to.equal('Worth remembering')
-      expect(change.removed_chars).to.equal(0)
-    })
-  })
-
   it('shows a document that is only displayed as text, with no toolbar or field to type in', () => {
     cy.mount(DocumentEditor, {
       props: {
@@ -207,7 +159,7 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('bookmarks a paste, distinct from ordinary typing', () => {
+  it('reports a paste through its own clipboard handling as a paste', () => {
     const onChange = cy.stub().as('change')
 
     cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })

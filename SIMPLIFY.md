@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–5 done.
+Status: commits 0–7 done.
 
 ## Context
 
@@ -90,8 +90,8 @@ Order and dependencies:
 - 0 comes first.
 - 1–7 stand alone, except 5, which comes after 4.
 - 8 is the spike. 9–12 are item 4, in order, after 7.
-- 13 comes after 12.
-- 14–20 are independent.
+- 13 and 20 are skipped.
+- 14–19 are independent.
 - FILE_SPECS.md commit 2 (the `useDraftSession` spec) comes after commits 3 and 5 here, and covers `handleFieldsChange` and `bookmark`.
 - Commits here and in FILE_SPECS.md that touch EntryDetailView's pairs rebase on whichever lands first.
 - Last, once the rest are in: delete this file, and every citation of it in CHRONICLE_PLAN.md, CODE_REVIEW.md and FILE_SPECS.md.
@@ -258,11 +258,7 @@ Order and dependencies:
       - FILE_SPECS.md: its "Editor files wait for Track B" bullet.
     - Verify: full component suites.
 
-13. **Condense Track B's comments**, cutting length first (CLAUDE.md: the non-obvious why, once, in proportion to its code).
-    - Files: DocumentEditor, EditorToolbar, AnchorMenu, `extensions.ts`, `anchorCommands.ts`, `anchorGuard.ts`, `changeSignals.ts`, `entryDocument.ts`, `anchors.ts`.
-    - Known repeat: "a property of the editor, not a rule the UI is trusted to follow" appears three times; ENTRY_MODEL.md says it once.
-    - Report the comment lines per file, before and after, with the counter this plan used (a node one-liner over `//`, `/* */` and `<!-- -->` lines).
-    - Verify: typecheck, lint.
+13. **Skipped: condense Track B's comments.** Moved to CODE_REVIEW.md's last step, one pass across the repo.
 
 ### Track A
 
@@ -297,8 +293,7 @@ Order and dependencies:
     - The A10 note leaves CODE_REVIEW.md.
     - Verify: shared test setup, so the full component suites.
 
-20. **Condense the comments in Track A's heaviest unreviewed files** (`useDraftSession` at 30%, `utils/format.ts` 39%, `entriesStore` 24%, EntryDetailView), as in commit 13. Optional: drop it to trim these during the review instead.
-    - Verify: typecheck, lint.
+20. **Skipped: condense Track A's comments.** Moved to CODE_REVIEW.md's last step, as 13 was.
 
 ## Left out, and why
 

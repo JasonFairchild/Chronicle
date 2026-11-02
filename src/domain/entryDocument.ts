@@ -116,7 +116,8 @@ export function previewText(content: string | EntryDocument, limit = 160): strin
   return singleLine.length > limit ? `${singleLine.slice(0, limit - 3)}...` : singleLine
 }
 
-function walk(node: DocNode, visit: (node: DocNode) => void): void {
+/** Visits `node` and every node below it, parents before children, in document order. */
+export function walk(node: DocNode, visit: (node: DocNode) => void): void {
   visit(node)
   for (const child of node.content ?? []) walk(child, visit)
 }

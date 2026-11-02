@@ -16,9 +16,9 @@ import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
   type DocMark,
-  type DocNode,
   type EntryDocument,
   parseDocument,
+  walk,
 } from './entryDocument'
 
 /** One anchor as the parent's document currently holds it. */
@@ -38,11 +38,6 @@ export interface DocumentAnchor {
  */
 export function newAnchorId(): string {
   return crypto.randomUUID()
-}
-
-function walk(node: DocNode, visit: (node: DocNode) => void): void {
-  visit(node)
-  for (const child of node.content ?? []) walk(child, visit)
 }
 
 function attrString(attrs: Record<string, unknown> | undefined, name: string): string | null {

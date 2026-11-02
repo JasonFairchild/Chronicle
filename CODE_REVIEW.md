@@ -46,6 +46,17 @@ Item 2 can start here.
 
 SIMPLIFY.md changes these files before the units above review them. Items 4–5 (seed data, the history view) wait on B4.
 
+### Last: condense comments across the repo
+
+Once both tracks are done, one pass over every source file, cutting length first (CLAUDE.md: the non-obvious why, once, in proportion to its code).
+
+- Heaviest at planning: `utils/format.ts` 39%, `anchorCommands.ts` 35%, `useDraftSession` 30%, `entriesStore` 24%.
+- Known repeat: "a property of the editor, not a rule the UI is trusted to follow" appears three times; ENTRY_MODEL.md says it once.
+- Compare each file's comments against the docs in CLAUDE.md's table. Behavior and model rules live in the docs, and a comment doesn't restate them; anything a comment holds that belongs in a doc moves there.
+- Cite a doc once per file, at its header, when several comments lean on it. Cite a section beside the code only for one specific behavior a reader there needs.
+- Report comment lines per file, before and after, counting `//`, `/* */` and `<!-- -->` lines.
+- Verify: typecheck, lint.
+
 ## Carried inward
 
 Found in one unit and left for the unit that reviews the file.

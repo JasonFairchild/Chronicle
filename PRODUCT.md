@@ -217,7 +217,7 @@ Chronicle is built for a desktop window first. Fitting narrow screens happens la
 ### Writing history
 
 - **Scrubbing backward** could fade later marks out after a slight delay rather than cutting them.
-- **Zooming in on the scrubber:** between two bookmarks, replay one keystroke at a time. More curiosity than reading tool, but the capture already supports it.
+- **Zooming in on the scrubber:** between two bookmarks, replay one keystroke at a time. More curiosity than reading tool, but the capture already supports it. Replaying forward from the earlier bookmark can keep each keystroke's inverse as it goes, so stepping back is as cheap as stepping forward.
 - Tuning how often moments get bookmarked, re-reading an old session under new rules, or turning capture off — and whether any of that is a user-facing setting at all. Most likely as a few saved presets for which kinds of moment to stop at, picked between while scrubbing (CHRONICLE_PLAN.md, "Mark sets replaced by filter presets").
 - **The history view on a draft in progress:** §5.1's scrubber in a collapsible section of the composer, playing the session's live log, for the writer curious how writing history is made. Marks are derived from the log, so it can stop at them before anything is saved. Bookmark this moment would move into its header, visible even while it's collapsed. Beyond §5.1 it needs a live feed of the log and a replay that keeps up with typing.
 - **Sittings:** a draft picked up again later records that it was, so the history view can show how many sittings a piece took. Without it, a return is only a long pause, indistinguishable from a tab left open.

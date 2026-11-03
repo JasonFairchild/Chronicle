@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–7 done.
+Status: commits 0–8 done.
 
 ## Context
 
@@ -191,10 +191,10 @@ Order and dependencies:
    - the open-box inline decoration and the placeholder widget render with a visible caret;
    - BubbleMenu shows for a collapsed caret.
 
-   If IME fails, route typing through `handleTextInput` instead and accept IME inside wording as a known limit.
+   Result: all five held, IME included (imitated through Chrome DevTools). What it changed is folded into 9 and 10. The spike's code, screenshots and findings are in the ignored `spikes/wording-mark/`.
 
 9. **Expand: the readers learn the `anchorWording` mark.**
-   - The mark: `{ anchorId }`, `inclusive: false`, excluding itself and the passage mark (so wording never carries a passage), rendering the `<ins><span>` shape above.
+   - The mark: `{ anchorId }`, `inclusive: false`, `clearable: false` as the passage mark has, rendering the `<ins><span>` shape above. It excludes every mark (`_`), itself included. So wording never carries a passage or formatting, bold over it leaves it as it was, and marking typed text strips whatever it inherited.
    - Beside the node:
      - `collectAnchors` reads wording from marked text, trimmed, with blank meaning none;
      - `docToPlainText` skips marked wording;
@@ -210,18 +210,23 @@ Order and dependencies:
 10. **Migrate: anchor mode writes wording as text** (Decisions).
     - **The guard** (`editor/anchorGuard.ts`, replacing `isAnchorEdit`), installed in every editor.
       - Always allowed: no steps, an anchor command's meta, and history.
-      - In anchor mode, a step is also allowed when it is a text-only replace, with no line break, whose deleted range lies inside this session's wording.
-      - In any editor, a step that changes sealed wording other than whole is refused.
+      - In anchor mode, a step is also allowed when it is a text-only replace, with no line break, whose deleted range is empty or lies inside this session's wording. Empty is a bare insertion, which the marker gives a fresh id.
+      - In any editor, a step whose result changes sealed wording, its text or its marks, other than removing it whole, is refused. Judged by the step's effect, so bold across it, which the mark's `excludes` makes a no-op there, goes through.
+      - In any editor, a step that adds or removes an anchor mark is refused outside an anchor command. `clearable: false` already keeps Clear formatting off them; this is the backstop.
       - Node spec over each case, with ranges built from `anchorSpans`.
+    - **Paste:** `transformPasted` strips both anchor marks in every editor, so a copy of anchored text or wording never carries its `anchorId` somewhere new.
     - **Typing** (the `AnchorMode` extension's plugin).
       - `handleTextInput` routes typing on an own passage to the end of its wording, meta-dispatched, as pairing does now.
-      - An `appendTransaction` gives text inserted by any other non-meta, non-history transaction exactly one wording mark: the own wording it touches, or else a fresh id. It also strips inherited marks.
+      - An `appendTransaction` gives text inserted by any other non-meta, non-history transaction exactly one wording mark: the own wording it touches, or the own passage it follows, or else a fresh id.
+      - The marker runs during an IME composition too, never deferred to its end. The guard relies on every composed character already carrying the mark; deferred, it refuses each update and leaves stray characters.
+      - Known limit: IME inside an own passage, which `handleTextInput` never sees, leaves its first composed character behind.
       - `handlePaste` inserts the clipboard's text as one line.
       - `handleClick` on an own passage or wording moves the caret into its wording. It leaves DocumentEditor.
     - **Decorations:**
       - the open-box class on own wording at the caret;
       - the "Add wording…" widget after an own passage with no wording;
       - `--editable` on all own wording.
+      - Padded so the caret draws inside the outline: the spike's caret sat on the box's right border, and just outside the placeholder.
     - **Commands:**
       - `addAnchorMark` marks the passage and puts the caret at its end.
       - `openAnchorWording` becomes `focusAnchor`, which moves the caret to the end of the anchor's wording.

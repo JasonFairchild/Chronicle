@@ -57,3 +57,6 @@ dev-dist/
 
 # Pre-commit snapshot of the index (scripts/checkStaged.ts)
 .staged/
+
+# Throwaway spikes and experiments, kept until their findings are in the docs
+spikes/

@@ -3,7 +3,13 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
 import EditorToolbar from '@/components/EditorToolbar.vue'
-import { collectMediaRefs, docToPlainText, type EntryDocument } from '@/domain/entryDocument'
+import { collectAnchors } from '@/domain/anchors'
+import {
+  ANCHOR_MARK,
+  collectMediaRefs,
+  docToPlainText,
+  type EntryDocument,
+} from '@/domain/entryDocument'
 import { entryExtensions } from '@/editor/extensions'
 import { mediaRepository } from '@/repositories'
 import { plainTextDocument } from '@/testing/documents'
@@ -188,6 +194,40 @@ describe('EditorToolbar (browser)', () => {
 
     await expect.element(more).toHaveAttribute('aria-expanded', 'false')
     await expect.element(more).toHaveFocus()
+  })
+
+  it('clears formatting but leaves an anchor', async () => {
+    const { screen, editor } = mountToolbar({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'It ' },
+            {
+              type: 'text',
+              text: 'rained',
+              marks: [
+                { type: 'bold' },
+                { type: ANCHOR_MARK, attrs: { anchorId: 'anchor-1', kind: 'comment' } },
+              ],
+            },
+            { type: 'text', text: ' all day' },
+          ],
+        },
+      ],
+    })
+    const body = screen.getByRole('textbox', { name: 'New entry' })
+    body.element().focus()
+    selectTextRange(body.element(), 0, 17)
+
+    await screen.getByRole('button', { name: 'More formatting actions' }).click()
+    await screen.getByRole('button', { name: 'Clear formatting' }).click()
+
+    expect(editor.getHTML()).not.toContain('<strong>')
+    expect(collectAnchors(editor.getJSON() as EntryDocument)).toEqual([
+      { anchor_id: 'anchor-1', kind: 'comment', quote: 'rained', insertion: null },
+    ])
   })
 
   it('disables every control while `disabled`', async () => {

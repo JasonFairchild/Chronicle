@@ -93,7 +93,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 - **Revise entry** opens the entry's current text and title for editing, as a draft. The entry is untouched until the revision is saved, and discarding leaves no trace.
 - Saving appends a new version; the old one stays and the version count goes up. Images are kept.
 - Renaming, or clearing the title, is an ordinary revision; old names stay with their versions. So is a change of formatting alone, such as bolding a passage.
-- Existing anchors show while you edit. If the edit changes the text under one — inserting into it, or deleting part or all of it — a warning names the related entry before you save, and stays even if you change the text back. Moving an anchor by editing elsewhere, or typing right against its edge, is not a change. The related entry survives either way.
+- Existing anchors show while you edit. If the edit changes the text under one — inserting into it, or deleting part or all of it — a warning names the related entry before you save, and stays even if you change the text back. Moving an anchor by editing elsewhere, or typing right against its edge, is not a change. The related entry survives either way. Clear formatting leaves anchors alone: an anchor isn't formatting.
 
 ### 4.6 Connections
 

@@ -1,7 +1,13 @@
 import { Editor } from '@tiptap/vue-3'
 
 import EditorToolbar from '@/components/EditorToolbar.vue'
-import { collectMediaRefs, docToPlainText, type EntryDocument } from '@/domain/entryDocument'
+import { collectAnchors } from '@/domain/anchors'
+import {
+  ANCHOR_MARK,
+  collectMediaRefs,
+  docToPlainText,
+  type EntryDocument,
+} from '@/domain/entryDocument'
 import { entryExtensions } from '@/editor/extensions'
 import { mediaRepository } from '@/repositories'
 import { plainTextDocument } from '@/testing/documents'
@@ -193,6 +199,44 @@ describe('EditorToolbar', () => {
     cy.findByRole('button', { name: 'More formatting actions' })
       .should('have.attr', 'aria-expanded', 'false')
       .and('have.focus')
+  })
+
+  it('clears formatting but leaves an anchor', () => {
+    const editor = mountToolbar({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'It ' },
+            {
+              type: 'text',
+              text: 'rained',
+              marks: [
+                { type: 'bold' },
+                { type: ANCHOR_MARK, attrs: { anchorId: 'anchor-1', kind: 'comment' } },
+              ],
+            },
+            { type: 'text', text: ' all day' },
+          ],
+        },
+      ],
+    })
+    cy.findByRole('textbox', { name: 'New entry' })
+      .focus()
+      .then(($body) => selectTextRange($body[0]!, 0, 17))
+
+    cy.findByRole('button', { name: 'More formatting actions' }).click()
+    cy.findByRole('button', { name: 'Clear formatting' }).click()
+
+    cy.wrap(editor).invoke('getHTML').should('not.contain', '<strong>')
+    cy.wrap(editor)
+      .invoke('getJSON')
+      .then((document) => {
+        expect(collectAnchors(document as EntryDocument)).to.deep.equal([
+          { anchor_id: 'anchor-1', kind: 'comment', quote: 'rained', insertion: null },
+        ])
+      })
   })
 
   it('disables every control while `disabled`', () => {

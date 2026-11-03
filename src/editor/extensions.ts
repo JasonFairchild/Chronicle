@@ -73,11 +73,15 @@ const MediaImage = Node.create({
  * `anchorId` is what stops ProseMirror from merging adjacent anchors into one.
  *
  * No color attribute: color is computed at render time (ENTRY_MODEL.md, "Color").
+ *
+ * `clearable: false` keeps Clear formatting (`unsetAllMarks`) from removing it: an anchor isn't
+ * formatting, and only the anchor controls may take one away.
  */
 const Anchor = Mark.create({
   name: ANCHOR_MARK,
   inclusive: false,
   excludes: '',
+  clearable: false,
 
   addAttributes() {
     return {

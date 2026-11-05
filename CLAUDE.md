@@ -36,7 +36,7 @@ The rule most often broken. A permission rule matches the **whole** command stri
 - **Types live by who uses them.** Shapes that are stored or cross layers go in `src/types/`; a module's own inputs, outputs and errors live beside it.
 - No hard-coded colors that block dark mode.
 - **Semantics first.** Native elements before ARIA; reach for a role or `aria-*` only where no element does the job (the editor's `contenteditable` body is the standing example).
-- **Disable a control only while its action is in flight.** Otherwise leave it enabled and say why it can't proceed.
+- **Disable a control only while its action is in flight, or while it has nothing to act on and its state says so itself, as Undo with no history.** Otherwise leave it enabled and say why it can't proceed.
 - Small, focused changes I can read and explain.
 - **Files read top-down.** A helper goes above its first caller; lint catches functions but not class methods called through `this`. A store's or composable's helper that it doesn't return and that reads none of its state goes at module level, above it, so everything inside depends on that state. In a component, store or composable: setup first, then actions in the order they're used, teardown last unless it sits beside the setup it undoes; a `return` lists state, then actions, in file order.
 - **Single-user app: make the common path work, and give a rare race the smallest backstop that holds** — an existing field or constraint before new machinery.
@@ -46,6 +46,5 @@ The rule most often broken. A permission rule matches the **whole** command stri
 
 ## Landmarks
 
-- `src/domain/entryDocument.ts` — the **only** flattening. Anchors, previews, search, and diff all measure against `docToPlainText`, or an anchor recorded on one ruler resolves on another. Mark-set frame highlights are deliberately off it (AUTHORING.md, "Mark sets").
 - `src/editor/` — schema and the guarded, anchor-aware document commands live only in `extensions.ts`, `anchorCommands.ts` and `anchorGuard.ts`; a second definition or a hand-rolled transaction silently breaks "no related entry is destructive" or anchor-mode exclusivity. A component holding an `Editor` to mount it or drive TipTap UI (`DocumentEditor.vue`, `AnchorMenu.vue`) is fine. The domain layer reads documents as plain JSON, which keeps it node-testable.
 - `src/repositories/index.ts` — the composition root. Four interfaces, each with an in-memory adapter (tests) and a persistent one (app), each proven by a shared `.contract.ts`.

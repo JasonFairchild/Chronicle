@@ -9,7 +9,7 @@ CHRONICLE_PLAN.md priority 1: understand and own the existing code, refactoring 
 ## Decisions
 
 - **Outside in: screens, then composables, stores, model, repositories.** A caller shows what the code beneath it has to offer. A simplification found at a screen narrows an inner API before that API is reviewed, so the inner layer gets reviewed in its slimmed form. Rejected: following NewEntryView all the way down to Dexie first. That reaches the deepest layers before most of their callers have been read, so inner refactors get redone as other callers turn up.
-- **Two tracks, split where the next priorities split.** Track A is the entry and draft path through every layer, which is what item 2 (connections folded) changes. Track B is the editor, which SIMPLIFY.md reshapes first, anchor wording as marked text included. Track A comes first because it holds NewEntryView and unblocks item 2. Item 2 can then start before Track B. Rejected: one pass with all screens first. It puts DocumentEditor (1,130 lines) second, and holds item 2 until both tracks are done.
+- **Two tracks, split where the next priorities split.** Track A is the entry and draft path through every layer, which is what item 2 (connections folded) changes. Track B is the editor, which SIMPLIFY.md reshapes first, anchor wording as marked text included. Track A comes first because it holds NewEntryView and unblocks item 2. Item 2 can then start before Track B. Rejected: one pass with all screens first. It puts DocumentEditor second, and holds item 2 until both tracks are done.
 - **A shared file is reviewed with the first screen that uses it.** EntryComposer and DraftElsewhereNotice go with NewEntryView, and later screens review only their wiring of them. Its own spec proves it (TESTING.md), so theirs prove only that wiring.
 - **Connections: read, don't polish.** NewConnectionView and its specs are skipped, since item 2 removes them. Connection-specific code elsewhere in Track A (`target_id`, the `connection` relation type, `new_connection`) is read for understanding only, because item 2 replaces it. A bug found there still gets fixed.
 - **Anchors are reviewed in full**, in the shape SIMPLIFY.md leaves them: wording as marked text, and PRODUCT.md §5.4's lock in place of affected-anchor tracking.
@@ -20,29 +20,33 @@ CHRONICLE_PLAN.md priority 1: understand and own the existing code, refactoring 
 
 ## Units
 
-Each unit lists its source with line counts, then the specs reviewed with it. **Verify:** each commit runs `npm run typecheck` and the unit specs covering what it changed, and each unit ends with the browser and Cypress specs listed. A change to a store, a repository, the editor schema or `src/testing/` runs the full component suites.
+Each unit lists its source, then the specs reviewed with it. **Verify:** each commit runs `npm run typecheck` and the unit specs covering what it changed, and each unit ends with the browser and Cypress specs listed. A change to a store, a repository, the editor schema or `src/testing/` runs the full component suites.
+
+### First, when the review is next picked up: test data across the specs
+
+Consider one pass over every spec against TESTING.md's data rules, before going on with the units: data shared between tests becomes each test's own, and a named value only one assertion reads becomes literals. Start with the `EntryDetailView` component pair, whose `PARENT_TEXT` about 20 tests share. Verify: the full component suites.
 
 ### Track A: the entry and draft path
 
-1. **NewEntryView and the composer shell.** `NewEntryView.vue` 86, `EntryComposer.vue` 131, `EntryDetailsFields.vue` 157, `DraftElsewhereNotice.vue` 26, `useSealDraft.ts` 16, `router/draftQuery.ts` 28, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `realRepositories`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair, `DraftElsewhereNotice` pair, `useSealDraft.test`.
-2. **App shell.** `main.ts` 19, `App.vue` 22, `AppLayout.vue` 50, `router/index.ts` 54, `useLayoutWidth.ts` 29, `useStoragePersistence.ts` 61, `useTabLifecycle.ts` 46. Specs: `App.flow` pair, `useStoragePersistence.test`.
-3. **Timeline and Drafts.** `TimelineView.vue` 35, `EntryList.vue` 27, `EntryCard.vue` 78, `DraftsView.vue` 149. Specs: `EntryCard` pair, `DraftsView` component and flow pairs.
-4. **EntryDetailView.** `EntryDetailView.vue` 579, `RelatedEntryComposer.vue` 73. Item 2 rewrites the breadcrumbs. Specs: `EntryDetailView` component pair (~800 lines each) and flow pair.
-5. **Composables.** `useDraftSession.ts` 348, `useMedia.ts` 65. Specs: `useMedia` pair. `useDraftSession` has no spec of its own yet: see FILE_SPECS.md.
-6. **draftsStore.** 664. Spec: `draftsStore.test`.
-7. **entriesStore.** 365. Item 2 changes `inputsForDraft`. Spec: `entriesStore.test`.
-8. **The entry model.** `reconstructEntryState.ts` 263, `entryValidation.ts` 84. Item 2 changes connection gathering and `assertValidRelation`. Specs: `reconstructEntryState.test` (601), `entryValidation.test`.
-9. **Repository interfaces and in-memory twins.** `entryRepository` 48, `draftRepository` 54, `markSetRepository` 11, `mediaRepository` 40, in-memory entry 138, draft 88, mark set 30, media 35. Specs: the four `.contract.ts` (835 together), `inMemory*.test`.
-10. **Persistent adapters and the composition root.** `chronicleDatabase.ts` 85, `dexieEntryRepository` 157, `dexieDraftRepository` 133, `dexieMarkSetRepository` 37, `opfsMediaRepository` 87, `repositories/index.ts` 48. Specs: `dexie*.browser.test`, `opfsMediaRepository.browser.test`.
+1. **NewEntryView and the composer shell.** `NewEntryView.vue`, `EntryComposer.vue`, `EntryDetailsFields.vue`, `DraftElsewhereNotice.vue`, `useSealDraft.ts`, `router/draftQuery.ts`, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `realRepositories`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair, `DraftElsewhereNotice` pair, `useSealDraft.test`.
+2. **App shell.** `main.ts`, `App.vue`, `AppLayout.vue`, `router/index.ts`, `useLayoutWidth.ts`, `useStoragePersistence.ts`, `useTabLifecycle.ts`. Specs: `App.flow` pair, `useStoragePersistence.test`.
+3. **Timeline and Drafts.** `TimelineView.vue`, `EntryList.vue`, `EntryCard.vue`, `DraftsView.vue`. Specs: `EntryCard` pair, `DraftsView` component and flow pairs.
+4. **EntryDetailView.** `EntryDetailView.vue`, `RelatedEntryComposer.vue`. Item 2 rewrites the breadcrumbs. Specs: `EntryDetailView` component and flow pairs.
+5. **Composables.** `useDraftSession.ts`, `useMedia.ts`. Specs: `useMedia` pair. `useDraftSession` has no spec of its own yet: see FILE_SPECS.md.
+6. **draftsStore.** Spec: `draftsStore.test`.
+7. **entriesStore.** Item 2 changes `inputsForDraft`. Spec: `entriesStore.test`.
+8. **The entry model.** `reconstructEntryState.ts`, `entryValidation.ts`. Item 2 changes connection gathering and `assertValidRelation`. Specs: `reconstructEntryState.test`, `entryValidation.test`.
+9. **Repository interfaces and in-memory twins.** `entryRepository`, `draftRepository`, `markSetRepository`, `mediaRepository`, and the in-memory entry, draft, mark set and media adapters. Specs: the four `.contract.ts`, `inMemory*.test`.
+10. **Persistent adapters and the composition root.** `chronicleDatabase.ts`, `dexieEntryRepository`, `dexieDraftRepository`, `dexieMarkSetRepository`, `opfsMediaRepository`, `repositories/index.ts`. Specs: `dexie*.browser.test`, `opfsMediaRepository.browser.test`.
 
 Item 2 can start here.
 
 ### Track B: the editor
 
-1. **DocumentEditor.** `DocumentEditor.vue` 419, `EditorToolbar.vue` 426, `AnchorMenu.vue` 107, `useRovingTabindex.ts` 70. Likely more than one sitting. Shared setup: `anchorFixtures`, `selectTextRange`. Specs: the `DocumentEditor` pair (656 and 736), and the `EditorToolbar` and `AnchorMenu` pairs.
-2. **Schema and anchor commands.** `anchorCommands.ts` 499, `anchorGuard.ts` 92, `extensions.ts` 310, `changeSignals.ts` 63. Specs: `anchorGuard.test`, `changeSignals.test`; DocumentEditor's cover the rest.
-3. **The document and anchors.** `entryDocument.ts` 269, `anchors.ts` 230. Specs: `entryDocument.test`, `anchors.test`.
-4. **The trace's read side.** `marks.ts` 173, `replay.ts` 73, `markFrames.ts` 226, `markSetsStore.ts` 56, `types/markSet.ts` 42, `documentDiff.ts` 163, with `traceRecorder.ts` for context. No screen uses these yet; they serve the history view (item 5), and `documentDiff` waits on a revision's diff (CHRONICLE_PLAN.md). Specs: `marks`, `replay`, `markFrames`, `markSetsStore`, `documentDiff` tests.
+1. **DocumentEditor.** `DocumentEditor.vue`, `EditorToolbar.vue`, `AnchorMenu.vue`, `useRovingTabindex.ts`. Likely more than one sitting. Shared setup: `anchorFixtures`, `selectTextRange`. Specs: the `DocumentEditor` pair, and the `EditorToolbar` and `AnchorMenu` pairs.
+2. **Schema and anchor commands.** `anchorCommands.ts`, `anchorGuard.ts`, `extensions.ts`, `changeSignals.ts`. Specs: `anchorGuard.test`, `changeSignals.test`; DocumentEditor's cover the rest.
+3. **The document and anchors.** `entryDocument.ts`, `anchors.ts`. Specs: `entryDocument.test`, `anchors.test`.
+4. **The trace's read side.** `marks.ts`, `replay.ts`, `markFrames.ts`, `markSetsStore.ts`, `types/markSet.ts`, `documentDiff.ts`, with `traceRecorder.ts` for context. No screen uses these yet; they serve the history view (item 5), and `documentDiff` waits on a revision's diff (CHRONICLE_PLAN.md). Specs: `marks`, `replay`, `markFrames`, `markSetsStore`, `documentDiff` tests.
 
 SIMPLIFY.md changes these files before the units above review them. Items 4–5 (seed data, the history view) wait on B4.
 

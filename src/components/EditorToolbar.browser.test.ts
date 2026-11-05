@@ -48,7 +48,10 @@ describe('EditorToolbar (browser)', () => {
    * The toolbar over an editor attached after it, as `DocumentEditor` lays them out, with a Title
    * field before it to Tab from, as `EntryComposer` has.
    */
-  function mountToolbar(content: EntryDocument = plainTextDocument(''), disabled = false) {
+  function mountToolbar(
+    content: EntryDocument = plainTextDocument(''),
+    props: { disabled?: boolean; historyOnly?: boolean } = {},
+  ) {
     const element = document.createElement('div')
     const editor = new Editor({
       element,
@@ -65,7 +68,7 @@ describe('EditorToolbar (browser)', () => {
     })
 
     const screen = renderComponent(EditorToolbar, {
-      props: { editor, label: 'New entry', disabled },
+      props: { editor, label: 'New entry', disabled: false, ...props },
     })
     document.body.prepend(title)
     document.body.append(element)
@@ -236,12 +239,25 @@ describe('EditorToolbar (browser)', () => {
   })
 
   it('disables every control while `disabled`', async () => {
-    const { screen } = mountToolbar(plainTextDocument(''), true)
+    const { screen } = mountToolbar(plainTextDocument(''), { disabled: true })
     const buttons = screen.getByRole('button').all()
 
     expect(buttons).toHaveLength(11)
     for (const button of buttons) await expect.element(button).toBeDisabled()
     await expect.element(screen.getByRole('combobox', { name: 'Text style' })).toBeDisabled()
+  })
+
+  it('shows Undo and Redo alone when history-only', async () => {
+    const { screen } = mountToolbar(plainTextDocument(''), { historyOnly: true })
+    const toolbar = screen.getByRole('toolbar', { name: 'New entry toolbar' })
+
+    await expect.element(toolbar).toBeVisible()
+    const names = toolbar
+      .getByRole('button')
+      .elements()
+      .map((button) => button.getAttribute('aria-label'))
+    expect(names).toEqual(['Undo', 'Redo'])
+    expect(screen.getByRole('combobox').query()).toBeNull()
   })
 
   it('stores an attached image and inserts it into the document by id', async () => {

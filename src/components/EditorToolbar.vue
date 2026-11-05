@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// The formatting toolbar over a text-mode `DocumentEditor`, as `AnchorMenu` is for anchor mode.
-// Every action is a command on the editor it's given; the editor reports the change itself.
 import {
   Bold,
   Eraser,
@@ -32,6 +30,8 @@ const props = defineProps<{
   label: string
   /** Every control disabled, as while a save is in flight. */
   disabled: boolean
+  /** Undo and Redo alone, for anchor mode, where formatting the parent's text is refused. */
+  historyOnly?: boolean
 }>()
 
 const id = useId()
@@ -256,7 +256,7 @@ function applyLink(): void {
       ref="toolbar"
       class="flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-2 py-1"
       role="toolbar"
-      :aria-label="`${label} formatting`"
+      :aria-label="historyOnly ? `${label} toolbar` : `${label} formatting`"
       @focusin="handleFocusin"
       @keydown="handleKeydown"
     >
@@ -286,114 +286,121 @@ function applyLink(): void {
         <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />
       </button>
 
-      <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
+      <template v-if="!historyOnly">
+        <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
 
-      <!-- A select, not two more toggle buttons: only one block type applies at a time, and a
-           future one (a code block, say) is added here rather than growing the button row. -->
-      <label :for="`${id}-text-style`" class="sr-only">Text style</label>
-      <select
-        :id="`${id}-text-style`"
-        class="rounded border border-transparent bg-transparent px-1.5 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
-        data-toolbar-control
-        :value="textStyleValue"
-        :disabled="disabled"
-        @change="setTextStyle"
-      >
-        <option value="paragraph">Normal text</option>
-        <option value="heading">Heading</option>
-        <option value="subheading">Subheading</option>
-      </select>
-
-      <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
-
-      <template
-        v-for="(group, index) in [toolbarGroups.marks, toolbarGroups.lists, toolbarGroups.link]"
-        :key="index"
-      >
-        <span v-if="index > 0" aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
-        <button
-          v-for="action in group"
-          :key="action.label"
-          type="button"
-          class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
-          :class="{ 'bg-[var(--color-surface)] text-[var(--color-accent)]': action.active }"
+        <!-- A select, not two more toggle buttons: only one block type applies at a time, and a
+             future one (a code block, say) is added here rather than growing the button row. -->
+        <label :for="`${id}-text-style`" class="sr-only">Text style</label>
+        <select
+          :id="`${id}-text-style`"
+          class="rounded border border-transparent bg-transparent px-1.5 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
           data-toolbar-control
-          :aria-pressed="action.active"
-          :aria-label="action.label"
-          :title="action.label"
-          :disabled="disabled || action.enabled === false"
-          @mousedown.prevent
-          @click="action.run"
-        >
-          <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />
-        </button>
-      </template>
-
-      <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
-
-      <!--
-        The overflow menu: rarely-reached actions, and where a future addition to this toolbar
-        belongs instead of another button crowding the row above. A disclosure, not a
-        `menu`/`menuitem` widget — those roles promise arrow-key navigation this doesn't implement,
-        so plain, independently-tabbable buttons in a revealed panel are the honest a11y choice.
-      -->
-      <div class="relative">
-        <button
-          ref="moreToggle"
-          type="button"
-          class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
-          :class="{ 'bg-[var(--color-surface)] text-[var(--color-accent)]': moreOpen }"
-          data-toolbar-control
-          :aria-expanded="moreOpen"
-          :aria-controls="`${id}-more-menu`"
-          aria-label="More formatting actions"
-          title="More formatting actions"
+          :value="textStyleValue"
           :disabled="disabled"
-          @mousedown.prevent
-          @click="toggleMore"
-          @keydown.escape="closeMore(true)"
+          @change="setTextStyle"
         >
-          <MoreHorizontal class="h-4 w-4" aria-hidden="true" />
-        </button>
-        <div
-          v-if="moreOpen"
-          :id="`${id}-more-menu`"
-          ref="morePanel"
-          class="absolute left-0 top-full z-10 mt-1 min-w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md"
-          @keydown.escape="closeMore(true)"
-        >
-          <button
-            type="button"
-            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-bg-muted)] disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="disabled"
-            @mousedown.prevent
-            @click="clearFormatting"
-          >
-            <Eraser class="h-4 w-4" aria-hidden="true" />
-            Clear formatting
-          </button>
-          <button
-            type="button"
-            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-bg-muted)] disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="disabled"
-            @mousedown.prevent
-            @click="triggerAddImage"
-          >
-            <Image class="h-4 w-4" aria-hidden="true" />
-            Add image
-          </button>
-        </div>
-      </div>
+          <option value="paragraph">Normal text</option>
+          <option value="heading">Heading</option>
+          <option value="subheading">Subheading</option>
+        </select>
 
-      <!-- Opens the file picker for Add image, its only way in, so it's hidden from everyone. -->
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/*"
-        hidden
-        data-testid="image-file-input"
-        @change="handleFiles"
-      />
+        <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
+
+        <template
+          v-for="(group, index) in [toolbarGroups.marks, toolbarGroups.lists, toolbarGroups.link]"
+          :key="index"
+        >
+          <span
+            v-if="index > 0"
+            aria-hidden="true"
+            class="mx-1 h-4 w-px bg-[var(--color-border)]"
+          />
+          <button
+            v-for="action in group"
+            :key="action.label"
+            type="button"
+            class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+            :class="{ 'bg-[var(--color-surface)] text-[var(--color-accent)]': action.active }"
+            data-toolbar-control
+            :aria-pressed="action.active"
+            :aria-label="action.label"
+            :title="action.label"
+            :disabled="disabled || action.enabled === false"
+            @mousedown.prevent
+            @click="action.run"
+          >
+            <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />
+          </button>
+        </template>
+
+        <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
+
+        <!--
+          The overflow menu: rarely-reached actions, and where a future addition to this toolbar
+          belongs instead of another button crowding the row above. A disclosure, not a
+          `menu`/`menuitem` widget — those roles promise arrow-key navigation this doesn't
+          implement, so plain, independently-tabbable buttons in a revealed panel are the honest
+          a11y choice.
+        -->
+        <div class="relative">
+          <button
+            ref="moreToggle"
+            type="button"
+            class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+            :class="{ 'bg-[var(--color-surface)] text-[var(--color-accent)]': moreOpen }"
+            data-toolbar-control
+            :aria-expanded="moreOpen"
+            :aria-controls="`${id}-more-menu`"
+            aria-label="More formatting actions"
+            title="More formatting actions"
+            :disabled="disabled"
+            @mousedown.prevent
+            @click="toggleMore"
+            @keydown.escape="closeMore(true)"
+          >
+            <MoreHorizontal class="h-4 w-4" aria-hidden="true" />
+          </button>
+          <div
+            v-if="moreOpen"
+            :id="`${id}-more-menu`"
+            ref="morePanel"
+            class="absolute left-0 top-full z-10 mt-1 min-w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md"
+            @keydown.escape="closeMore(true)"
+          >
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-bg-muted)] disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="disabled"
+              @mousedown.prevent
+              @click="clearFormatting"
+            >
+              <Eraser class="h-4 w-4" aria-hidden="true" />
+              Clear formatting
+            </button>
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-bg-muted)] disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="disabled"
+              @mousedown.prevent
+              @click="triggerAddImage"
+            >
+              <Image class="h-4 w-4" aria-hidden="true" />
+              Add image
+            </button>
+          </div>
+        </div>
+
+        <!-- Opens the file picker for Add image, its only way in, so it's hidden from everyone. -->
+        <input
+          ref="fileInput"
+          type="file"
+          accept="image/*"
+          hidden
+          data-testid="image-file-input"
+          @change="handleFiles"
+        />
+      </template>
     </div>
 
     <!--

@@ -1,8 +1,7 @@
 // The document layer: one canonical way to turn an entry's stored `content` into plain text.
 //
-// `Entry.content` is a serialized ProseMirror document. Search, timeline previews, and diffs all
-// need the same flat string and must agree to the character, so exactly one function produces it —
-// `docToPlainText` — and everything calls it (CLAUDE.md, Landmarks).
+// `Entry.content` is a serialized ProseMirror document. Previews, the empty check and diffs all read
+// it as text through `docToPlainText`, so they agree on what an entry says.
 //
 // Nothing here imports TipTap. The flattening is a walk over plain JSON, which keeps it pure,
 // runnable in node, and independent of whichever editor sits on top.
@@ -37,19 +36,13 @@ export const ANCHOR_MARK = 'anchor'
 
 /**
  * Wording a related entry proposes, as text in the parent's document carrying `{ anchorId }`: after
- * its anchor's passage, or alone for a bare insertion.
- *
- * Real text that the flattening **must** skip, which is what makes "no related entry is
- * destructive" checkable rather than merely intended: an anchor-mode session leaves
- * `docToPlainText` untouched, so `sameContent(before, after)` holds by construction.
+ * its anchor's passage, or alone for a bare insertion. It reads as the parent's text; the mark is
+ * what keeps it the related entry's.
  */
 export const ANCHOR_WORDING_MARK = 'anchorWording'
 
-/** The same wording as an atom carrying it in a `text` attribute, skipped the same way. */
-export const ANCHOR_INSERT_NODE = 'anchorInsert'
-
 /** Nodes that sit inside a line rather than starting one. */
-const INLINE_NODES = new Set(['text', 'hardBreak', ANCHOR_INSERT_NODE])
+const INLINE_NODES = new Set(['text', 'hardBreak'])
 
 /** A blank body to start a session in. `isEmptyDocument` still reports this as empty. */
 export function emptyDocument(): EntryDocument {
@@ -83,19 +76,7 @@ export function parseDocument(content: string | EntryDocument): EntryDocument {
   return parsed
 }
 
-/** The anchor whose wording `node` is, or null when it isn't anchor wording. */
-export function wordingAnchorId(node: DocNode): string | null {
-  const id =
-    node.type === ANCHOR_INSERT_NODE
-      ? node.attrs?.anchorId
-      : node.marks?.find((mark) => mark.type === ANCHOR_WORDING_MARK)?.attrs?.anchorId
-  return typeof id === 'string' && id ? id : null
-}
-
 function nodeText(node: DocNode): string {
-  // Anchor-carried wording belongs to the related entry that proposed it, not to this document's
-  // author. See ANCHOR_WORDING_MARK above: this line is why an anchor is non-destructive.
-  if (wordingAnchorId(node)) return ''
   if (node.type === 'text') return node.text ?? ''
   if (node.type === 'hardBreak') return '\n'
 
@@ -108,8 +89,8 @@ function nodeText(node: DocNode): string {
 }
 
 /**
- * The canonical flattening: the document's body as plain text, one line per block. Anchor-carried
- * wording is excluded — see `nodeText` — and nothing else is.
+ * The canonical flattening: the document's body as plain text, one line per block. Anchor wording
+ * reads as written, with nothing added around it: the author types any space it needs.
  */
 export function docToPlainText(content: string | EntryDocument): string {
   const doc = parseDocument(content)
@@ -177,8 +158,16 @@ export interface ContentDelta {
   sameMedia: boolean
   /** Same anchor ids and kinds. Ignores wording text — see `contentDelta`. */
   sameAnchors: boolean
-  /** Same wording on every anchor, untrimmed: a space typed into wording is still typing. */
-  sameWording: boolean
+}
+
+/**
+ * The document's text without its trailing line breaks, and only those. The editor keeps an empty
+ * paragraph at the end of a document so there is always somewhere to click, and appends one when
+ * the last block becomes a heading: that scaffolding is the editor's, and counting it would report
+ * every heading as an edit. A space typed at the end is the author's, so it counts.
+ */
+function withoutTrailingBreaks(doc: EntryDocument): string {
+  return docToPlainText(doc).replace(/\n+$/, '')
 }
 
 function anchorKey(anchors: DocumentAnchor[]): string {
@@ -188,27 +177,8 @@ function anchorKey(anchors: DocumentAnchor[]): string {
     .join('\n')
 }
 
-/** Each anchor's wording as written, untrimmed, keyed by anchor id in document order. */
-export function anchorWording(doc: EntryDocument): Map<string, string> {
-  const wording = new Map<string, string>()
-
-  walk(doc, (node) => {
-    const anchorId = wordingAnchorId(node)
-    if (!anchorId) return
-    const text = node.type === ANCHOR_INSERT_NODE ? node.attrs?.text : node.text
-    wording.set(anchorId, (wording.get(anchorId) ?? '') + String(text ?? ''))
-  })
-
-  return wording
-}
-
-/** `anchorWording` as one string, for comparing two documents' wording. */
-function wordingKey(doc: EntryDocument): string {
-  return [...anchorWording(doc)].map(([anchorId, text]) => `${anchorId}:${text}`).join('\n')
-}
-
 /**
- * Compares two documents along the four axes a change's signals are read from, in one pass so
+ * Compares two documents along the three axes a change's signals are read from, in one pass so
  * `DocumentEditor` never has to re-walk the document per signal.
  *
  * Deliberately a comparison of outcomes rather than a list of editor operations. Marks arrive as
@@ -219,33 +189,17 @@ function wordingKey(doc: EntryDocument): string {
  *
  * `sameAnchors` compares only `anchor_id` and `kind` (`collectAnchors`, `@/domain/anchors`),
  * ignoring `quote`/`insertion`: retyping wording moves no anchor and covers no different text, so
- * it must read as ordinary typing, not as a structural anchor op. `sameWording` is what tells that
- * typing from formatting, since `sameText` skips wording.
+ * it must read as ordinary typing, which `sameText` sees, not as a structural anchor op.
  */
 export function contentDelta(a: string | EntryDocument, b: string | EntryDocument): ContentDelta {
   const before = parseDocument(a)
   const after = parseDocument(b)
 
   return {
-    // Trimmed, as `isEmptyDocument` trims: the editor keeps an empty paragraph at the end of a
-    // document so there is always somewhere to click, and appends one when the last block becomes
-    // a heading. That scaffolding is the editor's, not the author's, and counting it would report
-    // every heading as an edit.
-    sameText: docToPlainText(before).trim() === docToPlainText(after).trim(),
+    sameText: withoutTrailingBreaks(before) === withoutTrailingBreaks(after),
     sameMedia: collectMediaRefs(before).join('\n') === collectMediaRefs(after).join('\n'),
     sameAnchors: anchorKey(collectAnchors(before)) === anchorKey(collectAnchors(after)),
-    sameWording: wordingKey(before) === wordingKey(after),
   }
-}
-
-/**
- * True when two documents say the same thing: the same body text and the same attachments. Only
- * their presentation differs. The title lives beside the document rather than in it, so a caller
- * comparing a full entry's before and after must check it separately.
- */
-export function sameContent(a: string | EntryDocument, b: string | EntryDocument): boolean {
-  const delta = contentDelta(a, b)
-  return delta.sameText && delta.sameMedia
 }
 
 function authoredJson(doc: EntryDocument): string {
@@ -260,9 +214,9 @@ function authoredJson(doc: EntryDocument): string {
 }
 
 /**
- * True when two documents are the same document, formatting included: marks and block types count,
- * where `sameContent` sees only words and attachments. What a revision has to change to be worth
- * saving. The editor's trailing empty blocks (see `contentDelta`) still don't count.
+ * True when two documents are the same document, formatting included: marks and block types count
+ * as well as words and attachments. What a revision has to change to be worth saving. The editor's
+ * trailing empty blocks (see `contentDelta`) still don't count.
  */
 export function sameDocument(a: string | EntryDocument, b: string | EntryDocument): boolean {
   return authoredJson(parseDocument(a)) === authoredJson(parseDocument(b))

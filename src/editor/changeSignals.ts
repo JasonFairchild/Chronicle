@@ -53,7 +53,7 @@ export function changeSignals(transaction: Transaction, after: EntryDocument): C
   return {
     inserted_text: insertedTextOf(transaction),
     removed_chars: removedTextOf(transaction),
-    is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors && delta.sameWording,
+    is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors,
     is_anchor_op: !delta.sameAnchors,
     // ProseMirror stamps this on its own paste handling. A drop is `'drop'` (PRODUCT.md §4.10), and
     // content inserted by a command, as an attached image is, carries none.

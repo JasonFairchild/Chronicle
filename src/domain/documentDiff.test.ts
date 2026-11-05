@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { diffDocuments, diffPlainText, type DiffSegment } from '@/domain/documentDiff'
-import { ANCHOR_INSERT_NODE, ANCHOR_MARK } from '@/domain/entryDocument'
 import { withAnchorWording } from '@/testing/anchorFixtures'
 import { serializeDocument, textContent } from '@/testing/documents'
 
@@ -121,38 +120,14 @@ describe('diffDocuments', () => {
     expect(diffDocuments(plain, bolded)).toEqual([{ kind: 'unchanged', text: 'It rained all day' }])
   })
 
-  it('ignores wording a related entry proposed, which the parent’s author never wrote', () => {
-    const annotated = serializeDocument({
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'I went to Lake Tahoe',
-              marks: [{ type: ANCHOR_MARK, attrs: { anchorId: 'anchor-1', kind: 'strike' } }],
-            },
-            {
-              type: ANCHOR_INSERT_NODE,
-              attrs: { anchorId: 'anchor-1', text: 'I went to Donner Lake' },
-            },
-          ],
-        },
-      ],
-    })
+  it('shows wording a related entry proposed as added text', () => {
+    const text = 'I went to Lake Tahoe with Dad'
+    const struck = withAnchorWording(text, 'anchor-1', 10, 20, ' Donner', 'strike')
 
-    // The anchor mark and its wording are what a related entry added; the entry still says what it said.
-    expect(diffDocuments(textContent('I went to Lake Tahoe'), annotated)).toEqual([
-      { kind: 'unchanged', text: 'I went to Lake Tahoe' },
-    ])
-  })
-
-  it('ignores proposed wording that is marked text', () => {
-    const struck = withAnchorWording('I went to Lake Tahoe', 'anchor-1', 10, 20, 'Donner', 'strike')
-
-    expect(diffDocuments(textContent('I went to Lake Tahoe'), struck)).toEqual([
-      { kind: 'unchanged', text: 'I went to Lake Tahoe' },
+    expect(diffDocuments(textContent(text), struck)).toEqual([
+      { kind: 'unchanged', text: 'I went to Lake Tahoe ' },
+      { kind: 'added', text: 'Donner ' },
+      { kind: 'unchanged', text: 'with Dad' },
     ])
   })
 })

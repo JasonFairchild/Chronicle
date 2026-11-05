@@ -264,8 +264,7 @@ describe('DocumentEditor (browser)', () => {
         quote: 'Lake Tahoe',
         insertion: 'Donner Lake',
       })
-      // The wording is presentational, not part of what the parent's author wrote.
-      expect(docToPlainText(latest.content)).toBe('I went to Lake Tahoe with Dad')
+      expect(docToPlainText(latest.content)).toBe('I went to Lake TahoeDonner Lake with Dad')
       await expect.element(placeholder).not.toBeInTheDocument()
     })
 
@@ -466,7 +465,7 @@ describe('DocumentEditor (browser)', () => {
       ])
     })
 
-    it('drops an anchor back out on undo', async () => {
+    it('drops an anchor back out on Undo', async () => {
       const screen = mountAnchorEditor()
       const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
       await expect.element(editorLocator).toBeVisible()
@@ -475,7 +474,7 @@ describe('DocumentEditor (browser)', () => {
       await screen.getByRole('button', { name: 'Highlight passage' }).click()
       expect(collectAnchors(changes[changes.length - 1]!.content)).toHaveLength(1)
 
-      await userEvent.keyboard('{Control>}z{/Control}')
+      await screen.getByRole('button', { name: 'Undo' }).click()
 
       const change = changes[changes.length - 1]!
       expect(collectAnchors(change.content)).toEqual([])

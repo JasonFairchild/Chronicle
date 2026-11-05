@@ -2,9 +2,9 @@
 //
 // An anchor's position is a fact about the **parent's** document, so that is where it is stored: a
 // span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is
-// wording: text carrying an `anchorWording` mark, or an `anchorInsert` node carrying
-// `{ anchorId, text }`. A related entry keeps only ids and the wording each one covered when it was
-// sealed (ENTRY_MODEL.md, "Related entries and anchors").
+// wording: text carrying an `anchorWording` mark with `{ anchorId }`. A related entry keeps only ids
+// and the wording each one covered when it was sealed (ENTRY_MODEL.md, "Related entries and
+// anchors").
 //
 // So there is no stored offset to reinterpret and nothing to resolve positionally: the editor
 // maintains anchor positions the way it maintains everything else, and this module only reads the
@@ -15,11 +15,10 @@ import type { AnchorKind, AnchorRef, NarrativeRelation, ResolvedAnchor } from '@
 
 import {
   ANCHOR_MARK,
-  anchorWording,
+  ANCHOR_WORDING_MARK,
   type EntryDocument,
   parseDocument,
   walk,
-  wordingAnchorId,
 } from './entryDocument'
 
 /** One anchor as the parent's document currently holds it. */
@@ -72,32 +71,25 @@ export function collectAnchors(content: string | EntryDocument): DocumentAnchor[
   }
 
   walk(doc, (node) => {
-    const wordingId = wordingAnchorId(node)
-    if (wordingId) {
-      upsert(wordingId)
-      return
-    }
-
     if (node.type !== 'text') return
 
     for (const mark of node.marks ?? []) {
-      if (mark.type !== ANCHOR_MARK) continue
+      if (mark.type !== ANCHOR_MARK && mark.type !== ANCHOR_WORDING_MARK) continue
 
       const anchorId = attrString(mark.attrs, 'anchorId')
       if (!anchorId) continue
 
       const anchor = upsert(anchorId)
-      // A mark can be split across several text nodes by any other mark overlapping it, so the
-      // quote accumulates rather than being assigned.
-      anchor.quote += node.text ?? ''
-      anchor.kind = anchorKind(mark.attrs) ?? anchor.kind
+      if (mark.type === ANCHOR_MARK) {
+        // A mark can be split across several text nodes by any other mark overlapping it, so the
+        // quote accumulates rather than being assigned.
+        anchor.quote += node.text ?? ''
+        anchor.kind = anchorKind(mark.attrs) ?? anchor.kind
+      } else {
+        anchor.insertion = (anchor.insertion ?? '') + (node.text ?? '')
+      }
     }
   })
-
-  // An `anchorInsert` node's empty text is a box opened and never written, not a correction.
-  for (const [anchorId, text] of anchorWording(doc)) {
-    anchors.get(anchorId)!.insertion = text || null
-  }
 
   return [...anchors.values()]
 }

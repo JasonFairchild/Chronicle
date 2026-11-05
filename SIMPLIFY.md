@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–8 and 9a (steps A–C, with its docs) done. Commit 9b (steps D–F) is next.
+Status: commits 0–8 and 9a (steps A–C, with its docs) done. 9b (steps D–F and its docs) is built and verified, with the manual check run; committing it is next.
 
 ## Context
 
@@ -280,31 +280,31 @@ Order and dependencies:
      - FILE_SPECS.md: its "Editor files wait for Track B" bullet.
    - Verify 9a, before committing: the full component suites, and `npx prettier --check` on the docs.
 
-   - **D. Remove the node.**
+   - **D. Remove the node.** Done.
      - Code: delete the `AnchorInsert` node, `ANCHOR_INSERT_NODE`, every node branch (`INLINE_NODES`, `wordingAnchorId`, `anchorWording`, `collectAnchors` and its `|| null`, which only the node's empty text needed, `anchorSpans`, `markFrames`), and the specs' node fixtures.
      - `findAnchor` goes, and with it a `toJSON` and `collectAnchors` over the whole document to read one anchor: `setAnchorKind` and `ownAnchorAt` read `kind` from the passage mark, and `removeAnchor` describes the anchor from the pieces it already finds.
      - Local data: clear IndexedDB by hand (TESTING.md, "Clearing local data by hand").
      - Verify: `npm run test -- src/domain/ src/editor/`.
-   - **E. Undo and Redo in anchor mode.** Ctrl+Z works there, but the buttons went with the formatting toolbar.
+   - **E. Undo and Redo in anchor mode.** Done. Ctrl+Z works there, but the buttons went with the formatting toolbar.
      - Where text mode has them, at the top left above the document. Not in AnchorMenu: it shows only over a selection or the session's own anchor, so it's gone just after Remove or a click away, when undo is most wanted.
      - EditorToolbar gains a `historyOnly` prop that renders its history group alone; DocumentEditor shows the toolbar in anchor mode with it set. There its name is "… toolbar", since "… formatting" would be wrong. Undo already passes the guard (`isHistoryTransaction`), so the buttons run what Ctrl+Z does.
      - Specs: EditorToolbar's pair, that history-only shows Undo and Redo and nothing else; DocumentEditor's pair, that Undo in anchor mode takes back a placed anchor. No spec Tabs through an anchor-mode page, so none changes order.
      - Verify: `npm run typecheck`; the EditorToolbar and DocumentEditor pairs.
-   - **F. Wording reads as the parent's text** (Decisions).
+   - **F. Wording reads as the parent's text** (Decisions). Done.
      - `docToPlainText` stops skipping wording, and adds nothing around it: the author types any space wording needs (Decisions).
      - `sameContent`, `sameWording` and `wordingKey` go, with their cases.
      - That leaves `collectAnchors` as `anchorWording`'s only caller, so it folds into that walk: a wording piece adds to its anchor's `insertion` as a passage piece adds to its `quote`.
      - `sameText` drops only trailing line breaks, the editor's scaffolding it exists to ignore, rather than all whitespace. That keeps what `sameWording`'s untrimmed comparison gave: a space typed at the end of the document is typing, in wording or prose.
      - Specs that assert an anchor session leaves `docToPlainText` unchanged now expect the wording in it: DocumentEditor's pair and EntryDetailView's flow pair.
      - Verify: `npm run test -- src/domain/ src/editor/`; the DocumentEditor and EntryDetailView flow pairs.
-   - **9b's docs**, after D, E and F:
+   - **9b's docs**, after D, E and F. Done.
      - ENTRY_MODEL.md: "Two invariants" (restated as in Decisions), and "Related entries and anchors"' skip becomes wording read as the parent's own.
      - AUTHORING.md: "Mark sets" names `docToPlainText` the ruler "anchors, search and diff use"; anchors leave that list.
      - PRODUCT.md: §4.4 gains Undo and Redo, and that an entry's preview includes its wording. §5.4's opening cites the anchor wording entry, which goes.
      - CHRONICLE_PLAN.md: the anchor wording entry goes.
      - CLAUDE.md: the `entryDocument.ts` landmark goes: its reason, a ruler anchors measure on, went with offset anchors, and its one rule, skipping wording, goes in step F.
      - Comments citing the skip or the ruler: `entryDocument.ts`'s header and `ANCHOR_WORDING_MARK`, and `documentDiff.ts`'s header.
-     - CODE_REVIEW.md: Track B's line counts, after D.
+     - CODE_REVIEW.md: drop the units' line counts, which go stale with every commit.
    - Verify 9b, before committing: the full component suites, and `npx prettier --check` on the docs.
 
 10. **Folded into 9.**

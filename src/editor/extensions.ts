@@ -13,7 +13,6 @@ import { Plugin } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
 
 import {
-  ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
   ANCHOR_WORDING_MARK,
   type EntryDocument,
@@ -156,46 +155,6 @@ const AnchorWording = Mark.create({
   },
 })
 
-/**
- * The same wording as an atom carrying it in a `text` attribute, which the editor no longer writes.
- * `docToPlainText` skips it, keeping the anchor non-destructive despite holding text.
- */
-const AnchorInsert = Node.create({
-  name: ANCHOR_INSERT_NODE,
-  group: 'inline',
-  inline: true,
-  atom: true,
-  selectable: true,
-
-  addAttributes() {
-    return {
-      anchorId: {
-        default: null,
-        parseHTML: (element) => element.getAttribute('data-anchor-id'),
-        renderHTML: (attributes) =>
-          attributes.anchorId ? { 'data-anchor-id': attributes.anchorId } : {},
-      },
-      text: {
-        default: '',
-        parseHTML: (element) => element.textContent,
-        renderHTML: () => ({}),
-      },
-    }
-  },
-
-  // No `parseHTML`: the `<ins>` it renders is the wording mark's, and ProseMirror re-reads typed
-  // wording from the DOM by that rule.
-
-  /** The wording mark's `<ins><span>` shape, so the same CSS styles both. */
-  renderHTML({ node, HTMLAttributes }) {
-    return [
-      'ins',
-      mergeAttributes(HTMLAttributes, { class: 'chronicle-anchor-insert' }),
-      ['span', { class: 'chronicle-anchor-wording' }, String(node.attrs.text ?? '')],
-    ]
-  },
-})
-
 /** `fragment` with no anchor marks, its nodes' content included. */
 function withoutAnchorMarks(fragment: Fragment): Fragment {
   const nodes: ProseMirrorNode[] = []
@@ -303,7 +262,6 @@ export function entryExtensions({
     // read, render, and carry forward the anchors already in the document it is editing.
     Anchor,
     AnchorWording,
-    AnchorInsert,
     AnchorGuard.configure({ anchorMode, baseContent }),
     ...(anchorMode ? [AnchorMode] : []),
   ]

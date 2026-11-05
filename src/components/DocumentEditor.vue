@@ -43,8 +43,8 @@ const props = withDefaults(
     displayOnly?: boolean
     /**
      * The other creation experience (ENTRY_MODEL.md, "Two creation experiences, kept separate").
-     * The parent's own text can't change: typing becomes wording, and the anchor menu
-     * (`AnchorMenu.vue`) takes the formatting toolbar's place.
+     * The parent's own text can't change: typing becomes wording, the anchor menu
+     * (`AnchorMenu.vue`) takes formatting's place, and the toolbar keeps only Undo and Redo.
      */
     anchorMode?: boolean
     /**
@@ -217,10 +217,11 @@ defineExpose({ focus })
     </p>
 
     <EditorToolbar
-      v-if="editor && !anchorMode && !displayOnly"
+      v-if="editor && !displayOnly"
       :editor="editor"
       :label="label"
       :disabled="disabled"
+      :history-only="anchorMode"
     />
 
     <EditorContent

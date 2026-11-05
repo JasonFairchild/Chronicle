@@ -104,8 +104,9 @@ Test ids are legitimate when the thing being located has no semantic role at all
 - **Imperative, concise test names.** `renders the entry's own text`, not `should render the entry's own text`. Never lead with "should".
 - **Group related assertions** that share setup. Split when setup is trivial and a clean dividing line exists.
 - **Keep test data and helpers in the narrowest scope that uses them:** what serves one test goes inside its `it`. Mount with only the props that scenario needs.
+- **Each test seeds its own data, in strings no other test in the file uses,** so state leaked from another test fails an assertion rather than satisfying it. The Browser Mode and Cypress copies of one test share theirs.
 - **Name a fixture after what it builds:** `makeDraft`, `draftChangeTo`.
-- **Hard-code assertion values.** Prefer duplication over indirection until it gets noisy.
+- **Hard-code assertion values.** Name a value only when more than one assertion reads it, a query by it included; seeding it doesn't count. Otherwise the seed and the assertion each spell it out.
 - **One blank line after mounting**, before the first assertion or interaction.
 - **Chain with `.and()`** after the first `.should()` in Cypress.
 - Don't remove an existing `.only` unless asked.

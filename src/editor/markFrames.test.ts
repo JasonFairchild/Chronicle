@@ -1,7 +1,7 @@
 import { Transform } from '@tiptap/pm/transform'
 import { describe, expect, it } from 'vitest'
 
-import { ANCHOR_INSERT_NODE, ANCHOR_MARK, ANCHOR_WORDING_MARK } from '@/domain/entryDocument'
+import { ANCHOR_MARK, ANCHOR_WORDING_MARK } from '@/domain/entryDocument'
 import type { AuthoringMark } from '@/domain/marks'
 import { buildFrames, documentsFromFrames } from '@/editor/markFrames'
 import { documentsAt, replayDocument, type ReplayLog } from '@/editor/replay'
@@ -40,6 +40,14 @@ function deleteRange(from: number, to: number) {
 function bold(from: number, to: number) {
   return (transform: Transform) =>
     transform.addMark(from, to, transform.doc.type.schema.marks.bold.create())
+}
+
+/** "rained" as the passage, then "heavily" typed after it at 10–17 and marked as its wording. */
+function placeWording(transform: Transform) {
+  const { schema } = transform.doc.type
+  transform.addMark(4, 10, schema.marks[ANCHOR_MARK].create({ anchorId: 'a-1' }))
+  transform.insert(10, schema.text('heavily'))
+  transform.addMark(10, 17, schema.marks[ANCHOR_WORDING_MARK].create({ anchorId: 'a-1' }))
 }
 
 describe('buildFrames', () => {
@@ -97,38 +105,16 @@ describe('buildFrames', () => {
     expect(frame?.changes).toEqual([{ kind: 'formatted', from: 4, to: 10 }])
   })
 
-  it('highlights an anchor over its marked text and its wording as one', () => {
-    const placeAnchor = (transform: Transform) => {
-      const { schema } = transform.doc.type
-      transform.addMark(4, 10, schema.marks[ANCHOR_MARK].create({ anchorId: 'a-1' }))
-      transform.insert(10, schema.nodes[ANCHOR_INSERT_NODE].create({ anchorId: 'a-1' }))
-    }
+  it('highlights an anchor over its passage and its typed wording as one', () => {
+    const [frame] = buildFrames(record(placeWording), marksAt(1))
 
-    const [frame] = buildFrames(record(placeAnchor), marksAt(1))
-
-    expect(frame?.changes).toEqual([{ kind: 'anchor', from: 4, to: 11 }])
+    expect(frame?.changes).toEqual([{ kind: 'anchor', from: 4, to: 17 }])
   })
 
-  describe('with wording as marked text', () => {
-    /** "rained" as the passage, then "heavily" typed after it at 10–17 and marked as its wording. */
-    function placeWording(transform: Transform) {
-      const { schema } = transform.doc.type
-      transform.addMark(4, 10, schema.marks[ANCHOR_MARK].create({ anchorId: 'a-1' }))
-      transform.insert(10, schema.text('heavily'))
-      transform.addMark(10, 17, schema.marks[ANCHOR_WORDING_MARK].create({ anchorId: 'a-1' }))
-    }
+  it('shows deleted wording as an anchor change, not as removed text', () => {
+    const [, frame] = buildFrames(record(placeWording, deleteRange(10, 17)), marksAt(1, 2))
 
-    it('highlights an anchor over its passage and its typed wording as one', () => {
-      const [frame] = buildFrames(record(placeWording), marksAt(1))
-
-      expect(frame?.changes).toEqual([{ kind: 'anchor', from: 4, to: 17 }])
-    })
-
-    it('shows deleted wording as an anchor change, not as removed text', () => {
-      const [, frame] = buildFrames(record(placeWording, deleteRange(10, 17)), marksAt(1, 2))
-
-      expect(frame?.changes).toEqual([{ kind: 'anchor', from: 10, to: 10 }])
-    })
+    expect(frame?.changes).toEqual([{ kind: 'anchor', from: 10, to: 10 }])
   })
 
   it('moves a highlight along with a later edit earlier in the document', () => {

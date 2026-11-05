@@ -9,7 +9,6 @@ import {
   relationTypeForAnchors,
   resolveAnchors,
 } from '@/domain/anchors'
-import type { EntryDocument } from '@/domain/entryDocument'
 import { withAnchorWording } from '@/testing/anchorFixtures'
 import { serializeDocument } from '@/testing/documents'
 
@@ -35,26 +34,6 @@ function doc(text: string, mark?: { anchorId: string; kind: string; from: number
   return serializeDocument({ type: 'doc', content: [{ type: 'paragraph', content: nodes }] })
 }
 
-/** A document with one bare `anchorInsert` node at the given index. */
-function docWithInsert(text: string, anchorId: string, at: number, insertedText: string): string {
-  const before = text.slice(0, at)
-  const after = text.slice(at)
-
-  return serializeDocument({
-    type: 'doc',
-    content: [
-      {
-        type: 'paragraph',
-        content: [
-          ...(before ? [{ type: 'text', text: before }] : []),
-          { type: 'anchorInsert', attrs: { anchorId, text: insertedText } },
-          ...(after ? [{ type: 'text', text: after }] : []),
-        ],
-      },
-    ],
-  } satisfies EntryDocument)
-}
-
 describe('collectAnchors', () => {
   it('reads a mark as one anchor with its covered text as the quote', () => {
     const content = doc('The meeting went badly', {
@@ -68,40 +47,6 @@ describe('collectAnchors', () => {
 
     expect(anchors).toEqual([
       { anchor_id: 'a1', kind: 'comment', quote: 'meeting', insertion: null },
-    ])
-  })
-
-  it('folds a mark and an anchorInsert sharing one id into a single anchor', () => {
-    const content = serializeDocument({
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: 'Wrong ' },
-            {
-              type: 'text',
-              text: 'lake',
-              marks: [{ type: 'anchor', attrs: { anchorId: 'a1', kind: 'strike' } }],
-            },
-            { type: 'anchorInsert', attrs: { anchorId: 'a1', text: 'Donner Lake' } },
-          ],
-        },
-      ],
-    })
-
-    const anchors = collectAnchors(content)
-
-    expect(anchors).toEqual([
-      { anchor_id: 'a1', kind: 'strike', quote: 'lake', insertion: 'Donner Lake' },
-    ])
-  })
-
-  it('reads a bare anchorInsert as an anchor with no mark', () => {
-    const content = docWithInsert('I went home', 'a1', 2, 'later')
-
-    expect(collectAnchors(content)).toEqual([
-      { anchor_id: 'a1', kind: null, quote: '', insertion: 'later' },
     ])
   })
 
@@ -251,7 +196,7 @@ describe('relationTypeForAnchors', () => {
   })
 
   it('reads proposed wording with nothing struck as an update too', () => {
-    const content = docWithInsert('The meeting went badly', 'a1', 22, ' in the end')
+    const content = withAnchorWording('The meeting went badly', 'a1', 22, 22, ' in the end')
 
     expect(relationTypeForAnchors(['a1'], content)).toBe('update')
   })

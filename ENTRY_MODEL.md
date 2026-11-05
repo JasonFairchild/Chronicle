@@ -8,7 +8,7 @@ A related entry is not a note stapled to a parent. It is a set of **operations o
 
 ## Two invariants
 
-**No related entry or connection is ever destructive.** A parent's stored text is never altered by them. Strikes and insertions are presentational. Content changes only through the version chain.
+**No related entry or connection is ever destructive.** A related entry marks passages and adds wording, and never changes or removes the parent's own words; the guard enforces it ("Two creation experiences, kept separate"). A strike is presentational: the struck words stay. Content changes only through the version chain.
 
 **Timeline membership is a view filter, not a model fact.** Any entry may appear in a timeline; revisions in a filtered timeline are a legitimate view. Marks are not entries and never appear.
 
@@ -22,7 +22,7 @@ There is no `replace` op. "I would have written this differently" is a strike pl
 
 **What the related entry stores.** `anchors: AnchorRef[]`, each `{ anchor_id, quote }`: an id referencing marks in the parent, plus the wording it covered at seal time. Empty means it is about the parent at large. `quote` is what renders "was attached to: …" once a later revision has removed the anchor.
 
-**Where wording lives.** The parent's document holds anchor structure and any wording with a position in it; the related entry holds the prose explanation. Per-op commentary should lead to additional related entries. Inline wording is plain single-line text; a thought needing more belongs on the related entry. `docToPlainText` skips anchor-carried wording, so previews and search never fill with words the parent's author didn't write.
+**Where wording lives.** The parent's document holds anchor structure and any wording with a position in it; the related entry holds the prose explanation. Per-op commentary should lead to additional related entries. Inline wording is plain single-line text; a thought needing more belongs on the related entry. Wording reads as the parent's own text: `docToPlainText` includes it as typed, so previews and diffs read it, as search will. Its mark, stored in every version, is what keeps it the related entry's.
 
 **Annotation and update are labels, not structure.** A related entry with a strike or proposed wording behaves like an update, one with only comments like an annotation; the difference falls out of what the user did. The labels drive icons, defaults, and filtering, never domain logic. Only `connection` and `revision` are structural.
 

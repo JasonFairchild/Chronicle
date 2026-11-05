@@ -5,19 +5,8 @@ import { type EditorState, PluginKey, TextSelection, type Transaction } from '@t
 import { Mapping } from '@tiptap/pm/transform'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 
-import {
-  type AnchorRange,
-  anchorRangeOverlapping,
-  collectAnchors,
-  type DocumentAnchor,
-  newAnchorId,
-} from '@/domain/anchors'
-import {
-  ANCHOR_INSERT_NODE,
-  ANCHOR_MARK,
-  ANCHOR_WORDING_MARK,
-  type EntryDocument,
-} from '@/domain/entryDocument'
+import { type AnchorRange, anchorRangeOverlapping, newAnchorId } from '@/domain/anchors'
+import { ANCHOR_MARK, ANCHOR_WORDING_MARK } from '@/domain/entryDocument'
 import type { AnchorKind } from '@/types/entry'
 
 import type { SealedAnchors } from './anchorGuard'
@@ -60,13 +49,6 @@ export function readAnchorAnnouncement(transaction: Transaction): string | null 
   return (transaction.getMeta(ANCHOR_ANNOUNCE_META) as string | undefined) ?? null
 }
 
-/** The anchor with this id in the editor's current document, if it's there. */
-function findAnchor(state: EditorState, anchorId: string): DocumentAnchor | undefined {
-  return collectAnchors(state.doc.toJSON() as EntryDocument).find(
-    (anchor) => anchor.anchor_id === anchorId,
-  )
-}
-
 /**
  * The region each anchor occupies, taken as the outermost extent of its pieces. A passage and its
  * wording are one anchor in two places, adjacent by construction, so the guard judges them as one
@@ -87,12 +69,6 @@ export function anchorSpans(doc: ProseMirrorNode): AnchorRange[] {
   }
 
   doc.descendants((node, pos) => {
-    if (node.type.name === ANCHOR_INSERT_NODE) {
-      const anchorId = node.attrs.anchorId
-      if (typeof anchorId === 'string' && anchorId) extend(anchorId, pos, pos + node.nodeSize)
-      return false
-    }
-
     if (!node.isText) return true
 
     for (const mark of node.marks) {
@@ -105,24 +81,6 @@ export function anchorSpans(doc: ProseMirrorNode): AnchorRange[] {
   })
 
   return [...spans.values()]
-}
-
-/** One of the session's own anchors: its outer extent and current kind. */
-export interface OwnAnchor extends AnchorRange {
-  kind: AnchorKind | null
-}
-
-/**
- * The session's own anchor at `pos`, its passage and its wording both counting, edges included.
- * Where two touch, the one ending at `pos`, which text typed there joins (`markTyped`). Null
- * outside anchor mode, where the editor seals every anchor it opens with.
- */
-export function ownAnchorAt(state: EditorState, pos: number): OwnAnchor | null {
-  const sealed = sealedOf(state)
-  const hit = anchorSpans(state.doc).find(
-    (span) => !sealed.has(span.anchor_id) && span.from <= pos && pos <= span.to,
-  )
-  return hit ? { ...hit, kind: findAnchor(state, hit.anchor_id)?.kind ?? null } : null
 }
 
 /** One text node carrying an anchor mark, with that mark. */
@@ -160,6 +118,27 @@ function anchorPieces(doc: ProseMirrorNode, markName: string): MarkPiece[] {
 
 function piecesOf(doc: ProseMirrorNode, markName: string, anchorId: string): MarkPiece[] {
   return anchorPieces(doc, markName).filter((piece) => piece.anchorId === anchorId)
+}
+
+/** One of the session's own anchors: its outer extent and current kind. */
+export interface OwnAnchor extends AnchorRange {
+  kind: AnchorKind | null
+}
+
+/**
+ * The session's own anchor at `pos`, its passage and its wording both counting, edges included.
+ * Where two touch, the one ending at `pos`, which text typed there joins (`markTyped`). Null
+ * outside anchor mode, where the editor seals every anchor it opens with.
+ */
+export function ownAnchorAt(state: EditorState, pos: number): OwnAnchor | null {
+  const sealed = sealedOf(state)
+  const hit = anchorSpans(state.doc).find(
+    (span) => !sealed.has(span.anchor_id) && span.from <= pos && pos <= span.to,
+  )
+  if (!hit) return null
+
+  const passage = piecesOf(state.doc, ANCHOR_MARK, hit.anchor_id)[0]
+  return { ...hit, kind: (passage?.mark.attrs.kind as AnchorKind | undefined) ?? null }
 }
 
 function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
@@ -249,9 +228,7 @@ function setAnchorKind(editor: Editor, anchorId: string, kind: AnchorKind): bool
   const markType = state.schema.marks[ANCHOR_MARK]!
 
   const pieces = piecesOf(state.doc, ANCHOR_MARK, anchorId)
-  if (pieces.length === 0) return false
-
-  if (findAnchor(state, anchorId)?.kind === kind) return false
+  if (pieces.length === 0 || pieces[0].mark.attrs.kind === kind) return false
 
   let transaction = state.tr
   for (const { from, to, mark } of pieces) {
@@ -288,19 +265,18 @@ export function applyAnchorKind(editor: Editor, kind: AnchorKind): boolean {
  */
 export function removeAnchor(editor: Editor, anchorId: string): void {
   const { state } = editor
+  const passage = piecesOf(state.doc, ANCHOR_MARK, anchorId)
+  const wording = piecesOf(state.doc, ANCHOR_WORDING_MARK, anchorId)
 
-  const found = findAnchor(state, anchorId)
-  // A bare insertion has no quote, so its wording stands in.
-  const description = found?.quote || found?.insertion
+  const textOf = (pieces: MarkPiece[]) =>
+    pieces.map(({ from, to }) => state.doc.textBetween(from, to)).join('')
+  // A bare insertion has no passage, so its wording stands in.
+  const description = textOf(passage) || textOf(wording)
 
   const transaction = state.tr
-  for (const { from, to, mark } of piecesOf(state.doc, ANCHOR_MARK, anchorId)) {
-    transaction.removeMark(from, to, mark)
-  }
+  for (const { from, to, mark } of passage) transaction.removeMark(from, to, mark)
   // Last to first, so each deletion leaves the earlier pieces where they were.
-  for (const { from, to } of piecesOf(state.doc, ANCHOR_WORDING_MARK, anchorId).reverse()) {
-    transaction.delete(from, to)
-  }
+  for (const { from, to } of wording.reverse()) transaction.delete(from, to)
 
   announce(transaction, description ? `Removed "${description}"` : 'Removed anchor')
 

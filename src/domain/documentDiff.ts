@@ -1,12 +1,9 @@
 // What changed between two versions of an entry, as something a reader can see rather than as the
 // steps that produced it. See PRODUCT.md §5.2.
 //
-// Measured against `docToPlainText`, like every other reading of a document (CLAUDE.md, Landmarks),
-// so a diff, a preview, and a search hit all agree to the character on what an entry says. Two
-// consequences worth naming: anchor-carried wording never appears here, deliberately, since it
-// belongs to the related entry that proposed it, not to this document's author; and a
-// formatting-only revision produces no diff here, since words are all this compares. PRODUCT.md
-// §5.2 decides that change should still show, as formatting.
+// Compares `docToPlainText` of each, so wording a related entry proposed shows as the parent's
+// text, and a formatting-only revision produces no diff here, since words are all this compares.
+// PRODUCT.md §5.2 decides that change should still show, as formatting.
 //
 // Nothing here interprets authoring steps. A diff is a comparison of two outcomes — the same
 // reasoning `contentDelta` is built on — which is what lets it work between any two versions,

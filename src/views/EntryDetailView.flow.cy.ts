@@ -9,9 +9,6 @@ import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput, type Entry } from '@/types/entry'
 
-const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
-const PARENT_CONTENT = textContent(PARENT_TEXT)
-
 function mountApp(id: string, router?: Router): Cypress.Chainable {
   return cy.mount(App, { routePath: `/entries/${id}`, router })
 }
@@ -23,7 +20,7 @@ function seed(input: Parameters<typeof createEntryInput>[0]): Promise<Entry> {
 
 describe('EntryDetailView flows', () => {
   it('adds a related entry about the whole entry when nothing is marked, and lands on it', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seed({ content: textContent('We hiked to the falls') })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -33,7 +30,7 @@ describe('EntryDetailView flows', () => {
 
       cy.findByRole('article').should('contain.text', 'Still think about this trip')
       cy.findByText('About').should('be.visible')
-      cy.findByRole('link', { name: PARENT_TEXT }).should(
+      cy.findByRole('link', { name: 'We hiked to the falls' }).should(
         'have.attr',
         'href',
         `/entries/${parent.id}`,
@@ -48,7 +45,7 @@ describe('EntryDetailView flows', () => {
 
   it('keeps a related entry in progress when the reader moves to another entry', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
+      const parent = await seed({ content: textContent('Snow on the pass by noon') })
       const other = await seed({ content: textContent('A different day entirely') })
       return { parent, other }
     }).then(({ parent, other }) => {
@@ -78,7 +75,7 @@ describe('EntryDetailView flows', () => {
   })
 
   it('frees the entry when the page is left with a revision opened and untouched', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seed({ content: textContent('The cabin smelled of pine') })).then((parent) => {
       mountApp(parent.id)
       cy.findByRole('button', { name: 'Revise entry' }).click()
       cy.findByRole('textbox', { name: 'Revised entry' }).should('be.visible')
@@ -91,7 +88,7 @@ describe('EntryDetailView flows', () => {
       cy.get('@abandonDraft')
         .should('have.been.calledOnce')
         .then((abandonDraft) => abandonDraft.firstCall.returnValue)
-      cy.findByRole('link', { name: PARENT_TEXT }).click()
+      cy.findByRole('link', { name: 'The cabin smelled of pine' }).click()
 
       cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
       cy.findByRole('button', { name: 'Resume draft' }).should('not.exist')
@@ -99,7 +96,7 @@ describe('EntryDetailView flows', () => {
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seed({ content: textContent('I went to Lake Tahoe alone') })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -115,7 +112,7 @@ describe('EntryDetailView flows', () => {
       cy.findByRole('button', { name: 'Add entry' }).click()
 
       // Saving lands on the related entry; what it marked shows on the entry it's about.
-      cy.findByRole('link', { name: PARENT_TEXT }).click()
+      cy.findByRole('link', { name: 'I went to Lake TahoeDonner Lake alone' }).click()
       cy.findByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”').should('be.visible')
 
       cy.then(() => entryRepository.listRevisions(parent.id)).then((revisions) => {
@@ -132,7 +129,7 @@ describe('EntryDetailView flows', () => {
   })
 
   it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seed({ content: textContent('I swam in Lake Tahoe at dawn') })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -142,15 +139,15 @@ describe('EntryDetailView flows', () => {
         .then(($editor) => selectTextRange($editor[0]!, 10, 20))
 
       cy.findByRole('button', { name: 'Highlight passage' }).click()
-      cy.focused().type('Donner Lake')
+      cy.focused().type('Emerald Bay')
 
       cy.findByRole('textbox', { name: 'Related entry' }).type('Actually')
       cy.findByRole('button', { name: 'Add entry' }).click()
-      cy.findByRole('link', { name: PARENT_TEXT }).click()
+      cy.findByRole('link', { name: 'I swam in Lake TahoeEmerald Bay at dawn' }).click()
 
       // A highlight is a mark on existing text, same as a strike — wording rides along with it the
       // same way, which is what `describeAnchor`'s `comment` case needed its own branch for.
-      cy.findByText('On “Lake Tahoe”, adds “Donner Lake”').should('be.visible')
+      cy.findByText('On “Lake Tahoe”, adds “Emerald Bay”').should('be.visible')
 
       cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
         expect(children[0]?.relation_type).to.equal('update')
@@ -159,7 +156,8 @@ describe('EntryDetailView flows', () => {
   })
 
   it('revises an entry by appending a version, leaving the original row untouched', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    const text = 'It rained the whole drive'
+    cy.then(() => seed({ content: textContent(text) })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -169,21 +167,19 @@ describe('EntryDetailView flows', () => {
       cy.findByText(/Version 2 of 2/).should('be.visible')
 
       cy.then(() => entryRepository.listRevisions(parent.id)).then((revisions) => {
-        expect(docToPlainText(revisions[0]!.content)).to.equal(
-          `${PARENT_TEXT}, or so I remembered it.`,
-        )
+        expect(docToPlainText(revisions[0]!.content)).to.equal(`${text}, or so I remembered it.`)
         expect(revisions[0]?.revision_mode).to.equal('direct')
         expect(revisions[0]?.authoring_trace?.events.length).to.be.greaterThan(0)
       })
       // The entry itself is never rewritten; the version chain is what carries the change.
       cy.then(() => entryRepository.getById(parent.id)).then((stored) => {
-        expect(docToPlainText(stored!.content)).to.equal(PARENT_TEXT)
+        expect(docToPlainText(stored!.content)).to.equal(text)
       })
     })
   })
 
   it('saves a revision that only changes formatting', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seed({ content: textContent('The road was icy') })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -193,14 +189,14 @@ describe('EntryDetailView flows', () => {
 
       cy.findByText(/Version 2 of 2/).should('be.visible')
       cy.then(() => entryRepository.listRevisions(parent.id)).then(([revision]) => {
-        expect(docToPlainText(revision!.content)).to.equal(PARENT_TEXT)
+        expect(docToPlainText(revision!.content)).to.equal('The road was icy')
         expect(revision!.content).to.contain('"bold"')
       })
     })
   })
 
   it('discards a revision on request, leaving the entry untouched', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seed({ content: textContent('We stopped for pie') })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -212,7 +208,7 @@ describe('EntryDetailView flows', () => {
       })
       cy.findByRole('button', { name: 'Discard' }).click()
 
-      cy.findByText(PARENT_TEXT).should('be.visible')
+      cy.findByText('We stopped for pie').should('be.visible')
       // Resolves once the delete has landed.
       cy.get('@discardDraft')
         .should('have.been.calledOnce')

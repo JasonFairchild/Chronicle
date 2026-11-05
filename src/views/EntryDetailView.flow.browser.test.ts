@@ -11,9 +11,6 @@ import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
 import { createEntryInput } from '@/types/entry'
 
-const PARENT_TEXT = 'I went to Lake Tahoe with Dad'
-const PARENT_CONTENT = textContent(PARENT_TEXT)
-
 async function mountApp(path: string) {
   const router = createTestRouter()
   await router.push(path)
@@ -24,7 +21,9 @@ async function mountApp(path: string) {
 
 describe('EntryDetailView flows (browser)', () => {
   it('adds a related entry about the whole entry when nothing is marked, and lands on it', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('We hiked to the falls') }),
+    )
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -38,7 +37,7 @@ describe('EntryDetailView flows (browser)', () => {
       .toHaveTextContent('Still think about this trip')
     await expect.element(screen.getByText('About', { exact: true })).toBeVisible()
     await expect
-      .element(screen.getByRole('link', { name: PARENT_TEXT }))
+      .element(screen.getByRole('link', { name: 'We hiked to the falls' }))
       .toHaveAttribute('href', `/entries/${parent.id}`)
 
     const children = await entryRepository.listChildren(parent.id)
@@ -48,7 +47,9 @@ describe('EntryDetailView flows (browser)', () => {
   })
 
   it('keeps a related entry in progress when the reader moves to another entry', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('Snow on the pass by noon') }),
+    )
     const other = await entryRepository.create(
       createEntryInput({ content: textContent('A different day entirely') }),
     )
@@ -77,7 +78,9 @@ describe('EntryDetailView flows (browser)', () => {
   })
 
   it('frees the entry when the page is left with a revision opened and untouched', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('The cabin smelled of pine') }),
+    )
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -89,7 +92,7 @@ describe('EntryDetailView flows (browser)', () => {
     await vi.waitFor(() => expect(abandonDraft).toHaveBeenCalledOnce())
     await abandonDraft.mock.results[0]!.value
 
-    await screen.getByRole('link', { name: PARENT_TEXT }).click()
+    await screen.getByRole('link', { name: 'The cabin smelled of pine' }).click()
 
     await expect.element(screen.getByRole('button', { name: 'Revise entry' })).toBeVisible()
     await expect
@@ -98,7 +101,9 @@ describe('EntryDetailView flows (browser)', () => {
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('I went to Lake Tahoe alone') }),
+    )
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -116,7 +121,7 @@ describe('EntryDetailView flows (browser)', () => {
     await screen.getByRole('button', { name: 'Add entry' }).click()
 
     // Saving lands on the related entry; what it marked shows on the entry it's about.
-    await screen.getByRole('link', { name: PARENT_TEXT }).click()
+    await screen.getByRole('link', { name: 'I went to Lake TahoeDonner Lake alone' }).click()
     await expect
       .element(screen.getByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”'))
       .toBeVisible()
@@ -133,7 +138,9 @@ describe('EntryDetailView flows (browser)', () => {
   })
 
   it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('I swam in Lake Tahoe at dawn') }),
+    )
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -144,24 +151,25 @@ describe('EntryDetailView flows (browser)', () => {
     selectTextRange(parentEditor.element(), 10, 20)
 
     await screen.getByRole('button', { name: 'Highlight passage' }).click()
-    await userEvent.keyboard('Donner Lake')
+    await userEvent.keyboard('Emerald Bay')
 
     await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Actually')
     await screen.getByRole('button', { name: 'Add entry' }).click()
-    await screen.getByRole('link', { name: PARENT_TEXT }).click()
+    await screen.getByRole('link', { name: 'I swam in Lake TahoeEmerald Bay at dawn' }).click()
 
     // A highlight is a mark on existing text, same as a strike, and wording rides along with it the
     // same way — so `relationTypeForAnchors` reads it as an `update`, and `describeAnchor`'s
     // `comment` case has to report the insertion rather than only the passage.
-    await expect.element(screen.getByText('On “Lake Tahoe”, adds “Donner Lake”')).toBeVisible()
+    await expect.element(screen.getByText('On “Lake Tahoe”, adds “Emerald Bay”')).toBeVisible()
 
     const children = await entryRepository.listChildren(parent.id)
     expect(children[0]?.relation_type).toBe('update')
   })
 
   it('revises an entry by appending a version, leaving the original row untouched', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const text = 'It rained the whole drive'
+    const parent = await entryRepository.create(createEntryInput({ content: textContent(text) }))
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -173,15 +181,17 @@ describe('EntryDetailView flows (browser)', () => {
     await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
 
     const revisions = await entryRepository.listRevisions(parent.id)
-    expect(docToPlainText(revisions[0]!.content)).toBe(`${PARENT_TEXT}, or so I remembered it.`)
+    expect(docToPlainText(revisions[0]!.content)).toBe(`${text}, or so I remembered it.`)
     expect(revisions[0]?.revision_mode).toBe('direct')
     expect(revisions[0]?.authoring_trace?.events.length).toBeGreaterThan(0)
     // The entry itself is never rewritten; the version chain is what carries the change.
-    expect(docToPlainText((await entryRepository.getById(parent.id))!.content)).toBe(PARENT_TEXT)
+    expect(docToPlainText((await entryRepository.getById(parent.id))!.content)).toBe(text)
   })
 
   it('saves a revision that only changes formatting', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('The road was icy') }),
+    )
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -193,12 +203,14 @@ describe('EntryDetailView flows (browser)', () => {
 
     await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
     const [revision] = await entryRepository.listRevisions(parent.id)
-    expect(docToPlainText(revision!.content)).toBe(PARENT_TEXT)
+    expect(docToPlainText(revision!.content)).toBe('The road was icy')
     expect(revision!.content).toContain('"bold"')
   })
 
   it('discards a revision on request, leaving the entry untouched', async () => {
-    const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const parent = await entryRepository.create(
+      createEntryInput({ content: textContent('We stopped for pie') }),
+    )
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -210,7 +222,7 @@ describe('EntryDetailView flows (browser)', () => {
     const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
     await screen.getByRole('button', { name: 'Discard' }).click()
 
-    await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
+    await expect.element(screen.getByText('We stopped for pie')).toBeVisible()
     // Resolves once the delete has landed.
     expect(discardDraft).toHaveBeenCalledOnce()
     await discardDraft.mock.results[0]!.value

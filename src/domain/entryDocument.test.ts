@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  ANCHOR_INSERT_NODE,
   collectMediaRefs,
   contentDelta,
   docToPlainText,
@@ -10,7 +9,6 @@ import {
   isEmptyDocument,
   parseDocument,
   previewText,
-  sameContent,
   sameDocument,
 } from '@/domain/entryDocument'
 import { withAnchorWording } from '@/testing/anchorFixtures'
@@ -69,10 +67,10 @@ describe('docToPlainText', () => {
     expect(docToPlainText(withBreak)).toBe('Roses\nViolets')
   })
 
-  it('leaves out wording an anchor proposes as marked text', () => {
-    const struck = withAnchorWording('We drove up on Friday.', 'a1', 15, 21, 'Saturday', 'strike')
+  it('reads wording an anchor proposes as the parent’s text, adding nothing around it', () => {
+    const struck = withAnchorWording('It rained all day', 'a1', 3, 9, ' poured', 'strike')
 
-    expect(docToPlainText(struck)).toBe('We drove up on Friday.')
+    expect(docToPlainText(struck)).toBe('It rained poured all day')
   })
 })
 
@@ -92,21 +90,10 @@ describe('previewText', () => {
     expect(previewText(plainTextDocument('   \n  '))).toBe('')
   })
 
-  it('shows only what the entry itself says, not wording an anchor proposes', () => {
-    const annotated: EntryDocument = {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: 'We drove up on Friday.' },
-            { type: 'anchorInsert', attrs: { anchorId: 'a1', text: 'Saturday, actually' } },
-          ],
-        },
-      ],
-    }
+  it('includes wording an anchor proposes', () => {
+    const annotated = withAnchorWording('It rained', 'a1', 9, 9, ' all day')
 
-    expect(previewText(annotated)).toBe('We drove up on Friday.')
+    expect(previewText(annotated)).toBe('It rained all day')
   })
 })
 
@@ -167,69 +154,13 @@ describe('parseDocument', () => {
   })
 })
 
-describe('sameContent', () => {
-  const paragraph: EntryDocument = {
-    type: 'doc',
-    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'We drove up on Friday.' }] }],
-  }
-
-  it('ignores marks and block types, which change presentation and not words', () => {
-    const bolded: EntryDocument = {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [{ type: 'text', text: 'We drove up on Friday.', marks: [{ type: 'bold' }] }],
-        },
-      ],
-    }
-    const asHeading: EntryDocument = {
-      type: 'doc',
-      content: [
-        {
-          type: 'heading',
-          attrs: { level: 2 },
-          content: [{ type: 'text', text: 'We drove up on Friday.' }],
-        },
-      ],
-    }
-
-    expect(sameContent(paragraph, bolded)).toBe(true)
-    expect(sameContent(paragraph, asHeading)).toBe(true)
-  })
-
-  it('ignores the empty block the editor keeps at the end of a document', () => {
-    const withTrailingBlock: EntryDocument = {
-      type: 'doc',
-      content: [...paragraph.content, { type: 'paragraph' }],
-    }
-
-    expect(sameContent(paragraph, withTrailingBlock)).toBe(true)
-  })
-
-  it('sees a change of words or of attachments — a title lives beside the document now', () => {
-    const reworded = plainTextDocument('We drove up on Saturday.')
-    const withImage: EntryDocument = {
-      type: 'doc',
-      content: [...paragraph.content, { type: 'mediaImage', attrs: { mediaRef: 'blob-1' } }],
-    }
-
-    expect(sameContent(paragraph, reworded)).toBe(false)
-    expect(sameContent(paragraph, withImage)).toBe(false)
-  })
-
-  it('compares a serialized document and a live one identically', () => {
-    expect(sameContent(serializeDocument(paragraph), paragraph)).toBe(true)
-  })
-})
-
 describe('sameDocument', () => {
   const paragraph: EntryDocument = {
     type: 'doc',
     content: [{ type: 'paragraph', content: [{ type: 'text', text: 'We drove up on Friday.' }] }],
   }
 
-  it('sees marks and block types, which sameContent ignores', () => {
+  it('sees marks and block types', () => {
     const bolded: EntryDocument = {
       type: 'doc',
       content: [
@@ -301,31 +232,24 @@ describe('contentDelta', () => {
     expect(delta.sameMedia).toBe(false)
   })
 
-  it('reports a retyped wording box as the same anchors, since only its text moved', () => {
-    const withWording = (text: string): EntryDocument => ({
+  it('ignores the empty block the editor keeps at the end of a document', () => {
+    const withTrailingBlock: EntryDocument = {
       type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: 'Worth revisiting' },
-            { type: ANCHOR_INSERT_NODE, attrs: { anchorId: 'anchor-1', text } },
-          ],
-        },
-      ],
-    })
+      content: [...paragraph.content, { type: 'paragraph' }],
+    }
 
-    const delta = contentDelta(withWording('first draft'), withWording('final wording'))
-    expect(delta.sameAnchors).toBe(true)
+    expect(contentDelta(paragraph, withTrailingBlock).sameText).toBe(true)
   })
 
-  it('reports a space typed into marked wording as the same anchors but different wording', () => {
-    const delta = contentDelta(
-      withAnchorWording('Worth revisiting', 'anchor-1', 0, 5, 'first'),
-      withAnchorWording('Worth revisiting', 'anchor-1', 0, 5, 'first '),
+  it('reports a space typed at the end, in prose or wording, as different text', () => {
+    const prose = contentDelta(paragraph, plainTextDocument('We drove up on Friday. '))
+    const wording = contentDelta(
+      withAnchorWording('Worth revisiting', 'anchor-1', 0, 16, 'first'),
+      withAnchorWording('Worth revisiting', 'anchor-1', 0, 16, 'first '),
     )
 
-    expect(delta.sameAnchors).toBe(true)
-    expect(delta.sameWording).toBe(false)
+    expect(prose.sameText).toBe(false)
+    expect(wording.sameText).toBe(false)
+    expect(wording.sameAnchors).toBe(true)
   })
 })

@@ -48,7 +48,10 @@ describe('EditorToolbar', () => {
    * The toolbar over an editor attached after it, as `DocumentEditor` lays them out, with a Title
    * field before it to Tab from, as `EntryComposer` has.
    */
-  function mountToolbar(content: EntryDocument = plainTextDocument(''), disabled = false): Editor {
+  function mountToolbar(
+    content: EntryDocument = plainTextDocument(''),
+    props: { disabled?: boolean; historyOnly?: boolean } = {},
+  ): Editor {
     const element = document.createElement('div')
     const editor = new Editor({
       element,
@@ -64,7 +67,9 @@ describe('EditorToolbar', () => {
       title.remove()
     }
 
-    cy.mount(EditorToolbar, { props: { editor, label: 'New entry', disabled } }).then(() => {
+    cy.mount(EditorToolbar, {
+      props: { editor, label: 'New entry', disabled: false, ...props },
+    }).then(() => {
       document.body.prepend(title)
       document.body.append(element)
     })
@@ -245,7 +250,7 @@ describe('EditorToolbar', () => {
   })
 
   it('disables every control while `disabled`', () => {
-    mountToolbar(plainTextDocument(''), true)
+    mountToolbar(plainTextDocument(''), { disabled: true })
 
     cy.findAllByRole('button')
       .should('have.length', 11)
@@ -253,6 +258,20 @@ describe('EditorToolbar', () => {
         cy.wrap($button).should('be.disabled')
       })
     cy.findByRole('combobox', { name: 'Text style' }).should('be.disabled')
+  })
+
+  it('shows Undo and Redo alone when history-only', () => {
+    mountToolbar(plainTextDocument(''), { historyOnly: true })
+
+    cy.findByRole('toolbar', { name: 'New entry toolbar' })
+      .findAllByRole('button')
+      .should(($buttons) =>
+        expect([...$buttons].map((button) => button.getAttribute('aria-label'))).to.deep.equal([
+          'Undo',
+          'Redo',
+        ]),
+      )
+    cy.findByRole('combobox').should('not.exist')
   })
 
   it('stores an attached image and inserts it into the document by id', () => {

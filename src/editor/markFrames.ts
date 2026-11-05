@@ -2,7 +2,6 @@ import { ChangeSet } from '@tiptap/pm/changeset'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import {
   AddMarkStep,
-  AttrStep,
   RemoveMarkStep,
   ReplaceAroundStep,
   ReplaceStep,
@@ -10,12 +9,7 @@ import {
   Transform,
 } from '@tiptap/pm/transform'
 
-import {
-  ANCHOR_INSERT_NODE,
-  ANCHOR_MARK,
-  ANCHOR_WORDING_MARK,
-  type EntryDocument,
-} from '@/domain/entryDocument'
+import { ANCHOR_MARK, ANCHOR_WORDING_MARK, type EntryDocument } from '@/domain/entryDocument'
 import type { AuthoringMark } from '@/domain/marks'
 import type { FrameChange, MarkFrame, MarkSet } from '@/types/markSet'
 
@@ -65,30 +59,19 @@ function visibleIn(doc: ProseMirrorNode, from: number, to: number): 'content' | 
   if (from >= to) return seen
 
   doc.nodesBetween(from, to, (node) => {
-    if (node.type.name === ANCHOR_INSERT_NODE || isWording(node)) seen ??= 'anchor'
+    if (isWording(node)) seen ??= 'anchor'
     else if (node.isLeaf) seen = 'content'
   })
 
   return seen
 }
 
-/** The range a mark, attribute or rewrapping step touched, in the document it applied to. */
-function touchedBy(
-  step: Step,
-  doc: ProseMirrorNode,
-): { kind: 'formatted' | 'anchor'; from: number; to: number } | null {
+/** The range a mark or rewrapping step touched, in the document it applied to. */
+function touchedBy(step: Step): { kind: 'formatted' | 'anchor'; from: number; to: number } | null {
   if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) {
     const { name } = step.mark.type
     const kind = name === ANCHOR_MARK || name === ANCHOR_WORDING_MARK ? 'anchor' : 'formatted'
     return { kind, from: step.from, to: step.to }
-  }
-
-  // A wording box's keystrokes, chiefly.
-  if (step instanceof AttrStep) {
-    const node = doc.nodeAt(step.pos)
-    if (!node) return null
-    const kind = node.type.name === ANCHOR_INSERT_NODE ? 'anchor' : 'formatted'
-    return { kind, from: step.pos, to: step.pos + node.nodeSize }
   }
 
   // A heading, a list or a quote.
@@ -120,12 +103,12 @@ function tidy(changes: FrameChange[]): FrameChange[] {
 
 /**
  * What to highlight, read from the segment's steps. Text and nodes come from `ChangeSet`, which
- * cancels out anything typed and deleted again. Mark, attribute and rewrapping steps don't read as
- * a change there, so each one's range is mapped forward and clipped to where the documents differ:
+ * cancels out anything typed and deleted again. Mark and rewrapping steps don't read as a change
+ * there, so each one's range is mapped forward and clipped to where the documents differ:
  * outside that, it was undone.
  */
 function changesIn(segment: Transform, differFrom: number, differTo: number): FrameChange[] {
-  const { before, doc: after, steps, docs, mapping } = segment
+  const { before, doc: after, steps, mapping } = segment
   const changes: FrameChange[] = []
 
   for (const change of ChangeSet.create(before).addSteps(after, mapping.maps, null).changes) {
@@ -146,7 +129,7 @@ function changesIn(segment: Transform, differFrom: number, differTo: number): Fr
   }
 
   steps.forEach((step, i) => {
-    const touched = touchedBy(step, docs[i])
+    const touched = touchedBy(step)
     if (!touched) return
 
     const forward = mapping.slice(i)

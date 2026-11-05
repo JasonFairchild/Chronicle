@@ -309,8 +309,7 @@ describe('DocumentEditor', () => {
           quote: 'Lake Tahoe',
           insertion: 'Donner Lake',
         })
-        // The wording is presentational, not part of what the parent's author wrote.
-        expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad')
+        expect(docToPlainText(change.content)).to.equal('I went to Lake TahoeDonner Lake with Dad')
       })
       cy.findByText('Add wording…').should('not.exist')
     })
@@ -514,7 +513,7 @@ describe('DocumentEditor', () => {
       })
     })
 
-    it('drops an anchor back out on undo', () => {
+    it('drops an anchor back out on Undo', () => {
       const onChange = cy.stub().as('change')
       mountAnchorEditor(onChange)
 
@@ -524,7 +523,7 @@ describe('DocumentEditor', () => {
         expect(collectAnchors(lastChange(stub).content)).to.have.length(1),
       )
 
-      cy.focused().type('{ctrl+z}')
+      cy.findByRole('button', { name: 'Undo' }).click()
 
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)

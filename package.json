@@ -51,6 +51,7 @@
     "@vitest/coverage-istanbul": "^4.1.11",
     "@vue/tsconfig": "^0.9.1",
     "cypress": "^16.0.0",
+    "cypress-real-events": "^1.15.1",
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-simple-import-sort": "^14.0.0",

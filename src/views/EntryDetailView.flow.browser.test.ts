@@ -108,13 +108,8 @@ describe('EntryDetailView flows (browser)', () => {
     parentEditor.element().focus()
     selectTextRange(parentEditor.element(), 10, 20)
 
-    // `exact: true` matters here: this composer's other half (`Related entry`) has its own ordinary
-    // "Strikethrough" toggle, and a substring match would find that button instead — on the wrong
-    // editor entirely.
-    await screen.getByRole('button', { name: 'Strike', exact: true }).click()
-    await userEvent.keyboard('D')
-    await screen.getByRole('textbox', { name: 'Wording' }).fill('Donner Lake')
-    await screen.getByRole('button', { name: 'Accept wording' }).click()
+    await screen.getByRole('button', { name: 'Strike passage' }).click()
+    await userEvent.keyboard('Donner Lake')
 
     await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Wrong lake')
@@ -148,10 +143,8 @@ describe('EntryDetailView flows (browser)', () => {
     parentEditor.element().focus()
     selectTextRange(parentEditor.element(), 10, 20)
 
-    await screen.getByRole('button', { name: 'Highlight' }).click()
-    await userEvent.keyboard('D')
-    await screen.getByRole('textbox', { name: 'Wording' }).fill('Donner Lake')
-    await screen.getByRole('button', { name: 'Accept wording' }).click()
+    await screen.getByRole('button', { name: 'Highlight passage' }).click()
+    await userEvent.keyboard('Donner Lake')
 
     await screen.getByRole('textbox', { name: 'Related entry' }).click()
     await userEvent.keyboard('Actually')

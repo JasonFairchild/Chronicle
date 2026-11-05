@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
-import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import DocumentEditor from '@/components/DocumentEditor.vue'
 import DraftElsewhereNotice from '@/components/DraftElsewhereNotice.vue'
 import EntryCard from '@/components/EntryCard.vue'
 import EntryComposer from '@/components/EntryComposer.vue'
@@ -65,8 +65,6 @@ const breadcrumbKind = computed<'about' | 'connects' | null>(() => {
 
 /** The revision session: `isOpen` while a revision draft is shown, not while the entry is read. */
 const revisionSession = useDraftSession()
-/** Anchors this revision session has disturbed so far, sticky once flagged (PRODUCT.md §4.5). */
-const revisionAffectedAnchorIds = ref<string[]>([])
 
 /**
  * The open anchor-mode session, if a related entry is being composed against a passage. Mutually
@@ -123,26 +121,6 @@ const metaLine = computed(() => {
 
 /** The writer's own details, one line each. Empty when they gave none, so nothing is shown. */
 const detailLines = computed(() => (aggregated.value ? entryDetailLines(aggregated.value) : []))
-
-/**
- * The related entry each disturbed anchor belongs to, named rather than merely counted
- * (PRODUCT.md §4.5).
- * Anchors, not related entries, are what a revision can disturb, so this reads them off each one's
- * resolved anchor list rather than off the entries themselves.
- */
-const revisionWarnings = computed<string[]>(() => {
-  if (revisionAffectedAnchorIds.value.length === 0) return []
-
-  const owners = new Map<string, string>()
-  for (const related of aggregated.value?.related_entries ?? []) {
-    for (const anchor of related.anchors) {
-      owners.set(anchor.anchor_id, entryLabel(related.entry))
-    }
-  }
-
-  const names = revisionAffectedAnchorIds.value.map((id) => owners.get(id) ?? 'a related entry')
-  return [...new Set(names)]
-})
 
 /**
  * One line per anchor. A strike and its replacement wording are one anchor sharing one id, not two
@@ -309,10 +287,6 @@ async function startRevising(): Promise<void> {
   revisionSession.begin({ kind: 'revision', parent: current })
 }
 
-function trackAffectedAnchors(change: EditorChange): void {
-  revisionAffectedAnchorIds.value = change.affectedAnchorIds ?? []
-}
-
 async function saveRevision(): Promise<void> {
   const saved = await revisionSession.save()
   if (saved) await loadEntry(props.id)
@@ -335,18 +309,12 @@ async function startRelatedEntry(): Promise<void> {
 /** Lands on the new related entry, whose breadcrumb leads back here. */
 const saveRelatedEntry = useSealDraft(relatedSession)
 
-/** Lets go of the revision session: its work stays a draft, and an untouched claim is released. */
-function resetRevisionState(): void {
-  revisionSession.reset()
-  revisionAffectedAnchorIds.value = []
-}
-
 watch(
   () => props.id,
   (entryId) => {
     // Otherwise saving after navigating away would seal against whichever entry this session's
     // draft still points at, not the one now on screen.
-    resetRevisionState()
+    revisionSession.reset()
     relatedSession.reset()
     void loadEntry(entryId)
   },
@@ -378,7 +346,7 @@ watch(
 onBeforeUnmount(() => {
   layoutWidth.value = 'normal'
   // Leaving the page ends its sessions as surely as changing entry does.
-  resetRevisionState()
+  revisionSession.reset()
   relatedSession.reset()
 })
 </script>
@@ -468,21 +436,9 @@ onBeforeUnmount(() => {
             :session="revisionSession"
             label="Revised entry"
             save-label="Save revision"
-            @change="trackAffectedAnchors"
             @save="saveRevision"
             @discard="revisionSession.discard()"
-          >
-            <template #notices>
-              <p
-                v-if="revisionWarnings.length > 0"
-                class="text-sm text-[var(--color-accent)]"
-                role="status"
-              >
-                This changes the passage {{ revisionWarnings.join(', ') }}
-                {{ revisionWarnings.length === 1 ? 'is' : 'are' }} about.
-              </p>
-            </template>
-          </EntryComposer>
+          />
         </template>
 
         <template v-else-if="relatedSession.isOpen">

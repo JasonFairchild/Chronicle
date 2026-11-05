@@ -12,7 +12,7 @@ CHRONICLE_PLAN.md priority 1: understand and own the existing code, refactoring 
 - **Two tracks, split where the next priorities split.** Track A is the entry and draft path through every layer, which is what item 2 (connections folded) changes. Track B is the editor, which SIMPLIFY.md reshapes first, anchor wording as marked text included. Track A comes first because it holds NewEntryView and unblocks item 2. Item 2 can then start before Track B. Rejected: one pass with all screens first. It puts DocumentEditor (1,130 lines) second, and holds item 2 until both tracks are done.
 - **A shared file is reviewed with the first screen that uses it.** EntryComposer and DraftElsewhereNotice go with NewEntryView, and later screens review only their wiring of them. Its own spec proves it (TESTING.md), so theirs prove only that wiring.
 - **Connections: read, don't polish.** NewConnectionView and its specs are skipped, since item 2 removes them. Connection-specific code elsewhere in Track A (`target_id`, the `connection` relation type, `new_connection`) is read for understanding only, because item 2 replaces it. A bug found there still gets fixed.
-- **Anchors are reviewed in full**, in the shape SIMPLIFY.md leaves them: wording as marked text, and affected-anchor tracking left in DocumentEditor until PRODUCT.md §5.4's lock replaces it.
+- **Anchors are reviewed in full**, in the shape SIMPLIFY.md leaves them: wording as marked text, and PRODUCT.md §5.4's lock in place of affected-anchor tracking.
 - **Read the Browser Mode spec closely, and its Cypress mirror against it.** The pairs cover the same cases on purpose (TESTING.md), so the mirror is checked for drift (a case or assertion one has and the other lacks) rather than re-read from scratch. Shared test setup is reviewed in the first unit that runs it.
 - **An improvement lands when it's ready, whatever layer it's in.** Pure simplification or reduction usually lands at once, even in a file no unit has reached yet. **Carried inward** holds what's better left: a change that needs the inner file understood first, or one that would swell the change it was found in.
 - **What a unit produces.** Each refactor or fix is its own commit, green alone. A unit with nothing to change only moves Status on. Behavior questions go to PRODUCT.md, and engineering bigger than a review fix goes to CHRONICLE_PLAN.md.
@@ -39,9 +39,9 @@ Item 2 can start here.
 
 ### Track B: the editor
 
-1. **DocumentEditor.** `DocumentEditor.vue` 1,130, `AnchorMenu.vue` 110. Likely more than one sitting. Shared setup: `anchorFixtures`, `selectTextRange`. Specs: `DocumentEditor` pair (763 and 866).
-2. **Schema and anchor commands.** `anchorCommands.ts` 647, `AnchorInsertView.vue` 232, `extensions.ts` (re-read beside the commands). No specs of their own: DocumentEditor's cover them.
-3. **The document and anchors.** `entryDocument.ts` 235, `anchors.ts` 291, `anchorWarnings.ts` 32. Specs: `entryDocument.test`, `anchors.test`, `anchorWarnings.test`.
+1. **DocumentEditor.** `DocumentEditor.vue` 419, `EditorToolbar.vue` 426, `AnchorMenu.vue` 107, `useRovingTabindex.ts` 70. Likely more than one sitting. Shared setup: `anchorFixtures`, `selectTextRange`. Specs: the `DocumentEditor` pair (656 and 736), and the `EditorToolbar` and `AnchorMenu` pairs.
+2. **Schema and anchor commands.** `anchorCommands.ts` 499, `anchorGuard.ts` 92, `extensions.ts` 310, `changeSignals.ts` 63. Specs: `anchorGuard.test`, `changeSignals.test`; DocumentEditor's cover the rest.
+3. **The document and anchors.** `entryDocument.ts` 269, `anchors.ts` 230. Specs: `entryDocument.test`, `anchors.test`.
 4. **The trace's read side.** `marks.ts` 173, `replay.ts` 73, `markFrames.ts` 226, `markSetsStore.ts` 56, `types/markSet.ts` 42, `documentDiff.ts` 163, with `traceRecorder.ts` for context. No screen uses these yet; they serve the history view (item 5), and `documentDiff` waits on a revision's diff (CHRONICLE_PLAN.md). Specs: `marks`, `replay`, `markFrames`, `markSetsStore`, `documentDiff` tests.
 
 SIMPLIFY.md changes these files before the units above review them. Items 4–5 (seed data, the history view) wait on B4.
@@ -79,4 +79,4 @@ Work the review turned up that is bigger than a review fix. Rough notes, kept as
 At the end of each track, in the running app, behavior should be unchanged from before the review, apart from any planned item done along the way.
 
 - **Track A:** write an entry and leave the page. Resume it from Drafts and save it. It shows on Timeline and on its own page. From that page, add a related entry and a revision, reloading between steps: nothing typed is lost.
-- **Track B:** in a related entry, highlight one passage, strike another, add wording, attach an image, and save. The parent shows the marks and wording. A revision that disturbs an anchor warns.
+- **Track B:** in a related entry, highlight one passage, strike another, add wording, attach an image, and save. The parent shows the marks and wording. A revision can't change the text under an anchor.

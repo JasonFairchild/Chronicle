@@ -2,7 +2,6 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
-import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
@@ -118,15 +117,13 @@ describe('EntryComposer', () => {
   it('moves from the title into the body on Enter', () => {
     cy.mount(EntryComposer, {
       props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
-      attrs: { onSave: cy.spy(), onDiscard: cy.spy(), onChange: cy.spy().as('change') },
+      attrs: { onSave: cy.spy(), onDiscard: cy.spy() },
     })
 
     cy.findByRole('textbox', { name: 'Title' }).type('Lake Tahoe{enter}')
     cy.focused().type('We drove up on Friday.')
 
-    cy.get('@change')
-      .its('lastCall.args.0.content')
-      .then((content) => expect(docToPlainText(content)).to.equal('We drove up on Friday.'))
+    cy.findByRole('textbox', { name: 'New entry' }).should('have.text', 'We drove up on Friday.')
   })
 
   it('moves from the title onto the toolbar on Tab', () => {

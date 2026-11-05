@@ -1,9 +1,10 @@
 // Anchors, read out of the document that owns them.
 //
 // An anchor's position is a fact about the **parent's** document, so that is where it is stored: a
-// span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is an
-// `anchorInsert` node carrying `{ anchorId, text }`. A related entry keeps only ids and the wording
-// each one covered when it was sealed (ENTRY_MODEL.md, "Related entries and anchors").
+// span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is
+// wording: text carrying an `anchorWording` mark, or an `anchorInsert` node carrying
+// `{ anchorId, text }`. A related entry keeps only ids and the wording each one covered when it was
+// sealed (ENTRY_MODEL.md, "Related entries and anchors").
 //
 // So there is no stored offset to reinterpret and nothing to resolve positionally: the editor
 // maintains anchor positions the way it maintains everything else, and this module only reads the
@@ -13,22 +14,22 @@
 import type { AnchorKind, AnchorRef, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
 
 import {
-  ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
-  type DocMark,
+  anchorWording,
   type EntryDocument,
   parseDocument,
   walk,
+  wordingAnchorId,
 } from './entryDocument'
 
 /** One anchor as the parent's document currently holds it. */
 export interface DocumentAnchor {
   anchor_id: string
-  /** From the mark. Null for an anchor that is only an `anchorInsert` node — a bare insertion. */
+  /** From the mark. Null for an anchor that is only wording — a bare insertion. */
   kind: AnchorKind | null
   /** The text the mark covers. Empty when the anchor has no span. */
   quote: string
-  /** Wording carried by an `anchorInsert` node. Null when the anchor has none. */
+  /** The anchor's wording as written, spaces included. Null when it has none. */
   insertion: string | null
 }
 
@@ -51,12 +52,14 @@ function anchorKind(attrs: Record<string, unknown> | undefined): AnchorKind | nu
 }
 
 /**
- * Every anchor in a document, in the order its marks and nodes appear.
+ * Every anchor in a document, in the order its passages and wording appear.
  *
- * A mark and a node sharing one id fold into a single anchor, which is what makes a strike and its
- * replacement wording one gesture rather than two things a renderer has to guess belong together.
+ * A passage and wording sharing one id fold into a single anchor, which is what makes a strike and
+ * its replacement wording one gesture rather than two things a renderer has to guess belong
+ * together.
  */
 export function collectAnchors(content: string | EntryDocument): DocumentAnchor[] {
+  const doc = parseDocument(content)
   const anchors = new Map<string, DocumentAnchor>()
 
   const upsert = (anchorId: string): DocumentAnchor => {
@@ -68,15 +71,10 @@ export function collectAnchors(content: string | EntryDocument): DocumentAnchor[
     return created
   }
 
-  walk(parseDocument(content), (node) => {
-    if (node.type === ANCHOR_INSERT_NODE) {
-      const anchorId = attrString(node.attrs, 'anchorId')
-      if (!anchorId) return
-
-      const anchor = upsert(anchorId)
-      // Empty text reads as no insertion at all — the node an eagerly-opened, still-empty wording
-      // session leaves behind (`addAnchorMark`) must not read as a correction nobody wrote.
-      anchor.insertion = attrString(node.attrs, 'text')
+  walk(doc, (node) => {
+    const wordingId = wordingAnchorId(node)
+    if (wordingId) {
+      upsert(wordingId)
       return
     }
 
@@ -96,36 +94,17 @@ export function collectAnchors(content: string | EntryDocument): DocumentAnchor[
     }
   })
 
+  // An `anchorInsert` node's empty text is a box opened and never written, not a correction.
+  for (const [anchorId, text] of anchorWording(doc)) {
+    anchors.get(anchorId)!.insertion = text || null
+  }
+
   return [...anchors.values()]
 }
 
 /** The ids a document currently carries, for telling what a session added. */
-export function anchorIdsIn(content: string | EntryDocument): string[] {
+function anchorIdsIn(content: string | EntryDocument): string[] {
   return collectAnchors(content).map((anchor) => anchor.anchor_id)
-}
-
-/**
- * The anchor id that wording typed at a caret should pair with, given the marks carried by the text
- * immediately before it — `$from.nodeBefore`'s marks, in `anchorCommands.ts`'s terms — or null when
- * there is nothing to pair with.
- *
- * Only an anchor placed **this session** may absorb it: a sealed anchor from an earlier related
- * entry sits in the same document, and pairing with one would attach this entry's wording to
- * another entry's anchor. `sealed` is those earlier ids — the ones the session's base document already
- * carried, computed once when the editor mounts — which is what makes this pure and node-testable,
- * and what makes highlight-plus-inline-wording work for free.
- */
-export function pairableAnchorAt(
-  marksBefore: DocMark[],
-  sealed: ReadonlySet<string>,
-): string | null {
-  for (const mark of marksBefore) {
-    if (mark.type !== ANCHOR_MARK) continue
-    const anchorId = attrString(mark.attrs, 'anchorId')
-    if (anchorId && !sealed.has(anchorId)) return anchorId
-  }
-
-  return null
 }
 
 /**
@@ -227,31 +206,13 @@ export function resolveAnchors(
 }
 
 /**
- * One anchor's mark extent, in whatever positional units the caller measures in — ProseMirror
- * document positions for every caller today (`editor/anchorCommands.ts`'s `anchorMarkRanges` /
- * `editableAnchorRanges`), kept as plain numbers here the same way `PositionRange`
- * (`anchorWarnings.ts`) is, so the judgment below stays pure and node-testable.
+ * One anchor's extent, in ProseMirror positions (`anchorSpans`, `editor/anchorCommands.ts`), kept
+ * as plain numbers so the judgments below stay pure and node-testable.
  */
 export interface AnchorRange {
   anchor_id: string
   from: number
   to: number
-}
-
-/**
- * The smallest range containing `pos`, among possibly several that overlap — a click inside an
- * anchor placed over part of an earlier one should resolve to the inner, more specific anchor.
- * Null when nothing covers `pos` at all.
- */
-export function innermostAnchorAt<T extends AnchorRange>(ranges: T[], pos: number): T | null {
-  let best: T | null = null
-
-  for (const range of ranges) {
-    if (pos < range.from || pos > range.to) continue
-    if (!best || range.to - range.from < best.to - best.from) best = range
-  }
-
-  return best
 }
 
 /**

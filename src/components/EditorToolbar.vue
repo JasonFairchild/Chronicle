@@ -347,7 +347,7 @@ function applyLink(): void {
           :aria-expanded="moreOpen"
           :aria-controls="`${id}-more-menu`"
           aria-label="More formatting actions"
-          title="More"
+          title="More formatting actions"
           :disabled="disabled"
           @mousedown.prevent
           @click="toggleMore"

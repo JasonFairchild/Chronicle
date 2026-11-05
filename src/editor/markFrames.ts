@@ -10,7 +10,12 @@ import {
   Transform,
 } from '@tiptap/pm/transform'
 
-import { ANCHOR_INSERT_NODE, ANCHOR_MARK, type EntryDocument } from '@/domain/entryDocument'
+import {
+  ANCHOR_INSERT_NODE,
+  ANCHOR_MARK,
+  ANCHOR_WORDING_MARK,
+  type EntryDocument,
+} from '@/domain/entryDocument'
 import type { AuthoringMark } from '@/domain/marks'
 import type { FrameChange, MarkFrame, MarkSet } from '@/types/markSet'
 
@@ -46,6 +51,11 @@ function differingRange(a: ProseMirrorNode, b: ProseMirrorNode) {
   return { start, endA, endB }
 }
 
+/** Whether `node` is text carrying anchor wording. */
+function isWording(node: ProseMirrorNode): boolean {
+  return node.marks.some((mark) => mark.type.name === ANCHOR_WORDING_MARK)
+}
+
 /**
  * What a reader would see in a range: words or media, only anchor wording, or nothing, as when a
  * paragraph splits or a block is rewrapped.
@@ -55,7 +65,7 @@ function visibleIn(doc: ProseMirrorNode, from: number, to: number): 'content' | 
   if (from >= to) return seen
 
   doc.nodesBetween(from, to, (node) => {
-    if (node.type.name === ANCHOR_INSERT_NODE) seen ??= 'anchor'
+    if (node.type.name === ANCHOR_INSERT_NODE || isWording(node)) seen ??= 'anchor'
     else if (node.isLeaf) seen = 'content'
   })
 
@@ -68,7 +78,8 @@ function touchedBy(
   doc: ProseMirrorNode,
 ): { kind: 'formatted' | 'anchor'; from: number; to: number } | null {
   if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) {
-    const kind = step.mark.type.name === ANCHOR_MARK ? 'anchor' : 'formatted'
+    const { name } = step.mark.type
+    const kind = name === ANCHOR_MARK || name === ANCHOR_WORDING_MARK ? 'anchor' : 'formatted'
     return { kind, from: step.from, to: step.to }
   }
 
@@ -88,7 +99,7 @@ function touchedBy(
 
 /**
  * In document order, with overlapping or touching ranges of one kind joined: an anchor's marked
- * text and its wording node, say. Removals stay apart, since each carries its own text.
+ * text and its wording, say. Removals stay apart, since each carries its own text.
  */
 function tidy(changes: FrameChange[]): FrameChange[] {
   const tidied: FrameChange[] = []

@@ -8,25 +8,29 @@
 // one (there).
 
 import { Extension, type Extensions, Mark, mergeAttributes, Node } from '@tiptap/core'
+import { Fragment, type Node as ProseMirrorNode, Slice } from '@tiptap/pm/model'
 import { Plugin } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
-import { VueNodeViewRenderer } from '@tiptap/vue-3'
 
 import {
   ANCHOR_INSERT_NODE,
   ANCHOR_MARK,
+  ANCHOR_WORDING_MARK,
   type EntryDocument,
   MEDIA_NODE,
+  parseDocument,
 } from '@/domain/entryDocument'
 
 import {
-  type AnchorModeStorage,
-  createAnchorInsertStorage,
-  createAnchorModeStorage,
-  isAnchorEdit,
-  markAnchor,
+  anchorModeDecorations,
+  applyAnchorKind,
+  markTyped,
+  pasteAsLine,
+  routeClickOnPassage,
+  routeTypingOnPassage,
+  SEALED_ANCHORS,
 } from './anchorCommands'
-import AnchorInsertView from './AnchorInsertView.vue'
+import { allowsEdit, sealAnchors } from './anchorGuard'
 
 /**
  * An image whose bytes live in the media store, referenced by blob id only — no data/object URL or
@@ -109,14 +113,52 @@ const Anchor = Mark.create({
 })
 
 /**
- * A collapsed anchor: wording a related entry proposes, at a position in the parent's document. A
- * node rather than a mark, since a mark can't exist at a zero-width position or carry content; an
- * atom so the wording is placed and removed whole, not typed character by character — the typing
- * happens in `AnchorInsertView.vue`'s own `<input>`, in the session that placed it. That's also what
- * seals it for a *different* editor reading it later (a text-mode revision, another session on the
- * same parent): it belongs to the related entry that proposed it, not to that editor's
- * contenteditable.
- * `docToPlainText` skips it either way, keeping the anchor non-destructive despite holding text.
+ * Wording a related entry proposes, as text in the parent's document (`ANCHOR_WORDING_MARK`,
+ * `domain/entryDocument.ts`).
+ *
+ * Excludes every mark, itself included, so wording carries no passage and no formatting: bold over
+ * it leaves it as it was, and marking text as wording strips whatever it inherited. `inclusive` and
+ * `clearable` are false for the passage mark's reasons.
+ */
+const AnchorWording = Mark.create({
+  name: ANCHOR_WORDING_MARK,
+  inclusive: false,
+  excludes: '_',
+  clearable: false,
+
+  addAttributes() {
+    return {
+      anchorId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-anchor-id'),
+        renderHTML: (attributes) =>
+          attributes.anchorId ? { 'data-anchor-id': attributes.anchorId } : {},
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'ins[data-anchor-id]' }]
+  },
+
+  /**
+   * The wording sits in its own inner span, apart from the `<ins>`, so the parked interlinear
+   * presentation (`DocumentEditor.vue`) can raise it above a proofreader's caret mark (⌃) on the
+   * baseline. The mark is a CSS `::before` on the `<ins>`, not a DOM node, so ProseMirror never
+   * reads it back as typed wording, and a copy never carries it.
+   */
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'ins',
+      mergeAttributes(HTMLAttributes, { class: 'chronicle-anchor-insert' }),
+      ['span', { class: 'chronicle-anchor-wording' }, 0],
+    ]
+  },
+})
+
+/**
+ * The same wording as an atom carrying it in a `text` attribute, which the editor no longer writes.
+ * `docToPlainText` skips it, keeping the anchor non-destructive despite holding text.
  */
 const AnchorInsert = Node.create({
   name: ANCHOR_INSERT_NODE,
@@ -141,16 +183,10 @@ const AnchorInsert = Node.create({
     }
   },
 
-  parseHTML() {
-    return [{ tag: 'ins[data-anchor-id]' }]
-  },
+  // No `parseHTML`: the `<ins>` it renders is the wording mark's, and ProseMirror re-reads typed
+  // wording from the DOM by that rule.
 
-  /**
-   * The wording sits in its own inner span, separate from the `<ins>` wrapper, so the dormant
-   * interlinear presentation (`DocumentEditor.vue`) can later raise it above the line with a
-   * baseline caret — a CSS `::before` on the `<ins>`, not a DOM node, so it never reaches
-   * `textContent`, a copy, or `parseHTML` above, which keeps finding the nested span's text.
-   */
+  /** The wording mark's `<ins><span>` shape, so the same CSS styles both. */
   renderHTML({ node, HTMLAttributes }) {
     return [
       'ins',
@@ -158,61 +194,100 @@ const AnchorInsert = Node.create({
       ['span', { class: 'chronicle-anchor-wording' }, String(node.attrs.text ?? '')],
     ]
   },
+})
 
-  /**
-   * Which anchor's wording is open for editing — UI state, never a node attribute, so it can't
-   * reach the stored document. See `AnchorInsertStorage` (`anchorCommands.ts`) for why it's a `Ref`.
-   */
-  addStorage: createAnchorInsertStorage,
+/** `fragment` with no anchor marks, its nodes' content included. */
+function withoutAnchorMarks(fragment: Fragment): Fragment {
+  const nodes: ProseMirrorNode[] = []
+  fragment.forEach((node) => {
+    const marks = node.marks.filter(
+      (mark) => mark.type.name !== ANCHOR_MARK && mark.type.name !== ANCHOR_WORDING_MARK,
+    )
+    nodes.push(
+      node.isText ? node.mark(marks) : node.copy(withoutAnchorMarks(node.content)).mark(marks),
+    )
+  })
+  return Fragment.from(nodes)
+}
 
-  /**
-   * The Vue node view (`AnchorInsertView.vue`) renders this node as plain text or a live input,
-   * depending on that storage.
-   */
-  addNodeView() {
-    return VueNodeViewRenderer(AnchorInsertView)
+/**
+ * The guard (`anchorGuard.ts`) in every editor, as a plugin whose state is its snapshot: the
+ * anchors of the document the editor opens with, or of `baseContent` when given.
+ *
+ * Paste and drop strip anchor marks, so a copy of anchored text or wording never carries its
+ * `anchorId` somewhere new. Nothing else stops a new anchor: the guard only keeps sealed ones.
+ */
+const AnchorGuard = Extension.create<{
+  anchorMode: boolean
+  baseContent: string | EntryDocument | undefined
+}>({
+  name: 'anchorGuard',
+  addOptions() {
+    return { anchorMode: false, baseContent: undefined }
+  },
+  addProseMirrorPlugins() {
+    const { anchorMode, baseContent } = this.options
+    return [
+      new Plugin({
+        key: SEALED_ANCHORS,
+        state: {
+          init: (_config, state) =>
+            sealAnchors(
+              baseContent === undefined
+                ? state.doc
+                : state.schema.nodeFromJSON(parseDocument(baseContent)),
+            ),
+          apply: (_transaction, sealed) => sealed,
+        },
+        filterTransaction: (transaction, state) =>
+          allowsEdit(transaction, SEALED_ANCHORS.getState(state)!, anchorMode),
+        props: {
+          transformPasted: (slice) =>
+            new Slice(withoutAnchorMarks(slice.content), slice.openStart, slice.openEnd),
+        },
+      }),
+    ]
   },
 })
 
 /**
- * Installs `isAnchorEdit` (`anchorCommands.ts`) as a ProseMirror plugin's `filterTransaction` —
- * which lives on a plugin spec, not on the `EditorProps` TipTap types for DOM-facing options, hence
- * its own one-plugin extension. That's what makes "the two experiences can't mix" a property of the
- * editor, not a rule the UI is trusted to follow: in anchor mode only the anchor commands and
- * undoing them may produce a step; everything else is rejected first.
- *
- * Also where "which anchors may still be edited" lives (`AnchorModeStorage`, `anchorCommands.ts`):
- * every anchor the session's base document already carried. Seeded in `addStorage`, which runs
- * before the view exists; `onCreate` runs after the node views first render, and they'd show a
- * sealed anchor's wording as editable.
+ * Anchor mode's typing (`anchorCommands.ts`): typed text becomes wording, a paste is typed as one
+ * line, a drop is ignored, and typing or a click on the session's own passage goes to the end of
+ * its wording.
  */
-const AnchorMode = Extension.create<{ baseContent: string | EntryDocument }, AnchorModeStorage>({
+const AnchorMode = Extension.create({
   name: 'anchorMode',
-  addOptions() {
-    return { baseContent: '' }
-  },
-  addStorage() {
-    return createAnchorModeStorage(this.options.baseContent)
-  },
   addProseMirrorPlugins() {
-    return [new Plugin({ filterTransaction: isAnchorEdit })]
+    const editor = this.editor
+    return [
+      new Plugin({
+        appendTransaction: (transactions, _oldState, state) => markTyped(transactions, state),
+        props: {
+          handleTextInput: routeTypingOnPassage,
+          handlePaste: (view, _event, slice) => pasteAsLine(view, slice),
+          handleDrop: () => true, // Inside a passage it would split it, and paste does its job.
+          handleClick: (_view, pos) => routeClickOnPassage(editor, pos),
+          decorations: anchorModeDecorations,
+        },
+      }),
+    ]
   },
   addKeyboardShortcuts() {
     return {
-      'Mod-Alt-h': () => markAnchor(this.editor, 'comment') !== null,
-      'Mod-Alt-s': () => markAnchor(this.editor, 'strike') !== null,
+      'Mod-Alt-h': () => applyAnchorKind(this.editor, 'comment'),
+      'Mod-Alt-s': () => applyAnchorKind(this.editor, 'strike'),
     }
   },
 })
 
 export interface EntryExtensionOptions {
-  /** True for an anchor-mode session: installs the guard that blocks every other kind of edit. */
+  /** True for an anchor-mode session: the guard lets only typing wording and anchor commands by. */
   anchorMode?: boolean
   /**
-   * The document as it stood when this **session** began, in anchor mode — for a resumed draft,
-   * the version `Draft.parent.base_version_id` names. Every anchor it carries belongs to an
-   * earlier, already-sealed related entry; everything that appears afterward is this session's own.
-   * See AUTHORING.md, "Drafts".
+   * The document whose anchors the guard seals, when not the one the editor opens with. In anchor
+   * mode, the document as it stood when this **session** began — for a resumed draft, the version
+   * `Draft.parent.base_version_id` names — so the anchors placed since are this session's own. See
+   * AUTHORING.md, "Drafts".
    */
   baseContent?: string | EntryDocument
 }
@@ -227,7 +302,9 @@ export function entryExtensions({
     // Installed in every editor, not only anchor-mode ones: a text-mode revision has to be able to
     // read, render, and carry forward the anchors already in the document it is editing.
     Anchor,
+    AnchorWording,
     AnchorInsert,
-    ...(anchorMode ? [AnchorMode.configure({ baseContent })] : []),
+    AnchorGuard.configure({ anchorMode, baseContent }),
+    ...(anchorMode ? [AnchorMode] : []),
   ]
 }

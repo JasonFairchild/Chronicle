@@ -1,5 +1,4 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { nextTick } from 'vue'
 import type { Router } from 'vue-router'
 
 import { ANCHOR_MARK } from '@/domain/entryDocument'
@@ -521,13 +520,12 @@ describe('EntryDetailView', () => {
     }).then((parent) => {
       mountDetail(parent.id, { draft: 'session-1' })
 
+      // The menu offers Remove only on an anchor the session placed.
       cy.findByRole('textbox', { name: 'Entry being annotated' }).findByText('Dad').click()
-      cy.findByRole('textbox', { name: 'Wording' }).should('be.visible').type('{esc}')
-      cy.findByRole('textbox', { name: 'Wording' }).should('not.exist')
+      cy.findByRole('button', { name: 'Remove anchor' }).should('be.visible')
 
       cy.findByRole('textbox', { name: 'Entry being annotated' }).findByText('Lake Tahoe').click()
-      cy.then(() => nextTick()) // A box the click opened would have rendered by now.
-      cy.findByRole('textbox', { name: 'Wording' }).should('not.exist')
+      cy.findByRole('button', { name: 'Remove anchor' }).should('not.exist')
     })
   })
 
@@ -625,7 +623,7 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('warns before saving a revision that changes the text under an anchor', () => {
+  it('keeps the text under an anchor as it was in a revision, and saves the rest', () => {
     cy.then(async () => {
       const parent = await seed({
         content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
@@ -647,106 +645,16 @@ describe('EntryDetailView', () => {
         selectTextRange(el, 10, 20)
       })
       cy.focused().type('{backspace}')
-
-      cy.findByText(/This changes the passage/).should('be.visible')
-      cy.findByText('Wonderful trip').should('be.visible')
-      cy.findByRole('button', { name: 'Discard' }).click()
-    })
-  })
-
-  it('stays quiet when a revision only moves an anchor, not the text it covers', () => {
-    cy.then(async () => {
-      const parent = await seed({
-        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
-      })
-      await seed({
-        content: textContent('Wonderful trip'),
-        parent_id: parent.id,
-        relation_type: 'annotation',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      })
-      return parent
-    }).then((parent) => {
-      mountDetail(parent.id)
-
-      cy.findByRole('button', { name: 'Revise entry' }).click()
-      cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}!')
-
-      cy.findByText(/This changes the passage/).should('not.exist')
-      cy.findByRole('button', { name: 'Discard' }).click()
-    })
-  })
-
-  it('stays quiet when a revision types right up against either edge of an anchor', () => {
-    cy.then(async () => {
-      const parent = await seed({
-        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
-      })
-      await seed({
-        content: textContent('Wonderful trip'),
-        parent_id: parent.id,
-        relation_type: 'annotation',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      })
-      return parent
-    }).then((parent) => {
-      mountDetail(parent.id)
-
-      cy.findByRole('button', { name: 'Revise entry' }).click()
       cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
-        const el = $editor[0]!
-        el.focus()
-        selectTextRange(el, 10, 10)
+        selectTextRange($editor[0]!, 29, 29)
       })
-      cy.focused().type('(')
-      cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
-        selectTextRange($editor[0]!, 21, 21)
-      })
-      cy.focused().type(')')
+      cy.focused().type('!')
+      cy.findByRole('button', { name: 'Save revision' }).click()
 
-      cy.findByRole('textbox', { name: 'Revised entry' }).should(
-        'contain.text',
-        'I went to (Lake Tahoe) with Dad',
-      )
-      cy.findByText(/This changes the passage/).should('not.exist')
-      cy.findByRole('button', { name: 'Discard' }).click()
-    })
-  })
-
-  it('warns when a paste swaps text under an anchor for text of the same length', () => {
-    cy.then(async () => {
-      const parent = await seed({
-        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
-      })
-      await seed({
-        content: textContent('Wonderful trip'),
-        parent_id: parent.id,
-        relation_type: 'annotation',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      })
-      return parent
-    }).then((parent) => {
-      mountDetail(parent.id)
-
-      cy.findByRole('button', { name: 'Revise entry' }).click()
-      // A hand-built paste, as in `DocumentEditor.cy.ts`: neither runner has a real one.
-      cy.findByRole('textbox', { name: 'Revised entry' }).then(($editor) => {
-        const el = $editor[0]!
-        el.focus()
-        selectTextRange(el, 12, 14)
-        const dataTransfer = new DataTransfer()
-        dataTransfer.setData('text/plain', 'ne')
-        el.dispatchEvent(
-          new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true }),
-        )
-      })
-
-      cy.findByRole('textbox', { name: 'Revised entry' }).should(
-        'contain.text',
-        'I went to Lane Tahoe with Dad',
-      )
-      cy.findByText('This changes the passage Wonderful trip is about.').should('be.visible')
-      cy.findByRole('button', { name: 'Discard' }).click()
+      cy.findByText(/Version 2 of 2/).should('be.visible')
+      // `contains`, since the anchor's mark splits the text across elements.
+      cy.contains(`${PARENT_TEXT}!`).should('be.visible')
+      cy.findByText('On “Lake Tahoe”').should('be.visible')
     })
   })
 

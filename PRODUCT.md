@@ -80,12 +80,13 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 - Creating a related entry opens two columns: the entry being written about on the left, the new entry (with the same optional title and details as §4.1) on the right. This anchoring mode never mixes with revising the entry's own text (ENTRY_MODEL.md, "Two creation experiences, kept separate").
 - On the left, select a passage and a small menu offers **Highlight** or **Strike** (Ctrl+Alt+H / Ctrl+Alt+S); or place the cursor and type to propose wording right where it would go. Nothing else can change the entry's text from here.
 - Marking is optional. A related entry that marks nothing is about the entry as a whole, and the entry is not revised at all.
-- Wording attaches to a highlight or a strike alike, renders inline right after its passage, and reads as proposed from its italic styling. A proofreader's-markup presentation (wording raised above the line, a caret on the baseline) exists but is dormant (`ANCHOR_MARKUP_MODE`): long wording overlapped trailing text on a packed line.
+- Wording attaches to a highlight or a strike alike, renders inline right after its passage, and reads as proposed from its colored underline, as track changes marks an insertion. The underline runs under spaces, so wording that's only a space still shows; spacing around wording is whatever the author typed. A proofreader's-markup presentation (wording raised above the line, a caret on the baseline) exists but is dormant (`ANCHOR_MARKUP_MODE`): long wording overlapped trailing text on a packed line.
 - Saving anchors the passages and the related entry together in one action. The entry gains the anchors and nothing else; its previous version stays as it stood. Saving opens the related entry's own page, whose breadcrumb leads back.
 - Annotation or update follows from what was marked, never asked: striking or proposing wording is an **update**; highlighting only, or marking nothing, is an **annotation**.
 - Related entries can themselves be annotated, to any depth.
-- An anchor placed earlier in the same, still-open session can be clicked — its passage or its wording — to reopen its box: edit the wording, switch highlight/strike (the same shortcuts), or remove it. Escape restores what the box held when it opened.
-- **Anchors are exclusive.** Selecting or clicking into an existing anchor's passage, even partly, opens that anchor's box if this session placed it, and does nothing if an earlier related entry did. Once saved, an anchor is fixed; pointing differently at the same passage means writing another related entry. Resizing an anchor isn't offered; remove and recreate it.
+- Highlight or Strike leaves the cursor right after the passage, beside a greyed "Add wording…" placeholder. Typing there is its wording, typed into the entry like any text and outlined while the cursor is in it. Backspace, undo and paste work as in prose; a paste arrives as one line, and dropped text is ignored. There's nothing to accept: click or arrow away and the wording stays.
+- An anchor placed earlier in the same, still-open session can be returned to: clicking its passage puts the cursor at the end of its wording, and clicking the wording puts it where clicked. With the cursor there, the menu shows its kind pressed, switches highlight/strike (the same shortcuts), and removes it, wording and all. Wording with no passage offers only removing.
+- **Anchors are exclusive.** Highlight or Strike over a selection touching an existing anchor, its passage or its wording, even partly, returns to that anchor if this session placed it, and does nothing if an earlier related entry did. Once saved, an anchor is fixed; pointing differently at the same passage means writing another related entry. Resizing an anchor isn't offered; remove and recreate it.
 - Highlight color is a display setting, never stored with the related entry. Today it's one system scheme by anchor kind.
 
 ### 4.5 Revising an entry
@@ -93,7 +94,9 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 - **Revise entry** opens the entry's current text and title for editing, as a draft. The entry is untouched until the revision is saved, and discarding leaves no trace.
 - Saving appends a new version; the old one stays and the version count goes up. Images are kept.
 - Renaming, or clearing the title, is an ordinary revision; old names stay with their versions. So is a change of formatting alone, such as bolding a passage.
-- Existing anchors show while you edit. If the edit changes the text under one — inserting into it, or deleting part or all of it — a warning names the related entry before you save, and stays even if you change the text back. Moving an anchor by editing elsewhere, or typing right against its edge, is not a change. The related entry survives either way. Clear formatting leaves anchors alone: an anchor isn't formatting.
+- **Anchored text is locked.** Existing anchors show while you edit, but the text under one, its wording, its kind, and their formatting, inline or block (bold, a heading or list over its paragraph), can't change. Deleting an anchor whole is refused too; typing against its outer edges is still fine, and Clear formatting leaves anchors alone, since an anchor isn't formatting. A refused edit silently does nothing. An anchor is removed only by deliberately revising the related entry that placed it (§5.4), so it never goes missing by accident. The lock exists to enforce that order, so history only moves forward, not to make removing an anchor hard.
+- Until revising a related entry exists, a saved anchor can't be removed at all, which is acceptable while nobody relies on the app.
+- Open: saying why an edit over an anchor did nothing. Likely a message on hovering a locked anchor, or one shown when an edit is refused, with controls left enabled.
 
 ### 4.6 Connections
 
@@ -139,19 +142,18 @@ When looking at a revision, show what changed since the version before it — ad
 
 - **A related entry's own page doesn't show what it marked.** It says which entry it's about, but its strikes and highlights show only on that entry, so landing on it after saving (§4.4) doesn't show what was just done. Likely fix: keep some of that entry, and what was marked, in view.
 
-### 5.4 Revising a related entry, and locking anchored text
+### 5.4 Revising a related entry
 
 Builds on anchor wording becoming ordinary text (CHRONICLE_PLAN.md, "Anchor wording as marked text").
 
 - **Revise** on a related entry reopens the two-pane experience of §4.4 rather than plain editing: the parent's latest version on the left, the related entry's latest version on the right.
-- On the left, the related entry's own anchors behave like ones placed in the current session: reopen, switch highlight/strike, edit or remove wording, or remove the anchor. They can also be reshaped while keeping their identity and their wording: unmark part of one to shrink it, or extend it over adjacent text. New anchors can be added. Every other related entry's anchors show but can't be touched, and nothing else on the left can change, as in any related entry.
+- On the left, the related entry's own anchors behave like ones placed in the current session: return to one, switch highlight/strike, edit or remove wording, or remove the anchor. They can also be reshaped while keeping their identity and their wording: unmark part of one to shrink it, or extend it over adjacent text. New anchors can be added. Every other related entry's anchors show but can't be touched, and nothing else on the left can change, as in any related entry.
 - Saving revises whichever side changed, together: the related entry, the parent's anchors, or both. It stays about its parent for good; it can't be revised into a freestanding entry.
 - Annotation or update follows its current anchors, so a revision that removes its last strike and wording makes it an annotation.
-- **Anchored text is locked everywhere else.** Revising the parent itself shows every anchor but can't change the text under one, its wording, or its kind; typing against an anchor's edge is still fine. An anchor is removed only by deliberately revising the related entry that placed it, so it never goes missing by accident. That replaces §4.5's warning on an affected anchor, and with it the quote a related entry saves to render "was attached to: …" once its anchor is gone.
+- This is the one way to remove an anchor, since §4.5's lock keeps every other editor off it. That also retires the quote a related entry saves to render "was attached to: …" once its anchor is gone.
 - Anchors stay exclusive (§4.4): a passage belongs to at most one related entry, so a lock never has two owners. Saying something different about an anchored passage means revising the related entry that holds it.
 - Revising a related entry is a draft like any other (§4.8), listed as a revision of it, and is outstanding against both it and its parent.
 - Reading a parent with several related entries offers its anchors grouped by related entry.
-- Open: whether formatting (bold, a list) may still change over anchored text, since it leaves the words alone; the lean is to lock it too.
 
 ### 5.5 Finding things
 
@@ -231,12 +233,12 @@ Chronicle is built for a desktop window first. Fitting narrow screens happens la
 
 ### Making anchor ops unmistakable
 
-Ordinary formatting, strikethrough included, can look like what an anchor op renders, so an anchor op has to be distinct through its own presentation. Today that rests on italic-plus-color wording; the dormant proofreader's markup (§4.4) would be stronger once it's back.
+Ordinary formatting, strikethrough and underline included, can look like what an anchor op renders, so an anchor op has to be distinct through its own presentation. Today that rests on underline-plus-color wording; the dormant proofreader's markup (§4.4) would be stronger once it's back.
 
 - Ordinary highlighting, belonging to no related entry, would collide with the comment anchor's yellow.
-- Arbitrary text color, if ever added, would weaken the italic-plus-color signal.
+- Arbitrary text color, if ever added, would weaken the underline-plus-color signal.
 - Anchor color schemes as a display setting: by op kind (today), auto-assigned per related entry, user-defined palettes, or by tag once tags exist.
-- Inline vs. raised wording per anchor op, not one mode for everything. A strike with replacement wording reads naturally inline; added wording that doesn't flow with the original reads better raised above the line. The writer could set it per op.
+- Inline vs. raised wording per anchor op, not one mode for everything. A strike with replacement wording reads naturally inline; added wording that doesn't flow with the original reads better raised above the line. The writer could set it per op. Raised wording would show inline while the cursor is in it, since typing into text positioned out of flow is unreliable.
 - Numbering anchor ops so a passage and its explanation are obviously paired: per related entry, in document order, which under §5.4's lock changes only while that entry is being revised.
 - Hovering an anchor shows which related entry it belongs to; a preview of it sitting near its passage.
 - An overall "current state" presentation of an entry with all its related entries' anchors shown together.

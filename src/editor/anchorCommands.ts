@@ -1,51 +1,46 @@
 import type { Editor } from '@tiptap/core'
-import type { Mark, Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { type EditorState, TextSelection, type Transaction } from '@tiptap/pm/state'
-import type { StepMap } from '@tiptap/pm/transform'
-import { type Ref, ref } from 'vue'
+import { isHistoryTransaction } from '@tiptap/pm/history'
+import type { Mark, Node as ProseMirrorNode, Slice } from '@tiptap/pm/model'
+import { type EditorState, PluginKey, TextSelection, type Transaction } from '@tiptap/pm/state'
+import { Mapping } from '@tiptap/pm/transform'
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 
 import {
-  anchorIdsIn,
   type AnchorRange,
   anchorRangeOverlapping,
   collectAnchors,
   type DocumentAnchor,
   newAnchorId,
 } from '@/domain/anchors'
-import { changesInside } from '@/domain/anchorWarnings'
-import { ANCHOR_INSERT_NODE, ANCHOR_MARK, type EntryDocument } from '@/domain/entryDocument'
+import {
+  ANCHOR_INSERT_NODE,
+  ANCHOR_MARK,
+  ANCHOR_WORDING_MARK,
+  type EntryDocument,
+} from '@/domain/entryDocument'
 import type { AnchorKind } from '@/types/entry'
 
-// The imperative half of anchor-mode: commands that place, edit, or read anchors on an editor that
-// already exists, plus the guard predicate that recognises them. `extensions.ts` is the schema
-// these operate on — a mark and a node type, and the plugin that installs the guard below into an
-// anchor-mode editor — kept separate so each file answers one question: what an anchor *is*
-// (extensions.ts) versus what a session *does* with one (here).
+import type { SealedAnchors } from './anchorGuard'
+
+// The imperative half of anchor mode: commands that place, edit, or read anchors on an editor that
+// already exists, and the typing rules anchor mode's plugin runs. `extensions.ts` is the schema
+// these operate on and installs the plugins, kept separate so each file answers one question: what
+// an anchor *is* (extensions.ts) versus what a session *does* with one (here).
 
 /**
- * Marks a transaction as one of this module's anchor commands, which is what `isAnchorEdit` lets
- * through in anchor mode.
+ * Marks a transaction as one of this module's anchor commands, which the guard (`anchorGuard.ts`)
+ * lets through whole.
  */
-const ANCHOR_EDIT_META = 'chronicleAnchorEdit'
-
-/** prosemirror-history's own plugin key, so undo and redo are recognisable to the guard below. */
-const HISTORY_META = 'history$'
+export const ANCHOR_EDIT_META = 'chronicleAnchorEdit'
 
 /**
- * The anchor-mode guard, installed by `extensions.ts`'s `AnchorMode` plugin.
- *
- * This is what makes "the two creation experiences cannot be mixed" a property of the editor rather
- * than a rule the UI is trusted to follow: in anchor mode the only transactions that may change the
- * document are the anchor commands below and undoing them. Everything else — typing, pasting,
- * formatting, dropping an image — is rejected before it produces a step, so an anchor-mode session
- * cannot alter a single word of its parent.
+ * The guard's snapshot (`sealAnchors`), held as its plugin's state in every editor. Every anchor in
+ * it is sealed; any other is one this session placed.
  */
-export function isAnchorEdit(transaction: Transaction): boolean {
-  return (
-    transaction.steps.length === 0 ||
-    transaction.getMeta(ANCHOR_EDIT_META) === true ||
-    transaction.getMeta(HISTORY_META) !== undefined
-  )
+export const SEALED_ANCHORS = new PluginKey<SealedAnchors>('sealedAnchors')
+
+function sealedOf(state: EditorState): SealedAnchors {
+  return SEALED_ANCHORS.getState(state)!
 }
 
 const ANCHOR_ANNOUNCE_META = 'chronicleAnchorAnnounce'
@@ -73,132 +68,37 @@ function findAnchor(state: EditorState, anchorId: string): DocumentAnchor | unde
 }
 
 /**
- * UI state for one `anchorInsert` node view: which anchor's wording input is open, if any, and what
- * it held the moment it opened. Kept off the node's own attributes so it never becomes part of the
- * stored document. A `Ref` rather than a plain field because a node view mounted by
- * `VueNodeViewRenderer` needs Vue's own reactivity to notice a change here: ProseMirror's view only
- * re-renders a node whose document representation changed, and opening or closing a wording session
- * deliberately produces no such change.
+ * The region each anchor occupies, taken as the outermost extent of its pieces. A passage and its
+ * wording are one anchor in two places, adjacent by construction, so the guard judges them as one
+ * stretch.
  */
-export interface AnchorInsertStorage {
-  openAnchorId: Ref<string | null>
-  /**
-   * What the open node's wording held the instant its box opened — never touched by a keystroke
-   * afterward. What `cancelAnchorInsert` restores on Escape, so reopening an anchor that already
-   * had wording and backing out again does not destroy it (only a still-empty, freshly placed
-   * anchor's box drops its node on Escape, matching today's behavior for that case).
-   */
-  openedText: Ref<string>
-}
+export function anchorSpans(doc: ProseMirrorNode): AnchorRange[] {
+  const spans = new Map<string, AnchorRange>()
 
-/** The value `AnchorInsert.addStorage` (`extensions.ts`) installs for every editor. */
-export function createAnchorInsertStorage(): AnchorInsertStorage {
-  return { openAnchorId: ref<string | null>(null), openedText: ref('') }
-}
-
-function anchorInsertStorage(editor: Editor): AnchorInsertStorage {
-  return (editor.storage as unknown as Record<string, AnchorInsertStorage>)[ANCHOR_INSERT_NODE]
-}
-
-function openWordingBox(editor: Editor, anchorId: string, openedText: string): void {
-  const storage = anchorInsertStorage(editor)
-  storage.openAnchorId.value = anchorId
-  storage.openedText.value = openedText
-}
-
-/**
- * Which anchors in the document an anchor-mode session may still edit — every id not sealed in from
- * an earlier related entry (`sealedAnchorIds`, `domain/anchors.ts`). Storage rather than a
- * plain field because the commands and node views that read it only ever have the `Editor` instance
- * to work from. A plain set, not a `Ref`, because it never changes: it's filled before the view
- * exists, so the node views' first render already reads it.
- */
-export interface AnchorModeStorage {
-  sealedAnchorIds: Set<string>
-}
-
-/**
- * The value `AnchorMode.addStorage` (`extensions.ts`) installs for an anchor-mode editor: every
- * anchor in the session's base is sealed.
- */
-export function createAnchorModeStorage(base: string | EntryDocument): AnchorModeStorage {
-  return { sealedAnchorIds: new Set(anchorIdsIn(base)) }
-}
-
-/** Undefined for any editor anchor mode was never turned on for — a text-mode revision, chiefly. */
-function anchorModeStorage(editor: Editor): AnchorModeStorage | undefined {
-  return (editor.storage as unknown as Record<string, AnchorModeStorage | undefined>).anchorMode
-}
-
-/**
- * Whether this session placed `anchorId` and may still change or remove it — false for a sealed
- * anchor from an earlier related entry, and false for every anchor when the editor isn't in anchor
- * mode at all (its own read-only rendering of anchors has nothing to make editable).
- */
-export function isEditableAnchor(editor: Editor, anchorId: string): boolean {
-  const sealed = anchorModeStorage(editor)?.sealedAnchorIds
-  return sealed !== undefined && !sealed.has(anchorId)
-}
-
-/**
- * The sealed anchor ids `AnchorMode` computed at creation, or an empty set for an editor that was
- * never put into anchor mode. `DocumentEditor` reads this rather than the storage directly, so it
- * never has to know the key its own extension is stored under.
- */
-export function sealedAnchorIdsOf(editor: Editor): ReadonlySet<string> {
-  return anchorModeStorage(editor)?.sealedAnchorIds ?? new Set()
-}
-
-/** One editable anchor's outer extent and current kind — `anchorSpans` filtered to this session's own. */
-export interface EditableAnchorRange extends AnchorRange {
-  kind: AnchorKind | null
-}
-
-/** Where one anchor sits in a document, in ProseMirror positions. */
-export interface AnchorSpan {
-  anchor_id: string
-  quote: string
-  from: number
-  to: number
-}
-
-/**
- * The region each anchor occupies, taken as the outermost extent of its pieces.
- *
- * A strike and the wording replacing it are one anchor in two places, adjacent by construction, so
- * one span covering both is the region the anchor is responsible for — and it means deleting the
- * proposed wording counts as disturbing the anchor just as deleting the struck text does.
- */
-export function anchorSpans(doc: ProseMirrorNode): AnchorSpan[] {
-  const spans = new Map<string, AnchorSpan>()
-
-  const extend = (anchorId: string, from: number, to: number, quote: string) => {
+  const extend = (anchorId: string, from: number, to: number) => {
     const existing = spans.get(anchorId)
     if (!existing) {
-      spans.set(anchorId, { anchor_id: anchorId, quote, from, to })
+      spans.set(anchorId, { anchor_id: anchorId, from, to })
       return
     }
 
     existing.from = Math.min(existing.from, from)
     existing.to = Math.max(existing.to, to)
-    existing.quote += quote
   }
 
   doc.descendants((node, pos) => {
     if (node.type.name === ANCHOR_INSERT_NODE) {
       const anchorId = node.attrs.anchorId
-      if (typeof anchorId === 'string' && anchorId) extend(anchorId, pos, pos + node.nodeSize, '')
+      if (typeof anchorId === 'string' && anchorId) extend(anchorId, pos, pos + node.nodeSize)
       return false
     }
 
     if (!node.isText) return true
 
     for (const mark of node.marks) {
-      if (mark.type.name !== ANCHOR_MARK) continue
+      if (mark.type.name !== ANCHOR_MARK && mark.type.name !== ANCHOR_WORDING_MARK) continue
       const anchorId = mark.attrs.anchorId
-      if (typeof anchorId === 'string' && anchorId) {
-        extend(anchorId, pos, pos + node.nodeSize, node.text ?? '')
-      }
+      if (typeof anchorId === 'string' && anchorId) extend(anchorId, pos, pos + node.nodeSize)
     }
 
     return true
@@ -207,91 +107,49 @@ export function anchorSpans(doc: ProseMirrorNode): AnchorSpan[] {
   return [...spans.values()]
 }
 
-/** One span moved through an edit, and whether that edit changed the text it covers. */
-export interface MappedAnchorSpan extends AnchorSpan {
-  changedInside: boolean
+/** One of the session's own anchors: its outer extent and current kind. */
+export interface OwnAnchor extends AnchorRange {
+  kind: AnchorKind | null
 }
 
 /**
- * Moves each span through an edit's step maps and reports whether any step changed the text under
- * it. Positions come back alongside the judgment because a revision session runs many edits in
- * sequence, each resuming from where the last left off — a caller keeps passing back the spans it
- * was given, one transaction at a time.
- *
- * Walks one map at a time rather than a composed `Mapping`, since each step's replaced range is
- * only comparable to the span as it stood just before that step. The endpoints are mapped with
- * opposite biases, matching the mark's `inclusive: false`, so text typed at an edge stays outside.
+ * The session's own anchor at `pos`, its passage and its wording both counting, edges included.
+ * Where two touch, the one ending at `pos`, which text typed there joins (`markTyped`). Null
+ * outside anchor mode, where the editor seals every anchor it opens with.
  */
-export function mapAnchorSpans(spans: AnchorSpan[], maps: readonly StepMap[]): MappedAnchorSpan[] {
-  return spans.map((span) => {
-    let { from, to } = span
-    let changedInside = false
-    for (const map of maps) {
-      map.forEach((oldStart, oldEnd) => {
-        if (changesInside({ from, to }, { from: oldStart, to: oldEnd })) changedInside = true
-      })
-      from = map.map(from, 1)
-      to = Math.max(from, map.map(to, -1))
-    }
-    return { anchor_id: span.anchor_id, quote: span.quote, from, to, changedInside }
-  })
-}
-
-/**
- * The mark-and-node extents of every anchor this session may still edit, for the click resolution
- * in `DocumentEditor`'s `handleClick` (`innermostAnchorAt`, `domain/anchors.ts`). Empty whenever
- * `isEditableAnchor` would be false for everything — an ordinary text-mode editor has no anchor-mode
- * storage at all.
- */
-export function editableAnchorRanges(editor: Editor): EditableAnchorRange[] {
-  const sealed = anchorModeStorage(editor)?.sealedAnchorIds
-  if (!sealed) return []
-
-  const kinds = new Map(
-    collectAnchors(editor.state.doc.toJSON() as EntryDocument).map((anchor) => [
-      anchor.anchor_id,
-      anchor.kind,
-    ]),
+export function ownAnchorAt(state: EditorState, pos: number): OwnAnchor | null {
+  const sealed = sealedOf(state)
+  const hit = anchorSpans(state.doc).find(
+    (span) => !sealed.has(span.anchor_id) && span.from <= pos && pos <= span.to,
   )
-
-  return anchorSpans(editor.state.doc)
-    .filter((span) => !sealed.has(span.anchor_id))
-    .map((span) => ({
-      anchor_id: span.anchor_id,
-      from: span.from,
-      to: span.to,
-      kind: kinds.get(span.anchor_id) ?? null,
-    }))
+  return hit ? { ...hit, kind: findAnchor(state, hit.anchor_id)?.kind ?? null } : null
 }
 
-/** One anchor's mark-only extent and kind — never a bare insertion, which has no mark to measure. */
-interface AnchorMarkExtent extends AnchorRange {
-  kind: AnchorKind
+/** One text node carrying an anchor mark, with that mark. */
+interface MarkPiece {
+  anchorId: string
+  from: number
+  to: number
+  mark: Mark
 }
 
 /**
- * The individual text-node pieces of one anchor's *mark*, before merging into an outer extent — a
- * mutation (`setAnchorKind`, `removeAnchor`) must act on exactly these, not the outer extent
- * `anchorSpans` reports: a *newer* anchor's `anchorInsert` node can sit inside an *older* anchor's
- * range, and `addMark`/`removeMark` over the whole extent would touch that atom node too.
- *
- * Carries each piece's actual `Mark` instance, not just its type, because the mark's own `excludes:
- * ''` (`extensions.ts`) lets a different anchor's mark legally share a span with this one —
- * `removeMark`/`setAnchorKind` must remove precisely this mark, not every anchor mark ProseMirror
- * finds in the range. Passing the bare mark *type* there instead would strip a different, unrelated
- * anchor's mark out from under it.
+ * Every text node carrying a `markName` mark, with that mark's own instance: a mutation must remove
+ * precisely that mark, not every one of its type in the range.
  */
-function anchorMarkRanges(
-  doc: ProseMirrorNode,
-  anchorId: string,
-): { from: number; to: number; mark: Mark }[] {
-  const pieces: { from: number; to: number; mark: Mark }[] = []
+function anchorPieces(doc: ProseMirrorNode, markName: string): MarkPiece[] {
+  const pieces: MarkPiece[] = []
 
   doc.descendants((node, pos) => {
     if (!node.isText) return true
     for (const mark of node.marks) {
-      if (mark.type.name === ANCHOR_MARK && mark.attrs.anchorId === anchorId) {
-        pieces.push({ from: pos, to: pos + node.nodeSize, mark })
+      if (mark.type.name === markName) {
+        pieces.push({
+          anchorId: String(mark.attrs.anchorId),
+          from: pos,
+          to: pos + node.nodeSize,
+          mark,
+        })
       }
     }
     return true
@@ -300,35 +158,8 @@ function anchorMarkRanges(
   return pieces
 }
 
-/**
- * The mark-only extent of every anchor in the document that has a mark at all, this session's own or
- * an earlier related entry's alike — what `markAnchor` checks a fresh selection against to keep
- * anchors exclusive (PRODUCT.md §4.4): touching any existing anchor's marked passage at all blocks
- * placing a new one over it, whoever placed the one already there.
- *
- * Deliberately the mark alone, not the outer mark-and-node extent `editableAnchorRanges` reports for
- * click resolution: a selection naturally covers only the marked words, never the invisible
- * `anchorInsert` atom sitting right after them. Measuring against that atom's own extent would make
- * an anchor impossible to reselect exactly the moment it gained any committed wording, since the
- * outer span grows past the text a person actually selects.
- */
-function allMarkExtents(editor: Editor): AnchorMarkExtent[] {
-  const doc = editor.state.doc
-
-  return collectAnchors(doc.toJSON() as EntryDocument).flatMap((anchor) => {
-    if (!anchor.kind) return []
-    const pieces = anchorMarkRanges(doc, anchor.anchor_id)
-    if (pieces.length === 0) return []
-
-    return [
-      {
-        anchor_id: anchor.anchor_id,
-        kind: anchor.kind,
-        from: Math.min(...pieces.map((piece) => piece.from)),
-        to: Math.max(...pieces.map((piece) => piece.to)),
-      },
-    ]
-  })
+function piecesOf(doc: ProseMirrorNode, markName: string, anchorId: string): MarkPiece[] {
+  return anchorPieces(doc, markName).filter((piece) => piece.anchorId === anchorId)
 }
 
 function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
@@ -337,15 +168,24 @@ function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
 }
 
 /**
- * Marks a range as an anchor and returns its new id, or null when there is nothing to mark. Always
- * creates a new one; reached only through `markAnchor` below, which routes a selection touching an
- * anchor already placed to editing it instead.
- *
- * A wording box opens immediately after the mark, empty and focused, in the **same** transaction —
- * one undo removes both, and there is no hidden "type to discover it" step between marking a
- * passage and seeing somewhere to write about it. `inclusive: false` on the mark (`extensions.ts`)
- * is what keeps that box's position outside the anchor's own range, so accepting it empty and later
- * widening the highlight can never absorb it.
+ * Moves the caret to the end of an anchor's wording, or of its passage while it has none, where
+ * typing adds to it. Focuses the document too, so a menu button pressed from the keyboard hands the
+ * typing back.
+ */
+function focusAnchor(editor: Editor, anchorId: string): boolean {
+  const span = anchorSpans(editor.state.doc).find((candidate) => candidate.anchor_id === anchorId)
+  if (!span) return false
+
+  editor.view.dispatch(
+    editor.state.tr.setSelection(TextSelection.create(editor.state.doc, span.to)),
+  )
+  editor.view.focus()
+  return true
+}
+
+/**
+ * Marks a range as an anchor and returns its new id, or null when there is nothing to mark. The
+ * caret lands at the passage's end, where typing becomes its wording (`markTyped`).
  */
 function addAnchorMark(
   editor: Editor,
@@ -353,9 +193,7 @@ function addAnchorMark(
   raw: { from: number; to: number },
 ): string | null {
   const { state } = editor
-  const markType = state.schema.marks[ANCHOR_MARK]
-  const insertType = state.schema.nodes[ANCHOR_INSERT_NODE]
-  if (!markType || !insertType) return null
+  const markType = state.schema.marks[ANCHOR_MARK]!
 
   // A drag-selection routinely swallows a word's neighboring space without meaning to. Trimming it
   // off here keeps a highlight's background from bleeding onto whitespace, and makes the wording
@@ -370,105 +208,32 @@ function addAnchorMark(
 
   const anchorId = newAnchorId()
   const quote = state.doc.textBetween(from, to, ' ')
-  const insertNode = insertType.create({ anchorId, text: '' })
 
   const transaction = state.tr.addMark(from, to, markType.create({ anchorId, kind }))
-  transaction.insert(to, insertNode)
-  transaction.setSelection(TextSelection.create(transaction.doc, to + insertNode.nodeSize))
+  transaction.setSelection(TextSelection.create(transaction.doc, to))
   announce(transaction, `${kind === 'strike' ? 'Struck' : 'Highlighted'} "${quote}"`)
 
-  openWordingBox(editor, anchorId, '')
   dispatchAnchorEdit(editor, transaction)
-  return anchorId
-}
-
-/** The position and node of the `anchorInsert` node carrying `anchorId`, if the document has one. */
-function findAnchorInsert(
-  doc: ProseMirrorNode,
-  anchorId: string,
-): { pos: number; node: ProseMirrorNode } | null {
-  const insertType = doc.type.schema.nodes[ANCHOR_INSERT_NODE]
-  let found: { pos: number; node: ProseMirrorNode } | null = null
-
-  doc.descendants((node, pos) => {
-    if (found) return false
-    if (node.type === insertType && node.attrs.anchorId === anchorId) {
-      found = { pos, node }
-      return false
-    }
-    return true
-  })
-
-  return found
-}
-
-/**
- * Opens an anchor's wording box for editing — the one mechanism behind both entry points into a
- * wording session: clicking a placed anchor to reopen it (`appendText` omitted, existing wording
- * kept as-is) and typing at the caret right after a mark this session placed (`appendText` is the
- * character just typed, from `DocumentEditor`'s `handleTextInput`).
- *
- * Routing both through one function is what stops a highlight that already has committed wording
- * from growing a *second* `anchorInsert` node sharing its id: the caret's neighboring mark alone
- * cannot tell "this anchor already has a node" from "it doesn't yet", so only a lookup can. Appends
- * to the existing node when there is one; otherwise inserts a fresh node right after the mark's own
- * extent, matching where `addAnchorMark` places its own.
- */
-export function openAnchorWording(
-  editor: Editor,
-  anchorId: string,
-  appendText = '',
-): string | null {
-  const { state } = editor
-  const insertType = state.schema.nodes[ANCHOR_INSERT_NODE]
-  if (!insertType) return null
-
-  const existing = findAnchorInsert(state.doc, anchorId)
-
-  if (existing) {
-    const openedText = String(existing.node.attrs.text ?? '')
-    const transaction = appendText
-      ? state.tr.setNodeAttribute(existing.pos, 'text', openedText + appendText)
-      : state.tr
-
-    openWordingBox(editor, anchorId, openedText)
-    dispatchAnchorEdit(editor, transaction)
-    return anchorId
-  }
-
-  const span = anchorSpans(state.doc).find((candidate) => candidate.anchor_id === anchorId)
-  if (!span) return null
-
-  const insertNode = insertType.create({ anchorId, text: appendText })
-  const transaction = state.tr.insert(span.to, insertNode)
-  transaction.setSelection(TextSelection.create(transaction.doc, span.to + insertNode.nodeSize))
-
-  openWordingBox(editor, anchorId, '')
-  dispatchAnchorEdit(editor, transaction)
+  editor.view.focus()
   return anchorId
 }
 
 /**
- * The single entry point for turning a selection into an anchor, or reopening one already there.
- * `AnchorMenu`'s buttons and the `Mod-Alt-h` / `Mod-Alt-s` shortcuts (`extensions.ts`) call this
- * rather than `addAnchorMark` directly, and it is what keeps anchors exclusive: no two anchors may
- * ever cover overlapping text, whoever placed them (PRODUCT.md §4.4).
+ * Turns a selection into an anchor, and keeps anchors exclusive: no two may cover overlapping
+ * text, whoever placed them (PRODUCT.md §4.4).
  *
- * A selection touching an existing anchor's marked passage at all — the whole thing, part of it, or
- * a range that swallows it — never creates a new anchor there. If it's this session's own, its
- * wording box opens instead, so overlapping it is how you get back to an anchor you've already
- * placed. If it's sealed, nothing happens: only the entry that placed it may still change it, and
- * there is no "layer a second opinion over it" gesture — write a new related entry instead. A
- * selection touching no anchor at all marks a fresh one, same as always.
+ * A selection touching an anchor already there — its passage or its wording, in whole or in part —
+ * never creates a new one. If it's this session's own, the caret moves to it instead. If it's
+ * sealed, nothing happens: only the entry that placed it may change it.
  */
-export function markAnchor(editor: Editor, kind: AnchorKind): string | null {
+function markAnchor(editor: Editor, kind: AnchorKind): string | null {
   const { from, to } = editor.state.selection
   if (from === to) return null
 
-  const overlapping = anchorRangeOverlapping(allMarkExtents(editor), from, to)
+  const overlapping = anchorRangeOverlapping(anchorSpans(editor.state.doc), from, to)
   if (overlapping) {
-    if (!isEditableAnchor(editor, overlapping.anchor_id)) return null
-    openAnchorWording(editor, overlapping.anchor_id)
+    if (sealedOf(editor.state).has(overlapping.anchor_id)) return null
+    focusAnchor(editor, overlapping.anchor_id)
     return overlapping.anchor_id
   }
 
@@ -476,20 +241,14 @@ export function markAnchor(editor: Editor, kind: AnchorKind): string | null {
 }
 
 /**
- * Switches an editable anchor's mark kind in place — Highlight ↔ Strike — touching neither its span
- * nor its wording. A no-op, with no transaction and no event, when `kind` already matches, so
- * clicking the already-active kind in a reopened wording box changes nothing.
- *
- * Acts on every per-text-node piece of the mark (`anchorMarkRanges`), not the outer extent
- * `anchorSpans` reports, because a *newer* anchor's `anchorInsert` node can sit inside an *older*
- * anchor's range — layering `removeMark`/`addMark` over the whole extent would touch that atom too.
+ * Switches an anchor's mark kind in place — Highlight ↔ Strike — touching neither its span nor its
+ * wording. A no-op, with no transaction and no event, when `kind` already matches.
  */
-export function setAnchorKind(editor: Editor, anchorId: string, kind: AnchorKind): boolean {
+function setAnchorKind(editor: Editor, anchorId: string, kind: AnchorKind): boolean {
   const { state } = editor
-  const markType = state.schema.marks[ANCHOR_MARK]
-  if (!markType) return false
+  const markType = state.schema.marks[ANCHOR_MARK]!
 
-  const pieces = anchorMarkRanges(state.doc, anchorId)
+  const pieces = piecesOf(state.doc, ANCHOR_MARK, anchorId)
   if (pieces.length === 0) return false
 
   if (findAnchor(state, anchorId)?.kind === kind) return false
@@ -508,134 +267,236 @@ export function setAnchorKind(editor: Editor, anchorId: string, kind: AnchorKind
 }
 
 /**
- * Removes an anchor outright: every piece of its mark, and its `anchorInsert` node if it has one.
- * The one gesture that takes back a passage entirely, rather than converting or reopening it — see
- * ENTRY_MODEL.md's non-destructive invariant, which this still holds: the marked *text* is never
- * touched, only the mark on it.
+ * Highlight or Strike, from `AnchorMenu` or its shortcuts: marks a selection (`markAnchor`), or
+ * switches the kind of the session's own anchor at the caret. False when there's nothing to act on,
+ * so a shortcut falls through.
+ */
+export function applyAnchorKind(editor: Editor, kind: AnchorKind): boolean {
+  const { selection } = editor.state
+  if (!selection.empty) return markAnchor(editor, kind) !== null
+
+  const anchor = ownAnchorAt(editor.state, selection.from)
+  if (!anchor?.kind) return false
+
+  setAnchorKind(editor, anchor.anchor_id, kind)
+  return true
+}
+
+/**
+ * Removes an anchor outright: the mark from its passage, which stays the parent's text
+ * (ENTRY_MODEL.md's non-destructive invariant), and its wording, which is deleted.
  */
 export function removeAnchor(editor: Editor, anchorId: string): void {
   const { state } = editor
 
   const found = findAnchor(state, anchorId)
-  // A mark anchor announces its quote; a bare insertion has none, so its wording stands in instead —
-  // and an insertion still empty when removed (opened, then immediately discarded this way rather
-  // than via Escape) has neither, so this falls back to a description with nothing to quote at all.
+  // A bare insertion has no quote, so its wording stands in.
   const description = found?.quote || found?.insertion
 
-  anchorInsertStorage(editor).openAnchorId.value = null
-
-  let transaction = state.tr
-  for (const { from, to, mark } of anchorMarkRanges(state.doc, anchorId)) {
-    transaction = transaction.removeMark(from, to, mark)
+  const transaction = state.tr
+  for (const { from, to, mark } of piecesOf(state.doc, ANCHOR_MARK, anchorId)) {
+    transaction.removeMark(from, to, mark)
   }
-
-  // Found against the original, unmutated document: `removeMark` above never changes document
-  // size, so the position found there still points at the same node on `transaction.doc`.
-  const existing = findAnchorInsert(state.doc, anchorId)
-  if (existing) {
-    transaction = transaction.delete(existing.pos, existing.pos + existing.node.nodeSize)
+  // Last to first, so each deletion leaves the earlier pieces where they were.
+  for (const { from, to } of piecesOf(state.doc, ANCHOR_WORDING_MARK, anchorId).reverse()) {
+    transaction.delete(from, to)
   }
 
   announce(transaction, description ? `Removed "${description}"` : 'Removed anchor')
 
   dispatchAnchorEdit(editor, transaction)
+  editor.view.focus()
 }
 
 /**
- * Opens a fresh wording session at `pos` for a bare insertion — an empty caret with nothing
- * pairable before it (`pairableAnchorAt`, `domain/anchors.ts`). Places an `anchorInsert` node
- * carrying `text` as its first character and marks it the open one, so its node view
- * (`AnchorInsertView.vue`) mounts an input and focuses it. Called from `DocumentEditor`'s
- * `handleTextInput` hook; when something pairable *does* sit before the caret, `openAnchorWording`
- * handles it instead.
+ * Text typed at `[from, to)` inside the session's own passage, sent to the end of its wording
+ * instead, since the passage is the parent's text. Null anywhere else. An IME composition there
+ * doesn't come through here, so it still splits the passage.
  */
-export function openAnchorInsert(editor: Editor, pos: number, text: string): string | null {
-  const nodeType = editor.state.schema.nodes[ANCHOR_INSERT_NODE]
-  if (!nodeType) return null
+function typedOnPassage(
+  state: EditorState,
+  from: number,
+  to: number,
+  text: string,
+): Transaction | null {
+  if (from !== to) return null
 
-  const anchorId = newAnchorId()
-  const transaction = editor.state.tr.insert(pos, nodeType.create({ anchorId, text }))
+  const sealed = sealedOf(state)
+  const passage = state.doc
+    .resolve(from)
+    .marks()
+    .find((mark) => mark.type.name === ANCHOR_MARK && !sealed.has(String(mark.attrs.anchorId)))
+  const span = passage && anchorSpans(state.doc).find((s) => s.anchor_id === passage.attrs.anchorId)
+  if (!span) return null
 
-  openWordingBox(editor, anchorId, '')
-  dispatchAnchorEdit(editor, transaction)
-  return anchorId
+  const wording = state.schema.marks[ANCHOR_WORDING_MARK]!.create({ anchorId: span.anchor_id })
+  const transaction = state.tr.insert(span.to, state.schema.text(text, [wording]))
+  transaction.setSelection(TextSelection.create(transaction.doc, span.to + text.length))
+  return transaction.setMeta(ANCHOR_EDIT_META, true)
+}
+
+/** Anchor mode's `handleTextInput` (`typedOnPassage`). True when it took the text. */
+export function routeTypingOnPassage(
+  view: EditorView,
+  from: number,
+  to: number,
+  text: string,
+): boolean {
+  const transaction = typedOnPassage(view.state, from, to, text)
+  if (transaction) view.dispatch(transaction)
+  return transaction !== null
 }
 
 /**
- * Carries the current full text of an open wording box on an `updateAnchorInsertText` transaction,
- * so `DocumentEditor` can report it as the change's `inserted_text` — see that function's note.
+ * Anchor mode's `handleClick`: a click on the session's own passage puts the caret at the end of
+ * its wording, as typing there would. A click on wording, edges included, keeps the caret where it
+ * landed. True when it moved the caret.
  */
-const ANCHOR_WORDING_TEXT_META = 'chronicleAnchorWordingText'
+export function routeClickOnPassage(editor: Editor, pos: number): boolean {
+  const anchor = ownAnchorAt(editor.state, pos)
+  if (!anchor) return false
 
-/** Reads the wording text a keystroke transaction carries, if any — see `ANCHOR_WORDING_TEXT_META`. */
-export function readAnchorWordingText(transaction: Transaction): string | null {
-  return (transaction.getMeta(ANCHOR_WORDING_TEXT_META) as string | undefined) ?? null
+  const wording = piecesOf(editor.state.doc, ANCHOR_WORDING_MARK, anchor.anchor_id)
+  if (wording.some((piece) => piece.from <= pos && pos <= piece.to)) return false
+
+  return focusAnchor(editor, anchor.anchor_id)
+}
+
+/** Anchor mode's `handlePaste`: the clipboard's text, typed as one line (`typedOnPassage`). */
+export function pasteAsLine(view: EditorView, slice: Slice): boolean {
+  const line = slice.content.textBetween(0, slice.content.size, ' ', ' ').replace(/\s*\n\s*/g, ' ')
+  if (!line) return true
+
+  const { state } = view
+  const { from, to } = state.selection
+  const transaction = typedOnPassage(state, from, to, line) ?? state.tr.insertText(line)
+  view.dispatch(transaction.setMeta('uiEvent', 'paste'))
+  return true
+}
+
+/** False for anchor commands, which mark their own text, and undo, which restores its marks. */
+function needsMarking(transaction: Transaction): boolean {
+  return transaction.getMeta(ANCHOR_EDIT_META) !== true && !isHistoryTransaction(transaction)
 }
 
 /**
- * Updates the text an open `anchorInsert` node carries, called on every keystroke in its input.
- * Still meta-stamped so the anchor-mode guard lets it through, but otherwise an ordinary attribute
- * change — the node stays an atom the surrounding document can never be typed into directly.
+ * Where the text typed in `transactions` sits in the final document. A step's map gives its
+ * insertion in the document just after that step, so the range is carried through every later
+ * step, in any transaction, which may shift or delete it.
+ */
+function typedRanges(transactions: readonly Transaction[]): { from: number; to: number }[] {
+  const steps = transactions.flatMap((transaction) =>
+    transaction.mapping.maps.map((map) => ({ map, typed: needsMarking(transaction) })),
+  )
+  const all = new Mapping(steps.map(({ map }) => map))
+  const ranges: { from: number; to: number }[] = []
+
+  steps.forEach(({ map, typed }, i) => {
+    if (!typed) return
+    const later = all.slice(i + 1)
+    map.forEach((_oldFrom, _oldTo, from, to) => {
+      if (to > from) ranges.push({ from: later.map(from, 1), to: later.map(to, -1) })
+    })
+  })
+
+  return ranges.filter((range) => range.to > range.from) // A later deletion collapses one.
+}
+
+/** The id of the session's own anchor that `node` carries one of `markNames` for. */
+function ownAnchorOn(
+  node: ProseMirrorNode | null | undefined,
+  markNames: string[],
+  sealed: SealedAnchors,
+): string | null {
+  const mark = node?.marks.find(
+    (candidate) =>
+      markNames.includes(candidate.type.name) && !sealed.has(String(candidate.attrs.anchorId)),
+  )
+  return mark ? String(mark.attrs.anchorId) : null
+}
+
+/**
+ * The session's own anchor that text inserted at `[from, to)` joins: the wording or passage it
+ * follows, or the wording it precedes. Null for a bare insertion. A sealed anchor never absorbs it,
+ * which would attach this entry's wording to an earlier entry's anchor.
+ */
+function ownAnchorBeside(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number,
+  sealed: SealedAnchors,
+): string | null {
+  return (
+    ownAnchorOn(doc.resolve(from).nodeBefore, [ANCHOR_MARK, ANCHOR_WORDING_MARK], sealed) ??
+    ownAnchorOn(doc.resolve(to).nodeAfter, [ANCHOR_WORDING_MARK], sealed)
+  )
+}
+
+/**
+ * Anchor mode's `appendTransaction`, which the guard relies on: text typed anywhere becomes
+ * wording, carrying exactly one wording mark, its own anchor's or a fresh id's.
  *
- * Not a structural anchor op: typing wording is typing, and is marked the way prose is
- * (AUTHORING.md, "Authoring capture"). `ANCHOR_WORDING_TEXT_META` is what lets `DocumentEditor`
- * report its text, since an attribute step has no slice for `changeSignals` to read.
+ * Runs during an IME composition too, never deferred to its end: the guard would refuse each
+ * composition update whose earlier characters weren't wording yet, leaving stray characters.
  */
-export function updateAnchorInsertText(editor: Editor, pos: number, text: string): void {
-  const transaction = editor.state.tr.setNodeAttribute(pos, 'text', text)
-  transaction.setMeta(ANCHOR_WORDING_TEXT_META, text)
-  dispatchAnchorEdit(editor, transaction)
+export function markTyped(
+  transactions: readonly Transaction[],
+  state: EditorState,
+): Transaction | null {
+  const ranges = typedRanges(transactions)
+  if (ranges.length === 0) return null
+
+  const sealed = sealedOf(state)
+  const wordingType = state.schema.marks[ANCHOR_WORDING_MARK]!
+  const transaction = state.tr
+  for (const { from, to } of ranges) {
+    const anchorId = ownAnchorBeside(state.doc, from, to, sealed) ?? newAnchorId()
+    // The mark excludes every other, so this strips whatever the text inherited.
+    transaction.addMark(from, to, wordingType.create({ anchorId }))
+  }
+
+  return transaction.docChanged ? transaction.setMeta(ANCHOR_EDIT_META, true) : null
+}
+
+function wordingPlaceholder(): HTMLElement {
+  const placeholder = document.createElement('span')
+  placeholder.className = 'chronicle-anchor-placeholder'
+  placeholder.textContent = 'Add wording…'
+  placeholder.contentEditable = 'false'
+  placeholder.setAttribute('aria-hidden', 'true')
+  return placeholder
 }
 
 /**
- * Commits an open wording session: keeps the node with its trimmed text, or drops it outright if
- * nothing was typed — an insert with no wording says nothing, whether it was never written or
- * edited back down to nothing.
- *
- * Skips the transaction entirely when the trimmed text is non-empty and unchanged from what the box
- * opened with — reopening an anchor and closing it again without editing anything is not a change at
- * all. When it *is* changed, this dispatch is ordinarily a content no-op in its own right: every
- * keystroke already wrote the same final value via `updateAnchorInsertText`, so TipTap's own
- * `prevState.doc.eq(state.doc)` check silently drops the `update` event for it — there is nothing
- * here left for a mark to attach to, which is the other half of why settling wording isn't the
- * `'anchor'` moment. Dropping the node *is* a real structural change (and always reaches `update`,
- * since the doc shrinks): the anchor's id drops out of the document's anchor set entirely, which is
- * what `DocumentEditor`'s outcome-based comparison (`contentDelta`) reads as an anchor change, the
- * same as removing one via the dedicated button (`removeAnchor`) — for a bare insertion with no
- * mark, emptying its wording and committing *is* how it's removed.
+ * Anchor mode's decorations on the session's own anchors: all their wording as editable, the
+ * wording at the caret outlined as open, and a placeholder at the caret after a passage with none.
  */
-export function commitAnchorInsert(editor: Editor, pos: number, text: string): void {
-  const storage = anchorInsertStorage(editor)
-  const openedText = storage.openedText.value
-  storage.openAnchorId.value = null
+export function anchorModeDecorations(state: EditorState): DecorationSet {
+  const sealed = sealedOf(state)
+  const { doc, selection } = state
+  const caret = selection.empty ? selection.from : null
+  const decorations: Decoration[] = []
+  const worded = new Set<string>()
 
-  const trimmed = text.trim()
-  if (trimmed && trimmed === openedText) return
+  for (const piece of anchorPieces(doc, ANCHOR_WORDING_MARK)) {
+    worded.add(piece.anchorId)
+    if (sealed.has(piece.anchorId)) continue
+    const open = caret !== null && piece.from <= caret && caret <= piece.to
+    decorations.push(
+      Decoration.inline(piece.from, piece.to, {
+        class: open
+          ? 'chronicle-anchor-wording--editable chronicle-anchor-wording--open'
+          : 'chronicle-anchor-wording--editable',
+      }),
+    )
+  }
 
-  const transaction = trimmed
-    ? editor.state.tr.setNodeAttribute(pos, 'text', trimmed)
-    : editor.state.tr.delete(pos, pos + 1)
+  for (const span of anchorSpans(doc)) {
+    if (span.to !== caret || sealed.has(span.anchor_id) || worded.has(span.anchor_id)) continue
+    decorations.push(
+      Decoration.widget(caret, wordingPlaceholder, { side: 1, key: 'anchor-placeholder' }),
+    )
+  }
 
-  if (trimmed) announce(transaction, `Added wording "${trimmed}"`)
-  else if (openedText) announce(transaction, 'Cleared wording')
-
-  dispatchAnchorEdit(editor, transaction)
-}
-
-/**
- * Discards an open wording session — Escape. Restores whatever the box held the moment it opened
- * (`AnchorInsertStorage.openedText`): for a freshly placed anchor that's always empty, so the node
- * is dropped outright, same as before this box could ever hold anything else; for a reopened anchor
- * that already had wording, its previous text comes back untouched rather than being destroyed.
- */
-export function cancelAnchorInsert(editor: Editor, pos: number): void {
-  const storage = anchorInsertStorage(editor)
-  const openedText = storage.openedText.value
-  storage.openAnchorId.value = null
-
-  const transaction = openedText
-    ? editor.state.tr.setNodeAttribute(pos, 'text', openedText)
-    : editor.state.tr.delete(pos, pos + 1)
-
-  dispatchAnchorEdit(editor, transaction)
+  return DecorationSet.create(doc, decorations)
 }

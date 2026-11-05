@@ -27,11 +27,6 @@ const props = defineProps<{
   onDiscard: () => Promise<unknown> | void
 }>()
 
-const emit = defineEmits<{
-  /** After the session has it, for an owner that reads more of it. */
-  change: [change: EditorChange]
-}>()
-
 const titleId = useId()
 /** Why Save or Discard did nothing; cleared by any change. */
 const error = ref<string | null>(null)
@@ -53,7 +48,6 @@ function handleTitleInput(event: Event): void {
 function handleChange(change: EditorChange): void {
   error.value = null
   props.session.handleChange(change)
-  emit('change', change)
 }
 
 /** Runs the owner's handler for one button, saying why if it fails. */
@@ -172,8 +166,6 @@ async function handleSave(): Promise<void> {
         </template>
       </p>
     </div>
-
-    <slot v-if="!session.readOnly" name="notices" />
 
     <EntryDetailsFields
       :model-value="session.fields"

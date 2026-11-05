@@ -36,12 +36,16 @@ export const MEDIA_NODE = 'mediaImage'
 export const ANCHOR_MARK = 'anchor'
 
 /**
- * A collapsed anchor: wording a related entry proposes, as a node rather than a mark.
+ * Wording a related entry proposes, as text in the parent's document carrying `{ anchorId }`: after
+ * its anchor's passage, or alone for a bare insertion.
  *
- * Being a node it holds real text that the flattening **must** skip, which is what makes "no
- * related entry is destructive" checkable rather than merely intended: an anchor-mode session
- * leaves `docToPlainText` untouched, so `sameContent(before, after)` holds by construction.
+ * Real text that the flattening **must** skip, which is what makes "no related entry is
+ * destructive" checkable rather than merely intended: an anchor-mode session leaves
+ * `docToPlainText` untouched, so `sameContent(before, after)` holds by construction.
  */
+export const ANCHOR_WORDING_MARK = 'anchorWording'
+
+/** The same wording as an atom carrying it in a `text` attribute, skipped the same way. */
 export const ANCHOR_INSERT_NODE = 'anchorInsert'
 
 /** Nodes that sit inside a line rather than starting one. */
@@ -79,12 +83,21 @@ export function parseDocument(content: string | EntryDocument): EntryDocument {
   return parsed
 }
 
+/** The anchor whose wording `node` is, or null when it isn't anchor wording. */
+export function wordingAnchorId(node: DocNode): string | null {
+  const id =
+    node.type === ANCHOR_INSERT_NODE
+      ? node.attrs?.anchorId
+      : node.marks?.find((mark) => mark.type === ANCHOR_WORDING_MARK)?.attrs?.anchorId
+  return typeof id === 'string' && id ? id : null
+}
+
 function nodeText(node: DocNode): string {
+  // Anchor-carried wording belongs to the related entry that proposed it, not to this document's
+  // author. See ANCHOR_WORDING_MARK above: this line is why an anchor is non-destructive.
+  if (wordingAnchorId(node)) return ''
   if (node.type === 'text') return node.text ?? ''
   if (node.type === 'hardBreak') return '\n'
-  // Anchor-carried wording belongs to the related entry that proposed it, not to this document's
-  // author. See ANCHOR_INSERT_NODE above: this line is why an anchor is non-destructive.
-  if (node.type === ANCHOR_INSERT_NODE) return ''
 
   const children = node.content ?? []
   if (children.length === 0) return ''
@@ -164,6 +177,8 @@ export interface ContentDelta {
   sameMedia: boolean
   /** Same anchor ids and kinds. Ignores wording text — see `contentDelta`. */
   sameAnchors: boolean
+  /** Same wording on every anchor, untrimmed: a space typed into wording is still typing. */
+  sameWording: boolean
 }
 
 function anchorKey(anchors: DocumentAnchor[]): string {
@@ -173,8 +188,27 @@ function anchorKey(anchors: DocumentAnchor[]): string {
     .join('\n')
 }
 
+/** Each anchor's wording as written, untrimmed, keyed by anchor id in document order. */
+export function anchorWording(doc: EntryDocument): Map<string, string> {
+  const wording = new Map<string, string>()
+
+  walk(doc, (node) => {
+    const anchorId = wordingAnchorId(node)
+    if (!anchorId) return
+    const text = node.type === ANCHOR_INSERT_NODE ? node.attrs?.text : node.text
+    wording.set(anchorId, (wording.get(anchorId) ?? '') + String(text ?? ''))
+  })
+
+  return wording
+}
+
+/** `anchorWording` as one string, for comparing two documents' wording. */
+function wordingKey(doc: EntryDocument): string {
+  return [...anchorWording(doc)].map(([anchorId, text]) => `${anchorId}:${text}`).join('\n')
+}
+
 /**
- * Compares two documents along the three axes a change's signals are read from, in one pass so
+ * Compares two documents along the four axes a change's signals are read from, in one pass so
  * `DocumentEditor` never has to re-walk the document per signal.
  *
  * Deliberately a comparison of outcomes rather than a list of editor operations. Marks arrive as
@@ -184,8 +218,9 @@ function anchorKey(anchors: DocumentAnchor[]): string {
  * the document says before and after always is.
  *
  * `sameAnchors` compares only `anchor_id` and `kind` (`collectAnchors`, `@/domain/anchors`),
- * ignoring `quote`/`insertion`: retyping a wording box moves no anchor and covers no different text,
- * so it must read as ordinary typing, not as a structural anchor op.
+ * ignoring `quote`/`insertion`: retyping wording moves no anchor and covers no different text, so
+ * it must read as ordinary typing, not as a structural anchor op. `sameWording` is what tells that
+ * typing from formatting, since `sameText` skips wording.
  */
 export function contentDelta(a: string | EntryDocument, b: string | EntryDocument): ContentDelta {
   const before = parseDocument(a)
@@ -199,6 +234,7 @@ export function contentDelta(a: string | EntryDocument, b: string | EntryDocumen
     sameText: docToPlainText(before).trim() === docToPlainText(after).trim(),
     sameMedia: collectMediaRefs(before).join('\n') === collectMediaRefs(after).join('\n'),
     sameAnchors: anchorKey(collectAnchors(before)) === anchorKey(collectAnchors(after)),
+    sameWording: wordingKey(before) === wordingKey(after),
   }
 }
 

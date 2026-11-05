@@ -4,7 +4,6 @@ import { userEvent } from 'vitest/browser'
 
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
-import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
@@ -139,16 +138,17 @@ describe('EntryComposer (browser)', () => {
   })
 
   it('moves from the title into the body on Enter', async () => {
-    const onChange = vi.fn()
     const screen = renderComponent(EntryComposer, {
       props: { session: beginSession(), label: 'New entry', saveLabel: 'Save entry' },
-      attrs: { onSave: vi.fn(), onDiscard: vi.fn(), onChange },
+      attrs: { onSave: vi.fn(), onDiscard: vi.fn() },
     })
 
     await screen.getByRole('textbox', { name: 'Title' }).fill('Lake Tahoe')
     await userEvent.keyboard('{Enter}We drove up on Friday.')
 
-    expect(docToPlainText(onChange.mock.lastCall![0].content)).toBe('We drove up on Friday.')
+    await expect
+      .element(screen.getByRole('textbox', { name: 'New entry' }))
+      .toHaveTextContent(/^We drove up on Friday\.$/)
   })
 
   it('moves from the title onto the toolbar on Tab', async () => {

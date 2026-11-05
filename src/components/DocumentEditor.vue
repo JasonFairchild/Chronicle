@@ -11,35 +11,19 @@ export interface EditorChange extends ChangeSignals {
   content: string
   /** Serialized ProseMirror steps for this change, in order. */
   steps: unknown[]
-  /**
-   * Pre-existing anchors whose covered text this session has disturbed so far, outside anchor
-   * mode. Cumulative across the whole session: once an edit changes what an anchor covers, that
-   * anchor stays flagged even if a later edit moves the surrounding text back (PRODUCT.md §4.5).
-   */
-  affectedAnchorIds?: string[]
 }
 </script>
 
 <script setup lang="ts">
-import type { EditorView } from '@tiptap/pm/view'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import AnchorMenu from '@/components/AnchorMenu.vue'
 import EditorToolbar from '@/components/EditorToolbar.vue'
 import { useMedia } from '@/composables/useMedia'
-import { collectAnchors, innermostAnchorAt, pairableAnchorAt } from '@/domain/anchors'
-import { type DocMark, type EntryDocument, parseDocument } from '@/domain/entryDocument'
-import {
-  type AnchorSpan,
-  anchorSpans,
-  editableAnchorRanges,
-  mapAnchorSpans,
-  openAnchorInsert,
-  openAnchorWording,
-  readAnchorAnnouncement,
-  sealedAnchorIdsOf,
-} from '@/editor/anchorCommands'
+import { collectAnchors } from '@/domain/anchors'
+import { type EntryDocument, parseDocument } from '@/domain/entryDocument'
+import { readAnchorAnnouncement } from '@/editor/anchorCommands'
 import { changeSignals } from '@/editor/changeSignals'
 import { entryExtensions } from '@/editor/extensions'
 
@@ -59,9 +43,8 @@ const props = withDefaults(
     displayOnly?: boolean
     /**
      * The other creation experience (ENTRY_MODEL.md, "Two creation experiences, kept separate").
-     * Surrounding text becomes unreachable — only the anchor menu (`AnchorMenu.vue`) and the
-     * keyboard shortcuts it mirrors can change the document — and the ordinary formatting toolbar
-     * gives way to it.
+     * The parent's own text can't change: typing becomes wording, and the anchor menu
+     * (`AnchorMenu.vue`) takes the formatting toolbar's place.
      */
     anchorMode?: boolean
     /**
@@ -91,22 +74,7 @@ const emit = defineEmits<{
 
 const media = useMedia()
 
-/**
- * Captured once, so anchor mode can tell "placed this session" apart from "was already there" for
- * as long as this editor instance lives — the same document this editor opened, never reassigned.
- */
 const initialDocument = parseDocument(props.content)
-
-/**
- * The anchors already in the document, moved forward one transaction at a time — text mode only.
- * Reassigned after every edit so the next one resumes tracking from where this one left off,
- * rather than re-walking every step since the session began. Null until the first edit, which
- * reads them off the document it started from: TipTap's `onCreate` fires a task after mount, and
- * an edit can land first.
- */
-let liveAnchorSpans: AnchorSpan[] | null = null
-/** Anchors this session has disturbed so far. Sticky: once flagged, an anchor stays flagged. */
-const affectedAnchorIds = new Set<string>()
 
 /** Scaffolding steps not yet reported; see `onUpdate`. */
 let heldSteps: unknown[] = []
@@ -138,14 +106,17 @@ function anchorMarkupAttr(document: EntryDocument): Record<string, string> {
 const liveRegionMessage = ref('')
 
 const editor = useEditor({
-  // In anchor mode, `entryExtensions` installs the guard that lets through only the anchor
-  // commands below and undo/redo of them — see `isAnchorEdit`. That is what makes "no related entry
-  // is destructive" a property of the editor rather than a rule the UI is trusted to follow.
+  // The guard (`anchorGuard.ts`) seals the anchors of the document this editor opens with, or in
+  // anchor mode of the session's base. It relies on this editor never being handed a new document:
+  // each composer keys it on the session's `editorKey`.
   extensions: entryExtensions({
     anchorMode: props.anchorMode,
-    baseContent: props.anchorBaseContent ?? initialDocument,
+    baseContent: props.anchorBaseContent,
   }),
   content: initialDocument,
+  // StarterKit's input rules each make a block or a mark, which anchor mode's guard refuses,
+  // swallowing the keystroke that completed one: the space in "- ".
+  enableInputRules: !props.anchorMode,
   editable: !props.disabled && !props.displayOnly,
   editorProps: {
     attributes: {
@@ -165,43 +136,6 @@ const editor = useEditor({
       ...(props.describedBy ? { 'aria-describedby': props.describedBy } : {}),
       ...anchorMarkupAttr(initialDocument),
     },
-    handleClick: (_view: EditorView, pos: number): boolean => {
-      // Reopening an anchor this session placed, by clicking its highlighted or struck text — the
-      // wording node's own span handles clicks on itself (`AnchorInsertView.vue`); this is only for
-      // the marked text beside it, which has no node view of its own to hook a click into. A click
-      // on a sealed anchor from an earlier related entry falls through to ordinary caret placement.
-      if (!props.anchorMode) return false
-
-      const instance = editor.value
-      if (!instance) return false
-
-      const hit = innermostAnchorAt(editableAnchorRanges(instance), pos)
-      if (!hit) return false
-
-      openAnchorWording(instance, hit.anchor_id)
-      return true
-    },
-    handleTextInput: (view: EditorView, from: number, to: number, text: string): boolean => {
-      // Opening a wording session at the caret. Only an empty selection in anchor mode qualifies;
-      // anything else falls through to the guard, which rejects it like any other ordinary edit in
-      // this mode.
-      if (!props.anchorMode || from !== to) return false
-
-      const instance = editor.value
-      if (!instance) return false
-
-      const marksBefore = (view.state.doc.resolve(from).nodeBefore?.marks ?? []).map((mark) =>
-        mark.toJSON(),
-      ) as DocMark[]
-      const pairWith = pairableAnchorAt(marksBefore, sealedAnchorIdsOf(instance))
-
-      // Pairing appends to the anchor's existing node (or creates its first one) rather than
-      // inserting a fresh one under the same id — see `openAnchorWording` for why inserting
-      // blindly here would be able to produce two nodes sharing an id.
-      return pairWith
-        ? openAnchorWording(instance, pairWith, text) !== null
-        : openAnchorInsert(instance, from, text) !== null
-    },
   },
   onUpdate: ({ editor: instance, transaction, appendedTransactions }) => {
     // Plugins append transactions of their own (an autolink, the paragraph after a trailing
@@ -214,15 +148,6 @@ const editor = useEditor({
     if (steps.length === 0) return
 
     const document = instance.getJSON() as EntryDocument
-
-    if (!props.anchorMode) {
-      const mapped = mapAnchorSpans(
-        liveAnchorSpans ?? anchorSpans(transaction.before),
-        applied.flatMap((tr) => tr.mapping.maps),
-      )
-      for (const span of mapped) if (span.changedInside) affectedAnchorIds.add(span.anchor_id)
-      liveAnchorSpans = mapped
-    }
 
     if (collectAnchors(document).length > 0) {
       instance.view.dom.setAttribute('data-anchor-markup', ANCHOR_MARKUP_MODE)
@@ -249,7 +174,6 @@ const editor = useEditor({
       content: JSON.stringify(document),
       steps: reported,
       ...changeSignals(transaction, document),
-      affectedAnchorIds: props.anchorMode ? undefined : [...affectedAnchorIds],
     })
 
     void nextTick(() => media.applyTo(instance.view.dom))
@@ -361,7 +285,6 @@ defineExpose({ focus })
 */
 :deep(.chronicle-document .chronicle-anchor) {
   border-radius: 0.15rem;
-  padding: 0 0.05rem;
 }
 
 :deep(.chronicle-document .chronicle-anchor[data-anchor-kind='comment']) {
@@ -373,30 +296,26 @@ defineExpose({ focus })
   text-decoration: line-through;
 }
 
+/*
+  No margin or padding on anchors or wording: spacing is the author's, typed as characters, so an
+  insertion mid-word sits flush and the page shows exactly the text that's stored.
+*/
 :deep(.chronicle-document .chronicle-anchor-insert) {
   text-decoration: none;
-  /*
-    A fixed visual gap ahead of the wording, independent of whatever whitespace the marked passage
-    behind it does or doesn't have — `addAnchorMark` (`anchorCommands.ts`) trims a placed anchor's
-    own span down to real characters, so there's never a space character here to lean on for
-    spacing. Applied to the `<ins>` wrapper rather than the wording span inside it, so it covers the
-    open input box too, not just the closed rendering.
-  */
-  margin-inline-start: 0.25em;
 }
 
 /*
   Inline presentation — active (`ANCHOR_MARKUP_MODE` above is 'inline'). Wording trails straight
   after the marked passage in normal flow, like ordinary text, with no separate glyph marking where
-  it starts — the type styling below is what reads as "this is proposed wording, not the original".
-  A caret glyph was tried here too and taken back out: pointing up reads fine when the wording is
-  actually above (see the dormant presentation below), but pointing at nothing when it's sitting
-  right next to the wording on the same line just looks like a stray mark.
+  it starts — a colored underline, as track changes marks an insertion, is what reads as "this is
+  proposed wording, not the original". It runs under spaces too, so wording that's only a space
+  still shows. A caret glyph was tried here too and taken back out: pointing up reads fine when the
+  wording is actually above (see the dormant presentation below), but pointing at nothing when it's
+  sitting right next to the wording on the same line just looks like a stray mark.
 */
 :deep(.chronicle-document .chronicle-anchor-wording) {
-  font-size: 0.82em;
   color: var(--color-anchor-insert);
-  font-style: italic;
+  text-decoration: underline;
 }
 
 /*
@@ -415,8 +334,8 @@ defineExpose({ focus })
   attempt: long wording can overlap whatever text follows on a tightly packed line, which read as a
   bug rather than an accepted proofreading-markup limit when it was tried live — worth another pass,
   not worth losing. If this comes back, a color scheme covering arbitrary text in the parent (see
-  "Making anchor ops unmistakable") is worth rechecking against too — italic-plus-color as "this is
-  wording, not original text" gets weaker the more the original text is itself colored.
+  "Making anchor ops unmistakable") is worth rechecking against too — underline-plus-color as "this
+  is wording, not original text" gets weaker the more the original text is itself colored.
 
 :deep(.chronicle-document .chronicle-anchor-insert) {
   position: relative;
@@ -428,7 +347,7 @@ defineExpose({ focus })
 }
 
 :deep(.chronicle-document .chronicle-anchor-wording),
-:deep(.chronicle-document .chronicle-anchor-insert-box) {
+:deep(.chronicle-document .chronicle-anchor-wording--open) {
   position: absolute;
   left: 0;
   bottom: 100%;
@@ -462,70 +381,39 @@ defineExpose({ focus })
 }
 
 /*
-  The open state of an `anchorInsert` node view (`AnchorInsertView.vue`): a bordered, auto-sizing
-  input plus a checkmark, sitting inline right after the caret glyph. Styled to visibly read as a
-  text box the moment it appears — including its empty placeholder state — rather than something
-  that only looks like one after it already has content.
+  The caret takes the wording's color anywhere in anchor mode, since whatever is typed there becomes
+  wording. That holds at a wording's start too, where ProseMirror draws the caret at the end of the
+  passage before it, outside the box.
 */
-:deep(.chronicle-anchor-insert-box) {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
-  z-index: 1;
+:deep(.chronicle-document--anchor) {
+  caret-color: var(--color-anchor-insert);
 }
 
-:deep(.chronicle-anchor-insert-input) {
-  border: 1px solid var(--color-anchor-insert);
+/*
+  Anchor mode's decorations (`anchorModeDecorations`, `anchorCommands.ts`). Wording the session
+  placed tints on hover, as something a click returns to. The wording at the caret is outlined as
+  an open box, and a passage at the caret with no wording yet shows a placeholder box. Each box
+  stands a margin clear of the passage, so its outline never crosses the passage's last letter, and
+  the open box is padded on its end side, clear of the wording's. The caret is left where
+  ProseMirror draws it, at a box's edge rather than inside it.
+*/
+:deep(.chronicle-anchor-wording--editable:hover) {
+  background-color: color-mix(in srgb, var(--color-anchor-insert) 15%, transparent);
+}
+
+:deep(.chronicle-anchor-wording--open),
+:deep(.chronicle-anchor-placeholder) {
+  outline: 1px solid var(--color-anchor-insert);
   border-radius: 0.25rem;
-  background-color: var(--color-surface);
-  color: var(--color-anchor-insert);
-  padding: 0 0.25rem;
+  margin-inline-start: 0.15em;
+  padding-inline-end: 0.2em;
+}
+
+:deep(.chronicle-anchor-placeholder) {
+  padding-inline-start: 0.2em;
+  color: var(--color-text-muted);
   font-size: 0.82em;
   font-style: italic;
-  outline: none;
-}
-
-:deep(.chronicle-anchor-insert-accept) {
-  color: var(--color-anchor-insert);
-  flex-shrink: 0;
-}
-
-/*
-  Remove is shown for every open anchor; the Highlight/Strike toggles only for one with a mark to
-  switch — a bare insertion has no kind. `--active` marks whichever kind the anchor currently
-  carries, echoing the same two colors `.chronicle-anchor[data-anchor-kind]` above renders on the
-  passage itself.
-*/
-:deep(.chronicle-anchor-insert-kind),
-:deep(.chronicle-anchor-insert-remove) {
-  display: inline-flex;
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  border-radius: 0.2rem;
-  padding: 0.05rem;
-}
-
-:deep(.chronicle-anchor-insert-kind:hover),
-:deep(.chronicle-anchor-insert-remove:hover) {
-  background-color: var(--color-bg-muted);
-  color: var(--color-text);
-}
-
-:deep(.chronicle-anchor-insert-kind--active) {
-  color: var(--color-anchor-insert);
-}
-
-/*
-  A placed anchor this session may still edit is itself clickable (PRODUCT.md §4.4), so its wording
-  reads as something to act on rather than plain text — without disturbing the italic/color styling
-  above that marks it as proposed wording in the first place.
-*/
-:deep(.chronicle-anchor-wording--editable) {
-  cursor: pointer;
-  border-radius: 0.15rem;
-}
-
-:deep(.chronicle-anchor-wording--editable:hover) {
-  text-decoration: underline;
+  pointer-events: none;
 }
 </style>

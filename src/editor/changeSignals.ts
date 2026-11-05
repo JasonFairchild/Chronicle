@@ -4,8 +4,6 @@ import { ReplaceAroundStep, ReplaceStep } from '@tiptap/pm/transform'
 import { contentDelta, type EntryDocument } from '@/domain/entryDocument'
 import type { ChangeSignals } from '@/types/entry'
 
-import { readAnchorWordingText } from './anchorCommands'
-
 // The signals of one editor change (AUTHORING.md, "Authoring capture"). In the editor layer because
 // they read ProseMirror steps; pure, so a bare `EditorState` proves them without mounting anything.
 
@@ -51,15 +49,11 @@ function removedTextOf(transaction: Transaction): number {
  */
 export function changeSignals(transaction: Transaction, after: EntryDocument): ChangeSignals {
   const delta = contentDelta(transaction.before.toJSON() as EntryDocument, after)
-  // A wording-box keystroke looks like formatting by outcome, since wording is in none of the
-  // three comparisons, and its attribute step has no slice to read text from.
-  const wordingText = readAnchorWordingText(transaction)
 
   return {
-    // The box's whole text serves: the punctuation check reads only its last character.
-    inserted_text: wordingText ?? insertedTextOf(transaction),
+    inserted_text: insertedTextOf(transaction),
     removed_chars: removedTextOf(transaction),
-    is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors && wordingText === null,
+    is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors && delta.sameWording,
     is_anchor_op: !delta.sameAnchors,
     // ProseMirror stamps this on its own paste handling. A drop is `'drop'` (PRODUCT.md §4.10), and
     // content inserted by a command, as an attached image is, carries none.

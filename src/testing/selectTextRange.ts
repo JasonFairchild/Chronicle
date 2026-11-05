@@ -6,9 +6,9 @@
  * Walks every text node under the editor in document order rather than assuming the content is one
  * text node — true for a freshly-seeded paragraph, false the moment a mark splits it into siblings
  * (e.g. an anchor already covering part of the text being revised). Skips any text sitting inside a
- * `contenteditable="false"` subtree — an anchor's own committed wording (`AnchorInsertView.vue`) —
- * since a real selection can never reach into one of those either; offsets here walk the same text a
- * person could actually select, not the presentational wording sitting beside it.
+ * `contenteditable="false"` subtree — anchor mode's "Add wording…" placeholder — since a real
+ * selection can never reach into one of those either; offsets here walk the same text a person could
+ * actually select.
  *
  * Shared between `DocumentEditor` and `EntryDetailView` specs in both runners, since none of them
  * has any other way to drive a ProseMirror selection without a real mouse.

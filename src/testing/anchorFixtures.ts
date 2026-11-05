@@ -1,16 +1,17 @@
-import { ANCHOR_MARK } from '@/domain/entryDocument'
+import { ANCHOR_MARK, ANCHOR_WORDING_MARK } from '@/domain/entryDocument'
 import { serializeDocument } from '@/testing/documents'
 
 /**
- * A hand-built document carrying one anchor mark over `[from, to)`, standing in for what
- * `addAnchorMark` (`editor/anchorCommands.ts`) would produce. Shared because more than one node test
- * needs a marked document and none of them has an editor to run one against.
+ * A hand-built document carrying one anchor: its mark over `[from, to)`, then `wording` as marked
+ * text right after it, sharing its id. Stands in for what anchor mode produces, for the tests with
+ * no editor to run one against. Equal `from` and `to` leave no passage: a bare insertion there.
  */
-export function withAnchorMark(
+export function withAnchorWording(
   text: string,
   anchorId: string,
   from: number,
   to: number,
+  wording: string,
   kind: 'comment' | 'strike' = 'comment',
 ): string {
   return serializeDocument({
@@ -25,9 +26,25 @@ export function withAnchorMark(
             text: text.slice(from, to),
             marks: [{ type: ANCHOR_MARK, attrs: { anchorId, kind } }],
           },
+          {
+            type: 'text',
+            text: wording,
+            marks: [{ type: ANCHOR_WORDING_MARK, attrs: { anchorId } }],
+          },
           { type: 'text', text: text.slice(to) },
         ].filter((node) => node.text !== ''),
       },
     ],
   })
+}
+
+/** `withAnchorWording` with no wording: a passage alone. */
+export function withAnchorMark(
+  text: string,
+  anchorId: string,
+  from: number,
+  to: number,
+  kind: 'comment' | 'strike' = 'comment',
+): string {
+  return withAnchorWording(text, anchorId, from, to, '', kind)
 }

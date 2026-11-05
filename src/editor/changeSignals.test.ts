@@ -2,9 +2,15 @@ import { EditorState, type Transaction } from '@tiptap/pm/state'
 import { findWrapping } from '@tiptap/pm/transform'
 import { describe, expect, it } from 'vitest'
 
-import { ANCHOR_MARK, type EntryDocument, MEDIA_NODE } from '@/domain/entryDocument'
+import {
+  ANCHOR_MARK,
+  ANCHOR_WORDING_MARK,
+  type EntryDocument,
+  MEDIA_NODE,
+} from '@/domain/entryDocument'
 import { changeSignals } from '@/editor/changeSignals'
 import { replayDocument } from '@/editor/replay'
+import { withAnchorWording } from '@/testing/anchorFixtures'
 import { plainTextDocument } from '@/testing/documents'
 import type { ChangeSignals } from '@/types/entry'
 
@@ -99,5 +105,16 @@ describe('changeSignals', () => {
     transaction.addMark(4, 10, anchor)
 
     expect(signalsOf(transaction)).toEqual({ ...noSignals, is_anchor_op: true })
+  })
+
+  it('reports a space typed into wording as typing, not formatting', () => {
+    // "rained" is the passage, and "heavily" its wording at 10–17.
+    const content = withAnchorWording('It rained all day', 'anchor-1', 3, 9, 'heavily')
+    const transaction = EditorState.create({ doc: replayDocument(content)! }).tr
+    const { schema } = transaction.doc.type
+    const wording = schema.marks[ANCHOR_WORDING_MARK]!.create({ anchorId: 'anchor-1' })
+    transaction.insert(17, schema.text(' ', [wording]))
+
+    expect(signalsOf(transaction)).toEqual({ ...noSignals, inserted_text: ' ' })
   })
 })

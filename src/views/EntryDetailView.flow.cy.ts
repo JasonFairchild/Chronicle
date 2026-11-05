@@ -108,8 +108,8 @@ describe('EntryDetailView flows', () => {
         .should('be.visible')
         .then(($editor) => selectTextRange($editor[0]!, 10, 20))
 
-      cy.findByRole('button', { name: 'Strike' }).click()
-      cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
+      cy.findByRole('button', { name: 'Strike passage' }).click()
+      cy.focused().type('Donner Lake')
 
       cy.findByRole('textbox', { name: 'Related entry' }).type('Wrong lake')
       cy.findByRole('button', { name: 'Add entry' }).click()
@@ -141,8 +141,8 @@ describe('EntryDetailView flows', () => {
         .should('be.visible')
         .then(($editor) => selectTextRange($editor[0]!, 10, 20))
 
-      cy.findByRole('button', { name: 'Highlight' }).click()
-      cy.findByRole('textbox', { name: 'Wording' }).type('Donner Lake{enter}')
+      cy.findByRole('button', { name: 'Highlight passage' }).click()
+      cy.focused().type('Donner Lake')
 
       cy.findByRole('textbox', { name: 'Related entry' }).type('Actually')
       cy.findByRole('button', { name: 'Add entry' }).click()

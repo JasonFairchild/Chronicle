@@ -1,6 +1,7 @@
 // Loaded automatically before every component spec: https://on.cypress.io/configuration
 
 import '@testing-library/cypress/add-commands'
+import 'cypress-real-events'
 import '@/assets/main.css'
 
 import { type CyMountOptions, mount } from 'cypress/vue'

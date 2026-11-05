@@ -4,6 +4,7 @@ import EditorToolbar from '@/components/EditorToolbar.vue'
 import { collectAnchors } from '@/domain/anchors'
 import {
   ANCHOR_MARK,
+  ANCHOR_WORDING_MARK,
   collectMediaRefs,
   docToPlainText,
   type EntryDocument,
@@ -201,7 +202,9 @@ describe('EditorToolbar', () => {
       .and('have.focus')
   })
 
-  it('clears formatting but leaves an anchor', () => {
+  it('clears formatting but leaves an anchor and its wording', () => {
+    // The guard would refuse the whole clear had it changed the anchor, so the bold beside it
+    // going shows the anchor's marks were never touched.
     const editor = mountToolbar({
       type: 'doc',
       content: [
@@ -212,19 +215,21 @@ describe('EditorToolbar', () => {
             {
               type: 'text',
               text: 'rained',
-              marks: [
-                { type: 'bold' },
-                { type: ANCHOR_MARK, attrs: { anchorId: 'anchor-1', kind: 'comment' } },
-              ],
+              marks: [{ type: ANCHOR_MARK, attrs: { anchorId: 'anchor-1', kind: 'comment' } }],
             },
-            { type: 'text', text: ' all day' },
+            {
+              type: 'text',
+              text: 'heavily',
+              marks: [{ type: ANCHOR_WORDING_MARK, attrs: { anchorId: 'anchor-1' } }],
+            },
+            { type: 'text', text: ' all day', marks: [{ type: 'bold' }] },
           ],
         },
       ],
     })
     cy.findByRole('textbox', { name: 'New entry' })
       .focus()
-      .then(($body) => selectTextRange($body[0]!, 0, 17))
+      .then(($body) => selectTextRange($body[0]!, 0, 24))
 
     cy.findByRole('button', { name: 'More formatting actions' }).click()
     cy.findByRole('button', { name: 'Clear formatting' }).click()
@@ -234,7 +239,7 @@ describe('EditorToolbar', () => {
       .invoke('getJSON')
       .then((document) => {
         expect(collectAnchors(document as EntryDocument)).to.deep.equal([
-          { anchor_id: 'anchor-1', kind: 'comment', quote: 'rained', insertion: null },
+          { anchor_id: 'anchor-1', kind: 'comment', quote: 'rained', insertion: 'heavily' },
         ])
       })
   })

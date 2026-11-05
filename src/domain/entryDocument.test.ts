@@ -13,6 +13,7 @@ import {
   sameContent,
   sameDocument,
 } from '@/domain/entryDocument'
+import { withAnchorWording } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 
 const document: EntryDocument = {
@@ -66,6 +67,12 @@ describe('docToPlainText', () => {
     }
 
     expect(docToPlainText(withBreak)).toBe('Roses\nViolets')
+  })
+
+  it('leaves out wording an anchor proposes as marked text', () => {
+    const struck = withAnchorWording('We drove up on Friday.', 'a1', 15, 21, 'Saturday', 'strike')
+
+    expect(docToPlainText(struck)).toBe('We drove up on Friday.')
   })
 })
 
@@ -310,5 +317,15 @@ describe('contentDelta', () => {
 
     const delta = contentDelta(withWording('first draft'), withWording('final wording'))
     expect(delta.sameAnchors).toBe(true)
+  })
+
+  it('reports a space typed into marked wording as the same anchors but different wording', () => {
+    const delta = contentDelta(
+      withAnchorWording('Worth revisiting', 'anchor-1', 0, 5, 'first'),
+      withAnchorWording('Worth revisiting', 'anchor-1', 0, 5, 'first '),
+    )
+
+    expect(delta.sameAnchors).toBe(true)
+    expect(delta.sameWording).toBe(false)
   })
 })

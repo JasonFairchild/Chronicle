@@ -1,7 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
-import { nextTick } from 'vue'
 import type { Router } from 'vue-router'
 
 import { ANCHOR_MARK } from '@/domain/entryDocument'
@@ -525,15 +524,14 @@ describe('EntryDetailView (browser)', () => {
 
     const screen = await mountDetail(parent.id, { draft: 'session-1' })
 
+    // The menu offers Remove only on an anchor the session placed.
     const annotated = screen.getByRole('textbox', { name: 'Entry being annotated' })
+    const remove = screen.getByRole('button', { name: 'Remove anchor' })
     await annotated.getByText('Dad').click()
-    await expect.element(screen.getByRole('textbox', { name: 'Wording' })).toBeVisible()
-    await userEvent.keyboard('{Escape}')
-    await expect.element(screen.getByRole('textbox', { name: 'Wording' })).not.toBeInTheDocument()
+    await expect.element(remove).toBeVisible()
 
     await annotated.getByText('Lake Tahoe').click()
-    await nextTick() // A box the click opened would have rendered by now.
-    expect(screen.getByRole('textbox', { name: 'Wording' }).query()).toBeNull()
+    await expect.element(remove).not.toBeInTheDocument()
   })
 
   it('opens a revision it was linked to read-only, and says why, when the entry was revised since', async () => {
@@ -638,7 +636,7 @@ describe('EntryDetailView (browser)', () => {
       .toBeVisible()
   })
 
-  it('warns before saving a revision that changes the text under an anchor', async () => {
+  it('keeps the text under an anchor as it was in a revision, and saves the rest', async () => {
     const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
     const parent = await entryRepository.create(createEntryInput({ content: marked }))
     await entryRepository.create(
@@ -659,118 +657,13 @@ describe('EntryDetailView (browser)', () => {
     editorEl.focus()
     selectTextRange(editorEl, 10, 20)
     await userEvent.keyboard('{Backspace}')
+    selectTextRange(editorEl, 29, 29)
+    await userEvent.keyboard('!')
+    await screen.getByRole('button', { name: 'Save revision' }).click()
 
-    // The full sentence, not just that some warning fired: PRODUCT.md §4.5 requires naming the
-    // note, not merely counting how many were affected.
-    await expect
-      .element(screen.getByText('This changes the passage Wonderful trip is about.'))
-      .toBeVisible()
-
-    // Neither assertion above completes the session, and the draft's scheduled flush would
-    // otherwise still be pending when this test ends — closing it here keeps that write from
-    // landing in whichever repository the next test's `beforeEach` happens to have installed by
-    // the time a stray timer fires.
-    const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
-    await screen.getByRole('button', { name: 'Discard' }).click()
-    expect(discardDraft).toHaveBeenCalledOnce()
-    await discardDraft.mock.results[0]!.value
-  })
-
-  it('stays quiet when a revision only moves an anchor, not the text it covers', async () => {
-    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-    const parent = await entryRepository.create(createEntryInput({ content: marked }))
-    await entryRepository.create(
-      createEntryInput({
-        content: textContent('Wonderful trip'),
-        parent_id: parent.id,
-        relation_type: 'annotation',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      }),
-    )
-
-    const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Revise entry' }).click()
-
-    await screen.getByRole('textbox', { name: 'Revised entry' }).click()
-    await userEvent.keyboard('{Control>}{End}{/Control}!')
-
-    expect(screen.getByText(/This changes the passage/).query()).toBeNull()
-
-    const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
-    await screen.getByRole('button', { name: 'Discard' }).click()
-    expect(discardDraft).toHaveBeenCalledOnce()
-    await discardDraft.mock.results[0]!.value
-  })
-
-  it('stays quiet when a revision types right up against either edge of an anchor', async () => {
-    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-    const parent = await entryRepository.create(createEntryInput({ content: marked }))
-    await entryRepository.create(
-      createEntryInput({
-        content: textContent('Wonderful trip'),
-        parent_id: parent.id,
-        relation_type: 'annotation',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      }),
-    )
-
-    const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Revise entry' }).click()
-
-    const editorLocator = screen.getByRole('textbox', { name: 'Revised entry' })
-    await expect.element(editorLocator).toBeVisible()
-    const editorEl = editorLocator.element()
-    editorEl.focus()
-    selectTextRange(editorEl, 10, 10)
-    await userEvent.keyboard('(')
-    selectTextRange(editorEl, 21, 21)
-    await userEvent.keyboard(')')
-
-    await expect.element(editorLocator).toHaveTextContent('I went to (Lake Tahoe) with Dad')
-    expect(screen.getByText(/This changes the passage/).query()).toBeNull()
-
-    const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
-    await screen.getByRole('button', { name: 'Discard' }).click()
-    expect(discardDraft).toHaveBeenCalledOnce()
-    await discardDraft.mock.results[0]!.value
-  })
-
-  it('warns when a paste swaps text under an anchor for text of the same length', async () => {
-    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment')
-    const parent = await entryRepository.create(createEntryInput({ content: marked }))
-    await entryRepository.create(
-      createEntryInput({
-        content: textContent('Wonderful trip'),
-        parent_id: parent.id,
-        relation_type: 'annotation',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      }),
-    )
-
-    const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Revise entry' }).click()
-
-    const editorLocator = screen.getByRole('textbox', { name: 'Revised entry' })
-    await expect.element(editorLocator).toBeVisible()
-    const editorEl = editorLocator.element()
-    editorEl.focus()
-    selectTextRange(editorEl, 12, 14)
-    // A hand-built paste, as in `DocumentEditor.browser.test.ts`: neither runner has a real one.
-    const dataTransfer = new DataTransfer()
-    dataTransfer.setData('text/plain', 'ne')
-    editorEl.dispatchEvent(
-      new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true }),
-    )
-
-    await expect.element(editorLocator).toHaveTextContent('I went to Lane Tahoe with Dad')
-    await expect
-      .element(screen.getByText('This changes the passage Wonderful trip is about.'))
-      .toBeVisible()
-
-    const discardDraft = vi.spyOn(useDraftsStore(), 'discardDraft')
-    await screen.getByRole('button', { name: 'Discard' }).click()
-    expect(discardDraft).toHaveBeenCalledOnce()
-    await discardDraft.mock.results[0]!.value
+    await expect.element(screen.getByText(/Version 2 of 2/)).toBeVisible()
+    await expect.element(screen.getByText(`${PARENT_TEXT}!`)).toBeVisible()
+    await expect.element(screen.getByText('On “Lake Tahoe”', { exact: true })).toBeVisible()
   })
 
   it('revises one detail, leaving the others and the text as they were', async () => {

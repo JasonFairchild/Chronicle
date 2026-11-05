@@ -23,18 +23,17 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - An owner test that is part session behavior and part wiring is shrunk to the wiring: which session method a control calls, what the owner renders from the session, where it navigates, and the order its own handler does things in.
   - A test is deleted outright only when what remains is already owned elsewhere.
   - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "A repository read doesn't retry").
-- **Editor files wait for Track B.** `extensions.ts`, `anchorCommands.ts`, `AnchorInsertView.vue` and `AnchorMenu.vue` get their specs as Track B reviews them, once SIMPLIFY.md has reshaped them: it replaces the AnchorInsert node and its view. DocumentEditor's specs stay as they are until then. What was learned goes into Track B unit 2 in CODE_REVIEW.md (commit 19):
+- **Editor files wait for Track B.** `extensions.ts` and `anchorCommands.ts` get their specs as Track B reviews them, now that SIMPLIFY.md has reshaped them. `anchorGuard.ts` and `AnchorMenu.vue` already have theirs. DocumentEditor's specs stay as they are until then. What was learned goes into Track B unit 2 in CODE_REVIEW.md (commit 19):
   - Browser project alone, with a bare TipTap `Editor`.
-  - `anchorSpans`, `anchorMarkRanges` and `mapAnchorSpans` are pure and could run in node over `replayDocument`.
-  - Unproven today: the guard actually rejecting an edit, `excludes: ''`, `Mod-Alt-s`, the live region, AnchorMenu's arrow keys (now `useRovingTabindex`'s, commit 16), and the box committing on focus-out.
-  - The ED flows click Accept wording in Browser Mode but press Enter in Cypress, which is drift.
+  - `anchorSpans` is pure and could run in node over `replayDocument`, as the guard's spec does over a bare `EditorState`.
+  - Unproven today: `excludes: ''`, `Mod-Alt-s`, and the live region.
   - Rejected for now: a third Vitest project on happy-dom/jsdom. The browser project already runs these for real.
 - **App.vue: App.flow is its spec.** `useTabLifecycle` gets its own spec for the event mapping. App.flow keeps one test per direction as App's wiring.
 - **`useTabLifecycle`: browser-only spec with a host.** Its point is real `pagehide`/`visibilitychange`/`focus` events listened for in `onMounted`, which need a mounted instance and a browser.
   - The spec mounts, through `renderComponent`, a host component that only calls the composable.
   - There's no Cypress mirror, since nothing user-facing is mounted. This matches the Dexie and OPFS adapters.
   - TESTING.md says otherwise today (non-components get a node spec; every mounting `.browser.test.ts` has a mirror; no `defineComponent` in component tests). So commit 9 amends it then, not later.
-  - Proposed line, to decide at that commit: _"A composable whose point is a browser's events or focus, needing a mounted instance, is proven in the browser project alone, through a host component that only calls it; the host is scaffolding, not the subject, so it has no Cypress mirror."_ `useRovingTabindex` (commit 16) is the second. Developer note: When we get to anything that actually implements this, I want to talk about it as I don't know that I fully agree.
+  - Proposed line, to decide at that commit: _"A composable whose point is a browser's events or focus, needing a mounted instance, is proven in the browser project alone, through a host component that only calls it; the host is scaffolding, not the subject, so it has no Cypress mirror."_ Developer note: When we get to anything that actually implements this, I want to talk about it as I don't know that I fully agree.
 - **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, its only caller.**
   - AppLayout provides through an exported `layoutWidthKey`. That's an app use, not a test entry point.
   - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it (TESTING.md, Don'ts), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
@@ -220,14 +219,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
     - Least value: every flow already leans on all three.
     - Verify: the new spec.
 
-16. **`useRovingTabindex` spec**, `src/composables/useRovingTabindex.browser.test.ts`, browser-only with a host, as commit 9. The host renders marked controls, one disabled, and a `<select>`, between two inputs.
-    - Tests:
-      - one Tab stop, on the first enabled control; Tab and Shift+Tab from any control leave it
-      - the arrows wrap, and Home and End reach the ends, skipping disabled controls
-      - the stop stays on the control last focused, and moves off it once that control is disabled
-      - Left and Right leave a closed `<select>`'s value alone
-    - Cuts: EditorToolbar's three keyboard tests shrink to one wiring test (one Tab stop, an arrow moves within it). AnchorMenu's arrow-key test is wiring too.
-    - Verify: the new spec and the EditorToolbar pair.
+16. **Dropped: a `useRovingTabindex` spec.** EditorToolbar is its only caller, and that pair proves it through the toolbar the app runs. The one case it planned that the pair lacks, the stop moving off a control once it's disabled, would go there.
 
 17. **Apply what's left under "Applies beyond its file."** It comes before the coverage pass, so coverage measures the finished specs.
     - Verify: each spec it touched, in the runners that spec runs in.

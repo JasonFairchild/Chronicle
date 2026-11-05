@@ -21,7 +21,7 @@ config:
 flowchart TB
   subgraph WRITE["WRITE · a session, until it's sealed"]
     direction LR
-    DE["<b>DocumentEditor.vue</b><br/>TipTap · EditorToolbar<br/>extensions.ts · anchorCommands.ts<br/>anchor-mode guard · affected-anchor tracking"]
+    DE["<b>DocumentEditor.vue</b><br/>TipTap · EditorToolbar<br/>extensions.ts · anchorCommands.ts<br/>anchorGuard.ts: the lock, in every editor"]
     EC["<b>EntryComposer.vue</b><br/>title · DocumentEditor<br/>EntryDetailsFields<br/>Discard · Save, or why it can't"]
     SES["<b>useDraftSession</b><br/>one per composer on a screen below:<br/>begin · resume · save · discard<br/>stale / elsewhere notices"]
     TAB["<b>App.vue · useTabLeave · useTabReturn · useTabCloseGuard</b>"]

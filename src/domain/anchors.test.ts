@@ -6,12 +6,11 @@ import {
   anchorRefsFor,
   anchorsPlacedSince,
   collectAnchors,
-  innermostAnchorAt,
-  pairableAnchorAt,
   relationTypeForAnchors,
   resolveAnchors,
 } from '@/domain/anchors'
-import type { DocMark, EntryDocument } from '@/domain/entryDocument'
+import type { EntryDocument } from '@/domain/entryDocument'
+import { withAnchorWording } from '@/testing/anchorFixtures'
 import { serializeDocument } from '@/testing/documents'
 
 /** A one-paragraph document, with a subrange optionally carrying an anchor mark. */
@@ -106,6 +105,28 @@ describe('collectAnchors', () => {
     ])
   })
 
+  it('folds a passage and the wording marked after it into a single anchor', () => {
+    const content = withAnchorWording('Wrong lake', 'a1', 6, 10, 'Donner Lake', 'strike')
+
+    expect(collectAnchors(content)).toEqual([
+      { anchor_id: 'a1', kind: 'strike', quote: 'lake', insertion: 'Donner Lake' },
+    ])
+  })
+
+  it('reads marked wording with no passage as a bare insertion', () => {
+    const content = withAnchorWording('I went home', 'a1', 2, 2, 'later')
+
+    expect(collectAnchors(content)).toEqual([
+      { anchor_id: 'a1', kind: null, quote: '', insertion: 'later' },
+    ])
+  })
+
+  it('reads marked wording as written, so a typed space is a correction', () => {
+    const content = withAnchorWording('I wentalone', 'a1', 6, 6, ' ')
+
+    expect(collectAnchors(content)[0]?.insertion).toBe(' ')
+  })
+
   it('returns nothing for a document with no anchors', () => {
     expect(collectAnchors(doc('Plain text'))).toEqual([])
   })
@@ -176,50 +197,6 @@ describe('resolveAnchors', () => {
     expect(resolveAnchors(refs, doc('Rewritten entirely'))).toEqual([
       { anchor_id: 'a1', status: 'orphaned', quote: 'meeting', kind: null, insertion: null },
     ])
-  })
-})
-
-describe('pairableAnchorAt', () => {
-  const mark = (anchorId: string, kind = 'comment'): DocMark[] => [
-    { type: 'anchor', attrs: { anchorId, kind } },
-  ]
-
-  it('pairs with an anchor mark not in the sealed set', () => {
-    expect(pairableAnchorAt(mark('a1'), new Set())).toBe('a1')
-  })
-
-  it('refuses to pair with a sealed anchor from an earlier related entry', () => {
-    expect(pairableAnchorAt(mark('a1'), new Set(['a1']))).toBeNull()
-  })
-
-  it('returns null when the text before the caret carries no anchor mark at all', () => {
-    expect(pairableAnchorAt([], new Set())).toBeNull()
-    expect(pairableAnchorAt([{ type: 'bold' }], new Set())).toBeNull()
-  })
-})
-
-describe('innermostAnchorAt', () => {
-  const range = (anchor_id: string, from: number, to: number): AnchorRange => ({
-    anchor_id,
-    from,
-    to,
-  })
-
-  it('picks the smaller of two overlapping ranges', () => {
-    const ranges = [range('outer', 0, 20), range('inner', 5, 10)]
-
-    expect(innermostAnchorAt(ranges, 7)?.anchor_id).toBe('inner')
-  })
-
-  it('matches a position sitting exactly on an edge', () => {
-    const ranges = [range('a1', 5, 10)]
-
-    expect(innermostAnchorAt(ranges, 5)?.anchor_id).toBe('a1')
-    expect(innermostAnchorAt(ranges, 10)?.anchor_id).toBe('a1')
-  })
-
-  it('returns null when nothing covers the position', () => {
-    expect(innermostAnchorAt([range('a1', 5, 10)], 20)).toBeNull()
   })
 })
 

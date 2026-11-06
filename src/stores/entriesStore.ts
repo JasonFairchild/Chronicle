@@ -2,12 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 
 import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
-import {
-  collectMediaRefs,
-  isBlankDraft,
-  isEmptyDocument,
-  sameDocument,
-} from '@/domain/entryDocument'
+import { collectMediaRefs, isBlankDraft, sameDocument } from '@/domain/entryDocument'
 import { reconstructEntryState } from '@/domain/reconstructEntryState'
 import { entryRepository } from '@/repositories'
 import type { DraftSnapshot } from '@/types/draft'
@@ -25,18 +20,21 @@ import {
 } from '@/types/entry'
 import { toErrorMessage } from '@/utils/format'
 
+/**
+ * A timeline card: `root` folded over its own revisions and nothing else, rather than loading the
+ * whole table to render a list.
+ */
+async function aggregateRoot(root: Entry): Promise<AggregatedEntry | null> {
+  const revisions = await entryRepository.listRevisions(root.id)
+  return reconstructEntryState(root.id, [root, ...revisions], { depth: 0 })
+}
+
 async function aggregateRoots(): Promise<AggregatedEntry[]> {
   const roots = await entryRepository.listRootEntries()
 
-  // A card needs each root folded over its own revisions and nothing else, so it asks for
-  // exactly that rather than loading the whole table to render a list. The revision fetches are
-  // independent, so they run concurrently rather than one root's round trip waiting on the last.
-  const states = await Promise.all(
-    roots.map(async (root) => {
-      const revisions = await entryRepository.listRevisions(root.id)
-      return reconstructEntryState(root.id, [root, ...revisions], { depth: 0 })
-    }),
-  )
+  // The revision fetches are independent, so they run concurrently rather than one root's round
+  // trip waiting on the last.
+  const states = await Promise.all(roots.map(aggregateRoot))
 
   return states.filter((state): state is AggregatedEntry => state !== null)
 }
@@ -53,7 +51,7 @@ function normalizeTitle(title: string | null): string | null {
 /**
  * The version a draft seals into: the fields the writer set beside the document, and the media
  * the document references. Unguarded, so `draftHoldsWork` can compare a revision whose body was
- * emptied; sealing calls `requireContent` first.
+ * emptied; `sealDraft` refuses an empty document first.
  */
 function fieldsFromDraft(entry: DraftSnapshot['entry']): VersionedFields {
   return versionedFieldsOf({
@@ -204,17 +202,6 @@ export const useEntriesStore = defineStore('entries', () => {
   }
 
   /**
-   * The one thing that must be true of any document about to become an entry: its body has to say
-   * something, in words or an image. A title doesn't count — it names an entry without being one.
-   */
-  function requireContent(content: string): void {
-    error.value = null
-    if (isEmptyDocument(content)) {
-      throw new Error('Entry content cannot be empty')
-    }
-  }
-
-  /**
    * The entries sealing a draft writes, in order, the one the draft was for last. The draft's
    * `kind` is the only thing that decides what they are, which is why the drafts list can describe
    * an unsealed session without opening it. Writing them is the draft repository's `seal`, so the
@@ -232,7 +219,6 @@ export const useEntriesStore = defineStore('entries', () => {
     trace: AuthoringTrace | null,
     parentTrace: AuthoringTrace | null = null,
   ): Promise<CreateEntryInput[]> {
-    requireContent(draft.entry.content)
     const fields = fieldsFromDraft(draft.entry)
 
     switch (draft.kind) {
@@ -312,7 +298,7 @@ export const useEntriesStore = defineStore('entries', () => {
     const root = await entryRepository.getById(rootId)
     if (!root) return
 
-    const state = reconstructEntryState(rootId, [root], { depth: 0 })
+    const state = await aggregateRoot(root)
     if (!state) return
 
     rootEntries.value = [state, ...rootEntries.value]
@@ -324,13 +310,10 @@ export const useEntriesStore = defineStore('entries', () => {
    * timeline grows, for entries that did not change.
    */
   async function refreshRoot(rootId: string): Promise<void> {
-    const [root, revisions] = await Promise.all([
-      entryRepository.getById(rootId),
-      entryRepository.listRevisions(rootId),
-    ])
+    const root = await entryRepository.getById(rootId)
     if (!root) return
 
-    const state = reconstructEntryState(rootId, [root, ...revisions], { depth: 0 })
+    const state = await aggregateRoot(root)
     if (!state) return
 
     const index = rootEntries.value.findIndex((entry) => entry.id === rootId)

@@ -62,8 +62,8 @@ function isEntryDocument(value: unknown): value is EntryDocument {
  *
  * The empty string is the one exception, not a format to sniff: every session ref that will hold a
  * document starts life as `ref('')`, before an editor has mounted or a draft has been typed into,
- * and that transient not-yet-anything state never reaches storage (`requireContent` refuses to save
- * an empty document). It reads as a blank document rather than throwing.
+ * and that transient not-yet-anything state never reaches storage (`sealDraft` refuses to save an
+ * empty document). It reads as a blank document rather than throwing.
  */
 export function parseDocument(content: string | EntryDocument): EntryDocument {
   if (typeof content !== 'string') return content

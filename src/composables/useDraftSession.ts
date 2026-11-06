@@ -88,7 +88,7 @@ export function useDraftSession() {
       : null,
   )
 
-  /** The same condition `entriesStore.requireContent` enforces, asked before a save. */
+  /** The same condition `draftsStore.sealDraft` enforces, asked before a save. */
   const canSave = computed(() => !isEmptyDocument(content.value))
 
   /** Said when another tab changed this draft in a way the writer should know about. */

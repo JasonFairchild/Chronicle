@@ -74,12 +74,6 @@ describe('useEntriesStore', () => {
     ])
   })
 
-  it('rejects empty content', async () => {
-    await expect(sealDraft(draftFor({ kind: 'new_root' }, '   '))).rejects.toThrow(
-      'Entry content cannot be empty',
-    )
-  })
-
   it('gives a related entry the title its draft carries', async () => {
     const parent = await seedEntry('I went to Lake Tahoe with Dad')
 

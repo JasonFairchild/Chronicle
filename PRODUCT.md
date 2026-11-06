@@ -69,7 +69,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 
 - Shows the title, the creation date, and the current text (the latest version), with whichever details were given (§4.1) below it, as when writing. An untitled entry is headed by the day it was written, set as a dateline ("Wed, Oct 7, 2026") rather than a title. The text is for reading: no editing controls appear until Revise.
 - A revised entry says which version you're looking at and how many exist.
-- Attached images appear below the text.
+- Attached images appear where they were placed.
 - Related entries and connections attached to it are listed beneath, each showing what part of the entry it points at. Immediate ones are shown; deeper ones are indicated, not expanded.
 - A related entry whose passage no longer exists quotes what it _was_ attached to. A broken reference reads as history, not as an error.
 - A related entry's or connection's own page has a breadcrumb back to what it's attached to.

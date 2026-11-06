@@ -3,9 +3,10 @@ import { userEvent } from 'vitest/browser'
 
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
-import { collectMediaRefs, docToPlainText } from '@/domain/entryDocument'
+import { collectMediaRefs, docToPlainText, MEDIA_NODE } from '@/domain/entryDocument'
 import { TraceRecorder } from '@/domain/traceRecorder'
 import { documentsAt } from '@/editor/replay'
+import { mediaRepository } from '@/repositories'
 import { withAnchorMark, withAnchorWording } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
@@ -125,6 +126,23 @@ describe('DocumentEditor (browser)', () => {
     await expect.element(screen.getByText('We drove up on Friday.')).toBeVisible()
     expect(screen.getByRole('toolbar').query()).toBeNull()
     expect(screen.getByRole('textbox').query()).toBeNull()
+  })
+
+  it('shows a stored image in a displayed document', async () => {
+    const mediaRef = await mediaRepository.put(
+      new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }),
+    )
+    const screen = mountEditor({
+      displayOnly: true,
+      content: serializeDocument({
+        type: 'doc',
+        content: [{ type: MEDIA_NODE, attrs: { mediaRef, alt: 'lake.png' } }],
+      }),
+    })
+
+    await expect
+      .element(screen.getByRole('img', { name: 'lake.png' }))
+      .toHaveAttribute('src', expect.stringMatching(/^blob:/))
   })
 
   it('shows an attached image from its stored bytes, and refers to it by id alone', async () => {

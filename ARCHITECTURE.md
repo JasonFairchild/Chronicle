@@ -82,7 +82,7 @@ flowchart TB
   SEALTX ==>|insert| T_ENTRIES
   SEALTX -->|delete| T_DRAFTS
   SEALTX -->|delete| T_EVENTS
-  DE -->|"EditorToolbar's image:<br/>useMedia.store"| OPFS
+  DE <-->|"EditorToolbar's image: useMedia.store<br/>every image shown: useMedia.applyTo"| OPFS
 
   %% entry model
   MODEL -.-|"rows, for example"| T_ENTRIES
@@ -105,7 +105,6 @@ flowchart TB
   DV2 -->|"Resume: ?draft=session_id"| NEV
   DV2 --> DV
   DV2 --> NCV
-  OPFS -->|"useMedia.applyTo"| DV
   T_ENTRIES -->|"authoring_trace"| DM
   T_ENTRIES -->|"base version's content"| BF
   DM --> BF

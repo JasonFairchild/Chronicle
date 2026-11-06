@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–8 and 9a (steps A–C, with its docs) done. 9b (steps D–F and its docs) is built and verified, with the manual check run; committing it is next.
+Status: commits 0–9 done. 14 is built and verified; committing it is next.
 
 ## Context
 

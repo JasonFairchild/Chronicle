@@ -9,7 +9,6 @@ import EntryComposer from '@/components/EntryComposer.vue'
 import RelatedEntryComposer from '@/components/RelatedEntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { useLayoutWidth } from '@/composables/useLayoutWidth'
-import { useMedia } from '@/composables/useMedia'
 import { useSealDraft } from '@/composables/useSealDraft'
 import { useTabReturn } from '@/composables/useTabLifecycle'
 import { currentVersionId } from '@/domain/reconstructEntryState'
@@ -34,13 +33,11 @@ const router = useRouter()
 const resumeDraftId = useDraftToResume()
 const store = useEntriesStore()
 const drafts = useDraftsStore()
-const media = useMedia()
 const loading = ref(true)
 /** Set when the entry itself couldn't be fetched; exclusive with showing the article at all. */
 const error = ref<string | null>(null)
 /** Set when an action taken from an already-loaded entry fails; shown alongside its content. */
 const actionError = ref<string | null>(null)
-const mediaEl = ref<HTMLElement | null>(null)
 
 /**
  * Holds an immutable snapshot, replaced wholesale and never mutated in place, so a shallow ref is
@@ -320,20 +317,6 @@ watch(
   },
 )
 
-// `post` because this reaches into the rendered <img> elements: running before the DOM updates
-// would resolve the previous entry's attachments, or none at all on first load. `loading` is part
-// of the source, not just a guard, because the attachments section is behind `v-else` on it: on
-// first load, `aggregated` (and its `media_refs`) is set a tick before `loading` turns false, so a
-// watch on `media_refs` alone fires while that section is still absent from the DOM and `mediaEl`
-// is null. Keying on both means the watch re-fires once loading actually flips.
-watch(
-  () => (loading.value ? undefined : aggregated.value?.media_refs),
-  () => {
-    void media.applyTo(mediaEl.value)
-  },
-  { flush: 'post' },
-)
-
 // Raised only while the side-by-side session is shown, and lowered again however it ends — saved,
 // discarded, or navigated away from.
 watch(
@@ -465,24 +448,6 @@ onBeforeUnmount(() => {
           >
             <p v-for="line in detailLines" :key="line">{{ line }}</p>
           </div>
-
-          <section v-if="aggregated.media_refs.length > 0" ref="mediaEl" class="mt-4 space-y-2">
-            <h2
-              class="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]"
-            >
-              Attachments
-            </h2>
-            <ul class="flex flex-wrap gap-3">
-              <li v-for="mediaRef in aggregated.media_refs" :key="mediaRef">
-                <!-- src is filled in from an object URL; the document only ever stores the id. -->
-                <img
-                  :data-media-ref="mediaRef"
-                  alt="Attached image"
-                  class="max-h-40 rounded-lg border border-[var(--color-border)]"
-                />
-              </li>
-            </ul>
-          </section>
         </template>
 
         <section v-if="aggregated.related_entries.length > 0" class="mt-6 space-y-3">

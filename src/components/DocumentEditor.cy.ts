@@ -1,8 +1,9 @@
 import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
-import { collectMediaRefs, docToPlainText } from '@/domain/entryDocument'
+import { collectMediaRefs, docToPlainText, MEDIA_NODE } from '@/domain/entryDocument'
 import { TraceRecorder } from '@/domain/traceRecorder'
 import { documentsAt } from '@/editor/replay'
+import { mediaRepository } from '@/repositories'
 import { withAnchorMark, withAnchorWording } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { selectTextRange } from '@/testing/selectTextRange'
@@ -57,6 +58,29 @@ describe('DocumentEditor', () => {
     cy.findByText('We drove up on Friday.').should('be.visible')
     cy.findByRole('toolbar').should('not.exist')
     cy.findByRole('textbox').should('not.exist')
+  })
+
+  it('shows a stored image in a displayed document', () => {
+    cy.then(() =>
+      mediaRepository.put(
+        new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }),
+      ),
+    ).then((mediaRef) => {
+      cy.mount(DocumentEditor, {
+        props: {
+          label: 'Entry content',
+          displayOnly: true,
+          content: serializeDocument({
+            type: 'doc',
+            content: [{ type: MEDIA_NODE, attrs: { mediaRef, alt: 'lake.png' } }],
+          }),
+        },
+      })
+    })
+
+    cy.findByRole('img', { name: 'lake.png' })
+      .should('have.attr', 'src')
+      .and('match', /^blob:/)
   })
 
   it('reports a link as formatting', () => {

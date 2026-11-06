@@ -102,32 +102,6 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('keeps the original wording visible when a revision orphans an anchor', () => {
-    cy.then(async () => {
-      const parent = await seed({
-        content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike'),
-      })
-      await seed({
-        content: textContent('Wrong lake'),
-        parent_id: parent.id,
-        relation_type: 'update',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      })
-      await seed({
-        content: textContent('I stayed home that summer'),
-        parent_id: parent.id,
-        relation_type: 'revision',
-        revision_mode: 'direct',
-        base_version_id: parent.id,
-      })
-      return parent
-    }).then((parent) => {
-      mountDetail(parent.id)
-
-      cy.findByText('Was attached to: “Lake Tahoe”').should('be.visible')
-    })
-  })
-
   it('reports the version position once an entry has been revised', () => {
     cy.then(async () => {
       const parent = await seed({ content: PARENT_CONTENT })

@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–9 done. 14 is built and verified; committing it is next.
+Status: commits 0–9 and 14 done. 15 is built and verified; committing it is next.
 
 ## Context
 
@@ -323,10 +323,11 @@ Order and dependencies:
     - EntryDetailView's "renders an entry's attachments…" becomes DocumentEditor's "shows a stored image in a displayed document".
     - Verify: the EntryDetailView and DocumentEditor pairs.
 
-15. **`describeAnchor` moves to `utils/format.ts`**, beside `entryLabel`.
-    - A table in `format.test.ts` covers all eight branches.
-    - The page keeps "describes which passage…" as wiring. Check coverage before cutting the orphan test, which also proves the italic.
-    - Verify: `npm run test -- src/utils/format.test.ts`; EntryDetailView pair.
+15. **`describeAnchor` moves to `utils/format.ts`**, beside `entryLabel`, for a unit-test seam rather than a second caller.
+    - Its "point in the text" branches go: they served the removed node's empty wording, and a kind now always comes with a passage.
+    - A table in `format.test.ts` covers the seven that are left, orphans included until item 2 removes them.
+    - The page keeps "describes which passage…" as wiring. The orphan test goes from the pair: what only it proved, anchors read from the version being viewed, moves to `reconstructEntryState.test.ts`. The flow specs' comments stop citing `describeAnchor`.
+    - Verify: `npm run test -- src/utils/format.test.ts src/domain/reconstructEntryState.test.ts`; EntryDetailView pair and flow pair.
 
 16. **`entriesStore`: one fold for a timeline root, and no second empty check.**
     - An `aggregateRoot(root)` above the store reads the root's revisions and folds them, for `aggregateRoots` and `refreshRoot`. `addRoot` uses it too, at the cost of one empty `listRevisions`.

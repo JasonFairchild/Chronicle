@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { emptyEntryDates, emptyEntryDetails } from '@/types/entry'
+import { emptyEntryDates, emptyEntryDetails, type ResolvedAnchor } from '@/types/entry'
 import {
+  describeAnchor,
   entryDetailLines,
   entryWhenLines,
   formatDate,
@@ -9,6 +10,38 @@ import {
   formatTime,
   toErrorMessage,
 } from '@/utils/format'
+
+describe('describeAnchor', () => {
+  const present = { anchor_id: 'a1', status: 'present' as const, quote: 'Lake Tahoe' }
+
+  it.each<[string, ResolvedAnchor, string]>([
+    [
+      'a strike with wording',
+      { ...present, kind: 'strike', insertion: 'Donner Lake' },
+      'Strikes “Lake Tahoe”, replaced with “Donner Lake”',
+    ],
+    ['a strike alone', { ...present, kind: 'strike', insertion: null }, 'Strikes “Lake Tahoe”'],
+    [
+      'a highlight with wording',
+      { ...present, kind: 'comment', insertion: 'Emerald Bay' },
+      'On “Lake Tahoe”, adds “Emerald Bay”',
+    ],
+    ['a highlight alone', { ...present, kind: 'comment', insertion: null }, 'On “Lake Tahoe”'],
+    ['a bare insertion', { ...present, quote: '', kind: null, insertion: 'alone' }, 'Adds “alone”'],
+    [
+      'an orphan, by its sealed quote',
+      { ...present, status: 'orphaned', kind: null, insertion: null },
+      'Was attached to: “Lake Tahoe”',
+    ],
+    [
+      'an orphan with no quote',
+      { ...present, status: 'orphaned', quote: '', kind: null, insertion: null },
+      'Was attached to a removed passage',
+    ],
+  ])('describes %s', (_case, resolved, line) => {
+    expect(describeAnchor(resolved)).toBe(line)
+  })
+})
 
 describe('formatDate', () => {
   // The locale is the browser's on purpose, so these assert what the format *carries* rather than

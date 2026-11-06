@@ -145,8 +145,8 @@ describe('EntryDetailView flows', () => {
       cy.findByRole('button', { name: 'Add entry' }).click()
       cy.findByRole('link', { name: 'I swam in Lake TahoeEmerald Bay at dawn' }).click()
 
-      // A highlight is a mark on existing text, same as a strike — wording rides along with it the
-      // same way, which is what `describeAnchor`'s `comment` case needed its own branch for.
+      // A highlight is a mark on existing text, same as a strike, and wording rides along with it the
+      // same way — so `relationTypeForAnchors` reads it as an `update`.
       cy.findByText('On “Lake Tahoe”, adds “Emerald Bay”').should('be.visible')
 
       cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {

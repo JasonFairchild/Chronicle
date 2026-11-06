@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { docToPlainText } from '@/domain/entryDocument'
 import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
+import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
 import { emptyEntryDates, type Entry } from '@/types/entry'
 
@@ -140,6 +141,36 @@ describe('reconstructEntryState', () => {
     expect(result?.related_entries.map((related) => docToPlainText(related.entry.content))).toEqual(
       ['Start date is March 3.'],
     )
+  })
+
+  it('reads a related entry’s anchors from the version being viewed', () => {
+    const root = makeEntry({ id: 'root-1', content: 'I went to Lake Tahoe' })
+    // The anchor revision sealed with the related entry: the parent's text, now marked.
+    const marked = {
+      ...makeEntry({
+        id: 'revision-1',
+        parent_id: 'root-1',
+        relation_type: 'revision',
+        revision_mode: 'anchor',
+        content: '',
+        created_at: '2026-01-02T00:00:00.000Z',
+      }),
+      content: withAnchorMark('I went to Lake Tahoe', 'a1', 10, 20, 'strike'),
+    }
+    const update = makeEntry({
+      id: 'update-1',
+      parent_id: 'root-1',
+      relation_type: 'update',
+      content: 'Wrong lake',
+      anchors: [{ anchor_id: 'a1', quote: 'Lake Tahoe' }],
+      created_at: '2026-01-02T00:00:00.000Z',
+    })
+
+    const result = reconstructEntryState('root-1', [root, marked, update])
+
+    expect(result?.related_entries[0]?.anchors).toEqual([
+      { anchor_id: 'a1', status: 'present', quote: 'Lake Tahoe', kind: 'strike', insertion: null },
+    ])
   })
 
   it('carries media through a revision instead of dropping it', () => {

@@ -159,8 +159,7 @@ describe('EntryDetailView flows (browser)', () => {
     await screen.getByRole('link', { name: 'I swam in Lake TahoeEmerald Bay at dawn' }).click()
 
     // A highlight is a mark on existing text, same as a strike, and wording rides along with it the
-    // same way — so `relationTypeForAnchors` reads it as an `update`, and `describeAnchor`'s
-    // `comment` case has to report the insertion rather than only the passage.
+    // same way — so `relationTypeForAnchors` reads it as an `update`.
     await expect.element(screen.getByText('On “Lake Tahoe”, adds “Emerald Bay”')).toBeVisible()
 
     const children = await entryRepository.listChildren(parent.id)

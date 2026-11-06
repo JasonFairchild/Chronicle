@@ -100,32 +100,6 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByText('Strikes “Lake Tahoe”')).toBeVisible()
   })
 
-  it('keeps the original wording visible when a revision orphans an anchor', async () => {
-    const marked = withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike')
-    const parent = await entryRepository.create(createEntryInput({ content: marked }))
-    await entryRepository.create(
-      createEntryInput({
-        content: textContent('Wrong lake'),
-        parent_id: parent.id,
-        relation_type: 'update',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
-      }),
-    )
-    await entryRepository.create(
-      createEntryInput({
-        content: textContent('I stayed home that summer'),
-        parent_id: parent.id,
-        relation_type: 'revision',
-        revision_mode: 'direct',
-        base_version_id: parent.id,
-      }),
-    )
-
-    const screen = await mountDetail(parent.id)
-
-    await expect.element(screen.getByText('Was attached to: “Lake Tahoe”')).toBeVisible()
-  })
-
   it('reports the version position once an entry has been revised', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
     await entryRepository.create(

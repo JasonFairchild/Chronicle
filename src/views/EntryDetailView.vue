@@ -16,8 +16,9 @@ import { useDraftToResume } from '@/router/draftQuery'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { type DraftSnapshot, versionsRevisedBy } from '@/types/draft'
-import type { AggregatedEntry, ResolvedAnchor } from '@/types/entry'
+import type { AggregatedEntry } from '@/types/entry'
 import {
+  describeAnchor,
   entryDetailLines,
   entryLabel,
   formatDateline,
@@ -118,35 +119,6 @@ const metaLine = computed(() => {
 
 /** The writer's own details, one line each. Empty when they gave none, so nothing is shown. */
 const detailLines = computed(() => (aggregated.value ? entryDetailLines(aggregated.value) : []))
-
-/**
- * One line per anchor. A strike and its replacement wording are one anchor sharing one id, not two
- * things to guess into a pair, so there is exactly one case for a strike whether or not it carries
- * replacement wording. An orphaned anchor keeps the wording it covered, so a revision that breaks a
- * reference reads as history rather than disappearing.
- */
-function describeAnchor(resolved: ResolvedAnchor): string {
-  if (resolved.status === 'orphaned') {
-    return resolved.quote
-      ? `Was attached to: “${resolved.quote}”`
-      : 'Was attached to a removed passage'
-  }
-
-  const where = resolved.quote ? `“${resolved.quote}”` : 'a point in the text'
-
-  if (resolved.kind === 'strike') {
-    return resolved.insertion
-      ? `Strikes ${where}, replaced with “${resolved.insertion}”`
-      : `Strikes ${where}`
-  }
-
-  if (resolved.kind === 'comment') {
-    return resolved.insertion ? `On ${where}, adds “${resolved.insertion}”` : `On ${where}`
-  }
-
-  // No mark at all: a bare insertion with nothing struck.
-  return resolved.insertion ? `Adds “${resolved.insertion}”` : 'On a point in the text'
-}
 
 /** The label(s) an entry's breadcrumb line links to — its parent, or both ends of a connection. */
 async function loadBreadcrumb(entry: AggregatedEntry): Promise<{ id: string; label: string }[]> {

@@ -28,8 +28,4 @@ export class InMemoryMediaRepository implements MediaRepository {
   async list(): Promise<string[]> {
     return [...this.blobs.keys()].sort()
   }
-
-  clear(): void {
-    this.blobs.clear()
-  }
 }

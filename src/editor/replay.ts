@@ -50,7 +50,8 @@ export function applySteps(transform: Transform, steps: readonly unknown[]): boo
 /**
  * The document after each of `indices` events, in one pass: 0 is the base, and `events.length` is
  * the finished document. `indices` must be ascending. Shorter than `indices` when replay stopped
- * early.
+ * early. Only specs call it for now: it's the keystroke replay that PRODUCT.md §6's "Zooming in on
+ * the scrubber" would step through.
  */
 export function documentsAt(log: ReplayLog, indices: readonly number[]): EntryDocument[] {
   const base = replayDocument(log.base_content)

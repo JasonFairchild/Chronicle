@@ -1,27 +1,29 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TraceRecorder } from '@/domain/traceRecorder'
 
-/** Drives the clock by hand so a session's timing is asserted rather than waited for. */
-function fakeClock(start: number) {
-  let current = start
-  return {
-    now: () => current,
-    advance: (ms: number) => {
-      current += ms
-    },
-  }
+/** Moves the faked clock, backwards too, so timing is asserted rather than waited for. */
+function advanceClock(ms: number): void {
+  vi.setSystemTime(Date.now() + ms)
 }
 
 describe('TraceRecorder', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('records every edit and manual mark in order, stamped by how far into the session it happened', () => {
-    const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const recorder = new TraceRecorder('session-1', '2026-09-05T10:00:00.000Z', clock.now)
+    vi.setSystemTime('2026-09-05T10:00:00.000Z')
+    const recorder = new TraceRecorder('session-1', '2026-09-05T10:00:00.000Z')
 
     recorder.record({ steps: [{ n: 1 }], inserted_text: 'It rained' })
-    clock.advance(2_500)
+    advanceClock(2_500)
     recorder.mark()
-    clock.advance(500)
+    advanceClock(500)
     recorder.record({ steps: [{ n: 2 }, { n: 3 }], inserted_text: ' all day.' })
 
     expect(recorder.events).toEqual([
@@ -32,8 +34,8 @@ describe('TraceRecorder', () => {
   })
 
   it('stores only the signals that are set', () => {
-    const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-    const recorder = new TraceRecorder('session-2', '2026-09-05T10:00:00.000Z', clock.now)
+    vi.setSystemTime('2026-09-05T10:00:00.000Z')
+    const recorder = new TraceRecorder('session-2', '2026-09-05T10:00:00.000Z')
 
     recorder.record({
       steps: [{ n: 1 }],
@@ -71,15 +73,12 @@ describe('TraceRecorder', () => {
   it('resumes an interrupted session with its log intact', () => {
     // A real clock here would measure this offset from whenever the test happens to run, not from
     // the reload.
-    const clock = fakeClock(Date.parse('2026-09-05T09:00:01.500Z'))
-    const recorder = TraceRecorder.resume(
-      'session-resume',
-      '2026-09-05T09:00:00.000Z',
-      [{ kind: 'edit', at: 1_000, steps: [{ n: 1 }] }],
-      clock.now,
-    )
+    vi.setSystemTime('2026-09-05T09:00:01.500Z')
+    const recorder = TraceRecorder.resume('session-resume', '2026-09-05T09:00:00.000Z', [
+      { kind: 'edit', at: 1_000, steps: [{ n: 1 }] },
+    ])
 
-    clock.advance(1_000)
+    advanceClock(1_000)
     recorder.record({ steps: [{ n: 2 }] })
     const trace = recorder.seal()
 
@@ -89,19 +88,15 @@ describe('TraceRecorder', () => {
 
   describe('a clock that moves backwards', () => {
     it('keeps offsets climbing when the clock is stepped back mid-session', () => {
-      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-      const recorder = new TraceRecorder(
-        'session-clock-back',
-        '2026-09-05T10:00:00.000Z',
-        clock.now,
-      )
+      vi.setSystemTime('2026-09-05T10:00:00.000Z')
+      const recorder = new TraceRecorder('session-clock-back', '2026-09-05T10:00:00.000Z')
 
       recorder.record({ steps: [{ n: 1 }] })
-      clock.advance(3_000)
+      advanceClock(3_000)
       recorder.record({ steps: [{ n: 2 }] })
-      clock.advance(-2_000) // An NTP correction, a resume from sleep, a hand-set clock.
+      advanceClock(-2_000) // An NTP correction, a resume from sleep, a hand-set clock.
       recorder.mark()
-      clock.advance(5_000)
+      advanceClock(5_000)
       recorder.record({ steps: [{ n: 3 }] })
 
       // The mark reads as having happened at the same instant as the second edit rather than 1s
@@ -110,14 +105,10 @@ describe('TraceRecorder', () => {
     })
 
     it('never stamps an event before the session began', () => {
-      const clock = fakeClock(Date.parse('2026-09-05T10:00:00.000Z'))
-      const recorder = new TraceRecorder(
-        'session-clock-before-start',
-        '2026-09-05T10:00:00.000Z',
-        clock.now,
-      )
+      vi.setSystemTime('2026-09-05T10:00:00.000Z')
+      const recorder = new TraceRecorder('session-clock-before-start', '2026-09-05T10:00:00.000Z')
 
-      clock.advance(-10_000)
+      advanceClock(-10_000)
       recorder.record({ steps: [{ n: 1 }] })
 
       expect(recorder.events[0]?.at).toBe(0)
@@ -126,18 +117,13 @@ describe('TraceRecorder', () => {
 
     it('does not stamp a resumed session behind what the run before the reload recorded', () => {
       // The reload cost a second, but the clock came back 4.5 seconds behind where it left off.
-      const clock = fakeClock(Date.parse('2026-09-05T09:00:00.500Z'))
-      const recorder = TraceRecorder.resume(
-        'session-clock-resume',
-        '2026-09-05T09:00:00.000Z',
-        [
-          { kind: 'edit', at: 4_500, steps: [] },
-          { kind: 'manual', at: 5_000 },
-        ],
-        clock.now,
-      )
+      vi.setSystemTime('2026-09-05T09:00:00.500Z')
+      const recorder = TraceRecorder.resume('session-clock-resume', '2026-09-05T09:00:00.000Z', [
+        { kind: 'edit', at: 4_500, steps: [] },
+        { kind: 'manual', at: 5_000 },
+      ])
 
-      clock.advance(1_000)
+      advanceClock(1_000)
       recorder.record({ steps: [{ n: 2 }] })
 
       // Floored at the manual mark, the latest thing the previous run stamped.

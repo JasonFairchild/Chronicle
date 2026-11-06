@@ -1,40 +1,50 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  type PersistableStorage,
-  requestPersistentStorage,
-  useStoragePersistence,
-} from '@/composables/useStoragePersistence'
+import type * as StoragePersistence from '@/composables/useStoragePersistence'
 
-function storage(persisted: boolean, grants: boolean): PersistableStorage {
-  return {
-    persisted: vi.fn(async () => persisted),
-    persist: vi.fn(async () => grants),
-  }
+/** A `navigator.storage` that grants persistence when asked, or doesn't. */
+function stubStorage(grants: boolean) {
+  const storage = { persist: vi.fn(async () => grants) }
+  vi.stubGlobal('navigator', { storage })
+  return storage
 }
 
 describe('requestPersistentStorage', () => {
-  it('asks for persistence when the site does not have it yet', async () => {
-    const manager = storage(false, true)
+  let persistence: typeof StoragePersistence
 
-    expect(await requestPersistentStorage(manager)).toBe('persisted')
-    expect(manager.persist).toHaveBeenCalledOnce()
+  // The browser's answer is module state, since the app asks once per load, so each case loads it
+  // fresh.
+  beforeEach(async () => {
+    vi.resetModules()
+    persistence = await import('@/composables/useStoragePersistence')
   })
 
-  it('does not ask again once it has been granted', async () => {
-    const manager = storage(true, true)
-
-    expect(await requestPersistentStorage(manager)).toBe('persisted')
-    expect(manager.persist).not.toHaveBeenCalled()
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
-  it('reports a refusal, which is when the writer is told', async () => {
-    expect(await requestPersistentStorage(storage(false, false))).toBe('refused')
-    expect(useStoragePersistence().showNotice.value).toBe(true)
+  it('asks the browser to keep its storage, and says nothing once it agrees', async () => {
+    const storage = stubStorage(true)
+
+    await persistence.requestPersistentStorage()
+
+    expect(storage.persist).toHaveBeenCalledOnce()
+    expect(persistence.useStoragePersistence().showNotice.value).toBe(false)
   })
 
-  it('says so when the browser offers no way to ask', async () => {
-    expect(await requestPersistentStorage(undefined)).toBe('unsupported')
-    expect(useStoragePersistence().showNotice.value).toBe(false)
+  it('tells the writer when the browser refuses', async () => {
+    stubStorage(false)
+
+    await persistence.requestPersistentStorage()
+
+    expect(persistence.useStoragePersistence().showNotice.value).toBe(true)
+  })
+
+  it('says nothing when the browser offers no way to ask', async () => {
+    vi.stubGlobal('navigator', {})
+
+    await persistence.requestPersistentStorage()
+
+    expect(persistence.useStoragePersistence().showNotice.value).toBe(false)
   })
 })

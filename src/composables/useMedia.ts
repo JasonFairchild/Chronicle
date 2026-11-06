@@ -19,11 +19,13 @@ export function useMedia() {
   }
 
   async function urlFor(mediaRef: string): Promise<string | null> {
-    const existing = urls.get(mediaRef)
-    if (existing) return existing
-
     const blob = await mediaRepository.get(mediaRef)
     if (!blob) return null
+
+    // Checked after the read, with no await before the set, so two images of one id resolving
+    // together share a URL rather than each minting one and orphaning the first.
+    const existing = urls.get(mediaRef)
+    if (existing) return existing
 
     const url = URL.createObjectURL(blob)
     urls.set(mediaRef, url)
@@ -36,9 +38,7 @@ export function useMedia() {
    * Reaching into the DOM rather than into the document is the point: a resolved `src` must not be
    * able to travel back into what gets saved.
    */
-  async function applyTo(root: HTMLElement | null | undefined): Promise<void> {
-    if (!root) return
-
+  async function applyTo(root: HTMLElement): Promise<void> {
     const images = root.querySelectorAll<HTMLImageElement>('img[data-media-ref]:not([src])')
 
     await Promise.all(
@@ -54,12 +54,9 @@ export function useMedia() {
     )
   }
 
-  function revokeAll(): void {
+  onScopeDispose(() => {
     for (const url of urls.values()) URL.revokeObjectURL(url)
-    urls.clear()
-  }
+  })
 
-  onScopeDispose(revokeAll)
-
-  return { store, urlFor, applyTo, revokeAll }
+  return { store, applyTo }
 }

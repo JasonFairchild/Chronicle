@@ -20,16 +20,13 @@ export class TraceRecorder {
   readonly startedAt: string
   /** Parsed once, so every offset measures from one instant. */
   private readonly startedAtMs: number
-  private readonly now: () => number
   /** The floor `readClock` enforces: the latest instant already used. */
   private lastReadAt: number
   private readonly recorded: AuthoringEvent[] = []
 
-  /** `now` is injected so tests can drive time instead of waiting for it. */
-  constructor(sessionId: string, startedAt: string, now: () => number = () => Date.now()) {
+  constructor(sessionId: string, startedAt: string) {
     this.sessionId = sessionId
     this.startedAt = startedAt
-    this.now = now
     this.startedAtMs = Date.parse(startedAt)
     if (Number.isNaN(this.startedAtMs)) {
       throw new Error(`TraceRecorder: "${startedAt}" is not a parseable timestamp`)
@@ -44,7 +41,7 @@ export class TraceRecorder {
    * does move back, which is the honest answer to a clock that lied.
    */
   private readClock(): number {
-    this.lastReadAt = Math.max(this.now(), this.lastReadAt)
+    this.lastReadAt = Math.max(Date.now(), this.lastReadAt)
     return this.lastReadAt
   }
 
@@ -79,13 +76,8 @@ export class TraceRecorder {
    * to its last event, so a clock that came back behind the previous run can't stamp an event
    * before one already recorded.
    */
-  static resume(
-    sessionId: string,
-    startedAt: string,
-    events: AuthoringEvent[],
-    now?: () => number,
-  ): TraceRecorder {
-    const recorder = new TraceRecorder(sessionId, startedAt, now)
+  static resume(sessionId: string, startedAt: string, events: AuthoringEvent[]): TraceRecorder {
+    const recorder = new TraceRecorder(sessionId, startedAt)
     recorder.recorded.push(...events)
     recorder.lastReadAt += events[events.length - 1]?.at ?? 0
     return recorder

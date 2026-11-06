@@ -124,8 +124,4 @@ export class InMemoryEntryRepository implements EntryRepository {
       .sort(compareEntries)
       .map((entry) => structuredClone(entry))
   }
-
-  clear(): void {
-    this.entries.clear()
-  }
 }

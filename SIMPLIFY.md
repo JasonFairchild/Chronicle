@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–9, 14 and 15 done. 16 is built and verified; committing it is next.
+Status: commits 0–9 and 14–16 done. 17 is built and verified; committing it is next.
 
 ## Context
 
@@ -361,7 +361,7 @@ Order and dependencies:
   - the breadcrumbs;
   - `listConnectionsFor`;
   - `listChildren`, which only specs call, but whose lookups item 2 reshapes.
-- **Read-side code with no caller yet,** built ahead for PRODUCT.md §5.1–5.2: `buildEntryHistory`, `documentsFromFrames`, `diffDocuments`, `markSetsStore`. Likewise `MediaRepository.delete` and `list`, which an import queue would read (ENTRY_MODEL.md, "Imports").
+- **Read-side code with no caller yet,** built ahead for PRODUCT.md §5.1–5.2: `buildEntryHistory`, `documentsFromFrames`, `diffDocuments`, `markSetsStore`. And `documentsAt`, for §6's keystroke zoom. Likewise `MediaRepository.delete` and `list`, which an import queue would read (ENTRY_MODEL.md, "Imports").
 - **FILE_SPECS.md's ground:** `useLayoutWidth`'s fallback, EntryList's `emptyMessage`, TimelineView's unhandled rejection.
 - **CODE_REVIEW.md's A6 and B4 notes.** These are draftsStore's and the recorder's units, both already reviewed. B4's call (whether `AuthoringChange` requires its signals) can be made when commit 3 is in `traceRecorder.ts`.
 

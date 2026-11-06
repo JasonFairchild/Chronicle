@@ -1,11 +1,5 @@
 import { computed, ref } from 'vue'
 
-/** Whether the browser has agreed to keep Chronicle's storage through its own clean-ups. */
-export type StoragePersistence = 'unknown' | 'persisted' | 'refused' | 'unsupported'
-
-/** The part of `navigator.storage` this reads, so a test can hand in its own. */
-export type PersistableStorage = Pick<StorageManager, 'persist' | 'persisted'>
-
 const DISMISSED_KEY = 'chronicle:storage-notice-dismissed'
 
 function readDismissed(): boolean {
@@ -16,7 +10,8 @@ function readDismissed(): boolean {
   }
 }
 
-const persistence = ref<StoragePersistence>('unknown')
+/** Whether the browser said no to keeping Chronicle's storage through its own clean-ups. */
+const refused = ref(false)
 const dismissed = ref(readDismissed())
 
 /**
@@ -25,27 +20,21 @@ const dismissed = ref(readDismissed())
  * apps without asking, and Firefox asks the writer. It never protects against someone clearing
  * the site's data, which only a backup outside the browser can.
  */
-export async function requestPersistentStorage(
-  storage: PersistableStorage | undefined = globalThis.navigator?.storage,
-): Promise<StoragePersistence> {
-  if (!storage?.persist) {
-    persistence.value = 'unsupported'
-    return persistence.value
-  }
+export async function requestPersistentStorage(): Promise<void> {
+  const storage = globalThis.navigator?.storage
+  // Only a refusal is worth a word: unsupported browsers have nothing to offer instead.
+  if (!storage?.persist) return
 
   try {
-    const granted = (await storage.persisted()) || (await storage.persist())
-    persistence.value = granted ? 'persisted' : 'refused'
+    refused.value = !(await storage.persist())
   } catch {
-    persistence.value = 'refused'
+    refused.value = true
   }
-  return persistence.value
 }
 
-/** The answer `requestPersistentStorage` got, and whether the writer should still be told. */
+/** Whether the writer should be told the browser refused, until they dismiss it. */
 export function useStoragePersistence() {
-  /** Only a refusal is worth a word: unsupported browsers have nothing to offer instead. */
-  const showNotice = computed(() => persistence.value === 'refused' && !dismissed.value)
+  const showNotice = computed(() => refused.value && !dismissed.value)
 
   function dismiss(): void {
     dismissed.value = true
@@ -56,5 +45,5 @@ export function useStoragePersistence() {
     }
   }
 
-  return { persistence, showNotice, dismiss }
+  return { showNotice, dismiss }
 }

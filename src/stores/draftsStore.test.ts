@@ -199,6 +199,36 @@ describe('useDraftsStore', () => {
         textContent('It rained all day'),
       )
     })
+
+    it('reloads what another tab wrote at the next write when reloading after a loss fails', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('It drizzled'))
+      await store.flush(sessionId)
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, draftChangeTo('It hailed'))
+      await otherTab.flush(sessionId)
+
+      vi.spyOn(draftRepository, 'getById').mockRejectedValueOnce(new Error('read failed'))
+      store.recordChange(sessionId, draftChangeTo('It drizzled all'))
+      await store.flush(sessionId)
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        'The next write meets the same conflict and retries.',
+        new Error('read failed'),
+      )
+      expect(store.currentDraft(sessionId)?.entry.content).toBe(textContent('It drizzled all'))
+
+      store.recordChange(sessionId, draftChangeTo('It drizzled all day'))
+      await store.flush(sessionId)
+
+      expect(store.currentDraft(sessionId)?.entry.content).toBe(textContent('It hailed'))
+      expect(store.changedElsewhere[sessionId]?.unsaved?.entry.content).toBe(
+        textContent('It drizzled all day'),
+      )
+    })
   })
 
   describe('ending a session', () => {
@@ -279,6 +309,64 @@ describe('useDraftsStore', () => {
       expect(change?.gone).toBe(false)
       expect(change?.unsaved?.entry.content).toBe(textContent('It rained all day'))
     })
+
+    it('still refuses to seal over another tab’s write when the check on return fails', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('The bus was late'))
+      await store.flush(sessionId)
+
+      const otherTab = anotherTab()
+      await otherTab.resumeDraft(sessionId)
+      otherTab.recordChange(sessionId, draftChangeTo('The bus never came'))
+      await otherTab.flush(sessionId)
+
+      vi.spyOn(draftRepository, 'list').mockRejectedValueOnce(new Error('read failed'))
+      await store.adoptChangesElsewhere()
+
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        'Saves, seals and discards still refuse another tab’s write.',
+        new Error('read failed'),
+      )
+      await expect(store.sealDraft(sessionId)).rejects.toThrow(DraftConflictError)
+    })
+
+    it('returns the saved entry when refreshing the lists after a seal fails', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const store = useDraftsStore()
+      const sessionId = store.beginDraft({ kind: 'new_root' })
+      store.recordChange(sessionId, draftChangeTo('A quiet morning'))
+
+      vi.spyOn(draftRepository, 'list').mockRejectedValueOnce(new Error('read failed'))
+      const sealed = await store.sealDraft(sessionId)
+
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        'The entry is saved; each list reloads when next shown.',
+        new Error('read failed'),
+      )
+      const stored = await entryRepository.getById(sealed.id)
+      expect(docToPlainText(stored!.content)).toBe('A quiet morning')
+    })
+
+    it.each(['sealDraft', 'discardDraft'] as const)(
+      'stops reporting a failed write once %s ends the session',
+      async (end) => {
+        const store = useDraftsStore()
+        const sessionId = store.beginDraft({ kind: 'new_root' })
+        vi.spyOn(draftRepository, 'save').mockRejectedValueOnce(new Error('Quota'))
+        store.recordChange(sessionId, draftChangeTo('Rain on the tin roof'))
+        await store.flush(sessionId)
+        expect(store.writeFailed[sessionId]).toBe(true)
+
+        await (end === 'sealDraft'
+          ? store.sealDraft(sessionId)
+          : store.discardDraft(sessionId, null))
+
+        // Still set, the tab would ask before closing once the session had ended.
+        expect(store.writeFailed[sessionId]).toBeUndefined()
+      },
+    )
 
     it('refuses to discard a draft another tab has written since, showing that version', async () => {
       const store = useDraftsStore()
@@ -527,6 +615,24 @@ describe('useDraftsStore', () => {
       const stored = await draftRepository.getById(sessionId)
       expect(stored?.entry.content).toBe(textContent('I received the offer'))
       expect(warn).not.toHaveBeenCalled()
+    })
+
+    it('keeps an untouched claim, listed for discarding, when releasing it fails', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const store = useDraftsStore()
+      const original = await existingEntry('I recieved the letter')
+      const sessionId = store.beginDraft({ kind: 'revision', parent: original })
+      await store.flush(sessionId)
+
+      vi.spyOn(draftRepository, 'getById').mockRejectedValueOnce(new Error('read failed'))
+      await store.abandonDraft(sessionId)
+
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        'The claim stays, and the drafts list offers to discard it.',
+        new Error('read failed'),
+      )
+      await store.loadDrafts()
+      expect(store.drafts.map((draft) => draft.session_id)).toEqual([sessionId])
     })
 
     it('keeps a resumed draft that holds work when it is let go untouched', async () => {

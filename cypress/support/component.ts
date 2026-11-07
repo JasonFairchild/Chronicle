@@ -9,6 +9,7 @@ import { createPinia } from 'pinia'
 import type { Router } from 'vue-router'
 
 import { disposeTestRepositories, freshRepositories } from '@/testing/realRepositories'
+import { settleStoreActions, trackStoreActions } from '@/testing/storeActions'
 import { createTestRouter } from '@/testing/testRouter'
 
 type MountOptions = CyMountOptions<unknown> & {
@@ -33,7 +34,9 @@ function mountWithRealStack(
   options: MountOptions = {},
 ): Cypress.Chainable {
   const { routePath, router = createTestRouter(), global, ...rest } = options
-  const plugins = [createPinia(), ...(global?.plugins ?? [])]
+  const pinia = createPinia()
+  pinia.use(trackStoreActions)
+  const plugins = [pinia, ...(global?.plugins ?? [])]
 
   if (routePath === undefined) {
     return mount(component, { ...rest, global: { ...global, plugins } })
@@ -53,6 +56,10 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  // `cy.mount` unmounts only after every `afterEach`, past the database's disposal, so unmount here
+  // and let a view's writes on unmount settle first. Its own unmount, later, is then harmless.
+  Cypress.vueWrapper?.unmount()
+  await settleStoreActions()
   await disposeTestRepositories()
 })
 

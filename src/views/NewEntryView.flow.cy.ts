@@ -208,15 +208,11 @@ describe('NewEntryView flows', () => {
     // This tab hasn't caught up, so its next write lands on a draft that has moved on.
     cy.findByRole('textbox', { name: 'New entry' }).type('{ctrl+end} here')
 
-    cy.findByText(
-      'This draft was changed elsewhere at the same time, and now shows what was saved there. ' +
-        'What you had here is below.',
-    ).should('be.visible')
-    cy.findByText('Half a thought here').should('be.visible')
     cy.findByRole('textbox', { name: 'New entry' }).should(
       'contain.text',
       'Half a thought, finished elsewhere',
     )
+    cy.findByText('Half a thought here').should('be.visible')
     cy.then(async () => {
       const stored = await draftRepository.getById('session-1')
       expect(docToPlainText(stored!.entry.content)).to.equal('Half a thought, finished elsewhere')

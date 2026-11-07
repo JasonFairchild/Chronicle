@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–9 and 14–17 done. 18 and 19 are built together and verified (full component suites), to be committed as one; what's left is deleting this file.
+Status: commits 0–9 and 14–19 done. 21 is built and verified; what's left is deleting this file.
 
 ## Context
 
@@ -107,7 +107,7 @@ Order and dependencies:
 - 1–7 stand alone, except 5, which comes after 4.
 - 8 is the spike. 9 is item 4, in two commits (9a, 9b), after 7, with 10–12 folded into it.
 - 13 and 20 are skipped.
-- 14–19 are independent.
+- 14–19 are independent. 21 comes after 19.
 - FILE_SPECS.md commit 2 (the `useDraftSession` spec) comes after commits 3 and 5 here, and covers `handleFieldsChange` and `bookmark`.
 - Commits here and in FILE_SPECS.md that touch EntryDetailView's pairs rebase on whichever lands first.
 - Last, once the rest are in: delete this file, and every citation of it in CHRONICLE_PLAN.md, CODE_REVIEW.md and FILE_SPECS.md.
@@ -351,6 +351,14 @@ Order and dependencies:
 
 20. **Skipped: condense Track A's comments.** Moved to CODE_REVIEW.md's last step, as 13 was.
 
+21. **CODE_REVIEW.md's A6 notes.**
+    - Both runners' teardown waits for what unmounting started. A view abandons its draft session on unmount without awaiting it, so those writes met a deleted database (the `DatabaseClosedError` warnings), or, landing after the next `beforeEach`, the next test's storage, through the composition root's live bindings. `src/testing/storeActions.ts`, a Pinia plugin that `renderComponent` and `cy.mount` install, records each action until it settles; each runner's `afterEach` unmounts, awaits it, then disposes. Cypress's has to unmount itself: `cy.mount`'s own unmount runs after every `afterEach`.
+    - The reload specs delete through their second connection, so Dexie doesn't close it for them with a warning.
+    - `draftsStore.test.ts`: a forced failure for each `bestEffort`, checking the call resolves, the warning, and the state its reason names. A seal and a discard each clear `writeFailed`.
+    - NewEntryView's conflict flow, both runners, cut to the editor showing the other tab's version, the copy of what this tab had, and its disk check. The copy alone matched the editor's own text before the conflict; it stays as `useDraftSession`'s only check of building it until FILE_SPECS.md commit 2.
+    - Left: Dexie's "delete was blocked" warning, now and then. IndexedDB reports a delete as blocked while a transaction commits, and goes ahead. Rejected: an empty write before each delete, which left some, and an `onConsoleLog` filter, which an agent's runs bypass.
+    - Verify: shared test setup, so the full component suites.
+
 ## Left out, and why
 
 - **Revise on a related entry (PRODUCT.md §5.4) and item 3:** see Decisions.
@@ -363,7 +371,7 @@ Order and dependencies:
   - `listChildren`, which only specs call, but whose lookups item 2 reshapes.
 - **Read-side code with no caller yet,** built ahead for PRODUCT.md §5.1–5.2: `buildEntryHistory`, `documentsFromFrames`, `diffDocuments`, `markSetsStore`. And `documentsAt`, for §6's keystroke zoom. Likewise `MediaRepository.delete` and `list`, which an import queue would read (ENTRY_MODEL.md, "Imports").
 - **FILE_SPECS.md's ground:** `useLayoutWidth`'s fallback, EntryList's `emptyMessage`, TimelineView's unhandled rejection.
-- **CODE_REVIEW.md's A6 and B4 notes.** These are draftsStore's and the recorder's units, both already reviewed. B4's call (whether `AuthoringChange` requires its signals) can be made when commit 3 is in `traceRecorder.ts`.
+- **CODE_REVIEW.md's B4 notes**, on the recorder's unit, already reviewed. B4's call (whether `AuthoringChange` requires its signals) can be made when commit 3 is in `traceRecorder.ts`.
 
 ## Manual check
 

@@ -117,7 +117,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - "revises one detail…".
      - "refuses a revision that changes nothing…".
    - **EntryComposer "shows all of a draft that will not reopen…":** given a stub session (`reactive({...}) as DraftSession`, as `DraftElsewhereNotice`'s spec does) rather than a resumed unreadable draft.
-   - The NewEntryView conflict flow stays: it reads disk (CODE_REVIEW.md, A6).
+   - The NewEntryView conflict flow stays: it reads disk.
    - Verify: the unit spec, then the NewEntryView, EntryDetailView and EntryComposer browser and Cypress specs, component and flow.
 
 4. **Cut flow assertions a screen's spec already owns.** Each one is checked first for whether a later read waits on it.

@@ -1,4 +1,3 @@
-import Dexie from 'dexie'
 import { describe, expect, it, onTestFinished } from 'vitest'
 
 import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
@@ -15,10 +14,12 @@ runEntryRepositoryContract('Dexie', () => freshEntryRepository())
 describe('DexieEntryRepository persistence', () => {
   it('keeps data when a new instance opens the same database', async () => {
     const databaseName = `chronicle-persistence-${Date.now()}`
-    // By name, so a failing assertion can't leave it behind; Dexie closes open connections first.
-    onTestFinished(() => Dexie.delete(databaseName))
-
     const beforeReload = new ChronicleDatabase(databaseName)
+    const afterReload = new ChronicleDatabase(databaseName) // Opens on first use, below.
+    // Through the connection left open, which a delete closes first. Registered before any
+    // assertion, so a failing one can't leave the database behind.
+    onTestFinished(() => afterReload.delete())
+
     const created = await new DexieEntryRepository(beforeReload).create(
       createEntryInput({ content: 'Written before reload' }),
     )
@@ -27,17 +28,17 @@ describe('DexieEntryRepository persistence', () => {
     // closest an automated test gets to "close the tab and reopen the app." The first connection
     // is closed, not left dangling, the way a closed tab would actually release it.
     beforeReload.close()
-    const afterReload = new DexieEntryRepository(new ChronicleDatabase(databaseName))
-    const fetched = await afterReload.getById(created.id)
+    const fetched = await new DexieEntryRepository(afterReload).getById(created.id)
 
     expect(fetched?.content).toBe('Written before reload')
   })
 
   it('keeps relations intact across a reload, not just the row that was fetched by id', async () => {
     const databaseName = `chronicle-persistence-relations-${Date.now()}`
-    onTestFinished(() => Dexie.delete(databaseName))
-
     const beforeReload = new ChronicleDatabase(databaseName)
+    const afterReload = new ChronicleDatabase(databaseName)
+    onTestFinished(() => afterReload.delete())
+
     const entries = new DexieEntryRepository(beforeReload)
     const parent = await entries.create(createEntryInput({ content: 'Root' }))
     await entries.create(
@@ -45,8 +46,7 @@ describe('DexieEntryRepository persistence', () => {
     )
 
     beforeReload.close()
-    const afterReload = new DexieEntryRepository(new ChronicleDatabase(databaseName))
-    const children = await afterReload.listChildren(parent.id)
+    const children = await new DexieEntryRepository(afterReload).listChildren(parent.id)
 
     expect(children).toHaveLength(1)
     expect(children[0]?.content).toBe('Note')

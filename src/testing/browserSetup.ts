@@ -7,6 +7,7 @@ import { cleanup } from 'vitest-browser-vue'
 
 // By alias, as specs import it: a relative path loads a second copy, with its own database.
 import { disposeTestRepositories, freshRepositories } from '@/testing/realRepositories'
+import { settleStoreActions } from '@/testing/storeActions'
 
 beforeEach(() => {
   freshRepositories()
@@ -15,7 +16,9 @@ beforeEach(() => {
 afterEach(async () => {
   // `vitest-browser-vue` only unmounts a test's component in the *next* test's `beforeEach`, not
   // this test's `afterEach` — so without an explicit `cleanup()` first, a still-mounted component's
-  // watchers could fire against a database this hook is about to delete. Unmount, then dispose.
+  // watchers could fire against a database this hook is about to delete. Unmounting starts writes
+  // of its own (a view abandons its draft session), so those settle before the database goes.
   cleanup()
+  await settleStoreActions()
   await disposeTestRepositories()
 })

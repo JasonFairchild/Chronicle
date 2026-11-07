@@ -194,17 +194,9 @@ describe('NewEntryView flows (browser)', () => {
     await userEvent.keyboard('{Control>}{End}{/Control} here')
 
     await expect
-      .element(
-        screen.getByText(
-          'This draft was changed elsewhere at the same time, and now shows what was saved ' +
-            'there. What you had here is below.',
-        ),
-      )
-      .toBeVisible()
-    await expect.element(screen.getByText('Half a thought here')).toBeVisible()
-    await expect
       .element(screen.getByRole('textbox', { name: 'New entry' }))
       .toHaveTextContent('Half a thought, finished elsewhere')
+    await expect.element(screen.getByText('Half a thought here')).toBeVisible()
     const stored = await draftRepository.getById('session-1')
     expect(docToPlainText(stored!.entry.content)).toBe('Half a thought, finished elsewhere')
   })

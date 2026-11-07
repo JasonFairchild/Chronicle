@@ -1,4 +1,3 @@
-import Dexie from 'dexie'
 import { describe, expect, it, onTestFinished } from 'vitest'
 
 import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
@@ -18,10 +17,12 @@ runDraftRepositoryContract('Dexie', () => ({
 describe('DexieDraftRepository persistence', () => {
   it('still holds an unsealed draft after the tab is closed and reopened', async () => {
     const databaseName = `chronicle-drafts-persistence-${Date.now()}`
-    // By name, so a failing assertion can't leave it behind; Dexie closes open connections first.
-    onTestFinished(() => Dexie.delete(databaseName))
-
     const beforeReload = new ChronicleDatabase(databaseName)
+    const afterReload = new ChronicleDatabase(databaseName) // Opens on first use, below.
+    // Through the connection left open, which a delete closes first. Registered before any
+    // assertion, so a failing one can't leave the database behind.
+    onTestFinished(() => afterReload.delete())
+
     await new DexieDraftRepository(beforeReload).save(
       makeDraft('session-1', {
         entry: {
@@ -34,8 +35,7 @@ describe('DexieDraftRepository persistence', () => {
     // A fresh connection sharing no in-memory state with the first — the closest an automated
     // test gets to a crash mid-sentence.
     beforeReload.close()
-    const afterReload = new DexieDraftRepository(new ChronicleDatabase(databaseName))
-    const recovered = await afterReload.getById('session-1')
+    const recovered = await new DexieDraftRepository(afterReload).getById('session-1')
 
     expect(recovered?.entry.content).toBe('Never got round to finishing this')
     expect(recovered?.entry.events).toHaveLength(1)

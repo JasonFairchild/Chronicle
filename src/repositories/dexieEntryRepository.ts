@@ -2,7 +2,7 @@ import { assertValidRelation, latestVersionOf } from '@/domain/entryValidation'
 import { compareEntries, type CreateEntryInput, type Entry } from '@/types/entry'
 import { newId, newTimestamp } from '@/utils/id'
 
-import { type ChronicleDatabase, resolveDatabase, type StoredEntry } from './chronicleDatabase'
+import type { ChronicleDatabase, StoredEntry } from './chronicleDatabase'
 import type { EntryRepository } from './entryRepository'
 
 /** Drops the storage-only indexing flag. */
@@ -22,11 +22,7 @@ function dedupeById(entries: StoredEntry[]): StoredEntry[] {
  * adapters run the identical behavioral suite.
  */
 export class DexieEntryRepository implements EntryRepository {
-  private db: ChronicleDatabase
-
-  constructor(database: ChronicleDatabase | string = 'chronicle') {
-    this.db = resolveDatabase(database)
-  }
+  constructor(private db: ChronicleDatabase) {}
 
   async create(input: CreateEntryInput): Promise<Entry> {
     const [entry] = await this.createMany([input])
@@ -138,15 +134,5 @@ export class DexieEntryRepository implements EntryRepository {
     }
 
     return [...subtree.values()].sort(compareEntries).map(stripStorage)
-  }
-
-  /** Closes this instance's connection without deleting the database. */
-  close(): void {
-    this.db.close()
-  }
-
-  /** Test-only: deletes the underlying IndexedDB database and closes this instance. */
-  async dispose(): Promise<void> {
-    await this.db.delete()
   }
 }

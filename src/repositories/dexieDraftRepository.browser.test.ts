@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { describe, expect, it, onTestFinished } from 'vitest'
 
+import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
 import { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
 import { runDraftRepositoryContract } from '@/repositories/draftRepository.contract'
 import { makeDraft } from '@/testing/draftFixtures'
@@ -20,8 +21,8 @@ describe('DexieDraftRepository persistence', () => {
     // By name, so a failing assertion can't leave it behind; Dexie closes open connections first.
     onTestFinished(() => Dexie.delete(databaseName))
 
-    const beforeReload = new DexieDraftRepository(databaseName)
-    await beforeReload.save(
+    const beforeReload = new ChronicleDatabase(databaseName)
+    await new DexieDraftRepository(beforeReload).save(
       makeDraft('session-1', {
         entry: {
           content: 'Never got round to finishing this',
@@ -33,7 +34,7 @@ describe('DexieDraftRepository persistence', () => {
     // A fresh connection sharing no in-memory state with the first — the closest an automated
     // test gets to a crash mid-sentence.
     beforeReload.close()
-    const afterReload = new DexieDraftRepository(databaseName)
+    const afterReload = new DexieDraftRepository(new ChronicleDatabase(databaseName))
     const recovered = await afterReload.getById('session-1')
 
     expect(recovered?.entry.content).toBe('Never got round to finishing this')

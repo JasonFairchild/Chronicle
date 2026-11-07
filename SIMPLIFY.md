@@ -1,6 +1,6 @@
 # Simplify Track B, wording as marked text, and Track A's unreviewed files
 
-Status: commits 0–9 and 14–16 done. 17 is built and verified; committing it is next.
+Status: commits 0–9 and 14–17 done. 18 and 19 are built together and verified (full component suites), to be committed as one; what's left is deleting this file.
 
 ## Context
 
@@ -95,7 +95,7 @@ The domain and read side are lean: `marks`, `replay`, `markFrames`, `documentDif
 - **The formatting toolbar is one Tab stop** (commit 4), by the APG toolbar pattern that AnchorMenu already follows: a roving tabindex, with arrow keys moving within it. It declares `role="toolbar"` today but makes every control a Tab stop. Once it costs one press, the title's Tab-skips-the-toolbar shortcut goes, and focus order is the same both ways. Enter still moves from the title into the body.
 - **The toolbar is its own component**, `EditorToolbar.vue`, as AnchorMenu is for anchor mode. Its `editor` prop is `@tiptap/vue-3`'s `Editor`, whose state is reactive; `@tiptap/core`'s is not. The same goes for AnchorMenu once it reads the anchor at the caret.
 - **Remove the Attachments list on an entry's page.** Images already show inline, where they were placed.
-- **One Dexie schema version.** Dexie diffs a lone declared version against the installed schema: `updateTablesAndIndexes` rebuilds the old schema, and `deleteRemovedTables` drops `draftSteps`. Keeping the number at 5 means an existing browser opens with no upgrade.
+- **One Dexie schema version, numbered 1 until release.** Before release local data is test data, so the file holds only the latest schema and git holds the rest; release starts real history at 1. Decided 2026-11-06, replacing "keep the number at 5". Dexie 4 makes it safe: an installed higher version is opened as it is (`VersionError` retries with no version), and a table or index added without a bump is patched in, with one console warning. A removed table lingers, harmless; a changed key or index type needs local data cleared.
 
 ## Commits
 
@@ -339,7 +339,7 @@ Order and dependencies:
     - `InMemoryEntryRepository.clear()` and `InMemoryMediaRepository.clear()` have no callers.
     - Verify: useMedia pair; `npm run test -- src/repositories/`.
 
-18. **Declare the Dexie schema once,** at version 5, with all four tables. Its comment says why there's no history (CLAUDE.md).
+18. **Declare the Dexie schema once,** at version 1, with all four tables. Its comment says why there's no history and the number never moves (CLAUDE.md).
     - Verify: the `dexie*.browser.test.ts` specs. Every browser spec opens this database, so the full component suites.
 
 19. **The adapters lose their test-only API.**

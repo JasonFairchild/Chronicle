@@ -72,15 +72,4 @@ export class OpfsMediaRepository implements MediaRepository {
 
     return ids.sort()
   }
-
-  /** Test-only: removes the whole media directory. */
-  async dispose(): Promise<void> {
-    const root = await navigator.storage.getDirectory()
-
-    try {
-      await root.removeEntry(this.directoryName, { recursive: true })
-    } catch (error) {
-      if (!isNotFound(error)) throw error
-    }
-  }
 }

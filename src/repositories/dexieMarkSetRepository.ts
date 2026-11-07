@@ -1,15 +1,11 @@
 import { compareMarkSets, type CreateMarkSetInput, type MarkSet } from '@/types/markSet'
 import { newId, newTimestamp } from '@/utils/id'
 
-import { type ChronicleDatabase, resolveDatabase } from './chronicleDatabase'
+import type { ChronicleDatabase } from './chronicleDatabase'
 import type { MarkSetRepository } from './markSetRepository'
 
 export class DexieMarkSetRepository implements MarkSetRepository {
-  private db: ChronicleDatabase
-
-  constructor(database: ChronicleDatabase | string = 'chronicle') {
-    this.db = resolveDatabase(database)
-  }
+  constructor(private db: ChronicleDatabase) {}
 
   async create(input: CreateMarkSetInput): Promise<MarkSet> {
     const set: MarkSet = { id: newId(), created_at: newTimestamp(), ...input }
@@ -28,10 +24,5 @@ export class DexieMarkSetRepository implements MarkSetRepository {
 
   async delete(id: string): Promise<void> {
     await this.db.markSets.delete(id)
-  }
-
-  /** Test-only: deletes the underlying IndexedDB database and closes this instance. */
-  async dispose(): Promise<void> {
-    await this.db.delete()
   }
 }

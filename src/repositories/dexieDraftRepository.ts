@@ -10,7 +10,7 @@ import {
 import type { AuthoringEvent, CreateEntryInput, Entry } from '@/types/entry'
 import { newId } from '@/utils/id'
 
-import { type ChronicleDatabase, resolveDatabase, type StoredDraftEvent } from './chronicleDatabase'
+import type { ChronicleDatabase, StoredDraftEvent } from './chronicleDatabase'
 import { DexieEntryRepository } from './dexieEntryRepository'
 import { assertFollows, type DraftRepository } from './draftRepository'
 
@@ -30,13 +30,11 @@ function reassemble(snapshot: DraftSnapshot, rows: StoredDraftEvent[]): Draft {
  * few hundred milliseconds of typing since the last one.
  */
 export class DexieDraftRepository implements DraftRepository {
-  private db: ChronicleDatabase
   /** Writes a seal's entries on this same connection, so one transaction can span both. */
   private entries: DexieEntryRepository
 
-  constructor(database: ChronicleDatabase | string = 'chronicle') {
-    this.db = resolveDatabase(database)
-    this.entries = new DexieEntryRepository(this.db)
+  constructor(private db: ChronicleDatabase) {
+    this.entries = new DexieEntryRepository(db)
   }
 
   /** Rows for what `events` holds past the stored log, which is always where it starts. */
@@ -133,10 +131,5 @@ export class DexieDraftRepository implements DraftRepository {
       await this.db.drafts.delete(sessionId)
       await this.db.draftEvents.where('session_id').equals(sessionId).delete()
     })
-  }
-
-  /** Closes this instance's connection without deleting the database. */
-  close(): void {
-    this.db.close()
   }
 }

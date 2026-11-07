@@ -72,10 +72,23 @@ export function freshMarkSetRepository(): MarkSetRepository {
   return repository
 }
 
+/** Removes an OPFS directory by name, as `Dexie.delete(name)` does a database. */
+export async function removeMediaDirectory(name: string): Promise<void> {
+  const root = await navigator.storage.getDirectory()
+
+  try {
+    await root.removeEntry(name, { recursive: true })
+  } catch (error) {
+    // Never created: the repository only makes its directory on first use.
+    if (!(error instanceof DOMException && error.name === 'NotFoundError')) throw error
+  }
+}
+
 export function freshMediaRepository(): MediaRepository {
-  const repository = new OpfsMediaRepository(uniqueName('media'))
+  const name = uniqueName('media')
+  const repository = new OpfsMediaRepository(name)
   setMediaRepository(repository)
-  disposers.push(() => repository.dispose())
+  disposers.push(() => removeMediaDirectory(name))
   return repository
 }
 

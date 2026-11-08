@@ -23,7 +23,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - An owner test that is part session behavior and part wiring is shrunk to the wiring: which session method a control calls, what the owner renders from the session, where it navigates, and the order its own handler does things in.
   - A test is deleted outright only when what remains is already owned elsewhere.
   - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "A repository read doesn't retry").
-- **Editor files wait for Track B.** `extensions.ts` and `anchorCommands.ts` get their specs as Track B reviews them, now that SIMPLIFY.md has reshaped them. `anchorGuard.ts` and `AnchorMenu.vue` already have theirs. DocumentEditor's specs stay as they are until then. What was learned goes into Track B unit 2 in CODE_REVIEW.md (commit 19):
+- **Editor files wait for Track B.** `extensions.ts` and `anchorCommands.ts` get their specs as Track B reviews them. `anchorGuard.ts` and `AnchorMenu.vue` already have theirs. DocumentEditor's specs stay as they are until then. What was learned, for Track B unit 2 in CODE_REVIEW.md:
   - Browser project alone, with a bare TipTap `Editor`.
   - `anchorSpans` is pure and could run in node over `replayDocument`, as the guard's spec does over a bare `EditorState`.
   - Unproven today: `excludes: ''`, `Mod-Alt-s`, and the live region.
@@ -101,7 +101,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - shows no notice for a resumed draft another tab had already changed
      - `canSave` is false for a title alone or blank words
      - field changes (`handleFieldsChange`: title and details alike) and parent changes are recorded, and nothing is recorded with no session open
-     - a bookmark reaches `drafts.addMark` and sets `bookmarkedAt`, which the next session opened, a reload from another tab, and `reset` each clear (SIMPLIFY.md commit 5)
+     - a bookmark reaches `drafts.addMark` and sets `bookmarkedAt`, which the next session opened, a reload from another tab, and `reset` each clear
      - abandon keeps what reached disk; reset clears everything for the next entry
    - Verify: the new spec.
 

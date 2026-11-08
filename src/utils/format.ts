@@ -4,9 +4,9 @@ import { previewText } from '@/domain/entryDocument'
 import type { EntryDates, EntryDetails, ResolvedAnchor } from '@/types/entry'
 
 /**
- * How to name an entry where only one line fits — a picker option, a connection's arrow, the note a
- * revision warning is about. Its title if it has one, otherwise the opening of what it says; an
- * entry with neither still needs naming rather than appearing as a blank row.
+ * How to name an entry where only one line fits — a picker option, a connection's arrow. Its title
+ * if it has one, otherwise the opening of what it says; an entry with neither still needs naming
+ * rather than appearing as a blank row.
  *
  * Structurally typed on the two fields it reads, because it names both stored entries and the
  * aggregated form the timeline hands back, and neither is a subtype of the other.

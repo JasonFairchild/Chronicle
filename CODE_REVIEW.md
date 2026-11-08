@@ -9,10 +9,10 @@ CHRONICLE_PLAN.md priority 1: understand and own the existing code, refactoring 
 ## Decisions
 
 - **Outside in: screens, then composables, stores, model, repositories.** A caller shows what the code beneath it has to offer. A simplification found at a screen narrows an inner API before that API is reviewed, so the inner layer gets reviewed in its slimmed form. Rejected: following NewEntryView all the way down to Dexie first. That reaches the deepest layers before most of their callers have been read, so inner refactors get redone as other callers turn up.
-- **Two tracks, split where the next priorities split.** Track A is the entry and draft path through every layer, which is what item 2 (connections folded) changes. Track B is the editor, which SIMPLIFY.md reshapes first, anchor wording as marked text included. Track A comes first because it holds NewEntryView and unblocks item 2. Item 2 can then start before Track B. Rejected: one pass with all screens first. It puts DocumentEditor second, and holds item 2 until both tracks are done.
+- **Two tracks, split where the next priorities split.** Track A is the entry and draft path through every layer, which is what item 2 (connections folded) changes. Track B is the editor. Track A comes first because it holds NewEntryView and unblocks item 2. Item 2 can then start before Track B. Rejected: one pass with all screens first. It puts DocumentEditor second, and holds item 2 until both tracks are done.
 - **A shared file is reviewed with the first screen that uses it.** EntryComposer and DraftElsewhereNotice go with NewEntryView, and later screens review only their wiring of them. Its own spec proves it (TESTING.md), so theirs prove only that wiring.
 - **Connections: read, don't polish.** NewConnectionView and its specs are skipped, since item 2 removes them. Connection-specific code elsewhere in Track A (`target_id`, the `connection` relation type, `new_connection`) is read for understanding only, because item 2 replaces it. A bug found there still gets fixed.
-- **Anchors are reviewed in full**, in the shape SIMPLIFY.md leaves them: wording as marked text, and PRODUCT.md §5.4's lock in place of affected-anchor tracking.
+- **Anchors are reviewed in full**: wording as marked text, and PRODUCT.md §5.4's lock.
 - **Read the Browser Mode spec closely, and its Cypress mirror against it.** The pairs cover the same cases on purpose (TESTING.md), so the mirror is checked for drift (a case or assertion one has and the other lacks) rather than re-read from scratch. Shared test setup is reviewed in the first unit that runs it.
 - **An improvement lands when it's ready, whatever layer it's in.** Pure simplification or reduction usually lands at once, even in a file no unit has reached yet. **Carried inward** holds what's better left: a change that needs the inner file understood first, or one that would swell the change it was found in.
 - **What a unit produces.** Each refactor or fix is its own commit, green alone. A unit with nothing to change only moves Status on. Behavior questions go to PRODUCT.md, and engineering bigger than a review fix goes to CHRONICLE_PLAN.md.
@@ -48,7 +48,7 @@ Item 2 can start here.
 3. **The document and anchors.** `entryDocument.ts`, `anchors.ts`. Specs: `entryDocument.test`, `anchors.test`.
 4. **The trace's read side.** `marks.ts`, `replay.ts`, `markFrames.ts`, `markSetsStore.ts`, `types/markSet.ts`, `documentDiff.ts`, with `traceRecorder.ts` for context. No screen uses these yet; they serve the history view (item 5), and `documentDiff` waits on a revision's diff (CHRONICLE_PLAN.md). Specs: `marks`, `replay`, `markFrames`, `markSetsStore`, `documentDiff` tests.
 
-SIMPLIFY.md changes these files before the units above review them. Items 4–5 (seed data, the history view) wait on B4.
+Items 4–5 (seed data, the history view) wait on B4.
 
 ### Last: condense comments across the repo
 

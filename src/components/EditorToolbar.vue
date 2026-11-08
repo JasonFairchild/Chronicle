@@ -8,7 +8,6 @@ import {
   List,
   ListOrdered,
   type LucideIcon,
-  MoreHorizontal,
   Quote,
   Redo2,
   Strikethrough,
@@ -16,7 +15,7 @@ import {
   Undo2,
 } from '@lucide/vue'
 import type { Editor } from '@tiptap/vue-3'
-import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
+import { computed, ref, useId } from 'vue'
 
 import { useMedia } from '@/composables/useMedia'
 import { useRovingTabindex } from '@/composables/useRovingTabindex'
@@ -45,20 +44,6 @@ const { handleFocusin, handleKeydown } = useRovingTabindex(toolbar)
 const linkOpen = ref(false)
 const linkUrl = ref('')
 
-const moreOpen = ref(false)
-const moreToggle = ref<HTMLButtonElement | null>(null)
-const morePanel = ref<HTMLElement | null>(null)
-
-function handleDocumentPointerDown(event: PointerEvent): void {
-  if (!moreOpen.value) return
-  const target = event.target as Node
-  if (moreToggle.value?.contains(target) || morePanel.value?.contains(target)) return
-  moreOpen.value = false
-}
-
-onMounted(() => document.addEventListener('pointerdown', handleDocumentPointerDown))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', handleDocumentPointerDown))
-
 /** Seeded from the link under the cursor, so clicking Link on an existing one edits it. */
 function openLink(): void {
   if (linkOpen.value) {
@@ -68,7 +53,6 @@ function openLink(): void {
 
   linkUrl.value = (props.editor.getAttributes('link').href as string | undefined) ?? ''
   linkOpen.value = true
-  moreOpen.value = false
 }
 
 /** One icon button in the toolbar. `active` is omitted for commands that are not a state to be in. */
@@ -81,9 +65,8 @@ interface ToolbarAction {
 }
 
 /**
- * The toolbar, as data, grouped the way the buttons are laid out. Every action here is a StarterKit
- * command that already works from the keyboard, so this exposes what the editor can do rather than
- * adding to it — and heading levels belong to the text-style select, not this row.
+ * The toolbar, as data, grouped the way the buttons are laid out. Heading levels belong to the
+ * text-style select, not this row.
  *
  * Strikethrough is included: it is ordinary formatting here, distinct from an anchor-op strike (a
  * related entry retracting part of its parent) by its own presentation, not by being withheld from
@@ -93,7 +76,8 @@ interface ToolbarGroups {
   history: ToolbarAction[]
   marks: ToolbarAction[]
   lists: ToolbarAction[]
-  link: ToolbarAction[]
+  insert: ToolbarAction[]
+  clear: ToolbarAction[]
 }
 
 const toolbarGroups = computed<ToolbarGroups>(() => {
@@ -161,7 +145,17 @@ const toolbarGroups = computed<ToolbarGroups>(() => {
         run: () => chain().toggleBlockquote().run(),
       },
     ],
-    link: [{ label: 'Link', icon: LinkIcon, active: linkOpen.value, run: openLink }],
+    insert: [
+      { label: 'Link', icon: LinkIcon, active: linkOpen.value, run: openLink },
+      { label: 'Add image', icon: Image, run: () => fileInput.value?.click() },
+    ],
+    clear: [
+      {
+        label: 'Clear formatting',
+        icon: Eraser,
+        run: () => chain().unsetAllMarks().clearNodes().run(),
+      },
+    ],
   }
 })
 
@@ -187,26 +181,6 @@ function setTextStyle(event: Event): void {
     default:
       chain.setParagraph().run()
   }
-}
-
-function toggleMore(): void {
-  moreOpen.value = !moreOpen.value
-  if (moreOpen.value) linkOpen.value = false
-}
-
-function closeMore(returnFocus: boolean): void {
-  moreOpen.value = false
-  if (returnFocus) moreToggle.value?.focus()
-}
-
-function clearFormatting(): void {
-  props.editor.chain().focus().unsetAllMarks().clearNodes().run()
-  closeMore(false)
-}
-
-function triggerAddImage(): void {
-  fileInput.value?.click()
-  closeMore(false)
 }
 
 async function handleFiles(event: Event): Promise<void> {
@@ -308,7 +282,12 @@ function applyLink(): void {
         <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
 
         <template
-          v-for="(group, index) in [toolbarGroups.marks, toolbarGroups.lists, toolbarGroups.link]"
+          v-for="(group, index) in [
+            toolbarGroups.marks,
+            toolbarGroups.lists,
+            toolbarGroups.insert,
+            toolbarGroups.clear,
+          ]"
           :key="index"
         >
           <span
@@ -333,63 +312,6 @@ function applyLink(): void {
             <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />
           </button>
         </template>
-
-        <span aria-hidden="true" class="mx-1 h-4 w-px bg-[var(--color-border)]" />
-
-        <!--
-          The overflow menu: rarely-reached actions, and where a future addition to this toolbar
-          belongs instead of another button crowding the row above. A disclosure, not a
-          `menu`/`menuitem` widget — those roles promise arrow-key navigation this doesn't
-          implement, so plain, independently-tabbable buttons in a revealed panel are the honest
-          a11y choice.
-        -->
-        <div class="relative">
-          <button
-            ref="moreToggle"
-            type="button"
-            class="rounded p-1.5 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40"
-            :class="{ 'bg-[var(--color-surface)] text-[var(--color-accent)]': moreOpen }"
-            data-toolbar-control
-            :aria-expanded="moreOpen"
-            :aria-controls="`${id}-more-menu`"
-            aria-label="More formatting actions"
-            title="More formatting actions"
-            :disabled="disabled"
-            @mousedown.prevent
-            @click="toggleMore"
-            @keydown.escape="closeMore(true)"
-          >
-            <MoreHorizontal class="h-4 w-4" aria-hidden="true" />
-          </button>
-          <div
-            v-if="moreOpen"
-            :id="`${id}-more-menu`"
-            ref="morePanel"
-            class="absolute left-0 top-full z-10 mt-1 min-w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md"
-            @keydown.escape="closeMore(true)"
-          >
-            <button
-              type="button"
-              class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-bg-muted)] disabled:cursor-not-allowed disabled:opacity-40"
-              :disabled="disabled"
-              @mousedown.prevent
-              @click="clearFormatting"
-            >
-              <Eraser class="h-4 w-4" aria-hidden="true" />
-              Clear formatting
-            </button>
-            <button
-              type="button"
-              class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-bg-muted)] disabled:cursor-not-allowed disabled:opacity-40"
-              :disabled="disabled"
-              @mousedown.prevent
-              @click="triggerAddImage"
-            >
-              <Image class="h-4 w-4" aria-hidden="true" />
-              Add image
-            </button>
-          </div>
-        </div>
 
         <!-- Opens the file picker for Add image, its only way in, so it's hidden from everyone. -->
         <input

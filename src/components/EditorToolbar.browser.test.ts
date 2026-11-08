@@ -89,17 +89,17 @@ describe('EditorToolbar (browser)', () => {
   it('moves between its controls on the arrow keys, Home and End, past disabled ones', async () => {
     const { screen } = mountToolbar()
     const textStyle = screen.getByRole('combobox', { name: 'Text style' })
-    const more = screen.getByRole('button', { name: 'More formatting actions' })
+    const clear = screen.getByRole('button', { name: 'Clear formatting' })
 
     await screen.getByRole('textbox', { name: 'Title' }).click()
     await userEvent.keyboard('{Tab}{ArrowLeft}')
-    await expect.element(more).toHaveFocus()
+    await expect.element(clear).toHaveFocus()
     await userEvent.keyboard('{ArrowRight}')
     await expect.element(textStyle).toHaveFocus()
     await userEvent.keyboard('{ArrowRight}')
     await expect.element(screen.getByRole('button', { name: 'Bold' })).toHaveFocus()
     await userEvent.keyboard('{End}')
-    await expect.element(more).toHaveFocus()
+    await expect.element(clear).toHaveFocus()
     await userEvent.keyboard('{Home}')
     await expect.element(textStyle).toHaveFocus()
     // Arrowed onto and off of, never changed.
@@ -187,19 +187,6 @@ describe('EditorToolbar (browser)', () => {
       .toHaveAttribute('href', 'https://example.com/trail')
   })
 
-  it('closes More on Escape, with focus back on its toggle', async () => {
-    const { screen } = mountToolbar()
-    const more = screen.getByRole('button', { name: 'More formatting actions' })
-
-    await screen.getByRole('textbox', { name: 'Title' }).click()
-    await userEvent.keyboard('{Tab}{End}{Enter}')
-    await expect.element(screen.getByRole('button', { name: 'Clear formatting' })).toBeVisible()
-    await userEvent.keyboard('{Tab}{Escape}')
-
-    await expect.element(more).toHaveAttribute('aria-expanded', 'false')
-    await expect.element(more).toHaveFocus()
-  })
-
   it('clears formatting but leaves an anchor and its wording', async () => {
     // The guard would refuse the whole clear had it changed the anchor, so the bold beside it
     // going shows the anchor's marks were never touched.
@@ -229,7 +216,6 @@ describe('EditorToolbar (browser)', () => {
     body.element().focus()
     selectTextRange(body.element(), 0, 24)
 
-    await screen.getByRole('button', { name: 'More formatting actions' }).click()
     await screen.getByRole('button', { name: 'Clear formatting' }).click()
 
     expect(editor.getHTML()).not.toContain('<strong>')
@@ -242,7 +228,7 @@ describe('EditorToolbar (browser)', () => {
     const { screen } = mountToolbar(plainTextDocument(''), { disabled: true })
     const buttons = screen.getByRole('button').all()
 
-    expect(buttons).toHaveLength(11)
+    expect(buttons).toHaveLength(12)
     for (const button of buttons) await expect.element(button).toBeDisabled()
     await expect.element(screen.getByRole('combobox', { name: 'Text style' })).toBeDisabled()
   })

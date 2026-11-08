@@ -93,13 +93,13 @@ describe('EditorToolbar', () => {
     cy.findByRole('textbox', { name: 'Title' }).click()
     cy.press(Cypress.Keyboard.Keys.TAB)
     cy.press(Cypress.Keyboard.Keys.LEFT)
-    cy.findByRole('button', { name: 'More formatting actions' }).should('have.focus')
+    cy.findByRole('button', { name: 'Clear formatting' }).should('have.focus')
     cy.press(Cypress.Keyboard.Keys.RIGHT)
     cy.findByRole('combobox', { name: 'Text style' }).should('have.focus')
     cy.press(Cypress.Keyboard.Keys.RIGHT)
     cy.findByRole('button', { name: 'Bold' }).should('have.focus')
     cy.press(Cypress.Keyboard.Keys.END)
-    cy.findByRole('button', { name: 'More formatting actions' }).should('have.focus')
+    cy.findByRole('button', { name: 'Clear formatting' }).should('have.focus')
     cy.press(Cypress.Keyboard.Keys.HOME)
     // Arrowed onto and off of, never changed.
     cy.findByRole('combobox', { name: 'Text style' })
@@ -190,23 +190,6 @@ describe('EditorToolbar', () => {
     )
   })
 
-  it('closes More on Escape, with focus back on its toggle', () => {
-    mountToolbar()
-
-    cy.findByRole('textbox', { name: 'Title' }).click()
-    cy.press(Cypress.Keyboard.Keys.TAB)
-    cy.press(Cypress.Keyboard.Keys.END)
-    // `cy.press` sends Enter without the keypress that activates a button.
-    cy.findByRole('button', { name: 'More formatting actions' }).should('have.focus').click()
-    cy.findByRole('button', { name: 'Clear formatting' }).should('be.visible')
-    cy.press(Cypress.Keyboard.Keys.TAB)
-    cy.press(Cypress.Keyboard.Keys.ESC)
-
-    cy.findByRole('button', { name: 'More formatting actions' })
-      .should('have.attr', 'aria-expanded', 'false')
-      .and('have.focus')
-  })
-
   it('clears formatting but leaves an anchor and its wording', () => {
     // The guard would refuse the whole clear had it changed the anchor, so the bold beside it
     // going shows the anchor's marks were never touched.
@@ -236,7 +219,6 @@ describe('EditorToolbar', () => {
       .focus()
       .then(($body) => selectTextRange($body[0]!, 0, 24))
 
-    cy.findByRole('button', { name: 'More formatting actions' }).click()
     cy.findByRole('button', { name: 'Clear formatting' }).click()
 
     cy.wrap(editor).invoke('getHTML').should('not.contain', '<strong>')
@@ -253,7 +235,7 @@ describe('EditorToolbar', () => {
     mountToolbar(plainTextDocument(''), { disabled: true })
 
     cy.findAllByRole('button')
-      .should('have.length', 11)
+      .should('have.length', 12)
       .each(($button) => {
         cy.wrap($button).should('be.disabled')
       })

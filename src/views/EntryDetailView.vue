@@ -94,10 +94,19 @@ const layoutWidth = useLayoutWidth()
  * thing twice. The date is the half every entry has, and it stays put — a title can be revised away
  * and the opening words rewritten, but when a record was made does not move.
  */
-const heading = computed(() => {
+const entryHeading = computed(() => {
   const entry = aggregated.value
   if (!entry) return 'Entry detail'
   return entry.title || formatDateline(entry.created_at)
+})
+
+const composing = computed(() => revisionSession.isOpen || relatedSession.isOpen)
+
+/** The page's heading: the entry's while reading, the task while composing, so a title shows once. */
+const heading = computed(() => {
+  if (revisionSession.isOpen) return 'Revise entry'
+  if (relatedSession.isOpen) return 'Create related entry'
+  return entryHeading.value
 })
 
 const versionLabel = computed(() => {
@@ -348,15 +357,14 @@ onBeforeUnmount(() => {
             <!-- An untitled entry's dateline is muted and unbolded, so it never reads as a title. -->
             <h1
               class="min-w-0 flex-1 basis-60 break-words text-xl"
-              :class="aggregated.title ? 'font-semibold' : 'text-[var(--color-text-muted)]'"
+              :class="
+                composing || aggregated.title ? 'font-semibold' : 'text-[var(--color-text-muted)]'
+              "
             >
               {{ heading }}
             </h1>
 
-            <div
-              v-if="!revisionSession.isOpen && !relatedSession.isOpen"
-              class="flex flex-wrap gap-2"
-            >
+            <div v-if="!composing" class="flex flex-wrap gap-2">
               <button
                 v-if="outstandingDraft"
                 type="button"
@@ -379,7 +387,13 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <p v-if="metaLine" class="mt-1 text-sm text-[var(--color-text-muted)]">{{ metaLine }}</p>
+          <!-- Beside a related entry, it moves into the parent's column. -->
+          <p
+            v-if="metaLine && !relatedSession.isOpen"
+            class="mt-1 text-sm text-[var(--color-text-muted)]"
+          >
+            {{ metaLine }}
+          </p>
         </header>
 
         <template v-if="revisionSession.isOpen">
@@ -399,6 +413,9 @@ onBeforeUnmount(() => {
         <template v-else-if="relatedSession.isOpen">
           <RelatedEntryComposer
             :session="relatedSession"
+            :parent-heading="entryHeading"
+            :parent-titled="!!aggregated.title"
+            :parent-meta-line="metaLine"
             @save="saveRelatedEntry"
             @discard="relatedSession.discard()"
           />

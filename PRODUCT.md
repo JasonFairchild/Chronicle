@@ -67,7 +67,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 
 ### 4.3 Reading an entry
 
-- Shows the title, the creation date, and the current text (the latest version), with whichever details were given (§4.1) below it, as when writing. An untitled entry is headed by the day it was written, set as a dateline ("Wed, Oct 7, 2026") rather than a title. The text is for reading: no editing controls appear until Revise.
+- Shows the title, the creation date, and the current text (the latest version), with whichever details were given (§4.1) below it, as when writing. An untitled entry is headed by the day it was written, set as a dateline ("Wed, Oct 7, 2026") rather than a title. The text is for reading: no editing controls appear until Revise. While a related entry or a revision is being written (§4.4, §4.5), the task heads the page instead, so the title is never shown twice.
 - A revised entry says which version you're looking at and how many exist.
 - Attached images appear where they were placed.
 - Related entries and connections attached to it are listed beneath, each showing what part of the entry it points at. Immediate ones are shown; deeper ones are indicated, not expanded.
@@ -77,7 +77,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 ### 4.4 Writing a related entry
 
 - An entry offers **Create related entry** and **Revise entry**: one way to say something about an entry, whether or not it points at a passage.
-- Creating a related entry opens two columns: the entry being written about on the left, the new entry (with the same optional title and details as §4.1) on the right. This anchoring mode never mixes with revising the entry's own text (ENTRY_MODEL.md, "Two creation experiences, kept separate").
+- Creating a related entry opens two columns under the heading "Create related entry": the entry being written about on the left, headed as its own page heads it (its title or dateline, then its creation time and version), with how to mark it below its text; the new entry (with the same optional title and details as §4.1) on the right. This anchoring mode never mixes with revising the entry's own text (ENTRY_MODEL.md, "Two creation experiences, kept separate").
 - On the left, select a passage and a small menu offers **Highlight** or **Strike** (Ctrl+Alt+H / Ctrl+Alt+S); or place the cursor and type to propose wording right where it would go. Nothing else can change the entry's text from here.
 - Marking is optional. A related entry that marks nothing is about the entry as a whole, and the entry is not revised at all.
 - Wording attaches to a highlight or a strike alike, renders inline right after its passage, and reads as proposed from its colored underline, as track changes marks an insertion. It reads as part of the entry's text, so the entry's preview includes it. The underline runs under spaces, so wording that's only a space still shows; spacing around wording is whatever the author typed. A proofreader's-markup presentation (wording raised above the line, a caret on the baseline) exists but is dormant (`ANCHOR_MARKUP_MODE`): long wording overlapped trailing text on a packed line.
@@ -92,7 +92,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 
 ### 4.5 Revising an entry
 
-- **Revise entry** opens the entry's current text and title for editing, as a draft. The entry is untouched until the revision is saved, and discarding leaves no trace.
+- **Revise entry** opens the entry's current text and title for editing, as a draft, under the heading "Revise entry"; the title shows only in its field. The entry is untouched until the revision is saved, and discarding leaves no trace.
 - Saving appends a new version; the old one stays and the version count goes up. Images are kept.
 - Renaming, or clearing the title, is an ordinary revision; old names stay with their versions. So is a change of formatting alone, such as bolding a passage.
 - **Anchored text is locked.** Existing anchors show while you edit, but the text under one, its wording, its kind, and their formatting, inline or block (bold, a heading or list over its paragraph), can't change. Deleting an anchor whole is refused too; typing against its outer edges is still fine, and Clear formatting leaves anchors alone, since an anchor isn't formatting. A refused edit silently does nothing. An anchor is removed only by deliberately revising the related entry that placed it (§5.4), so it never goes missing by accident. The lock exists to enforce that order, so history only moves forward, not to make removing an anchor hard.

@@ -48,21 +48,37 @@ describe('EntryDetailView', () => {
     })
   })
 
-  it('heads an untitled entry with the day it was written, and its time below', () => {
+  it('heads an untitled entry with its day and time, on its page or beside a related entry', () => {
     cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+      const createdAt = `Created at ${formatTime(parent.created_at)}`
       mountDetail(parent.id)
 
       cy.findByRole('heading', { name: formatDateline(parent.created_at) }).should('be.visible')
-      cy.findByText(`Created at ${formatTime(parent.created_at)}`).should('be.visible')
+      cy.findByText(createdAt).should('be.visible')
+
+      cy.findByRole('button', { name: 'Create related entry' }).click()
+
+      cy.findByRole('heading', { level: 1, name: 'Create related entry' }).should('be.visible')
+      cy.findByRole('region', { name: 'This entry' }).within(() => {
+        cy.findByText(formatDateline(parent.created_at)).should('be.visible')
+        cy.findByText(createdAt).should('be.visible')
+      })
+      cy.findAllByText(createdAt).should('have.length', 1)
     })
   })
 
-  it('shows the title once, as the page’s heading', () => {
+  it('shows the title once, heading the page or in the Title field while revising', () => {
     cy.then(() => seed({ content: PARENT_CONTENT, title: 'The Tahoe trip' })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('heading', { name: 'The Tahoe trip' }).should('be.visible')
       cy.findAllByText('The Tahoe trip').should('have.length', 1)
+
+      cy.findByRole('button', { name: 'Revise entry' }).click()
+
+      cy.findByRole('heading', { level: 1, name: 'Revise entry' }).should('be.visible')
+      cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'The Tahoe trip')
+      cy.findByText('The Tahoe trip').should('not.exist')
     })
   })
 
@@ -580,20 +596,6 @@ describe('EntryDetailView', () => {
 
       cy.findByRole('button', { name: 'Resume draft' }).should('be.visible')
       cy.findByRole('button', { name: 'Revise entry' }).should('not.exist')
-    })
-  })
-
-  it('shows the parent’s own title in the anchor-mode composer, not just its body', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT, title: 'The Tahoe trip' })).then((parent) => {
-      mountDetail(parent.id)
-
-      cy.findByRole('button', { name: 'Create related entry' }).click()
-
-      // The page heading carries the parent's title too, so this looks only inside the composer's
-      // own half, which shows a title only because the session reads `parentTitle` off the entry.
-      cy.findByRole('region', { name: 'This entry' })
-        .findByText('The Tahoe trip')
-        .should('be.visible')
     })
   })
 

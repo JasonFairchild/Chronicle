@@ -54,11 +54,6 @@ export function useDraftSession() {
    */
   const parentContent = ref('')
   /**
-   * The parent's own title, for display beside its document. Not stored in the draft: anchor mode
-   * never changes it, so it is read off the entry. Never editable from here.
-   */
-  const parentTitle = ref<string | null>(null)
-  /**
    * The document of the version `Draft.parent.base_version_id` names, never reassigned while the
    * session runs. Seeds `DocumentEditor`'s `anchor-base-content` on a resume, so an anchor placed
    * before a reload still reads as this session's own rather than as an earlier related entry's.
@@ -131,7 +126,7 @@ export function useDraftSession() {
 
   /**
    * Mirrors what a draft stores into the refs an editor binds to, whether it is beginning or
-   * resuming. The parent's title and base are read off entries, so whoever opens it sets those.
+   * resuming. The parent's base is read off entries, so whoever opens it sets that.
    */
   function mirror(draft: DraftSnapshot): void {
     kind.value = draft.kind
@@ -154,16 +149,15 @@ export function useDraftSession() {
     const id = drafts.beginDraft(start)
 
     mirror(drafts.currentDraft(id)!)
-    parentTitle.value = start.kind === 'new_related' ? start.parent.title : null
     parentBaseContent.value = start.kind === 'new_related' ? start.parent.content : ''
     stale.value = false
     openAs(id)
   }
 
   /**
-   * Mirrors a stored draft, reading the entry it could revise: for its title, which anchor mode
-   * never changes, and to say at once if it has moved on, rather than only when Save is refused. A
-   * related entry's draft also reads its parent's base version, which may no longer be current.
+   * Mirrors a stored draft, reading the entry it could revise to say at once if it has moved on,
+   * rather than only when Save is refused. A related entry's draft also reads its parent's base
+   * version, which may no longer be current.
    */
   async function mirrorReopened(draft: DraftSnapshot): Promise<void> {
     const [revises] = versionsRevisedBy(draft)
@@ -173,7 +167,6 @@ export function useDraftSession() {
     ])
 
     mirror(draft)
-    parentTitle.value = draft.kind === 'new_related' ? (parent?.title ?? null) : null
     parentBaseContent.value = base?.content ?? ''
     stale.value = parent !== null && currentVersionId(parent) !== revises?.base_version_id
   }
@@ -350,7 +343,6 @@ export function useDraftSession() {
     content.value = ''
     fields.value = fieldsOf(newDraftEntry())
     parentContent.value = ''
-    parentTitle.value = null
     parentBaseContent.value = ''
     saving.value = false
     kind.value = null
@@ -366,7 +358,6 @@ export function useDraftSession() {
     content,
     fields,
     parentContent,
-    parentTitle,
     parentBaseContent,
     saving,
     kind,

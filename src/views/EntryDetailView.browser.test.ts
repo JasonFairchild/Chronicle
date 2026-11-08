@@ -43,20 +43,31 @@ describe('EntryDetailView (browser)', () => {
     await expect.element(screen.getByText(PARENT_TEXT)).toBeVisible()
   })
 
-  it('heads an untitled entry with the day it was written, and its time below', async () => {
+  it('heads an untitled entry with its day and time, on its page or beside a related entry', async () => {
     const parent = await entryRepository.create(createEntryInput({ content: PARENT_CONTENT }))
+    const createdAt = `Created at ${formatTime(parent.created_at)}`
 
     const screen = await mountDetail(parent.id)
 
     await expect
       .element(screen.getByRole('heading', { name: formatDateline(parent.created_at) }))
       .toBeVisible()
+    await expect.element(screen.getByText(createdAt, { exact: true })).toBeVisible()
+
+    await screen.getByRole('button', { name: 'Create related entry' }).click()
+
     await expect
-      .element(screen.getByText(`Created at ${formatTime(parent.created_at)}`, { exact: true }))
+      .element(screen.getByRole('heading', { level: 1, name: 'Create related entry' }))
       .toBeVisible()
+    const column = screen.getByRole('region', { name: 'This entry' })
+    await expect
+      .element(column.getByText(formatDateline(parent.created_at), { exact: true }))
+      .toBeVisible()
+    await expect.element(column.getByText(createdAt, { exact: true })).toBeVisible()
+    expect(screen.getByText(createdAt, { exact: true }).elements()).toHaveLength(1)
   })
 
-  it('shows the title once, as the page’s heading', async () => {
+  it('shows the title once, heading the page or in the Title field while revising', async () => {
     const parent = await entryRepository.create(
       createEntryInput({ content: PARENT_CONTENT, title: 'The Tahoe trip' }),
     )
@@ -65,6 +76,16 @@ describe('EntryDetailView (browser)', () => {
 
     await expect.element(screen.getByRole('heading', { name: 'The Tahoe trip' })).toBeVisible()
     expect(screen.getByText('The Tahoe trip', { exact: true }).elements()).toHaveLength(1)
+
+    await screen.getByRole('button', { name: 'Revise entry' }).click()
+
+    await expect
+      .element(screen.getByRole('heading', { level: 1, name: 'Revise entry' }))
+      .toBeVisible()
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Title' }))
+      .toHaveValue('The Tahoe trip')
+    expect(screen.getByText('The Tahoe trip', { exact: true }).query()).toBeNull()
   })
 
   it('shows a related entry separately rather than spliced into the parent', async () => {
@@ -593,21 +614,6 @@ describe('EntryDetailView (browser)', () => {
     await expect
       .element(screen.getByRole('button', { name: 'Revise entry' }))
       .not.toBeInTheDocument()
-  })
-
-  it('shows the parent’s own title in the anchor-mode composer, not just its body', async () => {
-    const parent = await entryRepository.create(
-      createEntryInput({ content: PARENT_CONTENT, title: 'The Tahoe trip' }),
-    )
-
-    const screen = await mountDetail(parent.id)
-    await screen.getByRole('button', { name: 'Create related entry' }).click()
-
-    // The page heading carries the parent's title too, so this looks only inside the composer's
-    // own half, which shows a title only because the session reads `parentTitle` off the entry.
-    await expect
-      .element(screen.getByRole('region', { name: 'This entry' }).getByText('The Tahoe trip'))
-      .toBeVisible()
   })
 
   it('keeps the text under an anchor as it was in a revision, and saves the rest', async () => {

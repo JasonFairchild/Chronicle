@@ -1,4 +1,4 @@
-import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import DocumentEditor from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
 import { collectMediaRefs, docToPlainText, MEDIA_NODE } from '@/domain/entryDocument'
 import { TraceRecorder } from '@/domain/traceRecorder'
@@ -7,17 +7,18 @@ import { mediaRepository } from '@/repositories'
 import { withAnchorMark, withAnchorWording } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { selectTextRange } from '@/testing/selectTextRange'
+import type { DraftChange } from '@/types/draft'
 
 /** The change this component last reported, which is its whole contract with a parent. */
-function lastChange(stub: unknown): EditorChange {
-  const calls = (stub as { args: [EditorChange][] }).args
+function lastChange(stub: unknown): DraftChange {
+  const calls = (stub as { args: [DraftChange][] }).args
   return calls[calls.length - 1]![0]
 }
 
 /** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
 function replayAll(base: string, stub: unknown) {
   const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z')
-  for (const [change] of (stub as { args: [EditorChange][] }).args) recorder.record(change)
+  for (const [change] of (stub as { args: [DraftChange][] }).args) recorder.record(change)
   const { events } = recorder.seal()!
   return documentsAt({ base_content: base, events }, [events.length])
 }
@@ -286,7 +287,7 @@ describe('DocumentEditor', () => {
 
   describe('anchor mode', () => {
     function mountAnchorEditor(
-      onChange: (change: EditorChange) => void,
+      onChange: (change: DraftChange) => void,
       content?: string,
       props: Record<string, unknown> = {},
     ) {

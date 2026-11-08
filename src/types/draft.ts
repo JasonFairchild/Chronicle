@@ -1,5 +1,17 @@
-import type { AuthoringEvent, VersionedFields } from './entry'
+import type { AuthoringEvent, ChangeSignals, VersionedFields } from './entry'
 import { emptyEntryDetails, versionedFieldsOf } from './entry'
+
+/**
+ * One editor change, from the editor's emit to the draft buffer. `ChangeSignals` are required here,
+ * not optional as they are on `AuthoringChange`: the editor is the one site actually producing
+ * them, so the compiler should catch a call that forgets one when a signal is added.
+ */
+export interface DraftChange extends ChangeSignals {
+  /** The document's body as it now stands, serialized the way an entry stores it. */
+  content: string
+  /** Serialized ProseMirror steps for this change, in order. The session never interprets them. */
+  steps: unknown[]
+}
 
 /** One document a session is writing: where it started and where it is. */
 export interface DraftDocument {

@@ -8,6 +8,7 @@ import { draftRepository } from '@/repositories'
 import { DraftConflictError } from '@/repositories/draftRepository'
 import {
   type Draft,
+  type DraftChange,
   type DraftDocument,
   type DraftFields,
   draftFieldsOf,
@@ -17,12 +18,7 @@ import {
   versionsRevisedBy,
   withEvents,
 } from '@/types/draft'
-import {
-  type AggregatedEntry,
-  type AuthoringEvent,
-  type ChangeSignals,
-  type Entry,
-} from '@/types/entry'
+import { type AggregatedEntry, type AuthoringEvent, type Entry } from '@/types/entry'
 import { newId, newTimestamp } from '@/utils/id'
 
 import { useEntriesStore } from './entriesStore'
@@ -33,14 +29,6 @@ import { useEntriesStore } from './entriesStore'
  * marks: flushing is about never losing work.
  */
 export const DRAFT_FLUSH_MS = 300
-
-/** What one editor change tells the buffer. */
-export interface DraftChange extends ChangeSignals {
-  /** The document as it now stands. */
-  content: string
-  /** Serialized ProseMirror steps for this change. The session never interprets them. */
-  steps: unknown[]
-}
 
 /**
  * What a session starts from. Revising or relating to an entry starts from its aggregate, the

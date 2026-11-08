@@ -1,6 +1,5 @@
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
 
-import type { EditorChange } from '@/components/DocumentEditor.vue'
 import { docToPlainText, isBlankDraft, isEmptyDocument } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
 import { currentVersionId } from '@/domain/reconstructEntryState'
@@ -8,6 +7,7 @@ import { DraftConflictError } from '@/repositories/draftRepository'
 import { type BeginDraftInput, DraftUnreadableError, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import {
+  type DraftChange,
   type DraftFields,
   type DraftSnapshot,
   newDraftEntry,
@@ -234,7 +234,7 @@ export function useDraftSession() {
   )
 
   /** Forwards one `DocumentEditor` change into the session. */
-  function handleChange(change: EditorChange): void {
+  function handleChange(change: DraftChange): void {
     if (!sessionId.value) return
 
     content.value = change.content
@@ -252,7 +252,7 @@ export function useDraftSession() {
    * change is passed through — not a hand-picked subset — so the parent's own authoring stream is
    * recorded exactly the way the entry's own is.
    */
-  function handleParentChange(change: EditorChange): void {
+  function handleParentChange(change: DraftChange): void {
     if (!sessionId.value) return
 
     parentContent.value = change.content

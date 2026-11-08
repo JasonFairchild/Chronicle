@@ -70,7 +70,7 @@ flowchart TB
   end
 
   %% write path
-  DE ==>|"@change: EditorChange<br/>content · steps · signals"| EC
+  DE ==>|"@change: DraftChange<br/>content · steps · signals"| EC
   EC ==>|"handleChange<br/>handleFieldsChange"| SES
   DE -->|"anchor mode, the parent:<br/>handleParentChange"| SES
   SES ==>|"recordChange · recordParentChange<br/>recordFields"| DS
@@ -123,7 +123,7 @@ A shape's name says which stage of the flow above it belongs to. An entry passes
 | Stage | What it is | Named | Types |
 | --- | --- | --- | --- |
 | Input | what a caller hands over to create or begin something | `<Verb><Noun>Input`, after the call it feeds | `CreateEntryInput`, `CreateMarkSetInput`, `BeginDraftInput` |
-| Change | one edit, as it passes each layer of the write path | `*Change` | `EditorChange` → `DraftChange` → `AuthoringChange` |
+| Change | one edit, as it passes each layer of the write path | `*Change` | `DraftChange` → `AuthoringChange` |
 | Working | a session's state, rewritten until it's sealed | `Draft*` | `Draft`, `DraftSnapshot`, `DraftDocument`, `DraftFields`, `DraftEvents`; and `AuthoringEvent`, appended until sealing makes the log an `AuthoringTrace` |
 | Sealed | written once, never rewritten | the bare noun | `Entry` with its `AuthoringTrace`; `MarkSet`, which may be deleted but never edited |
 | Derived | computed from sealed rows on read, never stored in this form | for how it's derived, where that's the point: `Aggregated*` is folded from rows, `Resolved*` is a reference looked up as it stands now; otherwise a plain noun, like `EntryVersion` | `AggregatedEntry`, `ResolvedRelatedEntry`, `ResolvedConnection`, `ResolvedAnchor`, `EntryVersion`, `AuthoringMark`; and `MarkFrame`, which a `MarkSet` caches |

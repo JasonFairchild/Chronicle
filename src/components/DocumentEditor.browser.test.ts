@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
-import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import DocumentEditor from '@/components/DocumentEditor.vue'
 import { anchorsPlacedSince, collectAnchors } from '@/domain/anchors'
 import { collectMediaRefs, docToPlainText, MEDIA_NODE } from '@/domain/entryDocument'
 import { TraceRecorder } from '@/domain/traceRecorder'
@@ -11,6 +11,7 @@ import { withAnchorMark, withAnchorWording } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
 import { selectTextRange } from '@/testing/selectTextRange'
+import type { DraftChange } from '@/types/draft'
 
 /** Neither runner has a first-class paste, so a hand-built one goes straight at the document. */
 function paste(editorEl: Element, data: Record<string, string>): void {
@@ -22,7 +23,7 @@ function paste(editorEl: Element, data: Record<string, string>): void {
 }
 
 describe('DocumentEditor (browser)', () => {
-  let changes: EditorChange[]
+  let changes: DraftChange[]
 
   beforeEach(() => {
     changes = []
@@ -32,7 +33,7 @@ describe('DocumentEditor (browser)', () => {
     return renderComponent(DocumentEditor, {
       props: { label: 'New entry', ...props },
       attrs: {
-        onChange: (change: EditorChange) => {
+        onChange: (change: DraftChange) => {
           changes.push(change)
         },
       },
@@ -76,7 +77,7 @@ describe('DocumentEditor (browser)', () => {
     const screen = renderComponent(DocumentEditor, {
       props: { label: 'New entry', disabled: true },
       attrs: {
-        onChange: (change: EditorChange) => {
+        onChange: (change: DraftChange) => {
           changes.push(change)
         },
       },

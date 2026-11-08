@@ -5,7 +5,7 @@ import { collectAnchors } from '@/domain/anchors'
 import { docToPlainText, type EntryDocument } from '@/domain/entryDocument'
 import { entryExtensions } from '@/editor/extensions'
 import { withAnchorWording } from '@/testing/anchorFixtures'
-import { plainTextDocument } from '@/testing/documents'
+import { plainTextDocument, serializeDocument } from '@/testing/documents'
 import { selectTextRange } from '@/testing/selectTextRange'
 
 const TEXT = 'I went to Lake Tahoe with Dad'
@@ -22,7 +22,7 @@ describe('AnchorMenu', () => {
    * The menu over an anchor-mode editor whose session began from `base`, so anchors in `content`
    * that `base` lacks are the session's own.
    */
-  function mountMenu(content: string, base: EntryDocument = plainTextDocument(TEXT)): Editor {
+  function mountMenu(content: string, base = serializeDocument(plainTextDocument(TEXT))): Editor {
     const element = document.createElement('div')
     const editor = new Editor({
       element,
@@ -113,7 +113,7 @@ describe('AnchorMenu', () => {
 
   it('shows nothing at the caret on a sealed anchor', () => {
     const content = withAnchorWording(TEXT, 'sealed-1', 10, 20, 'Donner Lake')
-    mountMenu(content, JSON.parse(content) as EntryDocument)
+    mountMenu(content, content)
 
     select(0, 5)
     cy.findByRole('button', { name: 'Highlight passage' }).should('be.visible')

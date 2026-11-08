@@ -2,10 +2,10 @@
 import { Bookmark } from '@lucide/vue'
 import { ref, useId } from 'vue'
 
-import DocumentEditor, { type EditorChange } from '@/components/DocumentEditor.vue'
+import DocumentEditor from '@/components/DocumentEditor.vue'
 import EntryDetailsFields from '@/components/EntryDetailsFields.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
-import type { DraftFields } from '@/types/draft'
+import type { DraftChange, DraftFields } from '@/types/draft'
 import { formatTime, toErrorMessage } from '@/utils/format'
 
 // The one way an entry is written: its title, its document, then its detail fields, then Discard
@@ -45,7 +45,7 @@ function handleTitleInput(event: Event): void {
   handleFieldsChange({ title: (event.target as HTMLInputElement).value })
 }
 
-function handleChange(change: EditorChange): void {
+function handleChange(change: DraftChange): void {
   error.value = null
   props.session.handleChange(change)
 }

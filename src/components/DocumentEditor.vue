@@ -1,19 +1,3 @@
-<script lang="ts">
-import type { ChangeSignals } from '@/types/entry'
-
-/**
- * One editor change, as the draft buffer records it. `ChangeSignals` are required here, not
- * optional as they are on `AuthoringChange`: this is the one emit site actually producing them, so
- * the compiler should catch a call that forgets one when a signal is added.
- */
-export interface EditorChange extends ChangeSignals {
-  /** The document's body as it now stands, serialized the way an entry stores it. */
-  content: string
-  /** Serialized ProseMirror steps for this change, in order. */
-  steps: unknown[]
-}
-</script>
-
 <script setup lang="ts">
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
@@ -26,6 +10,7 @@ import { type EntryDocument, parseDocument } from '@/domain/entryDocument'
 import { readAnchorAnnouncement } from '@/editor/anchorCommands'
 import { changeSignals } from '@/editor/changeSignals'
 import { entryExtensions } from '@/editor/extensions'
+import type { DraftChange } from '@/types/draft'
 
 const props = withDefaults(
   defineProps<{
@@ -69,7 +54,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  change: [change: EditorChange]
+  change: [change: DraftChange]
 }>()
 
 const media = useMedia()

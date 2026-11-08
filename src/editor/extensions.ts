@@ -12,13 +12,7 @@ import { Fragment, type Node as ProseMirrorNode, Slice } from '@tiptap/pm/model'
 import { Plugin } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
 
-import {
-  ANCHOR_MARK,
-  ANCHOR_WORDING_MARK,
-  type EntryDocument,
-  MEDIA_NODE,
-  parseDocument,
-} from '@/domain/entryDocument'
+import { ANCHOR_MARK, ANCHOR_WORDING_MARK, MEDIA_NODE, parseDocument } from '@/domain/entryDocument'
 
 import {
   anchorModeDecorations,
@@ -178,7 +172,7 @@ function withoutAnchorMarks(fragment: Fragment): Fragment {
  */
 const AnchorGuard = Extension.create<{
   anchorMode: boolean
-  baseContent: string | EntryDocument | undefined
+  baseContent: string | undefined
 }>({
   name: 'anchorGuard',
   addOptions() {
@@ -248,7 +242,7 @@ export interface EntryExtensionOptions {
    * `Draft.parent.base_version_id` names — so the anchors placed since are this session's own. See
    * AUTHORING.md, "Drafts".
    */
-  baseContent?: string | EntryDocument
+  baseContent?: string
 }
 
 export function entryExtensions({

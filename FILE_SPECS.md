@@ -23,9 +23,8 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - An owner test that is part session behavior and part wiring is shrunk to the wiring: which session method a control calls, what the owner renders from the session, where it navigates, and the order its own handler does things in.
   - A test is deleted outright only when what remains is already owned elsewhere.
   - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "A repository read doesn't retry").
-- **Editor files wait for Track B.** `extensions.ts` and `anchorCommands.ts` get their specs as Track B reviews them. `anchorGuard.ts` and `AnchorMenu.vue` already have theirs. DocumentEditor's specs stay as they are until then. What was learned, for Track B unit 2 in CODE_REVIEW.md:
+- **Editor files wait for Track B.** `extensions.ts` and `anchorCommands.ts` get their specs as Track B reviews them. `anchorIndex.ts`, `anchorGuard.ts` and `AnchorMenu.vue` already have theirs. DocumentEditor's specs stay as they are until then. What was learned, for Track B unit 2 in CODE_REVIEW.md:
   - Browser project alone, with a bare TipTap `Editor`.
-  - `anchorSpans` is pure and could run in node over `replayDocument`, as the guard's spec does over a bare `EditorState`.
   - Unproven today: `excludes: ''`, `Mod-Alt-s`, and the live region.
   - Rejected for now: a third Vitest project on happy-dom/jsdom. The browser project already runs these for real.
 - **App.vue: App.flow is its spec.** `useTabLifecycle` gets its own spec for the event mapping. App.flow keeps one test per direction as App's wiring.
@@ -57,7 +56,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - `src/testing/`, `*.d.ts`, `main.css`: not app code.
   - `App.vue`: App.flow.
   - The four editor files: until Track B.
-- **NewConnectionView is out of scope.** Item 2 removes it. Its specs aren't trimmed. New specs include `new_connection` only where a function switches on kind, for item 2 to delete.
+- **NewConnectionView is out of scope.** Item 3 removes it. Its specs aren't trimmed. New specs include `new_connection` only where a function switches on kind, for item 3 to delete.
 
 ## Mechanics found so far
 

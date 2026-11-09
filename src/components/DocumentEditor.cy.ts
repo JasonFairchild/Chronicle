@@ -705,7 +705,7 @@ describe('DocumentEditor', () => {
 
       for (const [how, from, to] of [
         ['selected exactly', 10, 20],
-        ['overlapped at all', 15, 25],
+        ['overlapped past its end', 25, 36],
       ] as const) {
         it(`returns to a placed anchor ${how}, rather than changing its kind or placing a second`, () => {
           const onChange = cy.stub().as('change')
@@ -723,6 +723,27 @@ describe('DocumentEditor', () => {
           })
         })
       }
+
+      it('places a new anchor on a selection that only meets a placed one’s edge', () => {
+        const onChange = cy.stub().as('change')
+        mountAnchorEditor(onChange)
+        placeHighlightWithWording()
+
+        // " with" (31-36) starts where the placed anchor's wording ends.
+        select(31, 36)
+        cy.findByRole('button', { name: 'Strike passage' }).click()
+
+        cy.get('@change').then((stub) => {
+          const anchors = collectAnchors(lastChange(stub).content)
+          expect(anchors).to.have.length(2)
+          expect(anchors[0]).to.include({
+            kind: 'comment',
+            quote: 'Lake Tahoe',
+            insertion: 'Donner Lake',
+          })
+          expect(anchors[1]).to.include({ kind: 'strike', quote: 'with' })
+        })
+      })
 
       it('lets a resumed session keep editing an anchor it placed before the resume', () => {
         // Stands for a draft resumed after a reload: "resumed-1" was placed and persisted before

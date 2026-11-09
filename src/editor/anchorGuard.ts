@@ -5,7 +5,8 @@ import { ReplaceStep, type Step } from '@tiptap/pm/transform'
 
 import { ANCHOR_WORDING_MARK } from '@/domain/entryDocument'
 
-import { ANCHOR_EDIT_META, anchorSpans } from './anchorCommands'
+import { ANCHOR_EDIT_META } from './anchorCommands'
+import { anchorIndex } from './anchorIndex'
 
 // The guard on every editor's document (ENTRY_MODEL.md, "Two creation experiences"): a related
 // entry never changes its parent's words, and a sealed anchor never changes at all. Pure, so a bare
@@ -24,13 +25,16 @@ export type SealedAnchors = ReadonlyMap<string, Slice>
  * Every anchor in `doc`, as the editor must keep it. A revision seals the document it opens with;
  * anchor mode seals its base, so the session's own anchors are the ones not in here.
  *
- * An anchor runs from its first piece to its last (`anchorSpans`), so a passage and its wording are
+ * An anchor runs from its first piece to its last (`anchorIndex`), so a passage and its wording are
  * one stretch, and typing between them changes it. `slice(…, true)` keeps the blocks around the
  * stretch, so a heading or list over its paragraph changes it too.
  */
 export function sealAnchors(doc: ProseMirrorNode): SealedAnchors {
   return new Map(
-    anchorSpans(doc).map((span) => [span.anchor_id, doc.slice(span.from, span.to, true)]),
+    [...anchorIndex(doc).values()].map((anchor) => [
+      anchor.anchorId,
+      doc.slice(anchor.from, anchor.to, true),
+    ]),
   )
 }
 
@@ -41,10 +45,10 @@ export function sealAnchors(doc: ProseMirrorNode): SealedAnchors {
 function keepsSealed(doc: ProseMirrorNode, sealed: SealedAnchors): boolean {
   if (sealed.size === 0) return true
 
-  const spans = new Map(anchorSpans(doc).map((span) => [span.anchor_id, span]))
+  const anchors = anchorIndex(doc)
   return [...sealed].every(([anchorId, was]) => {
-    const span = spans.get(anchorId)
-    return span !== undefined && doc.slice(span.from, span.to, true).eq(was)
+    const anchor = anchors.get(anchorId)
+    return anchor !== undefined && doc.slice(anchor.from, anchor.to, true).eq(was)
   })
 }
 

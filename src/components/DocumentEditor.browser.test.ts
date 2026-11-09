@@ -627,7 +627,7 @@ describe('DocumentEditor (browser)', () => {
 
       it.each([
         ['selected exactly', 10, 20],
-        ['overlapped at all', 15, 25],
+        ['overlapped past its end', 25, 36],
       ] as const)(
         'returns to a placed anchor %s, rather than changing its kind or placing a second',
         async (_how, from, to) => {
@@ -642,6 +642,20 @@ describe('DocumentEditor (browser)', () => {
           expect(anchors).toMatchObject([{ kind: 'comment', insertion: 'Donner Lake!' }])
         },
       )
+
+      it('places a new anchor on a selection that only meets a placed one’s edge', async () => {
+        const screen = mountAnchorEditor()
+        const editorLocator = await placeHighlightWithWording(screen)
+
+        // " with" (31-36) starts where the placed anchor's wording ends.
+        selectTextRange(editorLocator.element(), 31, 36)
+        await screen.getByRole('button', { name: 'Strike passage' }).click()
+
+        expect(collectAnchors(changes[changes.length - 1]!.content)).toMatchObject([
+          { kind: 'comment', quote: 'Lake Tahoe', insertion: 'Donner Lake' },
+          { kind: 'strike', quote: 'with' },
+        ])
+      })
 
       it('lets a resumed session keep editing an anchor it placed before the resume', async () => {
         // Stands for a draft resumed after a reload: "resumed-1" was placed and persisted before

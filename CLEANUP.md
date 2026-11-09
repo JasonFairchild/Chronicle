@@ -1,10 +1,10 @@
 # Cleanup after simplifying
 
-Status: planned 2026-11-07. Commits 1–2 done.
+Status: planned 2026-11-07. Commits 1–2 done; commit 3 written, not yet committed.
 
 ## Context
 
-A sweep after the simplify work turned up a handful of changes too small for a plan each but too many for one commit. Four of them are left, each its own commit. The More menu's removal and the doc fixes from that sweep land before this plan. Deleted when done; anything lasting goes into the docs in the commit that makes it.
+A sweep after the simplify work turned up a handful of changes too small for a plan each but too many for one commit. Five of them are left, each its own commit. The More menu's removal and the doc fixes from that sweep land before this plan. Deleted when done; anything lasting goes into the docs in the commit that makes it.
 
 ## Decisions
 
@@ -21,25 +21,30 @@ A sweep after the simplify work turned up a handful of changes too small for a p
   - `AnchorRange` leaves the domain, and `anchorRangeOverlapping` is inlined into `markAnchor`, its one caller. Its touching-edge case gets an editor-level test, which nothing has today.
   - Left alone: `markTyped` (it reads only beside the typed range), `markFrames`'s `visibleIn`, the domain's JSON walks, and DocumentEditor's `collectAnchors` for the parked raised-wording mode.
   - Rejected, carried over from CHRONICLE_PLAN.md: a `DecorationSet` of sealed anchors mapped through each change, which sees text move but not marks added. Further, only if a profile shows it: an index per top-level block.
+- **Orphaned anchors go, ahead of CHRONICLE_PLAN.md item 3.** The lock keeps every sealed anchor in its parent's document, and a related entry is sealed after its anchor revision in one `createMany`, so no version viewed lacks an anchor a visible related entry names. The orphan path and the quote saved for it are dead.
+  - `AnchorRef` becomes `{ anchor_id }`, still an object, since connections folded adds the entry whose document it marks.
+  - `resolveAnchors` and `placedAnchors` are then one lookup: each id the document carries, in the order given, skipping any it doesn't. `ResolvedAnchor` and `AnchorStatus` go; `DocumentAnchor` moves to `types/entry.ts`, since it now crosses from the domain to the page.
+  - Also gone: `describeAnchor`'s orphan lines and the page's italic for them.
 - **Specs seed through `createMany`; `create`, `listChildren` and `listConnectionsFor` leave the repository.** App source calls none of them (TESTING.md, "Test the code the app runs").
   - `seedEntry` in `src/testing/`, taking what `createEntryInput` takes, and an optional repository for the contract suites and the Dexie spec. A batch can't refer to its own members' ids, so a tree is still seeded one entry at a time.
   - The contract suite's create cases (round trip, stored copy, every validation case) move onto `createMany`, which gains direct contract coverage it lacked. The `listChildren` and `listConnectionsFor` cases go: revisions left out of related entries and connections from either end are asserted at the fold (`reconstructEntryState.test`), and incoming connections by the `listDescendants` case.
-  - Read-backs move to `listDescendants`, filtered, or `getById`. NewConnectionView's specs are updated too, though connections folded (CHRONICLE_PLAN.md item 2) removes them later.
+  - Read-backs move to `listDescendants`, filtered, or `getById`. NewConnectionView's specs are updated too, though connections folded (CHRONICLE_PLAN.md item 3) removes them later.
 
 ## Commits
 
 1. **One change type, and `baseContent` a string.** `DraftChange` moves to `types/draft.ts` and `EditorChange` goes; DocumentEditor, `useDraftSession`, EntryComposer, the store, `draftFixtures` and DocumentEditor's specs follow. AnchorMenu's specs serialize their base. ARCHITECTURE.md's Change row becomes `DraftChange` → `AuthoringChange`. Verify: `npm run typecheck`, `npm run test -- src/stores/draftsStore.test.ts`; browser and Cypress: the DocumentEditor, AnchorMenu and EntryComposer pairs.
 2. **Task-named headings.** EntryDetailView's `heading` and its class follow the mode; RelatedEntryComposer takes the parent's heading and meta line, moves the instructions below its editor, and uses `useId()`; `parentTitle` leaves `useDraftSession`. Specs: the anchor-mode title test asserts the `<h1>` and the title in the This entry region once; add the `<h1>` while revising, and an untitled parent's dateline in the left column. PRODUCT.md §4.3–4.5 say what heads the page while composing and what the left column shows. Verify: typecheck; browser and Cypress: the EntryDetailView component and flow pairs.
-3. **The anchor index.** As decided above. New `anchorIndex.test.ts` in node over a schema-built document: outer span across passage and wording, pieces with their marks, document order, a non-string id skipped, the same document returning the same index. The `anchorRangeOverlapping` cases leave `anchors.test.ts`; DocumentEditor's anchor-mode pair gains "a selection touching an anchor's edge places a new one". The decision moves from CHRONICLE_PLAN.md into ENTRY_MODEL.md's anchors section, with the rejected alternative; CHRONICLE_PLAN.md item 2 drops "starting with one anchor index". FILE_SPECS.md's note that `anchorSpans` could be tested in node is done. Verify: typecheck, `npm run test -- src/editor src/domain/anchors.test.ts`; the full component suites (the guard and the decorations run in every editor).
-4. **Seeding through `createMany`.** As decided above. Also: `useSealDraft.test` fabricates its entry with `seedEntry` on a fresh repository; `write-tests/mechanics.md`'s stub example stops naming `create`; TESTING.md's data rules name `seedEntry`. Verify: typecheck, the unit suite; the full component suites (a repository changes).
-5. **Delete this plan** and its citation in CHRONICLE_PLAN.md.
+3. **The anchor index.** As decided above. New `anchorIndex.test.ts` in node over a schema-built document: outer span across passage and wording, pieces with their marks, document order, a non-string id skipped, the same document returning the same index. The `anchorRangeOverlapping` cases leave `anchors.test.ts`; DocumentEditor's anchor-mode pair gains "a selection touching an anchor's edge places a new one". The decision moves from CHRONICLE_PLAN.md into ENTRY_MODEL.md's anchors section, with the rejected alternative; CHRONICLE_PLAN.md item 3 drops "starting with one anchor index". FILE_SPECS.md's note that `anchorSpans` could be tested in node is done. Verify: typecheck, `npm run test -- src/editor src/domain/anchors.test.ts`; the full component suites (the guard and the decorations run in every editor).
+4. **Orphaned anchors.** As decided above, in `types/entry.ts`, `domain/anchors.ts`, `format.ts`, EntryDetailView and `entriesStore`. Specs: `anchors.test` (`anchorRefsFor`; `resolveAnchors` skipping an id the document lacks), `format.test`'s orphan rows, `reconstructEntryState.test`'s anchors-by-version case, and EntryDetailView's seeded refs and stored-quote assertions. Docs: ENTRY_MODEL.md (what a related entry stores, resolving, the shapes), PRODUCT.md §4.3's "quotes what it _was_ attached to" and §5.4's retired quote, ARCHITECTURE.md's `ResolvedAnchor` example, and CHRONICLE_PLAN.md item 3's sentences on it. Verify: typecheck, `npm run test -- src/domain src/utils`; browser and Cypress: the EntryDetailView pairs, component and flow.
+5. **Seeding through `createMany`.** As decided above. Also: `useSealDraft.test` fabricates its entry with `seedEntry` on a fresh repository; `write-tests/mechanics.md`'s stub example stops naming `create`; TESTING.md's data rules name `seedEntry`. Verify: typecheck, the unit suite; the full component suites (a repository changes).
+6. **Delete this plan** and its citation in CHRONICLE_PLAN.md.
 
 ## Manual check
 
-After commit 4, in the running app:
+After commit 5, in the running app:
 
 - Open an entry and press Revise entry: the heading reads "Revise entry", the meta line is under it, and the title appears only in the Title field. Discard.
 - Press Create related entry: the heading reads "Create related entry". The left column shows This entry, the title, the meta line, the editor, then the instructions; the right column's label, Title field and editor line up with it. Do the same on an untitled entry: its dateline shows, muted.
-- Highlight a word, then select from the end of that highlight onward and Strike: a second anchor is placed. Click the first: the menu shows Highlight pressed. Remove it. Add wording to the second, save.
+- Highlight a word, then select from the end of that highlight onward and Strike: a second anchor is placed. Click the first: the menu shows Highlight pressed. Remove it. Add wording to the second, save. The parent's page lists the related entry's anchor as a strike with its wording.
 - The toolbar shows Clear formatting and Add image as buttons; attach an image.
 - The parent's card on the timeline counts the anchor revision as a version.

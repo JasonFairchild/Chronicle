@@ -196,27 +196,3 @@ export function resolveAnchors(
     }
   })
 }
-
-/**
- * One anchor's extent, in ProseMirror positions (`anchorSpans`, `editor/anchorCommands.ts`), kept
- * as plain numbers so the judgments below stay pure and node-testable.
- */
-export interface AnchorRange {
-  anchor_id: string
-  from: number
-  to: number
-}
-
-/**
- * The first of `ranges` that overlaps `[from, to)` at all, or null when none does — what keeps
- * anchors exclusive: `markAnchor` (`editor/anchorCommands.ts`) refuses to place a new one wherever
- * this finds a hit, whether that range is this session's own or an earlier related entry's sealed
- * one. Two ranges that only touch, sharing an endpoint with no space between, are not overlapping.
- */
-export function anchorRangeOverlapping<T extends AnchorRange>(
-  ranges: T[],
-  from: number,
-  to: number,
-): T | null {
-  return ranges.find((range) => range.from < to && from < range.to) ?? null
-}

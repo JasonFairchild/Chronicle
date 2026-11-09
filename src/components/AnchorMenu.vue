@@ -97,7 +97,7 @@ function shouldShow({ state }: { state: EditorState }): boolean {
           aria-label="Remove anchor"
           title="Remove anchor"
           @mousedown.prevent
-          @click="removeAnchor(editor, caretAnchor.anchor_id)"
+          @click="removeAnchor(editor, caretAnchor.anchorId)"
         >
           <Trash2 class="h-4 w-4" aria-hidden="true" />
         </button>

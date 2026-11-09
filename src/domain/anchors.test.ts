@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  type AnchorRange,
-  anchorRangeOverlapping,
   anchorRefsFor,
   anchorsPlacedSince,
   collectAnchors,
@@ -142,33 +140,6 @@ describe('resolveAnchors', () => {
     expect(resolveAnchors(refs, doc('Rewritten entirely'))).toEqual([
       { anchor_id: 'a1', status: 'orphaned', quote: 'meeting', kind: null, insertion: null },
     ])
-  })
-})
-
-describe('anchorRangeOverlapping', () => {
-  const ranges: AnchorRange[] = [{ anchor_id: 'a1', from: 10, to: 20 }]
-
-  it('returns null for a range that touches nothing', () => {
-    expect(anchorRangeOverlapping(ranges, 0, 5)).toBeNull()
-    expect(anchorRangeOverlapping(ranges, 25, 30)).toBeNull()
-  })
-
-  it('returns null for a range that only touches an edge with no space between', () => {
-    expect(anchorRangeOverlapping(ranges, 0, 10)).toBeNull()
-    expect(anchorRangeOverlapping(ranges, 20, 30)).toBeNull()
-  })
-
-  it('finds a range a selection only partly overlaps', () => {
-    expect(anchorRangeOverlapping(ranges, 15, 25)?.anchor_id).toBe('a1')
-    expect(anchorRangeOverlapping(ranges, 5, 15)?.anchor_id).toBe('a1')
-  })
-
-  it('finds a range that swallows the selection entirely', () => {
-    expect(anchorRangeOverlapping(ranges, 12, 18)?.anchor_id).toBe('a1')
-  })
-
-  it('finds a range the selection exactly matches', () => {
-    expect(anchorRangeOverlapping(ranges, 10, 20)?.anchor_id).toBe('a1')
   })
 })
 

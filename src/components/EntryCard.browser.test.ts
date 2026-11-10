@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { h, type VNode } from 'vue'
 
 import EntryCard from '@/components/EntryCard.vue'
 import { previewText } from '@/domain/entryDocument'
@@ -34,7 +35,8 @@ function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEnt
   }
 }
 
-async function mountCard(entry: AggregatedEntry, slots: Record<string, string> = {}) {
+// Render functions, not template strings: Browser Mode's CJS Vue compiler warns on each one.
+async function mountCard(entry: AggregatedEntry, slots: Record<string, () => VNode> = {}) {
   const router = createTestRouter()
   await router.push('/')
   await router.isReady()
@@ -88,8 +90,8 @@ describe('EntryCard (browser)', () => {
 
   it('renders badge and extra slot content when given', async () => {
     const screen = await mountCard(makeAggregated(), {
-      badge: '<span>Update</span>',
-      extra: '<p>Was attached to a passage</p>',
+      badge: () => h('span', 'Update'),
+      extra: () => h('p', 'Was attached to a passage'),
     })
 
     await expect.element(screen.getByText('Update')).toBeVisible()

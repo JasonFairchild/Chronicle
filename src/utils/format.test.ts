@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { emptyEntryDates, emptyEntryDetails, type ResolvedAnchor } from '@/types/entry'
+import { type DocumentAnchor, emptyEntryDates, emptyEntryDetails } from '@/types/entry'
 import {
   describeAnchor,
   entryDetailLines,
@@ -12,34 +12,24 @@ import {
 } from '@/utils/format'
 
 describe('describeAnchor', () => {
-  const present = { anchor_id: 'a1', status: 'present' as const, quote: 'Lake Tahoe' }
+  const onTahoe = { anchor_id: 'a1', passage: 'Lake Tahoe' }
 
-  it.each<[string, ResolvedAnchor, string]>([
+  it.each<[string, DocumentAnchor, string]>([
     [
       'a strike with wording',
-      { ...present, kind: 'strike', insertion: 'Donner Lake' },
+      { ...onTahoe, kind: 'strike', wording: 'Donner Lake' },
       'Strikes “Lake Tahoe”, replaced with “Donner Lake”',
     ],
-    ['a strike alone', { ...present, kind: 'strike', insertion: null }, 'Strikes “Lake Tahoe”'],
+    ['a strike alone', { ...onTahoe, kind: 'strike', wording: null }, 'Strikes “Lake Tahoe”'],
     [
       'a highlight with wording',
-      { ...present, kind: 'comment', insertion: 'Emerald Bay' },
+      { ...onTahoe, kind: 'comment', wording: 'Emerald Bay' },
       'On “Lake Tahoe”, adds “Emerald Bay”',
     ],
-    ['a highlight alone', { ...present, kind: 'comment', insertion: null }, 'On “Lake Tahoe”'],
-    ['a bare insertion', { ...present, quote: '', kind: null, insertion: 'alone' }, 'Adds “alone”'],
-    [
-      'an orphan, by its sealed quote',
-      { ...present, status: 'orphaned', kind: null, insertion: null },
-      'Was attached to: “Lake Tahoe”',
-    ],
-    [
-      'an orphan with no quote',
-      { ...present, status: 'orphaned', quote: '', kind: null, insertion: null },
-      'Was attached to a removed passage',
-    ],
-  ])('describes %s', (_case, resolved, line) => {
-    expect(describeAnchor(resolved)).toBe(line)
+    ['a highlight alone', { ...onTahoe, kind: 'comment', wording: null }, 'On “Lake Tahoe”'],
+    ['a bare insertion', { ...onTahoe, passage: '', kind: null, wording: 'alone' }, 'Adds “alone”'],
+  ])('describes %s', (_case, anchor, line) => {
+    expect(describeAnchor(anchor)).toBe(line)
   })
 })
 

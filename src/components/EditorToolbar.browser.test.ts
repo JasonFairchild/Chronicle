@@ -220,7 +220,7 @@ describe('EditorToolbar (browser)', () => {
 
     expect(editor.getHTML()).not.toContain('<strong>')
     expect(collectAnchors(editor.getJSON() as EntryDocument)).toEqual([
-      { anchor_id: 'anchor-1', kind: 'comment', quote: 'rained', insertion: 'heavily' },
+      { anchor_id: 'anchor-1', kind: 'comment', passage: 'rained', wording: 'heavily' },
     ])
   })
 

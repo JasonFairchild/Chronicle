@@ -20,7 +20,7 @@ function entry(partial: Partial<Entry>): Entry {
     target_id: null,
     title: null,
     content: '',
-    anchors: [],
+    anchor_ids: [],
     revision_mode: null,
     base_version_id: null,
     authoring_trace: null,

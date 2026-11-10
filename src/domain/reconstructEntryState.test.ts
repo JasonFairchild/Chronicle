@@ -23,7 +23,7 @@ function makeEntry(overrides: Partial<Entry> & Pick<Entry, 'id' | 'content'>): E
     relation_type: null,
     target_id: null,
     title: null,
-    anchors: [],
+    anchor_ids: [],
     revision_mode: null,
     base_version_id: null,
     authoring_trace: null,
@@ -143,7 +143,7 @@ describe('reconstructEntryState', () => {
     )
   })
 
-  it('reads a related entry’s anchors from the version being viewed', () => {
+  it('reads a related entry’s anchors from the version being viewed, skipping any it lacks', () => {
     const root = makeEntry({ id: 'root-1', content: 'I went to Lake Tahoe' })
     // The anchor revision sealed with the related entry: the parent's text, now marked.
     const marked = {
@@ -162,14 +162,15 @@ describe('reconstructEntryState', () => {
       parent_id: 'root-1',
       relation_type: 'update',
       content: 'Wrong lake',
-      anchors: [{ anchor_id: 'a1', quote: 'Lake Tahoe' }],
+      // 'gone' stands for an id written outside the app, which no version carries.
+      anchor_ids: ['gone', 'a1'],
       created_at: '2026-01-02T00:00:00.000Z',
     })
 
     const result = reconstructEntryState('root-1', [root, marked, update])
 
     expect(result?.related_entries[0]?.anchors).toEqual([
-      { anchor_id: 'a1', status: 'present', quote: 'Lake Tahoe', kind: 'strike', insertion: null },
+      { anchor_id: 'a1', kind: 'strike', passage: 'Lake Tahoe', wording: null },
     ])
   })
 

@@ -41,7 +41,7 @@ describe('EntryDetailView flows (browser)', () => {
       .toHaveAttribute('href', `/entries/${parent.id}`)
 
     const children = await entryRepository.listChildren(parent.id)
-    expect(children[0]?.anchors).toEqual([])
+    expect(children[0]?.anchor_ids).toEqual([])
     // Nothing was marked, so the note claims nothing changed about the entry.
     expect(children[0]?.relation_type).toBe('annotation')
   })
@@ -131,8 +131,7 @@ describe('EntryDetailView flows (browser)', () => {
     expect(revisions[0]?.revision_mode).toBe('anchor')
 
     const children = await entryRepository.listChildren(parent.id)
-    expect(children[0]?.anchors).toHaveLength(1)
-    expect(children[0]?.anchors[0]?.quote).toBe('Lake Tahoe')
+    expect(children[0]?.anchor_ids).toHaveLength(1)
     // Striking reports a correction, so the note reads as an update without anyone being asked.
     expect(children[0]?.relation_type).toBe('update')
   })

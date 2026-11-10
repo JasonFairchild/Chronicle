@@ -216,7 +216,7 @@ describe('DocumentEditor (browser)', () => {
 
     const latest = changes[changes.length - 1]!
     expect(docToPlainText(latest.content)).toBe('I went to Lake Tahoe with Dad!')
-    expect(collectAnchors(latest.content)).toMatchObject([{ quote: 'Lake Tahoe' }])
+    expect(collectAnchors(latest.content)).toMatchObject([{ passage: 'Lake Tahoe' }])
   })
 
   it('reports every step it takes, so the sealed log replays to the document exactly', async () => {
@@ -280,8 +280,8 @@ describe('DocumentEditor (browser)', () => {
       const [anchor] = collectAnchors(latest.content)
       expect(anchor).toMatchObject({
         kind: 'comment',
-        quote: 'Lake Tahoe',
-        insertion: 'Donner Lake',
+        passage: 'Lake Tahoe',
+        wording: 'Donner Lake',
       })
       expect(docToPlainText(latest.content)).toBe('I went to Lake TahoeDonner Lake with Dad')
       await expect.element(placeholder).not.toBeInTheDocument()
@@ -301,8 +301,8 @@ describe('DocumentEditor (browser)', () => {
       const [anchor] = collectAnchors(latest.content)
       expect(anchor).toMatchObject({
         kind: 'strike',
-        quote: 'Lake Tahoe',
-        insertion: 'Donner Lake',
+        passage: 'Lake Tahoe',
+        wording: 'Donner Lake',
       })
     })
 
@@ -317,7 +317,7 @@ describe('DocumentEditor (browser)', () => {
 
       const latest = changes[changes.length - 1]!
       const [anchor] = collectAnchors(latest.content)
-      expect(anchor).toMatchObject({ kind: null, insertion: 'perhaps' })
+      expect(anchor).toMatchObject({ kind: null, wording: 'perhaps' })
     })
 
     it('takes a list marker typed at a line’s start as wording', async () => {
@@ -330,7 +330,7 @@ describe('DocumentEditor (browser)', () => {
       await userEvent.keyboard('- ')
 
       const [anchor] = collectAnchors(changes[changes.length - 1]!.content)
-      expect(anchor).toMatchObject({ kind: null, insertion: '- ' })
+      expect(anchor).toMatchObject({ kind: null, wording: '- ' })
     })
 
     it('types wording plain, without the formatting of the text before it', async () => {
@@ -371,7 +371,7 @@ describe('DocumentEditor (browser)', () => {
 
       const latest = changes[changes.length - 1]!
       expect(collectAnchors(latest.content)).toMatchObject([
-        { kind: null, insertion: 'Last summer, ' },
+        { kind: null, wording: 'Last summer, ' },
       ])
       expect(latest.is_paste).toBe(true)
     })
@@ -419,7 +419,7 @@ describe('DocumentEditor (browser)', () => {
       await screen.getByRole('button', { name: 'Highlight passage' }).click()
 
       const [anchor] = collectAnchors(changes[changes.length - 1]!.content)
-      expect(anchor).toMatchObject({ quote: 'Lake Tahoe', kind: 'comment' })
+      expect(anchor).toMatchObject({ passage: 'Lake Tahoe', kind: 'comment' })
     })
 
     it('places a highlight and its wording through the keyboard alone', async () => {
@@ -434,7 +434,7 @@ describe('DocumentEditor (browser)', () => {
 
       const latest = changes[changes.length - 1]!
       const [anchor] = collectAnchors(latest.content)
-      expect(anchor).toMatchObject({ kind: 'comment', insertion: 'Donner Lake' })
+      expect(anchor).toMatchObject({ kind: 'comment', wording: 'Donner Lake' })
     })
 
     it('does not let wording typed after a sealed anchor join it', async () => {
@@ -454,10 +454,10 @@ describe('DocumentEditor (browser)', () => {
       const anchors = collectAnchors(latest.content)
       expect(anchors).toHaveLength(2)
       expect(anchors.find((anchor) => anchor.anchor_id === 'sealed-1')).toMatchObject({
-        insertion: null,
+        wording: null,
       })
       const bare = anchors.find((anchor) => anchor.anchor_id !== 'sealed-1')
-      expect(bare).toMatchObject({ kind: null, insertion: '!' })
+      expect(bare).toMatchObject({ kind: null, wording: '!' })
     })
 
     it('leaves a sealed anchor alone: typing in its passage or its wording does nothing', async () => {
@@ -479,8 +479,8 @@ describe('DocumentEditor (browser)', () => {
 
       const latest = changes[changes.length - 1]!
       expect(collectAnchors(latest.content)).toMatchObject([
-        { anchor_id: 'sealed-1', quote: 'Lake Tahoe', insertion: 'Donner Lake' },
-        { kind: null, insertion: '!' },
+        { anchor_id: 'sealed-1', passage: 'Lake Tahoe', wording: 'Donner Lake' },
+        { kind: null, wording: '!' },
       ])
     })
 
@@ -543,7 +543,7 @@ describe('DocumentEditor (browser)', () => {
         await userEvent.keyboard('{Backspace}')
 
         const [anchor] = collectAnchors(changes[changes.length - 1]!.content)
-        expect(anchor).toMatchObject({ quote: 'Lake Tahoe', insertion: 'Donner Lak' })
+        expect(anchor).toMatchObject({ passage: 'Lake Tahoe', wording: 'Donner Lak' })
       })
 
       it('puts the caret where its wording is clicked', async () => {
@@ -556,7 +556,7 @@ describe('DocumentEditor (browser)', () => {
         await userEvent.keyboard('!')
 
         const [anchor] = collectAnchors(changes[changes.length - 1]!.content)
-        expect(anchor).toMatchObject({ quote: 'Lake Tahoe', insertion: '!Donner Lake' })
+        expect(anchor).toMatchObject({ passage: 'Lake Tahoe', wording: '!Donner Lake' })
       })
 
       it('puts typing on its passage at the end of its wording', async () => {
@@ -567,7 +567,7 @@ describe('DocumentEditor (browser)', () => {
         await userEvent.keyboard('!')
 
         const [anchor] = collectAnchors(changes[changes.length - 1]!.content)
-        expect(anchor).toMatchObject({ quote: 'Lake Tahoe', insertion: 'Donner Lake!' })
+        expect(anchor).toMatchObject({ passage: 'Lake Tahoe', wording: 'Donner Lake!' })
       })
 
       it('puts a paste on its passage at the end of its wording, as typing', async () => {
@@ -579,7 +579,7 @@ describe('DocumentEditor (browser)', () => {
 
         const latest = changes[changes.length - 1]!
         const [anchor] = collectAnchors(latest.content)
-        expect(anchor).toMatchObject({ quote: 'Lake Tahoe', insertion: 'Donner Lake!' })
+        expect(anchor).toMatchObject({ passage: 'Lake Tahoe', wording: 'Donner Lake!' })
         expect(latest.is_paste).toBe(true)
       })
 
@@ -604,7 +604,7 @@ describe('DocumentEditor (browser)', () => {
 
         const latest = changes[changes.length - 1]!
         const [anchor] = collectAnchors(latest.content)
-        expect(anchor).toMatchObject({ kind: 'strike', insertion: 'Donner Lake' })
+        expect(anchor).toMatchObject({ kind: 'strike', wording: 'Donner Lake' })
         expect(latest.is_anchor_op).toBe(true)
       })
 
@@ -612,7 +612,7 @@ describe('DocumentEditor (browser)', () => {
         const screen = mountAnchorEditor()
         await placeHighlightWithWording(screen)
         expect(collectAnchors(changes[changes.length - 1]!.content)).toMatchObject([
-          { quote: 'Lake Tahoe', insertion: 'Donner Lake' },
+          { passage: 'Lake Tahoe', wording: 'Donner Lake' },
         ])
 
         await screen.getByRole('button', { name: 'Remove anchor' }).click()
@@ -639,7 +639,7 @@ describe('DocumentEditor (browser)', () => {
           await userEvent.keyboard('!')
 
           const anchors = collectAnchors(changes[changes.length - 1]!.content)
-          expect(anchors).toMatchObject([{ kind: 'comment', insertion: 'Donner Lake!' }])
+          expect(anchors).toMatchObject([{ kind: 'comment', wording: 'Donner Lake!' }])
         },
       )
 
@@ -652,8 +652,8 @@ describe('DocumentEditor (browser)', () => {
         await screen.getByRole('button', { name: 'Strike passage' }).click()
 
         expect(collectAnchors(changes[changes.length - 1]!.content)).toMatchObject([
-          { kind: 'comment', quote: 'Lake Tahoe', insertion: 'Donner Lake' },
-          { kind: 'strike', quote: 'with' },
+          { kind: 'comment', passage: 'Lake Tahoe', wording: 'Donner Lake' },
+          { kind: 'strike', passage: 'with' },
         ])
       })
 
@@ -670,7 +670,9 @@ describe('DocumentEditor (browser)', () => {
           20,
           'Donner Lake',
         )
-        expect(anchorsPlacedSince(base, seeded)).toEqual(['resumed-1'])
+        expect(anchorsPlacedSince(base, seeded).map((anchor) => anchor.anchor_id)).toEqual([
+          'resumed-1',
+        ])
 
         const screen = mountAnchorEditor(seeded, { anchorBaseContent: base })
         const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
@@ -681,7 +683,7 @@ describe('DocumentEditor (browser)', () => {
 
         await expect.element(editorLocator).toHaveTextContent('Donner Lake! with Dad')
         const [anchor] = collectAnchors(changes[changes.length - 1]!.content)
-        expect(anchor).toMatchObject({ anchor_id: 'resumed-1', insertion: 'Donner Lake!' })
+        expect(anchor).toMatchObject({ anchor_id: 'resumed-1', wording: 'Donner Lake!' })
       })
     })
   })

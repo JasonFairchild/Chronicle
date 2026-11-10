@@ -7,11 +7,6 @@ export type VersionRelation = 'revision'
 /** `connection` and `revision` are structural; `annotation`/`update` are a label only. */
 export type RelationType = NarrativeRelation | EdgeRelation | VersionRelation
 
-export interface AnchorRef {
-  anchor_id: string
-  quote: string
-}
-
 export type RevisionMode = 'direct' | 'anchor'
 
 /**
@@ -133,8 +128,8 @@ export interface Entry extends VersionedFields {
   relation_type: RelationType | null
   /** Connections only. */
   target_id: string | null
-  /** Empty means the entry is about its parent at large. */
-  anchors: AnchorRef[]
+  /** Anchors in the parent's document. Empty means the entry is about its parent at large. */
+  anchor_ids: string[]
   /** Revisions only. */
   revision_mode: RevisionMode | null
   /** Revisions only: the version this one replaced. */
@@ -146,17 +141,15 @@ export interface Entry extends VersionedFields {
 
 export type AnchorKind = 'comment' | 'strike'
 
-/** Whether the parent's document still carries this anchor. */
-export type AnchorStatus = 'present' | 'orphaned'
-
-export interface ResolvedAnchor {
+/** One anchor as the parent's document holds it. */
+export interface DocumentAnchor {
   anchor_id: string
-  status: AnchorStatus
-  /** Current wording if present, the sealed quote if orphaned. */
-  quote: string
-  /** Null when orphaned or a bare insertion. */
+  /** From the mark. Null for an anchor that is only wording — a bare insertion. */
   kind: AnchorKind | null
-  insertion: string | null
+  /** The text the mark covers. Empty when the anchor has no span. */
+  passage: string
+  /** The anchor's wording as written, spaces included. Null when it has none. */
+  wording: string | null
 }
 
 /**
@@ -173,8 +166,8 @@ export interface EntryVersion extends VersionedFields {
 export interface ResolvedRelatedEntry {
   entry: AggregatedEntry
   relation_type: RelationType
-  /** Its anchors, read out of the parent's current document. */
-  anchors: ResolvedAnchor[]
+  /** Its anchors, read out of the parent's version being viewed. */
+  anchors: DocumentAnchor[]
   /** Grandchildren are indicated, not expanded. */
   has_children: boolean
 }
@@ -214,7 +207,7 @@ export function createEntryInput(
     relation_type: null,
     target_id: null,
     title: null,
-    anchors: [],
+    anchor_ids: [],
     revision_mode: null,
     base_version_id: null,
     authoring_trace: null,

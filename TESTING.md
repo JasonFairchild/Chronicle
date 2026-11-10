@@ -83,7 +83,7 @@ Accessibility first, in this order:
 
 1. `getByRole('button', { name: 'Add entry' })`
 2. `getByLabelText('Related entry')`
-3. `getByText('Was attached to: “Lake Tahoe”')`
+3. `getByText('Strikes “Lake Tahoe”')`
 4. A test id, only when none of the above can express it
 
 Both runners have these queries natively: Vitest Browser Mode as `screen.getBy*`, Cypress as `cy.findBy*` from `@testing-library/cypress`, wired up in `cypress/support/component.ts`. Reach for `cy.get` or `cy.contains` only when nothing above can express what you need.
@@ -116,11 +116,11 @@ Someone should understand a test without leaving the file. Abstraction is justif
 
 ## Setup, spying, and mocking
 
-- **Event listeners go in `attrs`, not `props`.** This matches how a parent writes `@submit`, in both runners:
+- **Event listeners go in `attrs`, not `props`.** This matches how a parent writes `@change`, in both runners:
 
   ```ts
-  cy.mount(RelatedEntryForm, { props: { quote }, attrs: { onSubmit } })
-  render(RelatedEntryForm, { props: { quote }, attrs: { onSubmit } })
+  cy.mount(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
+  renderComponent(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
   ```
 
 - **Swap the repository, don't mock it.** Every spec in either runner starts on fresh, isolated, **real** storage — real IndexedDB via Dexie, real OPFS — which a global `beforeEach` in `cypress/support/component.ts` and `src/testing/browserSetup.ts` points the composition root at, using the helpers in `src/testing/realRepositories.ts`. A spec seeds it, stubs it and, in a flow, reads it through the composition root's own bindings, which point at that test's instances. Read them inside a test, never captured at module scope, where they'd hold a stale instance:

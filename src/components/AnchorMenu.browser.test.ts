@@ -53,7 +53,7 @@ describe('AnchorMenu (browser)', () => {
 
     await highlight.click()
 
-    expect(anchorsOf(editor)).toMatchObject([{ kind: 'comment', quote: 'Lake Tahoe' }])
+    expect(anchorsOf(editor)).toMatchObject([{ kind: 'comment', passage: 'Lake Tahoe' }])
   })
 
   it('shows the kind of the session’s anchor at the caret pressed, and switches it', async () => {
@@ -71,7 +71,7 @@ describe('AnchorMenu (browser)', () => {
 
     await strike.click()
 
-    expect(anchorsOf(editor)).toMatchObject([{ kind: 'strike', insertion: 'Donner Lake' }])
+    expect(anchorsOf(editor)).toMatchObject([{ kind: 'strike', wording: 'Donner Lake' }])
     await expect.element(strike).toHaveAttribute('aria-pressed', 'true')
   })
 

@@ -462,12 +462,11 @@ onBeforeUnmount(() => {
 
               <ul v-if="related.anchors.length > 0" class="mt-2 space-y-1">
                 <li
-                  v-for="resolved in related.anchors"
-                  :key="resolved.anchor_id"
+                  v-for="anchor in related.anchors"
+                  :key="anchor.anchor_id"
                   class="text-xs text-[var(--color-text-muted)]"
-                  :class="{ italic: resolved.status === 'orphaned' }"
                 >
-                  {{ describeAnchor(resolved) }}
+                  {{ describeAnchor(anchor) }}
                 </li>
               </ul>
             </template>

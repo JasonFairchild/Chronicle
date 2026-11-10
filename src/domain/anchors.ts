@@ -2,16 +2,15 @@
 //
 // An anchor's position is a fact about the **parent's** document, so that is where it is stored: a
 // span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is
-// wording: text carrying an `anchorWording` mark with `{ anchorId }`. A related entry keeps only ids
-// and the wording each one covered when it was sealed (ENTRY_MODEL.md, "Related entries and
-// anchors").
+// wording: text carrying an `anchorWording` mark with `{ anchorId }`. A related entry keeps only the
+// ids (ENTRY_MODEL.md, "Related entries and anchors").
 //
 // So there is no stored offset to reinterpret and nothing to resolve positionally: the editor
 // maintains anchor positions the way it maintains everything else, and this module only reads the
 // structure back out. Nothing here imports TipTap; it walks the same plain JSON `entryDocument.ts`
 // does.
 
-import type { AnchorKind, AnchorRef, NarrativeRelation, ResolvedAnchor } from '@/types/entry'
+import type { AnchorKind, DocumentAnchor, NarrativeRelation } from '@/types/entry'
 
 import {
   ANCHOR_MARK,
@@ -20,17 +19,6 @@ import {
   parseDocument,
   walk,
 } from './entryDocument'
-
-/** One anchor as the parent's document currently holds it. */
-export interface DocumentAnchor {
-  anchor_id: string
-  /** From the mark. Null for an anchor that is only wording — a bare insertion. */
-  kind: AnchorKind | null
-  /** The text the mark covers. Empty when the anchor has no span. */
-  quote: string
-  /** The anchor's wording as written, spaces included. Null when it has none. */
-  insertion: string | null
-}
 
 /**
  * A fresh anchor id. Time ordering buys nothing here — an anchor is found by id, never sorted by
@@ -65,7 +53,7 @@ export function collectAnchors(content: string | EntryDocument): DocumentAnchor[
     const existing = anchors.get(anchorId)
     if (existing) return existing
 
-    const created: DocumentAnchor = { anchor_id: anchorId, kind: null, quote: '', insertion: null }
+    const created: DocumentAnchor = { anchor_id: anchorId, kind: null, passage: '', wording: null }
     anchors.set(anchorId, created)
     return created
   }
@@ -82,21 +70,16 @@ export function collectAnchors(content: string | EntryDocument): DocumentAnchor[
       const anchor = upsert(anchorId)
       if (mark.type === ANCHOR_MARK) {
         // A mark can be split across several text nodes by any other mark overlapping it, so the
-        // quote accumulates rather than being assigned.
-        anchor.quote += node.text ?? ''
+        // passage accumulates rather than being assigned.
+        anchor.passage += node.text ?? ''
         anchor.kind = anchorKind(mark.attrs) ?? anchor.kind
       } else {
-        anchor.insertion = (anchor.insertion ?? '') + (node.text ?? '')
+        anchor.wording = (anchor.wording ?? '') + (node.text ?? '')
       }
     }
   })
 
   return [...anchors.values()]
-}
-
-/** The ids a document currently carries, for telling what a session added. */
-function anchorIdsIn(content: string | EntryDocument): string[] {
-  return collectAnchors(content).map((anchor) => anchor.anchor_id)
 }
 
 /**
@@ -113,86 +96,18 @@ function anchorIdsIn(content: string | EntryDocument): string[] {
 export function anchorsPlacedSince(
   base: string | EntryDocument,
   current: string | EntryDocument,
-): string[] {
-  const sealed = new Set(anchorIdsIn(base))
-  return anchorIdsIn(current).filter((anchorId) => !sealed.has(anchorId))
-}
-
-/**
- * The anchors a session placed, as the document holds them. Ids the document does not carry are
- * skipped — nothing should record a reference to an anchor that was undone before sealing.
- */
-function placedAnchors(anchorIds: string[], content: string | EntryDocument): DocumentAnchor[] {
-  const present = new Map(collectAnchors(content).map((anchor) => [anchor.anchor_id, anchor]))
-
-  return anchorIds.flatMap((anchorId) => {
-    const anchor = present.get(anchorId)
-    return anchor ? [anchor] : []
-  })
-}
-
-/**
- * What a related entry stores for the anchors it just placed: the ids, plus the wording each one
- * covers at this moment.
- */
-export function anchorRefsFor(anchorIds: string[], content: string | EntryDocument): AnchorRef[] {
-  return placedAnchors(anchorIds, content).map((anchor) => ({
-    anchor_id: anchor.anchor_id,
-    quote: anchor.quote,
-  }))
+): DocumentAnchor[] {
+  const sealed = new Set(collectAnchors(base).map((anchor) => anchor.anchor_id))
+  return collectAnchors(current).filter((anchor) => !sealed.has(anchor.anchor_id))
 }
 
 /**
  * Whether a related entry reads as an annotation or an update, judged by what it did to its parent
  * rather than asked of the writer. Leaving the parent's wording alone and saying something about it
  * claims nothing changed — an annotation. Striking wording or proposing different wording reports a
- * correction, which is what an update is. One with no anchors at all has nothing to go on and is an
- * annotation, the quieter of the two claims.
+ * correction, which is what an update is.
  */
-export function relationTypeForAnchors(
-  anchorIds: string[],
-  content: string | EntryDocument,
-): NarrativeRelation {
-  const corrects = placedAnchors(anchorIds, content).some(
-    (anchor) => anchor.kind === 'strike' || anchor.insertion !== null,
-  )
-
+export function relationTypeForAnchors(anchors: DocumentAnchor[]): NarrativeRelation {
+  const corrects = anchors.some((anchor) => anchor.kind === 'strike' || anchor.wording !== null)
   return corrects ? 'update' : 'annotation'
-}
-
-/**
- * Reads a related entry's anchors out of the parent's document as it stands now.
- *
- * An anchor whose mark a later revision deleted is not dropped: it comes back orphaned, carrying
- * the quote recorded at seal time, so breakage renders as legible history rather than silent loss.
- */
-export function resolveAnchors(
-  refs: AnchorRef[],
-  content: string | EntryDocument,
-): ResolvedAnchor[] {
-  const present = new Map(collectAnchors(content).map((anchor) => [anchor.anchor_id, anchor]))
-
-  return refs.map((ref) => {
-    const anchor = present.get(ref.anchor_id)
-
-    if (!anchor) {
-      return {
-        anchor_id: ref.anchor_id,
-        status: 'orphaned',
-        quote: ref.quote,
-        kind: null,
-        insertion: null,
-      }
-    }
-
-    return {
-      anchor_id: ref.anchor_id,
-      status: 'present',
-      // The document is the authority on what the anchor covers today; the stored quote is only
-      // the fallback for when it no longer covers anything.
-      quote: anchor.quote,
-      kind: anchor.kind,
-      insertion: anchor.insertion,
-    }
-  })
 }

@@ -36,7 +36,7 @@ export class InMemoryEntryRepository implements EntryRepository {
       const entry: Entry = {
         id: newId(),
         created_at: newTimestamp(),
-        // Cloned on the way in as well as out. A plain spread is shallow, so `anchors`,
+        // Cloned on the way in as well as out. A plain spread is shallow, so `anchor_ids`,
         // `media_refs`, and `metadata` would stay shared with the caller's object and mutating an
         // input after saving would quietly rewrite stored history.
         ...structuredClone(input),

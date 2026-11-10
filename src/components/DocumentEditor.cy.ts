@@ -251,7 +251,7 @@ describe('DocumentEditor', () => {
     cy.get('@change').then((stub) => {
       const change = lastChange(stub)
       expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad!')
-      expect(collectAnchors(change.content)[0]).to.include({ quote: 'Lake Tahoe' })
+      expect(collectAnchors(change.content)[0]).to.include({ passage: 'Lake Tahoe' })
     })
   })
 
@@ -331,8 +331,8 @@ describe('DocumentEditor', () => {
         const [anchor] = collectAnchors(change.content)
         expect(anchor).to.include({
           kind: 'comment',
-          quote: 'Lake Tahoe',
-          insertion: 'Donner Lake',
+          passage: 'Lake Tahoe',
+          wording: 'Donner Lake',
         })
         expect(docToPlainText(change.content)).to.equal('I went to Lake TahoeDonner Lake with Dad')
       })
@@ -349,7 +349,7 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const [anchor] = collectAnchors(lastChange(stub).content)
-        expect(anchor).to.include({ kind: 'strike', quote: 'Lake Tahoe', insertion: 'Donner Lake' })
+        expect(anchor).to.include({ kind: 'strike', passage: 'Lake Tahoe', wording: 'Donner Lake' })
       })
     })
 
@@ -362,7 +362,7 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const [anchor] = collectAnchors(lastChange(stub).content)
-        expect(anchor).to.include({ kind: null, insertion: 'perhaps' })
+        expect(anchor).to.include({ kind: null, wording: 'perhaps' })
       })
     })
 
@@ -375,7 +375,7 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const [anchor] = collectAnchors(lastChange(stub).content)
-        expect(anchor).to.include({ kind: null, insertion: '- ' })
+        expect(anchor).to.include({ kind: null, wording: '- ' })
       })
     })
 
@@ -421,7 +421,7 @@ describe('DocumentEditor', () => {
       cy.get('@change').then((stub) => {
         const change = lastChange(stub)
         const [anchor] = collectAnchors(change.content)
-        expect(anchor).to.include({ kind: null, insertion: 'Last summer, ' })
+        expect(anchor).to.include({ kind: null, wording: 'Last summer, ' })
         expect(change.is_paste).to.equal(true)
       })
     })
@@ -470,7 +470,7 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const [anchor] = collectAnchors(lastChange(stub).content)
-        expect(anchor).to.include({ quote: 'Lake Tahoe', kind: 'comment' })
+        expect(anchor).to.include({ passage: 'Lake Tahoe', kind: 'comment' })
       })
     })
 
@@ -483,7 +483,7 @@ describe('DocumentEditor', () => {
 
       cy.get('@change').then((stub) => {
         const [anchor] = collectAnchors(lastChange(stub).content)
-        expect(anchor).to.include({ kind: 'comment', insertion: 'Donner Lake' })
+        expect(anchor).to.include({ kind: 'comment', wording: 'Donner Lake' })
       })
     })
 
@@ -503,10 +503,10 @@ describe('DocumentEditor', () => {
         const anchors = collectAnchors(lastChange(stub).content)
         expect(anchors).to.have.length(2)
         expect(anchors.find((anchor) => anchor.anchor_id === 'sealed-1')).to.include({
-          insertion: null,
+          wording: null,
         })
         const bare = anchors.find((anchor) => anchor.anchor_id !== 'sealed-1')
-        expect(bare).to.include({ kind: null, insertion: '!' })
+        expect(bare).to.include({ kind: null, wording: '!' })
       })
     })
 
@@ -531,10 +531,10 @@ describe('DocumentEditor', () => {
         expect(anchors).to.have.length(2)
         expect(anchors[0]).to.include({
           anchor_id: 'sealed-1',
-          quote: 'Lake Tahoe',
-          insertion: 'Donner Lake',
+          passage: 'Lake Tahoe',
+          wording: 'Donner Lake',
         })
-        expect(anchors[1]).to.include({ kind: null, insertion: '!' })
+        expect(anchors[1]).to.include({ kind: null, wording: '!' })
       })
     })
 
@@ -597,7 +597,7 @@ describe('DocumentEditor', () => {
 
         cy.get('@change').then((stub) => {
           const [anchor] = collectAnchors(lastChange(stub).content)
-          expect(anchor).to.include({ quote: 'Lake Tahoe', insertion: 'Donner Lak' })
+          expect(anchor).to.include({ passage: 'Lake Tahoe', wording: 'Donner Lak' })
         })
       })
 
@@ -614,7 +614,7 @@ describe('DocumentEditor', () => {
 
         cy.get('@change').then((stub) => {
           const [anchor] = collectAnchors(lastChange(stub).content)
-          expect(anchor).to.include({ quote: 'Lake Tahoe', insertion: '!Donner Lake' })
+          expect(anchor).to.include({ passage: 'Lake Tahoe', wording: '!Donner Lake' })
         })
       })
 
@@ -628,7 +628,7 @@ describe('DocumentEditor', () => {
 
         cy.get('@change').then((stub) => {
           const [anchor] = collectAnchors(lastChange(stub).content)
-          expect(anchor).to.include({ quote: 'Lake Tahoe', insertion: 'Donner Lake!' })
+          expect(anchor).to.include({ passage: 'Lake Tahoe', wording: 'Donner Lake!' })
         })
       })
 
@@ -645,7 +645,7 @@ describe('DocumentEditor', () => {
         cy.get('@change').then((stub) => {
           const change = lastChange(stub)
           const [anchor] = collectAnchors(change.content)
-          expect(anchor).to.include({ quote: 'Lake Tahoe', insertion: 'Donner Lake!' })
+          expect(anchor).to.include({ passage: 'Lake Tahoe', wording: 'Donner Lake!' })
           expect(change.is_paste).to.equal(true)
         })
       })
@@ -676,7 +676,7 @@ describe('DocumentEditor', () => {
         cy.get('@change').then((stub) => {
           const change = lastChange(stub)
           const [anchor] = collectAnchors(change.content)
-          expect(anchor).to.include({ kind: 'strike', insertion: 'Donner Lake' })
+          expect(anchor).to.include({ kind: 'strike', wording: 'Donner Lake' })
           expect(change.is_anchor_op).to.equal(true)
         })
       })
@@ -688,7 +688,7 @@ describe('DocumentEditor', () => {
         cy.get('@change').then((stub) => {
           const anchors = collectAnchors(lastChange(stub).content)
           expect(anchors).to.have.length(1)
-          expect(anchors[0]).to.include({ quote: 'Lake Tahoe', insertion: 'Donner Lake' })
+          expect(anchors[0]).to.include({ passage: 'Lake Tahoe', wording: 'Donner Lake' })
         })
 
         cy.findByRole('button', { name: 'Remove anchor' }).click()
@@ -719,7 +719,7 @@ describe('DocumentEditor', () => {
           cy.get('@change').then((stub) => {
             const anchors = collectAnchors(lastChange(stub).content)
             expect(anchors).to.have.length(1)
-            expect(anchors[0]).to.include({ kind: 'comment', insertion: 'Donner Lake!' })
+            expect(anchors[0]).to.include({ kind: 'comment', wording: 'Donner Lake!' })
           })
         })
       }
@@ -738,10 +738,10 @@ describe('DocumentEditor', () => {
           expect(anchors).to.have.length(2)
           expect(anchors[0]).to.include({
             kind: 'comment',
-            quote: 'Lake Tahoe',
-            insertion: 'Donner Lake',
+            passage: 'Lake Tahoe',
+            wording: 'Donner Lake',
           })
-          expect(anchors[1]).to.include({ kind: 'strike', quote: 'with' })
+          expect(anchors[1]).to.include({ kind: 'strike', passage: 'with' })
         })
       })
 
@@ -759,7 +759,9 @@ describe('DocumentEditor', () => {
         // The base — the parent as the session first found it, the version
         // `Draft.parent.base_version_id` names — is what still tells it apart from an anchor an
         // earlier related entry sealed.
-        expect(anchorsPlacedSince(base, seeded)).to.deep.equal(['resumed-1'])
+        expect(anchorsPlacedSince(base, seeded).map((anchor) => anchor.anchor_id)).to.deep.equal([
+          'resumed-1',
+        ])
 
         const onChange = cy.stub().as('change')
         mountAnchorEditor(onChange, seeded, { anchorBaseContent: base })
@@ -773,7 +775,7 @@ describe('DocumentEditor', () => {
         )
         cy.get('@change').then((stub) => {
           const [anchor] = collectAnchors(lastChange(stub).content)
-          expect(anchor).to.include({ anchor_id: 'resumed-1', insertion: 'Donner Lake!' })
+          expect(anchor).to.include({ anchor_id: 'resumed-1', wording: 'Donner Lake!' })
         })
       })
     })

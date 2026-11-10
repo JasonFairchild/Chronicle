@@ -112,7 +112,7 @@ describe('EntryDetailView (browser)', () => {
         content: textContent('Wrong lake'),
         parent_id: parent.id,
         relation_type: 'update',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+        anchor_ids: ['anchor-1'],
       }),
     )
 
@@ -480,7 +480,7 @@ describe('EntryDetailView (browser)', () => {
         content: textContent('Wrong lake'),
         parent_id: parent.id,
         relation_type: 'annotation',
-        anchors: [{ anchor_id: 'sealed-1', quote: 'Lake Tahoe' }],
+        anchor_ids: ['sealed-1'],
       }),
     )
     // Placed "own-1" before the reload.
@@ -624,7 +624,7 @@ describe('EntryDetailView (browser)', () => {
         content: textContent('Wonderful trip'),
         parent_id: parent.id,
         relation_type: 'annotation',
-        anchors: [{ anchor_id: 'anchor-1', quote: 'Lake Tahoe' }],
+        anchor_ids: ['anchor-1'],
       }),
     )
 

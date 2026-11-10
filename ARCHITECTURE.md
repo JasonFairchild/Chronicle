@@ -44,14 +44,14 @@ flowchart TB
     E["<b>E</b> · root<br/>version 1 · content + authoring_trace"]
     R1["<b>R1</b> · revision · direct<br/>every VersionedField + trace"]
     R2["<b>R2</b> · revision · anchor<br/>current doc + anchor marks"]
-    A["<b>A</b> · annotation / update<br/>anchors: anchor_id + quote<br/>sealed with R2 in one write"]
+    A["<b>A</b> · annotation / update<br/>anchor_ids<br/>sealed with R2 in one write"]
     C["<b>C</b> · connection"]
     F["<b>F</b> · another root"]
   end
 
   subgraph READ["READ · folded when viewed"]
     direction LR
-    RECON["<b>reconstructEntryState</b><br/>fold version chain · asOf<br/>resolveAnchors · gather connections"]
+    RECON["<b>reconstructEntryState</b><br/>fold version chain · asOf<br/>read anchors · gather connections"]
     AGG["<b>AggregatedEntry</b><br/>current version i of n<br/>related_entries · connections"]
     HIST["<b>buildEntryHistory</b><br/>EntryVersion[] · no UI yet"]
     DM["<b>deriveMarks</b>(events, policy)<br/>AuthoringMark[]"]
@@ -126,6 +126,6 @@ A shape's name says which stage of the flow above it belongs to. An entry passes
 | Change | one edit, as it passes each layer of the write path | `*Change` | `DraftChange` → `AuthoringChange` |
 | Working | a session's state, rewritten until it's sealed | `Draft*` | `Draft`, `DraftSnapshot`, `DraftDocument`, `DraftFields`, `DraftEvents`; and `AuthoringEvent`, appended until sealing makes the log an `AuthoringTrace` |
 | Sealed | written once, never rewritten | the bare noun | `Entry` with its `AuthoringTrace`; `MarkSet`, which may be deleted but never edited |
-| Derived | computed from sealed rows on read, never stored in this form | for how it's derived, where that's the point: `Aggregated*` is folded from rows, `Resolved*` is a reference looked up as it stands now; otherwise a plain noun, like `EntryVersion` | `AggregatedEntry`, `ResolvedRelatedEntry`, `ResolvedConnection`, `ResolvedAnchor`, `EntryVersion`, `AuthoringMark`; and `MarkFrame`, which a `MarkSet` caches |
+| Derived | computed from sealed rows on read, never stored in this form | for how it's derived, where that's the point: `Aggregated*` is folded from rows, `Resolved*` is a reference looked up as it stands now; otherwise a plain noun, like `EntryVersion` | `AggregatedEntry`, `ResolvedRelatedEntry`, `ResolvedConnection`, `EntryVersion`, `DocumentAnchor`, `AuthoringMark`; and `MarkFrame`, which a `MarkSet` caches |
 
 Not stages: field groups every stage shares (`VersionedFields`, `EntryDetails`, `EntryDates`, `ChangeSignals`), which is how a draft's fields copy onto an entry and back; and `Stored*` (`StoredEntry`, `StoredDraftEvent`), the Dexie adapter's own rows, which never leave it.

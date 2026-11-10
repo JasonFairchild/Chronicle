@@ -71,7 +71,6 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 - A revised entry says which version you're looking at and how many exist.
 - Attached images appear where they were placed.
 - Related entries and connections attached to it are listed beneath, each showing what part of the entry it points at. Immediate ones are shown; deeper ones are indicated, not expanded.
-- A related entry whose passage no longer exists quotes what it _was_ attached to. A broken reference reads as history, not as an error.
 - A related entry's or connection's own page has a breadcrumb back to what it's attached to.
 
 ### 4.4 Writing a related entry
@@ -149,7 +148,7 @@ When looking at a revision, show what changed since the version before it — ad
 - On the left, the related entry's own anchors behave like ones placed in the current session: return to one, switch highlight/strike, edit or remove wording, or remove the anchor. They can also be reshaped while keeping their identity and their wording: unmark part of one to shrink it, or extend it over adjacent text. New anchors can be added. Every other related entry's anchors show but can't be touched, and nothing else on the left can change, as in any related entry.
 - Saving revises whichever side changed, together: the related entry, the parent's anchors, or both. It stays about its parent for good; it can't be revised into a freestanding entry.
 - Annotation or update follows its current anchors, so a revision that removes its last strike and wording makes it an annotation.
-- This is the one way to remove an anchor, since §4.5's lock keeps every other editor off it. That also retires the quote a related entry saves to render "was attached to: …" once its anchor is gone.
+- This is the one way to remove an anchor, since §4.5's lock keeps every other editor off it.
 - Anchors stay exclusive (§4.4): a passage belongs to at most one related entry, so a lock never has two owners. Saying something different about an anchored passage means revising the related entry that holds it.
 - Revising a related entry is a draft like any other (§4.8), listed as a revision of it, and is outstanding against both it and its parent.
 - Reading a parent with several related entries offers its anchors grouped by related entry.

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 
-import { anchorRefsFor, anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
+import { anchorsPlacedSince, relationTypeForAnchors } from '@/domain/anchors'
 import { collectMediaRefs, isBlankDraft, sameDocument } from '@/domain/entryDocument'
 import { reconstructEntryState } from '@/domain/reconstructEntryState'
 import { entryRepository } from '@/repositories'
@@ -11,6 +11,7 @@ import {
   type AuthoringTrace,
   type CreateEntryInput,
   createEntryInput,
+  type DocumentAnchor,
   type Entry,
   type EntryDates,
   type NarrativeRelation,
@@ -125,7 +126,7 @@ function revisionInput(
  * (AUTHORING.md, "Drafts").
  *
  * Whether it reads as an annotation or an update is derived from what was anchored rather than
- * asked for up front — see `relationTypeForAnchors`. `anchorIds` is likewise derived, by the
+ * asked for up front — see `relationTypeForAnchors`. `anchors` is likewise derived, by the
  * caller, from the difference between `base`, the parent's base version, and the draft's parent
  * document.
  */
@@ -133,7 +134,7 @@ function anchoredInputs(
   draft: Extract<DraftSnapshot, { kind: 'new_related' }>,
   base: VersionedFields,
   fields: VersionedFields,
-  anchorIds: string[],
+  anchors: DocumentAnchor[],
   trace: AuthoringTrace | null,
   parentTrace: AuthoringTrace | null,
 ): CreateEntryInput[] {
@@ -153,8 +154,8 @@ function anchoredInputs(
       draft.parent.base_version_id,
       parentTrace,
     ),
-    relatedInput(fields, draft.parent_id, relationTypeForAnchors(anchorIds, parentContent), {
-      anchors: anchorRefsFor(anchorIds, parentContent),
+    relatedInput(fields, draft.parent_id, relationTypeForAnchors(anchors), {
+      anchor_ids: anchors.map((anchor) => anchor.anchor_id),
       authoring_trace: trace,
     }),
   ]
@@ -227,17 +228,16 @@ export const useEntriesStore = defineStore('entries', () => {
         // and then removed before sealing leaves nothing behind to subtract — see
         // `anchorsPlacedSince`.
         const base = await getVersion(draft.parent.base_version_id)
-        const anchorIds = anchorsPlacedSince(base.content, draft.parent.content)
-        if (anchorIds.length > 0) {
-          return anchoredInputs(draft, base, fields, anchorIds, trace, parentTrace)
+        const anchors = anchorsPlacedSince(base.content, draft.parent.content)
+        if (anchors.length > 0) {
+          return anchoredInputs(draft, base, fields, anchors, trace, parentTrace)
         }
 
         // Nothing was placed on the parent, so this is about the parent at large: one entry, no
-        // revision. With nothing anchored there is nothing for `relationTypeForAnchors` to read,
-        // and its answer for that case is annotation.
+        // revision, and an annotation, since it corrects nothing.
         return [
           relatedInput(fields, draft.parent_id, 'annotation', {
-            anchors: [],
+            anchor_ids: [],
             authoring_trace: trace,
           }),
         ]

@@ -36,7 +36,7 @@ describe('EntryDetailView flows', () => {
         `/entries/${parent.id}`,
       )
       cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
-        expect(children[0]?.anchors).to.deep.equal([])
+        expect(children[0]?.anchor_ids).to.deep.equal([])
         // Nothing was marked, so the note claims nothing changed about the entry.
         expect(children[0]?.relation_type).to.equal('annotation')
       })
@@ -120,8 +120,7 @@ describe('EntryDetailView flows', () => {
         expect(revisions[0]?.revision_mode).to.equal('anchor')
       })
       cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
-        expect(children[0]?.anchors).to.have.length(1)
-        expect(children[0]?.anchors[0]?.quote).to.equal('Lake Tahoe')
+        expect(children[0]?.anchor_ids).to.have.length(1)
         // Striking reports a correction, so the note reads as an update without anyone being asked.
         expect(children[0]?.relation_type).to.equal('update')
       })

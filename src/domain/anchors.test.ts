@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  anchorRefsFor,
-  anchorsPlacedSince,
-  collectAnchors,
-  relationTypeForAnchors,
-  resolveAnchors,
-} from '@/domain/anchors'
+import { anchorsPlacedSince, collectAnchors, relationTypeForAnchors } from '@/domain/anchors'
 import { withAnchorWording } from '@/testing/anchorFixtures'
 import { serializeDocument } from '@/testing/documents'
+import type { DocumentAnchor } from '@/types/entry'
 
 /** A one-paragraph document, with a subrange optionally carrying an anchor mark. */
 function doc(text: string, mark?: { anchorId: string; kind: string; from: number; to: number }) {
@@ -33,7 +28,7 @@ function doc(text: string, mark?: { anchorId: string; kind: string; from: number
 }
 
 describe('collectAnchors', () => {
-  it('reads a mark as one anchor with its covered text as the quote', () => {
+  it('reads a mark as one anchor with its covered text as the passage', () => {
     const content = doc('The meeting went badly', {
       anchorId: 'a1',
       kind: 'comment',
@@ -44,7 +39,7 @@ describe('collectAnchors', () => {
     const anchors = collectAnchors(content)
 
     expect(anchors).toEqual([
-      { anchor_id: 'a1', kind: 'comment', quote: 'meeting', insertion: null },
+      { anchor_id: 'a1', kind: 'comment', passage: 'meeting', wording: null },
     ])
   })
 
@@ -52,7 +47,7 @@ describe('collectAnchors', () => {
     const content = withAnchorWording('Wrong lake', 'a1', 6, 10, 'Donner Lake', 'strike')
 
     expect(collectAnchors(content)).toEqual([
-      { anchor_id: 'a1', kind: 'strike', quote: 'lake', insertion: 'Donner Lake' },
+      { anchor_id: 'a1', kind: 'strike', passage: 'lake', wording: 'Donner Lake' },
     ])
   })
 
@@ -60,14 +55,14 @@ describe('collectAnchors', () => {
     const content = withAnchorWording('I went home', 'a1', 2, 2, 'later')
 
     expect(collectAnchors(content)).toEqual([
-      { anchor_id: 'a1', kind: null, quote: '', insertion: 'later' },
+      { anchor_id: 'a1', kind: null, passage: '', wording: 'later' },
     ])
   })
 
   it('reads marked wording as written, so a typed space is a correction', () => {
     const content = withAnchorWording('I wentalone', 'a1', 6, 6, ' ')
 
-    expect(collectAnchors(content)[0]?.insertion).toBe(' ')
+    expect(collectAnchors(content)[0]?.wording).toBe(' ')
   })
 
   it('returns nothing for a document with no anchors', () => {
@@ -85,130 +80,51 @@ describe('anchorsPlacedSince', () => {
   })
 
   it('reports what appeared since the session’s base document', () => {
-    expect(anchorsPlacedSince(base, marked)).toEqual(['a1'])
+    expect(anchorsPlacedSince(base, marked)).toEqual([
+      { anchor_id: 'a1', kind: 'comment', passage: 'meeting', wording: null },
+    ])
   })
 
   it('reports nothing for an anchor the base already carried', () => {
     // An earlier related entry's, sealed before this session opened.
     expect(anchorsPlacedSince(marked, marked)).toEqual([])
   })
-
-  it('keeps reporting an anchor placed before a reload, since the base does not move', () => {
-    // A resumed draft mounts from `Draft.parent.content` — which already carries the anchor placed
-    // before the reload — but is measured against the base it started from, where it is absent.
-    expect(anchorsPlacedSince(base, marked)).toEqual(['a1'])
-  })
-})
-
-describe('anchorRefsFor', () => {
-  it('captures the quote each requested id currently covers', () => {
-    const content = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'comment',
-      from: 4,
-      to: 11,
-    })
-
-    expect(anchorRefsFor(['a1'], content)).toEqual([{ anchor_id: 'a1', quote: 'meeting' }])
-  })
-
-  it('skips an id the document does not carry, since it was undone before sealing', () => {
-    const content = doc('The meeting went badly')
-
-    expect(anchorRefsFor(['a1'], content)).toEqual([])
-  })
-})
-
-describe('resolveAnchors', () => {
-  it('reads the anchor’s current wording from the document, not the stored quote', () => {
-    const content = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'comment',
-      from: 4,
-      to: 11,
-    })
-    const refs = [{ anchor_id: 'a1', quote: 'meeting' }]
-
-    expect(resolveAnchors(refs, content)).toEqual([
-      { anchor_id: 'a1', status: 'present', quote: 'meeting', kind: 'comment', insertion: null },
-    ])
-  })
-
-  it('falls back to the stored quote once a revision removes the mark', () => {
-    const refs = [{ anchor_id: 'a1', quote: 'meeting' }]
-
-    expect(resolveAnchors(refs, doc('Rewritten entirely'))).toEqual([
-      { anchor_id: 'a1', status: 'orphaned', quote: 'meeting', kind: null, insertion: null },
-    ])
-  })
 })
 
 describe('relationTypeForAnchors', () => {
-  it('reads commenting on a passage as an annotation, since nothing was corrected', () => {
-    const content = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'comment',
-      from: 4,
-      to: 11,
-    })
+  const comment: DocumentAnchor = {
+    anchor_id: 'a1',
+    kind: 'comment',
+    passage: 'The',
+    wording: null,
+  }
+  const strike: DocumentAnchor = {
+    anchor_id: 'a2',
+    kind: 'strike',
+    passage: 'meeting',
+    wording: null,
+  }
 
-    expect(relationTypeForAnchors(['a1'], content)).toBe('annotation')
+  it('reads commenting on a passage as an annotation, since nothing was corrected', () => {
+    expect(relationTypeForAnchors([comment])).toBe('annotation')
   })
 
   it('reads a strike as an update, since striking reports a correction', () => {
-    const content = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'strike',
-      from: 4,
-      to: 11,
-    })
-
-    expect(relationTypeForAnchors(['a1'], content)).toBe('update')
+    expect(relationTypeForAnchors([strike])).toBe('update')
   })
 
   it('reads proposed wording with nothing struck as an update too', () => {
-    const content = withAnchorWording('The meeting went badly', 'a1', 22, 22, ' in the end')
+    const wording: DocumentAnchor = {
+      anchor_id: 'a3',
+      kind: null,
+      passage: '',
+      wording: ' in the end',
+    }
 
-    expect(relationTypeForAnchors(['a1'], content)).toBe('update')
+    expect(relationTypeForAnchors([wording])).toBe('update')
   })
 
   it('takes one correction among comments as enough to make the whole note an update', () => {
-    const content = serializeDocument({
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'The ',
-              marks: [{ type: 'anchor', attrs: { anchorId: 'a1', kind: 'comment' } }],
-            },
-            {
-              type: 'text',
-              text: 'meeting',
-              marks: [{ type: 'anchor', attrs: { anchorId: 'a2', kind: 'strike' } }],
-            },
-          ],
-        },
-      ],
-    })
-
-    expect(relationTypeForAnchors(['a1', 'a2'], content)).toBe('update')
-  })
-
-  it('calls a note with nothing anchored an annotation, the quieter claim', () => {
-    expect(relationTypeForAnchors([], doc('Untouched'))).toBe('annotation')
-  })
-
-  it('ignores an id the document no longer carries, such as one undone before sealing', () => {
-    const content = doc('The meeting went badly', {
-      anchorId: 'a1',
-      kind: 'strike',
-      from: 4,
-      to: 11,
-    })
-
-    expect(relationTypeForAnchors(['gone'], content)).toBe('annotation')
+    expect(relationTypeForAnchors([comment, strike])).toBe('update')
   })
 })

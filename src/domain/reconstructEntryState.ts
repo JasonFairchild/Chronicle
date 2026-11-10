@@ -8,7 +8,7 @@ import {
   versionedFieldsOf,
 } from '@/types/entry'
 
-import { resolveAnchors } from './anchors'
+import { collectAnchors } from './anchors'
 
 export interface ReconstructOptions {
   /** Reconstruct the state as it stood at this moment. Omit for current state. */
@@ -123,6 +123,11 @@ function resolveRelatedEntries(
   depth: number,
 ): ResolvedRelatedEntry[] {
   const resolved: ResolvedRelatedEntry[] = []
+  // Against the version being viewed, not the original: the anchors live in the parent's document,
+  // so "which version" is the whole question of where they are.
+  const anchorsById = new Map(
+    collectAnchors(current.content).map((anchor) => [anchor.anchor_id, anchor]),
+  )
 
   for (const child of descendants) {
     if (child.relation_type !== 'annotation' && child.relation_type !== 'update') continue
@@ -135,9 +140,9 @@ function resolveRelatedEntries(
     resolved.push({
       entry,
       relation_type: child.relation_type,
-      // Against the version being viewed, not the original: the anchors live in the parent's
-      // document, so "which version" is the whole question of where they are.
-      anchors: resolveAnchors(child.anchors, current.content),
+      // Skipping is a backstop: the lock and the one-write seal leave none missing (ENTRY_MODEL.md,
+      // "Anchor resolution").
+      anchors: child.anchor_ids.flatMap((anchorId) => anchorsById.get(anchorId) ?? []),
       has_children: hasVisibleChildren(child.id, walk),
     })
   }

@@ -74,7 +74,7 @@ describe('useEntriesStore', () => {
     ])
   })
 
-  it('gives a related entry the title its draft carries', async () => {
+  it('seals a related entry with nothing anchored as an annotation, titled as its draft is', async () => {
     const parent = await seedEntry('I went to Lake Tahoe with Dad')
 
     const sealed = await sealDraft(
@@ -82,6 +82,7 @@ describe('useEntriesStore', () => {
     )
 
     expect(sealed.title).toBe('A later thought')
+    expect(sealed.relation_type).toBe('annotation')
   })
 
   it('anchors a related entry to a passage by sealing it together with a parent revision', async () => {
@@ -105,13 +106,7 @@ describe('useEntriesStore', () => {
     // Commenting claims nothing changed, so the kind follows from the anchor rather than a picker.
     expect(aggregated?.related_entries[0]?.relation_type).toBe('annotation')
     expect(aggregated?.related_entries[0]?.anchors).toEqual([
-      {
-        anchor_id: 'anchor-1',
-        status: 'present',
-        quote: 'Lake Tahoe',
-        kind: 'comment',
-        insertion: null,
-      },
+      { anchor_id: 'anchor-1', kind: 'comment', passage: 'Lake Tahoe', wording: null },
     ])
     // The anchors went into a new version; the row the parent was written as is untouched.
     expect((await entryRepository.getById(parent.id))?.content).toBe(parent.content)
@@ -161,7 +156,7 @@ describe('useEntriesStore', () => {
       }),
     )
 
-    expect(sealed.anchors).toEqual([{ anchor_id: 'anchor-2', quote: 'Dad' }])
+    expect(sealed.anchor_ids).toEqual(['anchor-2'])
   })
 
   it('holds no work in a revision draft unchanged from its base, though the entry has moved on', async () => {

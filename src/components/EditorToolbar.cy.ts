@@ -226,7 +226,7 @@ describe('EditorToolbar', () => {
       .invoke('getJSON')
       .then((document) => {
         expect(collectAnchors(document as EntryDocument)).to.deep.equal([
-          { anchor_id: 'anchor-1', kind: 'comment', quote: 'rained', insertion: 'heavily' },
+          { anchor_id: 'anchor-1', kind: 'comment', passage: 'rained', wording: 'heavily' },
         ])
       })
   })

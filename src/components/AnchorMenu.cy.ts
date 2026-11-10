@@ -63,7 +63,7 @@ describe('AnchorMenu', () => {
     cy.then(() => {
       const anchors = anchorsOf(editor)
       expect(anchors).to.have.length(1)
-      expect(anchors[0]).to.include({ kind: 'comment', quote: 'Lake Tahoe' })
+      expect(anchors[0]).to.include({ kind: 'comment', passage: 'Lake Tahoe' })
     })
   })
 
@@ -84,7 +84,7 @@ describe('AnchorMenu', () => {
     cy.then(() => {
       const anchors = anchorsOf(editor)
       expect(anchors).to.have.length(1)
-      expect(anchors[0]).to.include({ kind: 'strike', insertion: 'Donner Lake' })
+      expect(anchors[0]).to.include({ kind: 'strike', wording: 'Donner Lake' })
     })
     cy.findByRole('button', { name: 'Strike passage' }).should('have.attr', 'aria-pressed', 'true')
   })

@@ -1,7 +1,7 @@
 // Deliberately not the domain layer: nothing here is about what an entry *is*, only how one shows.
 
 import { previewText } from '@/domain/entryDocument'
-import type { EntryDates, EntryDetails, ResolvedAnchor } from '@/types/entry'
+import type { DocumentAnchor, EntryDates, EntryDetails } from '@/types/entry'
 
 /**
  * How to name an entry where only one line fits — a picker option, a connection's arrow. Its title
@@ -18,28 +18,21 @@ export function entryLabel(entry: { title: string | null; content: string }): st
 /**
  * One line per anchor. A strike and its replacement wording are one anchor sharing one id, not two
  * things to guess into a pair, so there is exactly one case for a strike whether or not it carries
- * replacement wording. An orphaned anchor keeps the wording it covered, so a revision that breaks a
- * reference reads as history rather than disappearing.
+ * replacement wording.
  */
-export function describeAnchor(resolved: ResolvedAnchor): string {
-  if (resolved.status === 'orphaned') {
-    return resolved.quote
-      ? `Was attached to: “${resolved.quote}”`
-      : 'Was attached to a removed passage'
-  }
-
+export function describeAnchor(anchor: DocumentAnchor): string {
   // A kind comes from a passage mark, so no kind is a bare insertion, which always has wording.
-  if (!resolved.kind) return `Adds “${resolved.insertion}”`
+  if (!anchor.kind) return `Adds “${anchor.wording}”`
 
-  const where = `“${resolved.quote}”`
+  const where = `“${anchor.passage}”`
 
-  if (resolved.kind === 'strike') {
-    return resolved.insertion
-      ? `Strikes ${where}, replaced with “${resolved.insertion}”`
+  if (anchor.kind === 'strike') {
+    return anchor.wording
+      ? `Strikes ${where}, replaced with “${anchor.wording}”`
       : `Strikes ${where}`
   }
 
-  return resolved.insertion ? `On ${where}, adds “${resolved.insertion}”` : `On ${where}`
+  return anchor.wording ? `On ${where}, adds “${anchor.wording}”` : `On ${where}`
 }
 
 /**

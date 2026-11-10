@@ -6,7 +6,9 @@
 // Nothing here imports TipTap. The flattening is a walk over plain JSON, which keeps it pure,
 // runnable in node, and independent of whichever editor sits on top.
 
-import { collectAnchors, type DocumentAnchor } from './anchors'
+import type { DocumentAnchor } from '@/types/entry'
+
+import { collectAnchors } from './anchors'
 
 /** A ProseMirror mark as it serializes to JSON. */
 export interface DocMark {
@@ -188,7 +190,7 @@ function anchorKey(anchors: DocumentAnchor[]): string {
  * the document says before and after always is.
  *
  * `sameAnchors` compares only `anchor_id` and `kind` (`collectAnchors`, `@/domain/anchors`),
- * ignoring `quote`/`insertion`: retyping wording moves no anchor and covers no different text, so
+ * ignoring `passage`/`wording`: retyping wording moves no anchor and covers no different text, so
  * it must read as ordinary typing, which `sameText` sees, not as a structural anchor op.
  */
 export function contentDelta(a: string | EntryDocument, b: string | EntryDocument): ContentDelta {

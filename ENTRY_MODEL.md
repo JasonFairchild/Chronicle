@@ -22,7 +22,7 @@ A shared `anchor_id` _is_ the pairing of wording with its passage — a strike p
 
 There is no `replace` op. "I would have written this differently" is a strike plus wording sharing its id; a replace op would imply hiding the parent's text, which nothing does.
 
-**What the related entry stores.** `anchors: AnchorRef[]`, each `{ anchor_id, quote }`: an id referencing marks in the parent, plus the wording it covered at seal time. Empty means it is about the parent at large. `quote` is what renders "was attached to: …" once a later revision has removed the anchor.
+**What the related entry stores.** `anchor_ids`, each referencing marks in the parent. Empty means it is about the parent at large.
 
 **Where wording lives.** The parent's document holds anchor structure and any wording with a position in it; the related entry holds the prose explanation. Per-op commentary should lead to additional related entries. Inline wording is plain single-line text; a thought needing more belongs on the related entry. Wording reads as the parent's own text: `docToPlainText` includes it as typed, so previews and diffs read it, as search will. Its mark, stored in every version, is what keeps it the related entry's.
 
@@ -30,7 +30,7 @@ There is no `replace` op. "I would have written this differently" is a strike pl
 
 ## Anchor resolution
 
-`resolveAnchors` (`domain/anchors.ts`) walks the parent's current document for each `anchor_id`: found is `present`, and the document says what it covers now; not found is `orphaned`, and the related entry's `quote` renders instead. There is no ladder in between, because there is no position to drift: the mark survived the parent's edits or a revision removed it.
+`reconstructEntryState` (`domain/reconstructEntryState.ts`) looks up each of a related entry's `anchor_ids` in the document of the parent's version being viewed, and the document says what it covers. None is missing: the lock below keeps every sealed anchor in its parent's document, and a related entry is sealed in one write with the version that placed its anchors, so any version shown beside a related entry carries every anchor it names. The fold skips one that doesn't, a backstop for a row written outside the app. There is no fallback ladder, because there is no position to drift.
 
 Live editing needs no resolution: anchors are marks in the document being edited, so a revision renders them natively. Resolution is for a reader reconstructing what a related entry points at.
 
@@ -42,7 +42,7 @@ That makes "no related entry is destructive" hold by construction. A guard (`all
 
 What's sealed is the snapshot: in a revision, every anchor in the document it opens; in anchor mode, every anchor in the session's base, so those placed since are the session's own. A wrong base unlocks an earlier related entry's anchors, and the seal writes their removal into the parent's next version. The snapshot relies on an editor never being handed a new document in place: both composers key DocumentEditor on the session, so a new document is a new editor and a new snapshot.
 
-An anchor-mode session edits two documents and seals atomically, via `EntryRepository.createMany`, into a parent revision (`revision_mode: 'anchor'`) and the related entry. If nothing was anchored, only the related entry is written. `createMany` is all-or-nothing, so a revision whose anchors no entry explains, or an entry pointing at ids nothing carries, is never representable. An anchor revision is a version like any other, counted wherever versions are. `revision_mode` only records which kind of session made it, which nothing could recover once stored.
+An anchor-mode session edits two documents and seals atomically, via `EntryRepository.createMany`, into a parent revision (`revision_mode: 'anchor'`) and the related entry. If nothing was anchored, only the related entry is written. `createMany` is all-or-nothing, so the app never writes a revision whose anchors no entry explains, or an entry pointing at ids nothing carries. An anchor revision is a version like any other, counted wherever versions are. `revision_mode` only records which kind of session made it, which nothing could recover once stored.
 
 **Annotation vs update is derived at seal time.** `relationTypeForAnchors` (`domain/anchors.ts`) reads the anchors the session placed: a `strike` or proposed wording makes an `update`; only `comment`s, or no anchors, make an `annotation`. So a `new_related` draft carries no `relation_type`.
 
@@ -81,11 +81,6 @@ type RelationType = 'annotation' | 'update' | 'connection' | 'revision'
 
 type RevisionMode = 'direct' | 'anchor' // which creation experience wrote a revision
 
-interface AnchorRef {
-  anchor_id: string // references a mark/node in the parent's own document
-  quote: string // what the parent said under it at seal time; the orphaned fallback
-}
-
 interface EntryDates {
   recorded_at: string | null // YYYY-MM-DD, user-supplied
   recorded_time_note: string | null // freeform: "evening", "after dinner"
@@ -111,7 +106,7 @@ interface Entry extends VersionedFields {
   parent_id: string | null
   relation_type: RelationType | null
   target_id: string | null // connections only
-  anchors: AnchorRef[] // empty = about the parent at large
+  anchor_ids: string[] // marks in the parent's document; empty = about the parent at large
   revision_mode: RevisionMode | null // revisions only; null everywhere else
   base_version_id: string | null // revisions only: the version this one replaced
   authoring_trace: AuthoringTrace | null
@@ -157,16 +152,15 @@ interface AggregatedEntry extends VersionedFields {
 interface ResolvedRelatedEntry {
   entry: AggregatedEntry
   relation_type: RelationType
-  anchors: ResolvedAnchor[] // its anchors, read out of the parent's current document
+  anchors: DocumentAnchor[] // its anchors, read out of the parent's version being viewed
   has_children: boolean // grandchildren are indicated, not expanded
 }
 
-interface ResolvedAnchor {
+interface DocumentAnchor {
   anchor_id: string
-  status: 'present' | 'orphaned'
-  quote: string // current wording if present, the recorded quote if orphaned
   kind: 'comment' | 'strike' | null // null for a bare insertion with no mark
-  insertion: string | null // wording the anchor carries, if any
+  passage: string // the text the mark covers; empty for a bare insertion
+  wording: string | null // wording the anchor carries, if any
 }
 ```
 

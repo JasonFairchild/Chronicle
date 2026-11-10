@@ -204,7 +204,7 @@ export const useDraftsStore = defineStore('drafts', () => {
 
   /**
    * Not reactive: this holds timers and trace recorders, none of which a template reads, and
-   * a Vue proxy over the draft would not survive structuredClone on its way into the repository.
+   * a Vue proxy over the draft would not survive IndexedDB's clone on its way to disk.
    */
   const active = new Map<string, ActiveSession>()
   let adopting: Promise<void> | null = null

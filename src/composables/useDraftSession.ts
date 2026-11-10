@@ -39,8 +39,8 @@ export function useDraftSession() {
   const sessionId = ref<string | null>(null)
   const content = ref('')
   /**
-   * Title and details. Shallow, and replaced whole on every change, so it stays plain data: the store
-   * clones what it's given on the way to disk, and a deep ref's proxies can't be cloned.
+   * Title and details. Shallow, and replaced whole on every change, so it stays plain data:
+   * IndexedDB clones what it's given, and a deep ref's proxies can't be cloned.
    */
   const fields = shallowRef<DraftFields>(fieldsOf(newDraftEntry()))
   const saving = ref(false)

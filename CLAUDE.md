@@ -47,4 +47,4 @@ The rule most often broken. A permission rule matches the **whole** command stri
 ## Landmarks
 
 - `src/editor/` — schema and the guarded, anchor-aware document commands live only in `extensions.ts`, `anchorCommands.ts` and `anchorGuard.ts`; a second definition or a hand-rolled transaction silently breaks "no related entry is destructive" or anchor-mode exclusivity. A component holding an `Editor` to mount it or drive TipTap UI (`DocumentEditor.vue`, `AnchorMenu.vue`) is fine. The domain layer reads documents as plain JSON, which keeps it node-testable.
-- `src/repositories/index.ts` — the composition root. Four interfaces, each with an in-memory adapter (tests) and a persistent one (app), each proven by a shared `.contract.ts`.
+- `src/repositories/index.ts` — the composition root. Four interfaces, each with one persistent adapter that tests run too (node on `fake-indexeddb`), each proven by a `.contract.ts` a replacement must also pass.

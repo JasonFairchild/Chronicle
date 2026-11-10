@@ -5,9 +5,9 @@ import { compareEntries, type CreateEntryInput, type Entry } from '@/types/entry
  * kind of write that needs them, so a lookup is never paid for a create that cannot violate a rule.
  */
 export interface RelationLookups {
-  loadParent: (id: string) => Entry | undefined | Promise<Entry | undefined>
+  loadParent: (id: string) => Promise<Entry | undefined>
   /** The id of the row an entry's latest version came from, as `latestVersionOf` answers it. */
-  latestVersionId: (entryId: string) => string | Promise<string>
+  latestVersionId: (entryId: string) => Promise<string>
 }
 
 /**
@@ -29,9 +29,9 @@ export function latestVersionOf(entryId: string, revisions: Entry[]): string {
 
 /**
  * The structural relation rules, written once so every adapter enforces exactly the same ones.
- * Each adapter reads rows differently — a Map lookup in memory, an indexed query in Dexie — so the
- * lookups are injected and this module stays pure and node-testable. An adapter runs this inside
- * its write, so what a lookup reads can't change before the write lands.
+ * Each adapter reads rows its own way, so the lookups are injected and this module stays pure and
+ * node-testable. An adapter runs this inside its write, so what a lookup reads can't change before
+ * the write lands.
  *
  * Structure only: nothing here has an opinion about content, which is the editor's business.
  *

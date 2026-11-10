@@ -8,10 +8,7 @@ function pngBlob(): Blob {
   return new Blob([bytes], { type: 'image/png' })
 }
 
-/**
- * One behavioral contract for every `MediaRepository`. In-memory backs node tests, OPFS backs the
- * app; holding both to the same assertions is what makes the swap trustworthy.
- */
+/** What any `MediaRepository` must do, run against OPFS. */
 export function runMediaRepositoryContract(
   label: string,
   createRepository: () => MediaRepository | Promise<MediaRepository>,

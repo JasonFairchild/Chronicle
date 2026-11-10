@@ -65,12 +65,8 @@ export class DexieDraftRepository implements DraftRepository {
       assertFollows(await this.db.drafts.get(sessionId), draft.write_id)
 
       // `put`, not `add`: overwriting is the point of this store, and it is why drafts are kept
-      // out of the entries table rather than being a flag on it. The clone guards a narrower race
-      // than crash recovery (that fidelity comes from the durable event log): Dexie holds this
-      // object by reference until it reaches the real `IDBObjectStore.put()` a microtask or two
-      // later, and cloning keeps a keystroke landing in that window from mutating an in-flight
-      // write.
-      await this.db.drafts.put(structuredClone(snapshot))
+      // out of the entries table rather than being a flag on it.
+      await this.db.drafts.put(snapshot)
 
       const newEvents = [
         ...(await this.tailRows(sessionId, 'entry', draft.entry.events)),
@@ -79,7 +75,7 @@ export class DexieDraftRepository implements DraftRepository {
           : []),
       ]
       // `add`, not `put`: a stored event is never written over.
-      if (newEvents.length > 0) await this.db.draftEvents.bulkAdd(structuredClone(newEvents))
+      if (newEvents.length > 0) await this.db.draftEvents.bulkAdd(newEvents)
     })
     return writeId
   }

@@ -28,7 +28,7 @@ Consider one pass over every spec against TESTING.md's data rules, before going 
 
 ### Track A: the entry and draft path
 
-1. **NewEntryView and the composer shell.** `NewEntryView.vue`, `EntryComposer.vue`, `EntryDetailsFields.vue`, `DraftElsewhereNotice.vue`, `useSealDraft.ts`, `router/draftQuery.ts`, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `realRepositories`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair, `DraftElsewhereNotice` pair, `useSealDraft.test`.
+1. **NewEntryView and the composer shell.** `NewEntryView.vue`, `EntryComposer.vue`, `EntryDetailsFields.vue`, `DraftElsewhereNotice.vue`, `useSealDraft.ts`, `router/draftQuery.ts`, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `nodeSetup`, `realRepositories`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair, `DraftElsewhereNotice` pair, `useSealDraft.test`.
 2. **App shell.** `main.ts`, `App.vue`, `AppLayout.vue`, `router/index.ts`, `useLayoutWidth.ts`, `useStoragePersistence.ts`, `useTabLifecycle.ts`. Specs: `App.flow` pair, `useStoragePersistence.test`.
 3. **Timeline and Drafts.** `TimelineView.vue`, `EntryList.vue`, `EntryCard.vue`, `DraftsView.vue`. Specs: `EntryCard` pair, `DraftsView` component and flow pairs.
 4. **EntryDetailView.** `EntryDetailView.vue`, `RelatedEntryComposer.vue`. Item 3 rewrites the breadcrumbs. Specs: `EntryDetailView` component and flow pairs.
@@ -36,7 +36,7 @@ Consider one pass over every spec against TESTING.md's data rules, before going 
 6. **draftsStore.** Spec: `draftsStore.test`.
 7. **entriesStore.** Item 3 changes `inputsForDraft`. Spec: `entriesStore.test`.
 8. **The entry model.** `reconstructEntryState.ts`, `entryValidation.ts`. Item 3 changes connection gathering and `assertValidRelation`. Specs: `reconstructEntryState.test`, `entryValidation.test`.
-9. **Repository interfaces and in-memory twins.** `entryRepository`, `draftRepository`, `markSetRepository`, `mediaRepository`, and the in-memory entry, draft, mark set and media adapters. Specs: the four `.contract.ts`, `inMemory*.test`.
+9. **Repository interfaces.** `entryRepository`, `draftRepository`, `markSetRepository`, `mediaRepository`. Specs: the four `.contract.ts`.
 10. **Persistent adapters and the composition root.** `chronicleDatabase.ts`, `dexieEntryRepository`, `dexieDraftRepository`, `dexieMarkSetRepository`, `opfsMediaRepository`, `repositories/index.ts`. Specs: `dexie*.browser.test`, `opfsMediaRepository.browser.test`.
 
 ### Track B: the editor

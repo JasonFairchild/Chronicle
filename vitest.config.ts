@@ -33,6 +33,11 @@ export default mergeConfig(
           test: {
             name: 'unit',
             environment: 'node',
+            setupFiles: ['./src/testing/nodeSetup.ts'],
+            // `setImmediate` stays real: fake-indexeddb schedules every request on it.
+            fakeTimers: {
+              toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+            },
             include: ['src/**/*.{test,spec}.ts'],
             exclude: ['src/**/*.browser.{test,spec}.ts'],
           },

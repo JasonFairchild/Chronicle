@@ -6,9 +6,7 @@ import { emptyDocument, type EntryDocument } from '@/domain/entryDocument'
 import { DEFAULT_MARK_POLICY } from '@/domain/marks'
 import { documentsFromFrames } from '@/editor/markFrames'
 import { replayDocument } from '@/editor/replay'
-import { markSetRepository, setEntryRepository, setMarkSetRepository } from '@/repositories'
-import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
-import { InMemoryMarkSetRepository } from '@/repositories/inMemoryMarkSetRepository'
+import { markSetRepository } from '@/repositories'
 import { useMarkSetsStore } from '@/stores/markSetsStore'
 import { plainTextDocument, textContent } from '@/testing/documents'
 import { seedEntry } from '@/testing/seedEntry'
@@ -37,8 +35,6 @@ function traceOfTyping(base: EntryDocument, typed: string): AuthoringTrace {
 describe('useMarkSetsStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    setEntryRepository(new InMemoryEntryRepository())
-    setMarkSetRepository(new InMemoryMarkSetRepository())
   })
 
   /** A revision that finished "It rained" with " all day.", so its trace starts from that version. */

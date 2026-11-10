@@ -4,7 +4,6 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import type { DraftSession } from '@/composables/useDraftSession'
 import { useSealDraft } from '@/composables/useSealDraft'
-import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { textContent } from '@/testing/documents'
 import { seedEntry } from '@/testing/seedEntry'
 
@@ -26,10 +25,7 @@ function sealWith(save: DraftSession['save']) {
 
 describe('useSealDraft', () => {
   it('lands on the page of the entry it saved', async () => {
-    const saved = await seedEntry(
-      { content: textContent('We drove up on Friday.') },
-      new InMemoryEntryRepository(),
-    )
+    const saved = await seedEntry({ content: textContent('We drove up on Friday.') })
     const { seal, push } = sealWith(async () => saved)
 
     await seal()

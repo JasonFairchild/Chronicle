@@ -12,12 +12,11 @@ import { OpfsMediaRepository } from './opfsMediaRepository'
 // other module — the stores, the views, the domain layer — imports from here and never names a
 // concrete adapter, so switching backends (Dexie now, SQLite WASM + OPFS later; CHRONICLE_PLAN.md)
 // means changing the lines below and nothing else. The `.contract.ts` suites are what make that
-// swap trustworthy: every adapter runs the same behavioral suite.
+// swap trustworthy: a new adapter must pass what the current one passes.
 //
-// `let`, not `const`: ES module bindings are live, so a component test can call the setters to
-// point the whole app at isolated instances before mounting, and every module that imported one of
-// these — including the stores, whose closures captured the binding, not a snapshot of its value —
-// sees the swap.
+// `let`, not `const`: ES module bindings are live, so a test's setup can call the setters to point
+// the whole app at isolated storage, and every module that imported one of these — including the
+// stores, whose closures captured the binding, not a snapshot of its value — sees the swap.
 
 /** One connection, since sealing touches entries and drafts in the same breath. */
 const database = new ChronicleDatabase('chronicle')

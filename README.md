@@ -6,7 +6,7 @@ Local-first Progressive Web App for personal life mapping and journaling. Every 
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) is the whole app on one page: each layer, and how data moves between them.
 
-Storage sits behind four repository interfaces — entries, drafts, mark sets, media — and a single composition root (`src/repositories/index.ts`) decides which adapter implements each. Nothing in the stores, views, or domain layer names a concrete adapter, so changing a backend is a one-line change. Each interface has an in-memory adapter for tests and a persistent one for the app (Dexie, or OPFS for media), and both run the same behavioral suite from its `.contract.ts`, which is what makes that swap trustworthy rather than merely claimed.
+Storage sits behind four repository interfaces — entries, drafts, mark sets, media — and a single composition root (`src/repositories/index.ts`) decides which adapter implements each. Nothing in the stores, views, or domain layer names a concrete adapter, so changing a backend is a one-line change. Each interface has one adapter today (Dexie, or OPFS for media), and tests run it rather than a stand-in: node specs run Dexie on `fake-indexeddb`. Its `.contract.ts` is the behavioral suite a replacement must pass, which is what makes that swap trustworthy rather than merely claimed.
 
 Nothing is stored in the form it's viewed in. Entries are append-only, and `reconstructEntryState` folds an entry's revisions into its state now or at any earlier moment, alongside the entries related to it. A writing session is recorded as ProseMirror steps — an event log that replays to the saved content exactly — and the points worth stopping at in its history are derived from that log under a tunable policy, cached as deletable mark sets rather than stored with it. The domain layer reads documents as plain JSON, so this logic is pure and testable in node.
 
@@ -24,7 +24,7 @@ Nothing is stored in the form it's viewed in. Entries are append-only, and `reco
 
 ## Testing
 
-Tests are written from the user's perspective: they simulate real interaction and assert what a user can see. Every spec runs real stores over real repositories on an isolated database. A component spec is one screen: storage is seeded beneath it and never read back. A flow spec (`.flow.`) mounts the app at a route and follows one path from the click down to what's stored, across as many screens as it takes. Unit tests cover only what the UI can't reach — many-case pure logic, timing and races, fault injection — and each repository's contract suite holds every adapter to the same behavior.
+Tests are written from the user's perspective: they simulate real interaction and assert what a user can see. Every spec runs real stores over real repositories on an isolated database. A component spec is one screen: storage is seeded beneath it and never read back. A flow spec (`.flow.`) mounts the app at a route and follows one path from the click down to what's stored, across as many screens as it takes. Unit tests cover only what the UI can't reach — many-case pure logic, timing and races, fault injection — and each repository's contract suite holds its adapter, and any replacement, to the same behavior.
 
 Component and flow specs run in both Vitest Browser Mode and Cypress, deliberately duplicated to compare the two runners on the same cases.
 

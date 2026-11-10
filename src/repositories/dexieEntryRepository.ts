@@ -13,9 +13,8 @@ function stripStorage(entry: StoredEntry): Entry {
 
 /**
  * SQLite WASM + OPFS is the preferred long-term adapter (CHRONICLE_PLAN.md); Dexie ships first
- * because it needs no cross-origin isolation headers and proves the same interface can be backed
- * by more than one storage engine. `entryRepository.contract.ts` is what makes that provable: both
- * adapters run the identical behavioral suite.
+ * because it needs no cross-origin isolation headers. `entryRepository.contract.ts` is what the
+ * SQLite adapter will have to pass to replace it.
  */
 export class DexieEntryRepository implements EntryRepository {
   constructor(private db: ChronicleDatabase) {}
@@ -80,13 +79,10 @@ export class DexieEntryRepository implements EntryRepository {
     const subtree = new Map<string, StoredEntry>([[rootId, root]])
     let frontier = [rootId]
 
-    // Indexed breadth-first expansion rather than the repeated full-table scan the in-memory
-    // adapter uses: each level here is one indexed query instead of a scan-until-fixpoint loop.
-    //
-    // Two edges grow the frontier, not one: parent_id children, and incoming connections (an
-    // entry outside the subtree whose target_id points into it). Both run every iteration, or a
-    // connection's own children — annotations on it, its own revisions — are found once as a
-    // one-level graft and never explored further themselves.
+    // Breadth-first, one indexed query per level. Two edges grow the frontier, not one: parent_id
+    // children, and incoming connections (an entry outside the subtree whose target_id points into
+    // it). Both run every iteration, or a connection's own children — annotations on it, its own
+    // revisions — are found once as a one-level graft and never explored further themselves.
     while (frontier.length > 0) {
       const [children, incoming] = await Promise.all([
         this.db.entries.where('parent_id').anyOf(frontier).toArray(),

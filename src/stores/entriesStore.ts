@@ -164,8 +164,8 @@ function anchoredInputs(
 export const useEntriesStore = defineStore('entries', () => {
   /**
    * Immutable snapshots, replaced wholesale and never mutated in place, so deep reactivity would
-   * only cost proxies. Keeping them raw also stops a proxy from reaching the repository, which
-   * clones with structuredClone and cannot clone one.
+   * only cost proxies. Keeping them raw also stops a proxy from reaching IndexedDB, whose own clone
+   * refuses one.
    */
   const rootEntries = shallowRef<AggregatedEntry[]>([])
   const loading = ref(false)

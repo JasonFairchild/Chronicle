@@ -1,6 +1,6 @@
 # Every file with a spec of its own
 
-Status: commit 1 written, not yet committed. Coverage baseline recorded under commit 18.
+Status: not started. Coverage baseline recorded under commit 17.
 
 ## Context
 
@@ -8,7 +8,7 @@ TESTING.md says each source file has a spec of its own, proving that file's code
 
 This plan gives every `src` file a spec of its own, merges it into its caller, or notes why it has neither. For each spec there are two steps: write it, then cut whatever it now makes redundant, wherever that is. Flows that repeat a screen's own spec are cut too. A coverage pass comes last.
 
-It is independent of the review units: each commit stands alone, so a file's spec can be written in its review unit or on its own. This file is deleted when the last commit lands, once anything that outlasts it has moved into the docs (commit 19).
+It is independent of the review units: each commit stands alone, so a file's spec can be written in its review unit or on its own. This file is deleted when the last commit lands, once anything that outlasts it has moved into the docs (commit 18).
 
 ## Decisions
 
@@ -31,7 +31,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
 - **`useTabLifecycle`: browser-only spec with a host.** Its point is real `pagehide`/`visibilitychange`/`focus` events listened for in `onMounted`, which need a mounted instance and a browser.
   - The spec mounts, through `renderComponent`, a host component that only calls the composable.
   - There's no Cypress mirror, since nothing user-facing is mounted. This matches the Dexie and OPFS adapters.
-  - TESTING.md says otherwise today (non-components get a node spec; every mounting `.browser.test.ts` has a mirror; no `defineComponent` in component tests). So commit 9 amends it then, not later.
+  - TESTING.md says otherwise today (non-components get a node spec; every mounting `.browser.test.ts` has a mirror; no `defineComponent` in component tests). So commit 8 amends it then, not later.
   - Proposed line, to decide at that commit: _"A composable whose point is a browser's events or focus, needing a mounted instance, is proven in the browser project alone, through a host component that only calls it; the host is scaffolding, not the subject, so it has no Cypress mirror."_ Developer note: When we get to anything that actually implements this, I want to talk about it as I don't know that I fully agree.
 - **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, its only caller.**
   - AppLayout provides through an exported `layoutWidthKey`. That's an app use, not a test entry point.
@@ -60,7 +60,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
 
 ## Mechanics found so far
 
-These move to the write-tests skill's `mechanics.md` in commit 19, wherever it doesn't already say them.
+These move to the write-tests skill's `mechanics.md` in commit 18, wherever it doesn't already say them.
 
 - A composable calling `useRouter()` runs in node under `app.runWithContext()`, with a hand-built router (`useSealDraft.test.ts`).
 - `src/router/index.ts` can't load in node: `createWebHistory` runs at import and reads `window`. So `createTestRouter()` is browser-only.
@@ -69,7 +69,7 @@ These move to the write-tests skill's `mechanics.md` in commit 19, wherever it d
 
 ## Applies beyond its file
 
-Changes one commit made to how a test is written that other specs should get too. Each entry gives the change, the commit it came from, and the specs a grep found the same pattern in. A later commit that reworks one of those specs applies the change there and takes the spec off the list; commit 17 applies the rest.
+Changes one commit made to how a test is written that other specs should get too. Each entry gives the change, the commit it came from, and the specs a grep found the same pattern in. A later commit that reworks one of those specs applies the change there and takes the spec off the list; commit 16 applies the rest.
 
 - None yet.
 
@@ -79,13 +79,10 @@ Every commit: `npm run typecheck`, each new test seen failing first (break the l
 
 When a commit changes how a test is written, not just what it proves, grep the other specs for the same pattern and add what turns up to "Applies beyond its file", without asking.
 
-1. **Remove the dead in-memory singleton.** `inMemoryEntryRepository.ts:137` exports `entryRepository = new InMemoryEntryRepository()`, which nothing imports.
-   - Verify: `npm run test -- src/repositories/inMemoryEntryRepository.test.ts`.
-
-2. **`useDraftSession` spec**, `src/composables/useDraftSession.test.ts`, node. Setup follows `draftsStore.test.ts`:
-   - `setActivePinia(createPinia())`, with in-memory entry and draft repositories through the composition root's setters.
+1. **`useDraftSession` spec**, `src/composables/useDraftSession.test.ts`, node. Setup follows `draftsStore.test.ts`:
+   - `setActivePinia(createPinia())`, over the fresh storage `nodeSetup.ts` gives every node spec.
    - `anotherTab()` is a second Pinia over the same repositories.
-   - A same-moment conflict comes from `InMemoryDraftRepository.save` throwing `DraftConflictError`. Gone and quiet reloads come from the first tab's `adoptChangesElsewhere()`.
+   - A same-moment conflict comes from `draftRepository.save` throwing `DraftConflictError`. Gone and quiet reloads come from the first tab's `adoptChangesElsewhere()`.
    - Tests:
      - begins with nothing written
      - resumes a draft with its words, title, details, and the parent's content, base and title
@@ -104,11 +101,11 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - abandon keeps what reached disk; reset clears everything for the next entry
    - Verify: the new spec.
 
-3. **Cut the session's owners to their wiring.** Each candidate is coverage-checked first. Nothing is deleted outright. Shrink:
+2. **Cut the session's owners to their wiring.** Each candidate is coverage-checked first. Nothing is deleted outright. Shrink:
    - **NewEntryView "keeps what was written, and says why, when the discard fails":** the words are still there after a failed discard. That is `handleDiscard` beginning only once `discard` resolves. Drop the alert wording, which is EntryComposer's.
-   - **NewEntryView "reopens the draft it links to…":** that `?draft=` is resumed; its words are enough. Its title and dates move to commit 2.
-   - **NewEntryView "shows a linked draft that will not reopen…":** no fresh draft over a read-only one, and one begins once it's discarded. The read-only reason moves to commit 2.
-   - **NewEntryView "offers a new entry once its draft is saved or discarded elsewhere":** the Start a new entry button, plus one check that the notice shows. This is the only proof the page mounts `DraftElsewhereNotice`, since commit 9 cuts App.flow's wording.
+   - **NewEntryView "reopens the draft it links to…":** that `?draft=` is resumed; its words are enough. Its title and dates move to commit 1.
+   - **NewEntryView "shows a linked draft that will not reopen…":** no fresh draft over a read-only one, and one begins once it's discarded. The read-only reason moves to commit 1.
+   - **NewEntryView "offers a new entry once its draft is saved or discarded elsewhere":** the Start a new entry button, plus one check that the notice shows. This is the only proof the page mounts `DraftElsewhereNotice`, since commit 8 cuts App.flow's wording.
    - **EntryDetailView:**
      - "keeps a revision open… when its save fails" and "turns a revision read-only… once its save is refused": what `saveRevision` itself does on a failure and on null.
      - "opens a revision it was linked to read-only…": the link resumes into the revision composer.
@@ -119,7 +116,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
    - The NewEntryView conflict flow stays: it reads disk.
    - Verify: the unit spec, then the NewEntryView, EntryDetailView and EntryComposer browser and Cypress specs, component and flow.
 
-4. **Cut flow assertions a screen's spec already owns.** Each one is checked first for whether a later read waits on it.
+3. **Cut flow assertions a screen's spec already owns.** Each one is checked first for whether a later read waits on it.
    - NewEntryView.flow Discard: the emptied Title and body (86–87). The deleted-row check stays.
    - NewEntryView.flow save, "details and all": the four detail-line strings (47–53) shrink to one line, or become a read of the stored details. This is the flow's end check, so it can't simply go.
    - EntryDetailView.flow "adds a related entry…": the About breadcrumb (38–41), unless it's the wait for the landing.
@@ -129,7 +126,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - "frees the entry when the page is left…": the only end-to-end proof, and a cross-screen UI check.
    - Verify: `npm run test:browser -- .flow.` and `npm run cy:run -- --spec "src/**/*.flow.cy.ts"`.
 
-5. **`RelatedEntryComposer` pair**, on a real session begun or resumed for `new_related` on a seeded entry.
+4. **`RelatedEntryComposer` pair**, on a real session begun or resumed for `new_related` on a seeded entry.
    - Tests:
      - two regions, "This entry" and "The related entry"
      - in anchor mode, the instructions and optional-marking hint show, and the parent editor is described by them
@@ -140,7 +137,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
    - Cuts: EntryDetailView "shows the parent's own title in the anchor-mode composer" moves here, and the page keeps only that it opens the composer.
    - Verify: the new pair and the EntryDetailView pair.
 
-6. **`EntryDetailsFields` pair.**
+5. **`EntryDetailsFields` pair.**
    - Tests:
      - each field shows its value
      - typing emits a whole new object with only that key changed (spy on `onUpdate:modelValue` in `attrs`)
@@ -151,7 +148,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
    - Cuts: none expected. Check EntryDetailView "revises one detail…" for an "others untouched" assertion it can drop.
    - Verify: the new pair and the EntryComposer pair.
 
-7. **`types/draft.ts` spec**, `src/types/draft.test.ts`.
+6. **`types/draft.ts` spec**, `src/types/draft.test.ts`.
    - `versionsRevisedBy` as a table over the kinds.
    - `newDraftEntry` is empty.
    - `draftFieldsOf` drops `content` and `media_refs` and keeps the rest.
@@ -159,13 +156,13 @@ When a commit changes how a test is written, not just what it proves, grep the o
    - Cuts: none; the contracts prove adapters.
    - Verify: the new spec.
 
-8. **`router/draftQuery.ts` spec**, `src/router/draftQuery.test.ts`.
+7. **`router/draftQuery.ts` spec**, `src/router/draftQuery.test.ts`.
    - `draftLocation` as a table over the kinds.
    - `useDraftToResume` under `app.runWithContext()` with a hand-built memory router, as `useSealDraft.test.ts` does: a string, absent, a repeated `?draft=` → null, and following a route change.
    - Cuts: DraftsView "lists drafts newest first…" keeps one Resume `href` of four, as wiring.
    - Verify: the new spec and the DraftsView pair.
 
-9. **`useTabLifecycle` spec**, `src/composables/useTabLifecycle.browser.test.ts`, browser-only with a host. Amends TESTING.md as in Decisions.
+8. **`useTabLifecycle` spec**, `src/composables/useTabLifecycle.browser.test.ts`, browser-only with a host. Amends TESTING.md as in Decisions.
    - Tests:
      - return fires on `focus` and on becoming visible, not on hiding
      - leave fires on `pagehide` and on hiding, not on showing
@@ -178,23 +175,23 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - The draft label at 141 is DraftsView's.
    - Verify: the new spec and the App.flow pair.
 
-10. **`AppLayout` pair, plus `dismiss` in `useStoragePersistence`'s own spec.**
-    - `useStoragePersistence.test.ts` gains: a dismissal hides the notice and is remembered across a reload (it reads the key at import). It's untested today, and AppLayout's spec mustn't be its only proof.
-    - AppLayout's tests:
-      - the brand and three nav links by `href`
-      - the storage notice shown after a refusal, and gone on Dismiss
-    - `dismissed` is module state read once at import. So the nav test runs first, a single test covers refusal then Dismiss, and an `afterEach` removes `chronicle:storage-notice-dismissed`.
-    - `aria-current` is RouterLink's, and the width class is styling; neither is asserted.
-    - Verify: both specs.
+9. **`AppLayout` pair, plus `dismiss` in `useStoragePersistence`'s own spec.**
+   - `useStoragePersistence.test.ts` gains: a dismissal hides the notice and is remembered across a reload (it reads the key at import). It's untested today, and AppLayout's spec mustn't be its only proof.
+   - AppLayout's tests:
+     - the brand and three nav links by `href`
+     - the storage notice shown after a refusal, and gone on Dismiss
+   - `dismissed` is module state read once at import. So the nav test runs first, a single test covers refusal then Dismiss, and an `afterEach` removes `chronicle:storage-notice-dismissed`.
+   - `aria-current` is RouterLink's, and the width class is styling; neither is asserted.
+   - Verify: both specs.
 
-11. **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, drop the fallback, then spec it.** The source change: AppLayout provides through an exported `layoutWidthKey`, and `useLayoutWidth` throws with no provider.
+10. **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, drop the fallback, then spec it.** The source change: AppLayout provides through an exported `layoutWidthKey`, and `useLayoutWidth` throws with no provider.
     - `src/composables/useLayoutWidth.test.ts`, node, under `app.runWithContext()`:
       - returns the ref provided under the key
       - throws with no provider
     - EntryDetailView's `mountDetail`, in both runners, provides a width ref through the mount's `global.provide`. The pair gains one test: that ref turns `'wide'` while the related composer is open, and back to `'normal'` after Discard and after unmount.
     - Verify: the new spec, and the AppLayout and EntryDetailView pairs.
 
-12. **`EntryList` and `TimelineView` pairs, and drop `emptyMessage`.**
+11. **`EntryList` and `TimelineView` pairs, and drop `emptyMessage`.**
     - EntryList: the empty text, and a card per entry in the order given.
     - TimelineView:
       - lists root entries once mounted
@@ -203,28 +200,28 @@ When a commit changes how a test is written, not just what it proves, grep the o
     - Source change: `loadRootEntries` rethrows, so `void store.loadRootEntries()` would leave an unhandled rejection that fails both runners. The call becomes `.catch(() => {})`, since `store.error` already says why, as DraftsView's `refresh` does.
     - Verify: both pairs.
 
-13. **`compareMarkSets` spec**, `src/types/markSet.test.ts`, mirroring `compareEntries` in `entry.test.ts`: by `created_at`, tied on `id`. The contract hits the tie only by chance.
+12. **`compareMarkSets` spec**, `src/types/markSet.test.ts`, mirroring `compareEntries` in `entry.test.ts`: by `created_at`, tied on `id`. The contract hits the tie only by chance.
     - Verify: the new spec.
 
-14. **Media MIME helpers spec**, `src/repositories/mediaRepository.test.ts`.
+13. **Media MIME helpers spec**, `src/repositories/mediaRepository.test.ts`.
     - Every known type round-trips through `extensionForMime` → id → `mimeForMediaId`.
     - An unknown type gives `bin`; an unknown extension gives `application/octet-stream`.
     - Verify: the new spec.
 
-15. **Route table spec**, `src/router/index.browser.test.ts`, browser-only, since `createWebHistory` reads `window` at import. Uses `createTestRouter()`, and `await router.push(...)`, because `resolve()` doesn't follow redirects:
+14. **Route table spec**, `src/router/index.browser.test.ts`, browser-only, since `createWebHistory` reads `window` at import. Uses `createTestRouter()`, and `await router.push(...)`, because `resolve()` doesn't follow redirects:
     - `/` lands on `new-entry`
     - `/entries/new` is `new-entry`, not an entry called "new"
     - `/entries/:id` passes `id` as a prop
     - Least value: every flow already leans on all three.
     - Verify: the new spec.
 
-16. **Dropped: a `useRovingTabindex` spec.** EditorToolbar is its only caller, and that pair proves it through the toolbar the app runs. The one case it planned that the pair lacks, the stop moving off a control once it's disabled, would go there.
+15. **Dropped: a `useRovingTabindex` spec.** EditorToolbar is its only caller, and that pair proves it through the toolbar the app runs. The one case it planned that the pair lacks, the stop moving off a control once it's disabled, would go there.
 
-17. **Apply what's left under "Applies beyond its file."** It comes before the coverage pass, so coverage measures the finished specs.
+16. **Apply what's left under "Applies beyond its file."** It comes before the coverage pass, so coverage measures the finished specs.
     - Verify: each spec it touched, in the runners that spec runs in.
 
-18. **Coverage pass.** `npm run test:coverage` over the whole suite. Any line the cuts left unreached either gets a test in the spec of the file it belongs to, or is judged a gap that TESTING.md's "Coverage" says doesn't earn one. Then the full component suites once (`npm run test:browser`, `npm run cy:run`), since the cuts touched shared views.
-    - Compare with the baseline taken before commit 1 (2026-10-23; 39 files, 431 tests):
+17. **Coverage pass.** `npm run test:coverage` over the whole suite. Any line the cuts left unreached either gets a test in the spec of the file it belongs to, or is judged a gap that TESTING.md's "Coverage" says doesn't earn one. Then the full component suites once (`npm run test:browser`, `npm run cy:run`), since the cuts touched shared views.
+    - Compare with the baseline taken 2026-10-23 (39 files, 431 tests):
 
       |              | Stmts             | Branch            | Funcs          | Lines             |
       | ------------ | ----------------- | ----------------- | -------------- | ----------------- |
@@ -238,7 +235,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
       | utils        | 100               | 96.96             | 100            | 100               |
       | views        | 93                | 85.77             | 97.56          | 95.54             |
 
-19. **Docs.**
+18. **Docs.**
     - TESTING.md gains a short "Files without a spec of their own" list, with the reasons above.
     - CODE_REVIEW.md:
       - Each unit's "Specs:" list gains the new specs (Track A units 1–5; Track B unit 4 for `markSet.test`).

@@ -6,9 +6,9 @@ import { runEntryRepositoryContract } from '@/repositories/entryRepository.contr
 import { freshEntryRepository } from '@/testing/realRepositories'
 import { seedEntry } from '@/testing/seedEntry'
 
-// Real IndexedDB, via Playwright Chromium — Dexie has nothing to fall back to in node, which is
-// why this adapter is only proven here rather than in the unit project. Each test gets its own
-// database, which `realRepositories.ts` deletes after.
+// Real IndexedDB, via Playwright Chromium. Not in node too: on fake-indexeddb it would prove the
+// fake rather than the adapter. Each test gets its own database, which `realRepositories.ts`
+// deletes after.
 runEntryRepositoryContract('Dexie', () => freshEntryRepository())
 
 describe('DexieEntryRepository persistence', () => {

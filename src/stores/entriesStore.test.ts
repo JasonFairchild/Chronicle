@@ -1,10 +1,9 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ANCHOR_MARK, docToPlainText, type EntryDocument } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
-import { entryRepository, setEntryRepository } from '@/repositories'
-import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
+import { entryRepository } from '@/repositories'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument, textContent } from '@/testing/documents'
@@ -55,11 +54,6 @@ async function sealDraft(draft: Draft): Promise<Entry> {
 describe('useEntriesStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    // Fresh in-memory repository per test: fast and node-friendly. The composition root's real
-    // default (Dexie) gets its own dedicated persistence proof in dexieEntryRepository.browser.test.ts
-    // — the store doesn't need to re-prove that, only that it talks to whatever `entryRepository`
-    // points at.
-    setEntryRepository(new InMemoryEntryRepository())
   })
 
   it('loads the root timeline from the repository', async () => {
@@ -332,9 +326,9 @@ describe('useEntriesStore', () => {
     })
 
     it('surfaces why the timeline could not be loaded, rather than failing blank', async () => {
-      const repository = new InMemoryEntryRepository()
-      repository.listRootEntries = () => Promise.reject(new Error('listRootEntries rejected'))
-      setEntryRepository(repository)
+      vi.spyOn(entryRepository, 'listRootEntries').mockRejectedValueOnce(
+        new Error('listRootEntries rejected'),
+      )
       const store = useEntriesStore()
 
       await expect(store.loadRootEntries()).rejects.toThrow('listRootEntries rejected')

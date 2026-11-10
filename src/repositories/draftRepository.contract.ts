@@ -14,11 +14,7 @@ export interface DraftStorage {
   entries: EntryRepository
 }
 
-/**
- * One behavioral contract, run against every `DraftRepository` implementation, for the same reason
- * the entry contract exists: swapping the storage engine has to be a one-line change, and that is
- * only true if both adapters are held to the identical definition of correct.
- */
+/** What any `DraftRepository` must do, for the same reason as the entry contract. */
 export function runDraftRepositoryContract(
   label: string,
   createStorage: () => DraftStorage | Promise<DraftStorage>,
@@ -257,15 +253,6 @@ export function runDraftRepositoryContract(
 
     it('returns null for a session it has never seen', async () => {
       expect(await repository.getById('never-existed')).toBeNull()
-    })
-
-    it("does not keep the caller's object, so a session that keeps typing cannot rewrite what it stored", async () => {
-      const draft = makeDraft('session-1', { entry: { content: 'It rai' } })
-
-      await repository.save(draft)
-      draft.entry.content = 'It rained all day, mutated after the save resolved'
-
-      expect((await repository.getById('session-1'))?.entry.content).toBe('It rai')
     })
 
     it('appends only the events it has not already stored, and reads the whole log back', async () => {

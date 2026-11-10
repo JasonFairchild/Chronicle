@@ -19,9 +19,10 @@ import { OpfsMediaRepository } from '@/repositories/opfsMediaRepository'
 // the same approach `dexieEntryRepository.browser.test.ts` and its siblings already use to prove
 // the adapters themselves.
 //
-// Setup and cleanup are global: `cypress/support/component.ts` and `src/testing/browserSetup.ts`
-// each call `freshRepositories()` in a `beforeEach` and `disposeTestRepositories()` in an
-// `afterEach`, so specs reach storage through `@/repositories` and never set it up themselves.
+// Setup and cleanup are global: `cypress/support/component.ts`, `src/testing/browserSetup.ts` and
+// `src/testing/nodeSetup.ts` each point the repositories at fresh storage in a `beforeEach` and
+// call `disposeTestRepositories()` in an `afterEach`, so specs reach storage through
+// `@/repositories` and never set it up themselves.
 
 let counter = 0
 const disposers: Array<() => Promise<void>> = []

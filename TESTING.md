@@ -6,24 +6,24 @@ How tests are written here and why. These apply to component and flow specs in *
 
 | Suffix | Runner | Environment | What belongs here |
 | --- | --- | --- | --- |
-| `*.test.ts` | Vitest, `unit` | node | Source that isn't a component: domain, editor, stores, composables, repositories, types, utils |
+| `*.test.ts` | Vitest, `unit` | node, IndexedDB from `fake-indexeddb` | Source that isn't a component: domain, editor, stores, composables, repositories, types, utils |
 | `*.browser.test.ts` | Vitest, `browser` | real Chromium | Components, and anything needing real browser APIs |
 | `*.cy.ts` | Cypress | real browser | Components, mirroring the `.browser.test.ts` spec |
 | `*.flow.browser.test.ts` | Vitest, `browser` | real Chromium | Flows: the app from a route, down to what's stored |
 | `*.flow.cy.ts` | Cypress | real browser | Flows, mirroring the `.flow.browser.test.ts` spec |
-| `*.contract.ts` | imported, never run | either | A shared suite run against multiple implementations |
+| `*.contract.ts` | imported, never run | real Chromium | What any implementation of an interface must do |
 
 **A flow spec sits beside the view its route starts on**, whatever screens it passes through: a flow from `/entries/new` lives in `NewEntryView.flow.cy.ts`. `App`'s own flows — tab return, flushing on leave — sit beside `App.vue`. The runners' existing globs already match the `.flow.` names; to run only flows, pass `--spec "src/**/*.flow.cy.ts"` to Cypress or `.flow.` to Vitest as a filter.
 
 **Duplicate specs are intentional.** `EntryCard.browser.test.ts` and `EntryCard.cy.ts` cover the same cases on purpose, to compare the two runners, and flow specs pair the same way. Don't consolidate them.
 
-**Each file has a spec of its own, in the runner for its kind.** A component gets a pair: a `.browser.test.ts` and its `.cy.ts` mirror. Anything else gets a node `*.test.ts`, even a composable that injects: `useRouter()` resolves under `app.runWithContext()`. The exception is source needing a real browser API, such as the Dexie and OPFS adapters, proven in the Vitest browser project alone, with nothing to mount for Cypress. Flows are always pairs.
+**Each file has a spec of its own, in the runner for its kind.** A component gets a pair: a `.browser.test.ts` and its `.cy.ts` mirror. Anything else gets a node `*.test.ts`, even a composable that injects: `useRouter()` resolves under `app.runWithContext()`. The exception is source proven against a real browser API, such as the Dexie and OPFS adapters against real IndexedDB and OPFS, in the Vitest browser project alone, with nothing to mount for Cypress. Flows are always pairs.
 
 **Cypress should keep up with Vitest Browser Mode.** Every `.browser.test.ts` that mounts something has a `.cy.ts` mirror, the same as any other duplicated pair.
 
-**Contract suites are for interfaces with more than one implementation.** Each of the four repositories exports one: `entryRepository.contract.ts`, `draftRepository.contract.ts` and `markSetRepository.contract.ts` (each in-memory and Dexie), and `mediaRepository.contract.ts` (in-memory and OPFS). That is what makes "swap the storage backend by changing one line" provable rather than asserted. They are named `.contract.ts` precisely so no runner picks them up directly.
+**Contract suites hold the next adapter to what the current one does.** Each of the four repositories exports one: `entryRepository.contract.ts`, `draftRepository.contract.ts` and `markSetRepository.contract.ts` run against Dexie, and `mediaRepository.contract.ts` against OPFS. A replacement, such as the SQLite adapter (CHRONICLE_PLAN.md), passes the same suite, which is what makes "swap the storage backend by changing one line" provable rather than asserted. They are named `.contract.ts` precisely so no runner picks them up directly.
 
-The persistent halves run in the browser project only — Dexie needs real IndexedDB and OPFS needs a real origin private file system, and neither has anything to fall back to in node.
+They run in the browser project only, against real IndexedDB and a real origin private file system. Node specs run Dexie on `fake-indexeddb`, so a contract there would prove the fake rather than the adapter.
 
 ## Philosophy
 
@@ -57,7 +57,7 @@ A component spec owns everything its own code produces: every state its screen c
 - **When no UI marks the moment, wait on a signal the code already gives** rather than writing a polling helper: spy on the call that awaits the write, await its promise, then read plainly — for absence as well as presence, in both runners. For example, a draft session let go (the page left, a change of entry) calls `drafts.abandonDraft`, which resolves once its flush has landed.
 - **Leave a page the way the writer would:** the header's links, and back through the page you left for (a Timeline card, the Drafts link). Where the same view stays mounted for another entry, push the router there: one the spec builds with `createTestRouter()` and hands to the mount, as `cy.mount`'s `router` option in Cypress.
 
-**Unit specs are a non-component file's own.** They prove its code directly: many cases as a table of inputs, and timing, ordering and races driven deterministically. A store's fault handling — a failed write, a conflict — is proven in the store's spec; what a screen shows for one is the component's. A contract suite proves one interface across its implementations.
+**Unit specs are a non-component file's own.** They prove its code directly: many cases as a table of inputs, and timing, ordering and races driven deterministically. A store's fault handling — a failed write, a conflict — is proven in the store's spec; what a screen shows for one is the component's. A contract suite proves what an interface's implementations must do.
 
 A behavior is proven once, in the spec of the file whose code it is. A component spec doesn't re-prove a store or composable it runs on, and a unit spec doesn't re-walk a component's wiring of it. Before deleting a test because another now covers it, check coverage for lines only it reached, since a test can exercise a path it never asserts.
 
@@ -123,13 +123,13 @@ Someone should understand a test without leaving the file. Abstraction is justif
   renderComponent(DocumentEditor, { props: { label: 'New entry' }, attrs: { onChange } })
   ```
 
-- **Swap the repository, don't mock it.** Every spec in either runner starts on fresh, isolated, **real** storage — real IndexedDB via Dexie, real OPFS — which a global `beforeEach` in `cypress/support/component.ts` and `src/testing/browserSetup.ts` points the composition root at, using the helpers in `src/testing/realRepositories.ts`. A spec seeds it, stubs it and, in a flow, reads it through the composition root's own bindings, which point at that test's instances. Read them inside a test, never captured at module scope, where they'd hold a stale instance:
+- **Swap the repository, don't mock it.** Every spec starts on fresh, isolated, **real** storage — the Dexie and OPFS adapters the app runs — which a global `beforeEach` in `cypress/support/component.ts`, `src/testing/browserSetup.ts` and `src/testing/nodeSetup.ts` points the composition root at, using the helpers in `src/testing/realRepositories.ts`. Node specs run Dexie on `fake-indexeddb`, and have no media repository: none stores media, and OPFS needs a browser. A spec seeds it, stubs it and, in a flow, reads it through the composition root's own bindings, which point at that test's instances. Read them inside a test, never captured at module scope, where they'd hold a stale instance:
 
   ```ts
   import { draftRepository, entryRepository } from '@/repositories'
   ```
 
-  Entries, drafts and mark sets share one uniquely-named database per test, exactly as `src/repositories/index.ts` shares one in production — a transaction cannot span two connections, so a spec covering the anchor-mode atomic seal has to be given the shape it will actually run against. Media gets its own OPFS directory. Neither is opened until first used, so a spec that never touches storage pays almost nothing, and everything created is disposed in one global `afterEach` per runner, once the mounted Pinia's actions settle, so a stub that never settles hangs it. The adapter specs call `freshXRepository()` themselves, since a contract wants an instance per factory call. Plain-Node `*.test.ts` unit tests construct `InMemoryEntryRepository` / `InMemoryDraftRepository` / `InMemoryMediaRepository` directly.
+  Entries, drafts and mark sets share one uniquely-named database per test, exactly as `src/repositories/index.ts` shares one in production — a transaction cannot span two connections, so a spec covering the anchor-mode atomic seal has to be given the shape it will actually run against. Media gets its own OPFS directory. Neither is opened until first used, so a spec that never touches storage pays almost nothing, and everything created is disposed in one global `afterEach` per runner. In the browser runners that waits for the mounted Pinia's actions to settle, so a stub that never settles hangs it. The adapter specs call `freshXRepository()` themselves, since a contract wants an instance per factory call.
 
 - **Fresh instance per test**, not a shared singleton that gets cleared. Isolation by construction.
 

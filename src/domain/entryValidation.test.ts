@@ -30,7 +30,10 @@ function entry(partial: Partial<Entry>): Entry {
   }
 }
 
-const nothing: RelationLookups = { loadParent: () => undefined, latestVersionId: (id) => id }
+const nothing: RelationLookups = {
+  loadParent: async () => undefined,
+  latestVersionId: async (id) => id,
+}
 
 describe('assertValidRelation', () => {
   it('accepts a root entry, which has no relation at all', async () => {
@@ -120,7 +123,7 @@ describe('assertValidRelation', () => {
         relation_type: 'revision',
         base_version_id: 'root-1',
       }),
-      { ...nothing, latestVersionId: () => 'revision-2' },
+      { ...nothing, latestVersionId: async () => 'revision-2' },
     )
 
     await expect(check).rejects.toThrow(StaleVersionError)
@@ -158,7 +161,10 @@ describe('assertValidRelation', () => {
   })
 
   it('never reads anything for a rule that does not need it', async () => {
-    const lookups = { loadParent: vi.fn(nothing.loadParent), latestVersionId: vi.fn((id) => id) }
+    const lookups = {
+      loadParent: vi.fn(nothing.loadParent),
+      latestVersionId: vi.fn(nothing.latestVersionId),
+    }
 
     await assertValidRelation(
       createEntryInput({ content: 'Note', parent_id: 'root-1', relation_type: 'annotation' }),

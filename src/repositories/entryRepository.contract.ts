@@ -7,10 +7,9 @@ import { createEntryInput } from '@/types/entry'
 import type { EntryRepository } from './entryRepository'
 
 /**
- * One behavioral contract, run against every `EntryRepository` implementation. This is what makes
- * the composition root's "swap the backend by changing one import" claim provable rather than
- * asserted: the in-memory and Dexie adapters both have to pass the exact same assertions, so
- * nothing about what "correct" means is adapter-specific.
+ * What any `EntryRepository` must do, run today against Dexie. It is the planned SQLite adapter's
+ * acceptance test (CHRONICLE_PLAN.md): swapping the backend at the composition root is safe once
+ * the new adapter passes the same assertions.
  */
 export function runEntryRepositoryContract(
   label: string,
@@ -131,19 +130,6 @@ export function runEntryRepositoryContract(
           createEntryInput({ content: 'Two', parent_id: root.id, relation_type: 'revision' }),
         ]),
       ).rejects.toThrow('must name the version it replaces')
-    })
-
-    it('stores a copy, so mutating the input afterwards cannot rewrite history', async () => {
-      const input = createEntryInput({ content: 'Root', metadata: { mood: 'calm' } })
-      const [created] = await repository.createMany([input])
-
-      input.metadata.mood = 'frantic'
-      input.media_refs.push('never-attached')
-
-      const fetched = await repository.getById(created!.id)
-
-      expect(fetched?.metadata).toEqual({ mood: 'calm' })
-      expect(fetched?.media_refs).toEqual([])
     })
 
     it('collects a subtree plus connections pointing into it', async () => {

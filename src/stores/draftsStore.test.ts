@@ -3,15 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { docToPlainText } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
-import {
-  draftRepository,
-  entryRepository,
-  setDraftRepository,
-  setEntryRepository,
-} from '@/repositories'
+import { draftRepository, entryRepository } from '@/repositories'
 import { DraftConflictError } from '@/repositories/draftRepository'
-import { InMemoryDraftRepository } from '@/repositories/inMemoryDraftRepository'
-import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
@@ -35,12 +28,6 @@ function anotherTab() {
 describe('useDraftsStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    // Fresh in-memory adapters per test. The Dexie ones get their own persistence proof in
-    // dexieDraftRepository.browser.test.ts; the store only needs to prove it talks to whatever
-    // the composition root points at.
-    const entries = new InMemoryEntryRepository()
-    setEntryRepository(entries)
-    setDraftRepository(new InMemoryDraftRepository(entries))
   })
 
   afterEach(() => {
@@ -63,6 +50,7 @@ describe('useDraftsStore', () => {
       await vi.advanceTimersByTimeAsync(1) // A debounce would have restarted and still be waiting.
 
       expect(save).toHaveBeenCalledOnce()
+      await save.mock.results[0]!.value // The advance starts the write; it lands later.
       const flushed = await draftRepository.getById(sessionId)
       expect(docToPlainText(flushed!.entry.content)).toBe('It rained')
       expect(flushed?.entry.events).toHaveLength(2)
@@ -98,13 +86,16 @@ describe('useDraftsStore', () => {
       vi.useFakeTimers()
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
+      const save = vi.spyOn(draftRepository, 'save')
 
       store.recordChange(sessionId, draftChangeTo('It rained all day.'))
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+      await save.mock.results[0]!.value
       expect(await draftRepository.getById(sessionId)).not.toBeNull()
 
       store.addMark(sessionId) // Nothing else pending: the bookmark alone must schedule a write.
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+      await save.mock.results[1]!.value
 
       const flushed = await draftRepository.getById(sessionId)
       expect(flushed?.entry.events.map((event) => event.kind)).toEqual(['edit', 'manual'])
@@ -114,11 +105,13 @@ describe('useDraftsStore', () => {
       vi.useFakeTimers()
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
+      const save = vi.spyOn(draftRepository, 'save')
 
       store.recordChange(sessionId, draftChangeTo('We drove up on Friday'))
       store.recordFields(sessionId, { title: 'Lake Tahoe' })
 
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+      await save.mock.results[0]!.value
 
       const flushed = await draftRepository.getById(sessionId)
       expect(flushed?.entry.content).toBe(textContent('We drove up on Friday'))
@@ -179,13 +172,6 @@ describe('useDraftsStore', () => {
       const save = vi.spyOn(draftRepository, 'save').mockImplementationOnce(async (draft) => {
         await held
         return originalSave(draft)
-      })
-      // In-memory calls resolve within microtasks, where IndexedDB takes a macrotask. Delay the
-      // catch-up's read as disk would, or it ends before the queued write starts and nothing races.
-      const read = draftRepository.getById.bind(draftRepository)
-      vi.spyOn(draftRepository, 'getById').mockImplementationOnce(async (id) => {
-        await new Promise((resolve) => setTimeout(resolve))
-        return read(id)
       })
       store.recordChange(sessionId, draftChangeTo('It rained all'))
       const losing = store.flush(sessionId)
@@ -283,8 +269,11 @@ describe('useDraftsStore', () => {
 
       // Sealing cancels the scheduled flush, so a refusal has to schedule another.
       await expect(store.sealDraft(sessionId)).rejects.toThrow(StaleVersionError)
+      const save = vi.spyOn(draftRepository, 'save')
       await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
 
+      expect(save).toHaveBeenCalledOnce()
+      await save.mock.results[0]!.value
       const stored = await draftRepository.getById(sessionId)
       expect(docToPlainText(stored!.entry.content)).toBe('I received the offer')
     })

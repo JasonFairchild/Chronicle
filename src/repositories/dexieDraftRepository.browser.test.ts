@@ -6,9 +6,9 @@ import { runDraftRepositoryContract } from '@/repositories/draftRepository.contr
 import { makeDraft } from '@/testing/draftFixtures'
 import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
-// Real IndexedDB, via Playwright Chromium, for the same reason the entry adapter is proven here:
-// Dexie has nothing to fall back to in node. Drafts and entries share one database per test, as
-// the composition root has them, so a seal is one write; `realRepositories.ts` deletes it after.
+// Real IndexedDB, via Playwright Chromium, for the same reason the entry adapter is proven here.
+// Drafts and entries share one database per test, as the composition root has them, so a seal is
+// one write; `realRepositories.ts` deletes it after.
 runDraftRepositoryContract('Dexie', () => ({
   drafts: freshDraftRepository(),
   entries: freshEntryRepository(),

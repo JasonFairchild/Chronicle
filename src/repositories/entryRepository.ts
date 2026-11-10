@@ -1,8 +1,6 @@
 import type { CreateEntryInput, Entry } from '@/types/entry'
 
 export interface EntryRepository {
-  create(input: CreateEntryInput): Promise<Entry>
-
   /**
    * Writes several entries as one unit: either all of them land or none do.
    *
@@ -22,18 +20,8 @@ export interface EntryRepository {
    */
   listRootEntries(): Promise<Entry[]>
 
-  /**
-   * Direct children, **excluding revisions**. Excluding them is the default rather than a rule each
-   * call site has to remember, because forgetting it once renders version snapshots as if they were
-   * annotations.
-   */
-  listChildren(parentId: string): Promise<Entry[]>
-
   /** The version chain's revision entries, oldest first. */
   listRevisions(entryId: string): Promise<Entry[]>
-
-  /** Connections touching this entry from either end. */
-  listConnectionsFor(entryId: string): Promise<Entry[]>
 
   /**
    * Everything needed to reconstruct one entry: itself, its whole subtree, and any connection

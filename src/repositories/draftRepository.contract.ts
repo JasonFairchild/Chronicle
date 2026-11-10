@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { StaleVersionError } from '@/domain/entryValidation'
 import { makeDraft, relatedTo } from '@/testing/draftFixtures'
+import { seedEntry } from '@/testing/seedEntry'
 import { type AuthoringEvent, createEntryInput } from '@/types/entry'
 
 import { DraftConflictError, type DraftRepository } from './draftRepository'
@@ -46,7 +47,7 @@ export function runDraftRepositoryContract(
     })
 
     it('leaves the draft exactly as it was when its entries are refused', async () => {
-      const root = await entries.create(createEntryInput({ content: 'One' }))
+      const root = await seedEntry({ content: 'One' }, entries)
       const staleRevision = () =>
         createEntryInput({
           content: 'Two, from a stale start',
@@ -54,7 +55,7 @@ export function runDraftRepositoryContract(
           relation_type: 'revision',
           base_version_id: root.id,
         })
-      await entries.create(staleRevision())
+      await entries.createMany([staleRevision()])
       const stored = await repository.save(
         makeDraft('session-1', {
           entry: {
@@ -104,7 +105,7 @@ export function runDraftRepositoryContract(
     })
 
     it('returns the entries it seals in the order it was given them', async () => {
-      const root = await entries.create(createEntryInput({ content: 'One' }))
+      const root = await seedEntry({ content: 'One' }, entries)
       const stored = await repository.save(makeDraft('session-1'))
 
       // An anchor-mode seal: the parent's revision, then the related entry, which the caller

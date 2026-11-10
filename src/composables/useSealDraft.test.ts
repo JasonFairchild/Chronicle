@@ -6,7 +6,7 @@ import type { DraftSession } from '@/composables/useDraftSession'
 import { useSealDraft } from '@/composables/useSealDraft'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { textContent } from '@/testing/documents'
-import { createEntryInput } from '@/types/entry'
+import { seedEntry } from '@/testing/seedEntry'
 
 /**
  * The seal handler for a session whose save does as given, with a spy on where it navigates. The
@@ -26,8 +26,9 @@ function sealWith(save: DraftSession['save']) {
 
 describe('useSealDraft', () => {
   it('lands on the page of the entry it saved', async () => {
-    const saved = await new InMemoryEntryRepository().create(
-      createEntryInput({ content: textContent('We drove up on Friday.') }),
+    const saved = await seedEntry(
+      { content: textContent('We drove up on Friday.') },
+      new InMemoryEntryRepository(),
     )
     const { seal, push } = sealWith(async () => saved)
 

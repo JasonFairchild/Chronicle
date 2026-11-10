@@ -1,7 +1,7 @@
-import { draftRepository, entryRepository } from '@/repositories'
+import { draftRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
 import { makeDraft, relatedTo } from '@/testing/draftFixtures'
-import { createEntryInput } from '@/types/entry'
+import { seedEntry } from '@/testing/seedEntry'
 import { formatDate } from '@/utils/format'
 import DraftsView from '@/views/DraftsView.vue'
 
@@ -10,12 +10,8 @@ const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace'
 describe('DraftsView', () => {
   it('lists drafts newest first, each with what it would become, when, how it begins, and where it resumes', () => {
     cy.then(async () => {
-      const parent = await entryRepository.create(
-        createEntryInput({ content: textContent('The meeting went badly') }),
-      )
-      const other = await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      )
+      const parent = await seedEntry({ content: textContent('The meeting went badly') })
+      const other = await seedEntry({ content: textContent('Started the degree') })
       // Seeded out of order, so the order shown is the list's own.
       await draftRepository.save(
         makeDraft('related', {
@@ -94,22 +90,19 @@ describe('DraftsView', () => {
 
   it('names the entry a draft is on as it is called now, after a revision renamed it', () => {
     cy.then(async () => {
-      const parent = await entryRepository.create(
-        createEntryInput({ content: textContent('The meeting went badly'), title: 'Monday' }),
-      )
-      const other = await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      )
-      await entryRepository.create(
-        createEntryInput({
-          content: parent.content,
-          title: 'The Monday meeting',
-          parent_id: parent.id,
-          relation_type: 'revision',
-          revision_mode: 'direct',
-          base_version_id: parent.id,
-        }),
-      )
+      const parent = await seedEntry({
+        content: textContent('The meeting went badly'),
+        title: 'Monday',
+      })
+      const other = await seedEntry({ content: textContent('Started the degree') })
+      await seedEntry({
+        content: parent.content,
+        title: 'The Monday meeting',
+        parent_id: parent.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: parent.id,
+      })
       await draftRepository.save(
         makeDraft('connection', {
           entry: { content: textContent('One led to the other'), events: TYPED },

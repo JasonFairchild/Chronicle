@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Router } from 'vue-router'
 
-import { draftRepository, entryRepository } from '@/repositories'
+import { draftRepository } from '@/repositories'
 import { DraftConflictError } from '@/repositories/draftRepository'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
+import { seedEntry } from '@/testing/seedEntry'
 import { createTestRouter } from '@/testing/testRouter'
-import { createEntryInput } from '@/types/entry'
 import NewConnectionView from '@/views/NewConnectionView.vue'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -27,9 +27,7 @@ async function mountNewConnection(
 
 describe('NewConnectionView (browser)', () => {
   it('says there is nothing to connect to rather than showing an empty picker', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
+    const source = await seedEntry({ content: textContent('Left my job') })
 
     const screen = await mountNewConnection(source.id)
 
@@ -41,12 +39,8 @@ describe('NewConnectionView (browser)', () => {
   })
 
   it('returns to the entry it started from on Discard', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
-    const destination = await entryRepository.create(
-      createEntryInput({ content: textContent('Started the degree') }),
-    )
+    const source = await seedEntry({ content: textContent('Left my job') })
+    const destination = await seedEntry({ content: textContent('Started the degree') })
     const router = createTestRouter()
     const screen = await mountNewConnection(source.id, { router })
 
@@ -62,12 +56,8 @@ describe('NewConnectionView (browser)', () => {
   })
 
   it('stays on the page when Discard is refused for another tab’s write', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
-    const destination = await entryRepository.create(
-      createEntryInput({ content: textContent('Started the degree') }),
-    )
+    const source = await seedEntry({ content: textContent('Left my job') })
+    const destination = await seedEntry({ content: textContent('Started the degree') })
     await draftRepository.save(
       makeDraft('session-1', {
         entry: { content: textContent('One led to the other'), events: TYPED },
@@ -92,12 +82,8 @@ describe('NewConnectionView (browser)', () => {
   })
 
   it('reopens the connection it was linked to, with the entry it connects to', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
-    const destination = await entryRepository.create(
-      createEntryInput({ content: textContent('Started the degree') }),
-    )
+    const source = await seedEntry({ content: textContent('Left my job') })
+    const destination = await seedEntry({ content: textContent('Started the degree') })
     await draftRepository.save(
       makeDraft('session-1', {
         entry: { content: textContent('One led to the other'), events: TYPED },

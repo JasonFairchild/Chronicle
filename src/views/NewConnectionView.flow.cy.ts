@@ -2,17 +2,13 @@ import App from '@/App.vue'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
-import { createEntryInput } from '@/types/entry'
+import { seedEntry } from '@/testing/seedEntry'
 
 describe('NewConnectionView flows', () => {
   it('creates a connection with a title, dates, and rich content, then lands on its own page', () => {
     cy.then(async () => ({
-      source: await entryRepository.create(
-        createEntryInput({ content: textContent('Left my job') }),
-      ),
-      destination: await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      ),
+      source: await seedEntry({ content: textContent('Left my job') }),
+      destination: await seedEntry({ content: textContent('Started the degree') }),
     })).then(({ source, destination }) => {
       cy.mount(App, { routePath: `/entries/${source.id}/connect` })
 
@@ -43,12 +39,8 @@ describe('NewConnectionView flows', () => {
 
   it('adds an untitled connection', () => {
     cy.then(async () => ({
-      source: await entryRepository.create(
-        createEntryInput({ content: textContent('Left my job') }),
-      ),
-      destination: await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      ),
+      source: await seedEntry({ content: textContent('Left my job') }),
+      destination: await seedEntry({ content: textContent('Started the degree') }),
     })).then(({ source, destination }) => {
       cy.mount(App, { routePath: `/entries/${source.id}/connect` })
 
@@ -61,7 +53,8 @@ describe('NewConnectionView flows', () => {
 
       // The composer closes only once the save has landed.
       cy.findByRole('textbox', { name: 'New connection' }).should('not.exist')
-      cy.then(() => entryRepository.listConnectionsFor(source.id)).then((connections) => {
+      cy.then(() => entryRepository.listDescendants(source.id)).then((descendants) => {
+        const connections = descendants.filter((entry) => entry.relation_type === 'connection')
         expect(connections[0]?.title).to.equal(null)
         expect(connections[0]?.target_id).to.equal(destination.id)
       })
@@ -70,12 +63,8 @@ describe('NewConnectionView flows', () => {
 
   it('keeps a half-written connection when the screen is left without discarding it', () => {
     cy.then(async () => ({
-      source: await entryRepository.create(
-        createEntryInput({ content: textContent('Left my job') }),
-      ),
-      destination: await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      ),
+      source: await seedEntry({ content: textContent('Left my job') }),
+      destination: await seedEntry({ content: textContent('Started the degree') }),
     })).then(({ source, destination }) => {
       cy.mount(App, { routePath: `/entries/${source.id}/connect` })
       cy.findByLabelText('Connect to').select(destination.id)
@@ -104,12 +93,8 @@ describe('NewConnectionView flows', () => {
 
   it('discards a half-written connection on request', () => {
     cy.then(async () => ({
-      source: await entryRepository.create(
-        createEntryInput({ content: textContent('Left my job') }),
-      ),
-      destination: await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      ),
+      source: await seedEntry({ content: textContent('Left my job') }),
+      destination: await seedEntry({ content: textContent('Started the degree') }),
     })).then(({ source, destination }) => {
       cy.mount(App, { routePath: `/entries/${source.id}/connect` })
       cy.spy(draftRepository, 'save').as('saveDraft')

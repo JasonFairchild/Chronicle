@@ -11,10 +11,6 @@ function stripStorage(entry: StoredEntry): Entry {
   return rest
 }
 
-function dedupeById(entries: StoredEntry[]): StoredEntry[] {
-  return [...new Map(entries.map((entry) => [entry.id, entry])).values()]
-}
-
 /**
  * SQLite WASM + OPFS is the preferred long-term adapter (CHRONICLE_PLAN.md); Dexie ships first
  * because it needs no cross-origin isolation headers and proves the same interface can be backed
@@ -23,11 +19,6 @@ function dedupeById(entries: StoredEntry[]): StoredEntry[] {
  */
 export class DexieEntryRepository implements EntryRepository {
   constructor(private db: ChronicleDatabase) {}
-
-  async create(input: CreateEntryInput): Promise<Entry> {
-    const [entry] = await this.createMany([input])
-    return entry!
-  }
 
   async createMany(inputs: CreateEntryInput[]): Promise<Entry[]> {
     // One IndexedDB transaction: either every row commits or the whole write rolls back, which is
@@ -74,31 +65,12 @@ export class DexieEntryRepository implements EntryRepository {
     return rows.sort((a, b) => compareEntries(b, a)).map(stripStorage)
   }
 
-  async listChildren(parentId: string): Promise<Entry[]> {
-    const rows = await this.db.entries.where('parent_id').equals(parentId).toArray()
-    return rows
-      .filter((entry) => entry.relation_type !== 'revision')
-      .sort(compareEntries)
-      .map(stripStorage)
-  }
-
   async listRevisions(entryId: string): Promise<Entry[]> {
     const rows = await this.db.entries
       .where('[parent_id+relation_type]')
       .equals([entryId, 'revision'])
       .toArray()
     return rows.sort(compareEntries).map(stripStorage)
-  }
-
-  async listConnectionsFor(entryId: string): Promise<Entry[]> {
-    const [outgoing, incoming] = await Promise.all([
-      this.db.entries.where('[parent_id+relation_type]').equals([entryId, 'connection']).toArray(),
-      this.db.entries.where('[target_id+relation_type]').equals([entryId, 'connection']).toArray(),
-    ])
-
-    return dedupeById([...outgoing, ...incoming])
-      .sort(compareEntries)
-      .map(stripStorage)
   }
 
   async listDescendants(rootId: string): Promise<Entry[]> {

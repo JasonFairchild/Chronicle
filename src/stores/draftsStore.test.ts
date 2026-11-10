@@ -17,11 +17,12 @@ import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
 import { draftChangeTo, makeDraft, relatedTo } from '@/testing/draftFixtures'
-import { type AggregatedEntry, createEntryInput } from '@/types/entry'
+import { seedEntry } from '@/testing/seedEntry'
+import type { AggregatedEntry } from '@/types/entry'
 
 /** An entry already on record, as a session opened against it would find it. */
 async function existingEntry(text: string): Promise<AggregatedEntry> {
-  const created = await entryRepository.create(createEntryInput({ content: textContent(text) }))
+  const created = await seedEntry({ content: textContent(text) })
   return (await useEntriesStore().getAggregatedEntry(created.id))!
 }
 
@@ -271,15 +272,13 @@ describe('useDraftsStore', () => {
       const sessionId = store.beginDraft({ kind: 'revision', parent: original })
 
       // Another tab saves a version first, so this draft's seal will be refused.
-      await entryRepository.create(
-        createEntryInput({
-          content: textContent('I got the offer'),
-          parent_id: original.id,
-          relation_type: 'revision',
-          revision_mode: 'direct',
-          base_version_id: original.id,
-        }),
-      )
+      await seedEntry({
+        content: textContent('I got the offer'),
+        parent_id: original.id,
+        relation_type: 'revision',
+        revision_mode: 'direct',
+        base_version_id: original.id,
+      })
       store.recordChange(sessionId, draftChangeTo('I received the offer'))
 
       // Sealing cancels the scheduled flush, so a refusal has to schedule another.

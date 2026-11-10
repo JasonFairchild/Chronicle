@@ -4,7 +4,7 @@ import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
 import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { runEntryRepositoryContract } from '@/repositories/entryRepository.contract'
 import { freshEntryRepository } from '@/testing/realRepositories'
-import { createEntryInput } from '@/types/entry'
+import { seedEntry } from '@/testing/seedEntry'
 
 // Real IndexedDB, via Playwright Chromium — Dexie has nothing to fall back to in node, which is
 // why this adapter is only proven here rather than in the unit project. Each test gets its own
@@ -20,8 +20,9 @@ describe('DexieEntryRepository persistence', () => {
     // assertion, so a failing one can't leave the database behind.
     onTestFinished(() => afterReload.delete())
 
-    const created = await new DexieEntryRepository(beforeReload).create(
-      createEntryInput({ content: 'Written before reload' }),
+    const created = await seedEntry(
+      { content: 'Written before reload' },
+      new DexieEntryRepository(beforeReload),
     )
 
     // A fresh connection against the same name, sharing no in-memory state with the first — the
@@ -40,15 +41,12 @@ describe('DexieEntryRepository persistence', () => {
     onTestFinished(() => afterReload.delete())
 
     const entries = new DexieEntryRepository(beforeReload)
-    const parent = await entries.create(createEntryInput({ content: 'Root' }))
-    await entries.create(
-      createEntryInput({ content: 'Note', parent_id: parent.id, relation_type: 'annotation' }),
-    )
+    const parent = await seedEntry({ content: 'Root' }, entries)
+    await seedEntry({ content: 'Note', parent_id: parent.id, relation_type: 'annotation' }, entries)
 
     beforeReload.close()
-    const children = await new DexieEntryRepository(afterReload).listChildren(parent.id)
+    const descendants = await new DexieEntryRepository(afterReload).listDescendants(parent.id)
 
-    expect(children).toHaveLength(1)
-    expect(children[0]?.content).toBe('Note')
+    expect(descendants.map((entry) => entry.content)).toEqual(['Root', 'Note'])
   })
 })

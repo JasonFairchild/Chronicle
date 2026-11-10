@@ -4,13 +4,13 @@ import { userEvent } from 'vitest/browser'
 
 import App from '@/App.vue'
 import { docToPlainText } from '@/domain/entryDocument'
-import { draftRepository, entryRepository } from '@/repositories'
+import { draftRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { draftChangeTo, makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
+import { seedEntry } from '@/testing/seedEntry'
 import { createTestRouter } from '@/testing/testRouter'
-import { createEntryInput } from '@/types/entry'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -109,9 +109,10 @@ describe('App flows (browser)', () => {
   })
 
   it('lists a draft another tab began once this tab is returned to, named for its entry', async () => {
-    const entry = await entryRepository.create(
-      createEntryInput({ content: textContent('The meeting went badly'), title: 'Monday' }),
-    )
+    const entry = await seedEntry({
+      content: textContent('The meeting went badly'),
+      title: 'Monday',
+    })
     const screen = await mountApp('/drafts')
     await expect.element(screen.getByText('No drafts in progress.')).toBeVisible()
 

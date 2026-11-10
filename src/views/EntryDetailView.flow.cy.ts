@@ -5,22 +5,26 @@ import { docToPlainText } from '@/domain/entryDocument'
 import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
+import { seedEntry } from '@/testing/seedEntry'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
-import { createEntryInput, type Entry } from '@/types/entry'
+import type { Entry } from '@/types/entry'
 
 function mountApp(id: string, router?: Router): Cypress.Chainable {
   return cy.mount(App, { routePath: `/entries/${id}`, router })
 }
 
-/** Creates one entry in the active repository; see `EntryDetailView.cy.ts`. */
-function seed(input: Parameters<typeof createEntryInput>[0]): Promise<Entry> {
-  return entryRepository.create(createEntryInput(input))
+/** The related entries stored on `parentId`, oldest first. */
+async function relatedEntriesOf(parentId: string): Promise<Entry[]> {
+  const descendants = await entryRepository.listDescendants(parentId)
+  return descendants.filter(
+    (entry) => entry.parent_id === parentId && entry.relation_type !== 'revision',
+  )
 }
 
 describe('EntryDetailView flows', () => {
   it('adds a related entry about the whole entry when nothing is marked, and lands on it', () => {
-    cy.then(() => seed({ content: textContent('We hiked to the falls') })).then((parent) => {
+    cy.then(() => seedEntry({ content: textContent('We hiked to the falls') })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Create related entry' }).click()
@@ -35,7 +39,7 @@ describe('EntryDetailView flows', () => {
         'href',
         `/entries/${parent.id}`,
       )
-      cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
+      cy.then(() => relatedEntriesOf(parent.id)).then((children) => {
         expect(children[0]?.anchor_ids).to.deep.equal([])
         // Nothing was marked, so the note claims nothing changed about the entry.
         expect(children[0]?.relation_type).to.equal('annotation')
@@ -45,8 +49,8 @@ describe('EntryDetailView flows', () => {
 
   it('keeps a related entry in progress when the reader moves to another entry', () => {
     cy.then(async () => {
-      const parent = await seed({ content: textContent('Snow on the pass by noon') })
-      const other = await seed({ content: textContent('A different day entirely') })
+      const parent = await seedEntry({ content: textContent('Snow on the pass by noon') })
+      const other = await seedEntry({ content: textContent('A different day entirely') })
       return { parent, other }
     }).then(({ parent, other }) => {
       const router = createTestRouter()
@@ -75,88 +79,94 @@ describe('EntryDetailView flows', () => {
   })
 
   it('frees the entry when the page is left with a revision opened and untouched', () => {
-    cy.then(() => seed({ content: textContent('The cabin smelled of pine') })).then((parent) => {
-      mountApp(parent.id)
-      cy.findByRole('button', { name: 'Revise entry' }).click()
-      cy.findByRole('textbox', { name: 'Revised entry' }).should('be.visible')
+    cy.then(() => seedEntry({ content: textContent('The cabin smelled of pine') })).then(
+      (parent) => {
+        mountApp(parent.id)
+        cy.findByRole('button', { name: 'Revise entry' }).click()
+        cy.findByRole('textbox', { name: 'Revised entry' }).should('be.visible')
 
-      // Leaving the page, not moving to another entry, is how most sessions end.
-      cy.then(() => {
-        cy.spy(useDraftsStore(), 'abandonDraft').as('abandonDraft')
-      })
-      cy.findByRole('link', { name: 'Timeline' }).click()
-      cy.get('@abandonDraft')
-        .should('have.been.calledOnce')
-        .then((abandonDraft) => abandonDraft.firstCall.returnValue)
-      cy.findByRole('link', { name: 'The cabin smelled of pine' }).click()
+        // Leaving the page, not moving to another entry, is how most sessions end.
+        cy.then(() => {
+          cy.spy(useDraftsStore(), 'abandonDraft').as('abandonDraft')
+        })
+        cy.findByRole('link', { name: 'Timeline' }).click()
+        cy.get('@abandonDraft')
+          .should('have.been.calledOnce')
+          .then((abandonDraft) => abandonDraft.firstCall.returnValue)
+        cy.findByRole('link', { name: 'The cabin smelled of pine' }).click()
 
-      cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
-      cy.findByRole('button', { name: 'Resume draft' }).should('not.exist')
-    })
+        cy.findByRole('button', { name: 'Revise entry' }).should('be.visible')
+        cy.findByRole('button', { name: 'Resume draft' }).should('not.exist')
+      },
+    )
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', () => {
-    cy.then(() => seed({ content: textContent('I went to Lake Tahoe alone') })).then((parent) => {
-      mountApp(parent.id)
+    cy.then(() => seedEntry({ content: textContent('I went to Lake Tahoe alone') })).then(
+      (parent) => {
+        mountApp(parent.id)
 
-      cy.findByRole('button', { name: 'Create related entry' }).click()
+        cy.findByRole('button', { name: 'Create related entry' }).click()
 
-      cy.findByRole('textbox', { name: 'Entry being annotated' })
-        .should('be.visible')
-        .then(($editor) => selectTextRange($editor[0]!, 10, 20))
+        cy.findByRole('textbox', { name: 'Entry being annotated' })
+          .should('be.visible')
+          .then(($editor) => selectTextRange($editor[0]!, 10, 20))
 
-      cy.findByRole('button', { name: 'Strike passage' }).click()
-      cy.focused().type('Donner Lake')
+        cy.findByRole('button', { name: 'Strike passage' }).click()
+        cy.focused().type('Donner Lake')
 
-      cy.findByRole('textbox', { name: 'Related entry' }).type('Wrong lake')
-      cy.findByRole('button', { name: 'Add entry' }).click()
+        cy.findByRole('textbox', { name: 'Related entry' }).type('Wrong lake')
+        cy.findByRole('button', { name: 'Add entry' }).click()
 
-      // Saving lands on the related entry; what it marked shows on the entry it's about.
-      cy.findByRole('link', { name: 'I went to Lake TahoeDonner Lake alone' }).click()
-      cy.findByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”').should('be.visible')
+        // Saving lands on the related entry; what it marked shows on the entry it's about.
+        cy.findByRole('link', { name: 'I went to Lake TahoeDonner Lake alone' }).click()
+        cy.findByText('Strikes “Lake Tahoe”, replaced with “Donner Lake”').should('be.visible')
 
-      cy.then(() => entryRepository.listRevisions(parent.id)).then((revisions) => {
-        expect(revisions).to.have.length(1)
-        expect(revisions[0]?.revision_mode).to.equal('anchor')
-      })
-      cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
-        expect(children[0]?.anchor_ids).to.have.length(1)
-        // Striking reports a correction, so the note reads as an update without anyone being asked.
-        expect(children[0]?.relation_type).to.equal('update')
-      })
-    })
+        cy.then(() => entryRepository.listRevisions(parent.id)).then((revisions) => {
+          expect(revisions).to.have.length(1)
+          expect(revisions[0]?.revision_mode).to.equal('anchor')
+        })
+        cy.then(() => relatedEntriesOf(parent.id)).then((children) => {
+          expect(children[0]?.anchor_ids).to.have.length(1)
+          // Striking reports a correction, so the note reads as an update without anyone being asked.
+          expect(children[0]?.relation_type).to.equal('update')
+        })
+      },
+    )
   })
 
   it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', () => {
-    cy.then(() => seed({ content: textContent('I swam in Lake Tahoe at dawn') })).then((parent) => {
-      mountApp(parent.id)
+    cy.then(() => seedEntry({ content: textContent('I swam in Lake Tahoe at dawn') })).then(
+      (parent) => {
+        mountApp(parent.id)
 
-      cy.findByRole('button', { name: 'Create related entry' }).click()
+        cy.findByRole('button', { name: 'Create related entry' }).click()
 
-      cy.findByRole('textbox', { name: 'Entry being annotated' })
-        .should('be.visible')
-        .then(($editor) => selectTextRange($editor[0]!, 10, 20))
+        cy.findByRole('textbox', { name: 'Entry being annotated' })
+          .should('be.visible')
+          .then(($editor) => selectTextRange($editor[0]!, 10, 20))
 
-      cy.findByRole('button', { name: 'Highlight passage' }).click()
-      cy.focused().type('Emerald Bay')
+        cy.findByRole('button', { name: 'Highlight passage' }).click()
+        cy.focused().type('Emerald Bay')
 
-      cy.findByRole('textbox', { name: 'Related entry' }).type('Actually')
-      cy.findByRole('button', { name: 'Add entry' }).click()
-      cy.findByRole('link', { name: 'I swam in Lake TahoeEmerald Bay at dawn' }).click()
+        cy.findByRole('textbox', { name: 'Related entry' }).type('Actually')
+        cy.findByRole('button', { name: 'Add entry' }).click()
+        cy.findByRole('link', { name: 'I swam in Lake TahoeEmerald Bay at dawn' }).click()
 
-      // A highlight is a mark on existing text, same as a strike, and wording rides along with it the
-      // same way — so `relationTypeForAnchors` reads it as an `update`.
-      cy.findByText('On “Lake Tahoe”, adds “Emerald Bay”').should('be.visible')
+        // A highlight is a mark on existing text, same as a strike, and wording rides along with it the
+        // same way — so `relationTypeForAnchors` reads it as an `update`.
+        cy.findByText('On “Lake Tahoe”, adds “Emerald Bay”').should('be.visible')
 
-      cy.then(() => entryRepository.listChildren(parent.id)).then((children) => {
-        expect(children[0]?.relation_type).to.equal('update')
-      })
-    })
+        cy.then(() => relatedEntriesOf(parent.id)).then((children) => {
+          expect(children[0]?.relation_type).to.equal('update')
+        })
+      },
+    )
   })
 
   it('revises an entry by appending a version, leaving the original row untouched', () => {
     const text = 'It rained the whole drive'
-    cy.then(() => seed({ content: textContent(text) })).then((parent) => {
+    cy.then(() => seedEntry({ content: textContent(text) })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -178,7 +188,7 @@ describe('EntryDetailView flows', () => {
   })
 
   it('saves a revision that only changes formatting', () => {
-    cy.then(() => seed({ content: textContent('The road was icy') })).then((parent) => {
+    cy.then(() => seedEntry({ content: textContent('The road was icy') })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -195,7 +205,7 @@ describe('EntryDetailView flows', () => {
   })
 
   it('discards a revision on request, leaving the entry untouched', () => {
-    cy.then(() => seed({ content: textContent('We stopped for pie') })).then((parent) => {
+    cy.then(() => seedEntry({ content: textContent('We stopped for pie') })).then((parent) => {
       mountApp(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()

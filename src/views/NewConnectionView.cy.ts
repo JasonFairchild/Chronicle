@@ -1,11 +1,11 @@
 import type { Router } from 'vue-router'
 
-import { draftRepository, entryRepository } from '@/repositories'
+import { draftRepository } from '@/repositories'
 import { DraftConflictError } from '@/repositories/draftRepository'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
+import { seedEntry } from '@/testing/seedEntry'
 import { createTestRouter } from '@/testing/testRouter'
-import { createEntryInput } from '@/types/entry'
 import NewConnectionView from '@/views/NewConnectionView.vue'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
@@ -23,9 +23,7 @@ function mountNewConnection(
 
 describe('NewConnectionView', () => {
   it('says there is nothing to connect to rather than showing an empty picker', () => {
-    cy.then(() =>
-      entryRepository.create(createEntryInput({ content: textContent('Left my job') })),
-    ).then((source) => {
+    cy.then(() => seedEntry({ content: textContent('Left my job') })).then((source) => {
       mountNewConnection(source.id)
 
       cy.findByText('There is nothing else to connect to yet. Write another entry first.').should(
@@ -36,12 +34,8 @@ describe('NewConnectionView', () => {
 
   it('returns to the entry it started from on Discard', () => {
     cy.then(async () => ({
-      source: await entryRepository.create(
-        createEntryInput({ content: textContent('Left my job') }),
-      ),
-      destination: await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      ),
+      source: await seedEntry({ content: textContent('Left my job') }),
+      destination: await seedEntry({ content: textContent('Started the degree') }),
     })).then(({ source, destination }) => {
       const router = createTestRouter()
       mountNewConnection(source.id, { router })
@@ -57,12 +51,8 @@ describe('NewConnectionView', () => {
 
   it('stays on the page when Discard is refused for another tab’s write', () => {
     cy.then(async () => {
-      const source = await entryRepository.create(
-        createEntryInput({ content: textContent('Left my job') }),
-      )
-      const destination = await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      )
+      const source = await seedEntry({ content: textContent('Left my job') })
+      const destination = await seedEntry({ content: textContent('Started the degree') })
       await draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('One led to the other'), events: TYPED },
@@ -87,12 +77,8 @@ describe('NewConnectionView', () => {
 
   it('reopens the connection it was linked to, with the entry it connects to', () => {
     cy.then(async () => {
-      const source = await entryRepository.create(
-        createEntryInput({ content: textContent('Left my job') }),
-      )
-      const destination = await entryRepository.create(
-        createEntryInput({ content: textContent('Started the degree') }),
-      )
+      const source = await seedEntry({ content: textContent('Left my job') })
+      const destination = await seedEntry({ content: textContent('Started the degree') })
       await draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('One led to the other'), events: TYPED },

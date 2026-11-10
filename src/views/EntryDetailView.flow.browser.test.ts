@@ -7,9 +7,10 @@ import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
+import { seedEntry } from '@/testing/seedEntry'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
-import { createEntryInput } from '@/types/entry'
+import type { Entry } from '@/types/entry'
 
 async function mountApp(path: string) {
   const router = createTestRouter()
@@ -19,11 +20,17 @@ async function mountApp(path: string) {
   return renderComponent(App, { global: { plugins: [router] } })
 }
 
+/** The related entries stored on `parentId`, oldest first. */
+async function relatedEntriesOf(parentId: string): Promise<Entry[]> {
+  const descendants = await entryRepository.listDescendants(parentId)
+  return descendants.filter(
+    (entry) => entry.parent_id === parentId && entry.relation_type !== 'revision',
+  )
+}
+
 describe('EntryDetailView flows (browser)', () => {
   it('adds a related entry about the whole entry when nothing is marked, and lands on it', async () => {
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent('We hiked to the falls') }),
-    )
+    const parent = await seedEntry({ content: textContent('We hiked to the falls') })
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -40,19 +47,15 @@ describe('EntryDetailView flows (browser)', () => {
       .element(screen.getByRole('link', { name: 'We hiked to the falls' }))
       .toHaveAttribute('href', `/entries/${parent.id}`)
 
-    const children = await entryRepository.listChildren(parent.id)
+    const children = await relatedEntriesOf(parent.id)
     expect(children[0]?.anchor_ids).toEqual([])
     // Nothing was marked, so the note claims nothing changed about the entry.
     expect(children[0]?.relation_type).toBe('annotation')
   })
 
   it('keeps a related entry in progress when the reader moves to another entry', async () => {
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent('Snow on the pass by noon') }),
-    )
-    const other = await entryRepository.create(
-      createEntryInput({ content: textContent('A different day entirely') }),
-    )
+    const parent = await seedEntry({ content: textContent('Snow on the pass by noon') })
+    const other = await seedEntry({ content: textContent('A different day entirely') })
 
     const router = createTestRouter()
     await router.push(`/entries/${parent.id}`)
@@ -78,9 +81,7 @@ describe('EntryDetailView flows (browser)', () => {
   })
 
   it('frees the entry when the page is left with a revision opened and untouched', async () => {
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent('The cabin smelled of pine') }),
-    )
+    const parent = await seedEntry({ content: textContent('The cabin smelled of pine') })
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -101,9 +102,7 @@ describe('EntryDetailView flows (browser)', () => {
   })
 
   it('anchors a strike to the passage the user selects, in one atomic seal', async () => {
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent('I went to Lake Tahoe alone') }),
-    )
+    const parent = await seedEntry({ content: textContent('I went to Lake Tahoe alone') })
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -130,16 +129,14 @@ describe('EntryDetailView flows (browser)', () => {
     expect(revisions).toHaveLength(1)
     expect(revisions[0]?.revision_mode).toBe('anchor')
 
-    const children = await entryRepository.listChildren(parent.id)
+    const children = await relatedEntriesOf(parent.id)
     expect(children[0]?.anchor_ids).toHaveLength(1)
     // Striking reports a correction, so the note reads as an update without anyone being asked.
     expect(children[0]?.relation_type).toBe('update')
   })
 
   it('pairs a highlight with inline wording, which is what a highlight-plus-comment reads as', async () => {
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent('I swam in Lake Tahoe at dawn') }),
-    )
+    const parent = await seedEntry({ content: textContent('I swam in Lake Tahoe at dawn') })
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Create related entry' }).click()
@@ -161,13 +158,13 @@ describe('EntryDetailView flows (browser)', () => {
     // same way — so `relationTypeForAnchors` reads it as an `update`.
     await expect.element(screen.getByText('On “Lake Tahoe”, adds “Emerald Bay”')).toBeVisible()
 
-    const children = await entryRepository.listChildren(parent.id)
+    const children = await relatedEntriesOf(parent.id)
     expect(children[0]?.relation_type).toBe('update')
   })
 
   it('revises an entry by appending a version, leaving the original row untouched', async () => {
     const text = 'It rained the whole drive'
-    const parent = await entryRepository.create(createEntryInput({ content: textContent(text) }))
+    const parent = await seedEntry({ content: textContent(text) })
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -187,9 +184,7 @@ describe('EntryDetailView flows (browser)', () => {
   })
 
   it('saves a revision that only changes formatting', async () => {
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent('The road was icy') }),
-    )
+    const parent = await seedEntry({ content: textContent('The road was icy') })
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Revise entry' }).click()
@@ -206,9 +201,7 @@ describe('EntryDetailView flows (browser)', () => {
   })
 
   it('discards a revision on request, leaving the entry untouched', async () => {
-    const parent = await entryRepository.create(
-      createEntryInput({ content: textContent('We stopped for pie') }),
-    )
+    const parent = await seedEntry({ content: textContent('We stopped for pie') })
 
     const screen = await mountApp(`/entries/${parent.id}`)
     await screen.getByRole('button', { name: 'Revise entry' }).click()

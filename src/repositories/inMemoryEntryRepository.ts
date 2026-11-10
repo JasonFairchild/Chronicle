@@ -12,11 +12,6 @@ import type { EntryRepository } from './entryRepository'
 export class InMemoryEntryRepository implements EntryRepository {
   private entries = new Map<string, Entry>()
 
-  async create(input: CreateEntryInput): Promise<Entry> {
-    const [entry] = await this.createMany([input])
-    return entry!
-  }
-
   async createMany(inputs: CreateEntryInput[]): Promise<Entry[]> {
     // Validated and built against a lookup that sees this batch's own earlier entries, but nothing
     // is committed to the real map until every input has passed — an all-or-nothing write.
@@ -70,23 +65,9 @@ export class InMemoryEntryRepository implements EntryRepository {
     )
   }
 
-  async listChildren(parentId: string): Promise<Entry[]> {
-    return this.collect(
-      (entry) => entry.parent_id === parentId && entry.relation_type !== 'revision',
-    )
-  }
-
   async listRevisions(entryId: string): Promise<Entry[]> {
     return this.collect(
       (entry) => entry.parent_id === entryId && entry.relation_type === 'revision',
-    )
-  }
-
-  async listConnectionsFor(entryId: string): Promise<Entry[]> {
-    return this.collect(
-      (entry) =>
-        entry.relation_type === 'connection' &&
-        (entry.parent_id === entryId || entry.target_id === entryId),
     )
   }
 

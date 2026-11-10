@@ -5,8 +5,8 @@ import { draftRepository, entryRepository } from '@/repositories'
 import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
+import { seedEntry } from '@/testing/seedEntry'
 import { createTestRouter } from '@/testing/testRouter'
-import { createEntryInput } from '@/types/entry'
 
 async function mountApp(path: string) {
   const router = createTestRouter()
@@ -18,12 +18,8 @@ async function mountApp(path: string) {
 
 describe('NewConnectionView flows (browser)', () => {
   it('creates a connection with a title, dates, and rich content, then lands on its own page', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
-    const destination = await entryRepository.create(
-      createEntryInput({ content: textContent('Started the degree') }),
-    )
+    const source = await seedEntry({ content: textContent('Left my job') })
+    const destination = await seedEntry({ content: textContent('Started the degree') })
 
     const screen = await mountApp(`/entries/${source.id}/connect`)
     await expect.element(screen.getByText(/New connection from/)).toBeVisible()
@@ -51,12 +47,8 @@ describe('NewConnectionView flows (browser)', () => {
   })
 
   it('adds an untitled connection', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
-    const destination = await entryRepository.create(
-      createEntryInput({ content: textContent('Started the degree') }),
-    )
+    const source = await seedEntry({ content: textContent('Left my job') })
+    const destination = await seedEntry({ content: textContent('Started the degree') })
 
     const screen = await mountApp(`/entries/${source.id}/connect`)
     await screen.getByLabelText('Connect to').selectOptions(destination.id)
@@ -71,18 +63,16 @@ describe('NewConnectionView flows (browser)', () => {
       .element(screen.getByRole('textbox', { name: 'New connection' }))
       .not.toBeInTheDocument()
 
-    const [connection] = await entryRepository.listConnectionsFor(source.id)
+    const [connection] = (await entryRepository.listDescendants(source.id)).filter(
+      (entry) => entry.relation_type === 'connection',
+    )
     expect(connection?.title).toBeNull()
     expect(connection?.target_id).toBe(destination.id)
   })
 
   it('keeps a half-written connection when the screen is left without discarding it', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
-    const destination = await entryRepository.create(
-      createEntryInput({ content: textContent('Started the degree') }),
-    )
+    const source = await seedEntry({ content: textContent('Left my job') })
+    const destination = await seedEntry({ content: textContent('Started the degree') })
 
     const screen = await mountApp(`/entries/${source.id}/connect`)
     await screen.getByLabelText('Connect to').selectOptions(destination.id)
@@ -104,12 +94,8 @@ describe('NewConnectionView flows (browser)', () => {
   })
 
   it('discards a half-written connection on request', async () => {
-    const source = await entryRepository.create(
-      createEntryInput({ content: textContent('Left my job') }),
-    )
-    const destination = await entryRepository.create(
-      createEntryInput({ content: textContent('Started the degree') }),
-    )
+    const source = await seedEntry({ content: textContent('Left my job') })
+    const destination = await seedEntry({ content: textContent('Started the degree') })
 
     const screen = await mountApp(`/entries/${source.id}/connect`)
     await screen.getByLabelText('Connect to').selectOptions(destination.id)

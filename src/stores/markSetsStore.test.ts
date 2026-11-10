@@ -6,17 +6,13 @@ import { emptyDocument, type EntryDocument } from '@/domain/entryDocument'
 import { DEFAULT_MARK_POLICY } from '@/domain/marks'
 import { documentsFromFrames } from '@/editor/markFrames'
 import { replayDocument } from '@/editor/replay'
-import {
-  entryRepository,
-  markSetRepository,
-  setEntryRepository,
-  setMarkSetRepository,
-} from '@/repositories'
+import { markSetRepository, setEntryRepository, setMarkSetRepository } from '@/repositories'
 import { InMemoryEntryRepository } from '@/repositories/inMemoryEntryRepository'
 import { InMemoryMarkSetRepository } from '@/repositories/inMemoryMarkSetRepository'
 import { useMarkSetsStore } from '@/stores/markSetsStore'
 import { plainTextDocument, textContent } from '@/testing/documents'
-import { type AuthoringTrace, createEntryInput } from '@/types/entry'
+import { seedEntry } from '@/testing/seedEntry'
+import type { AuthoringTrace } from '@/types/entry'
 
 /** A session that typed `typed` at the end of `base`, as one edit. */
 function traceOfTyping(base: EntryDocument, typed: string): AuthoringTrace {
@@ -47,19 +43,15 @@ describe('useMarkSetsStore', () => {
 
   /** A revision that finished "It rained" with " all day.", so its trace starts from that version. */
   async function typedEntry() {
-    const first = await entryRepository.create(
-      createEntryInput({ content: textContent('It rained') }),
-    )
-    return entryRepository.create(
-      createEntryInput({
-        content: textContent('It rained all day.'),
-        parent_id: first.id,
-        relation_type: 'revision',
-        revision_mode: 'direct',
-        base_version_id: first.id,
-        authoring_trace: traceOfTyping(plainTextDocument('It rained'), ' all day.'),
-      }),
-    )
+    const first = await seedEntry({ content: textContent('It rained') })
+    return seedEntry({
+      content: textContent('It rained all day.'),
+      parent_id: first.id,
+      relation_type: 'revision',
+      revision_mode: 'direct',
+      base_version_id: first.id,
+      authoring_trace: traceOfTyping(plainTextDocument('It rained'), ' all day.'),
+    })
   }
 
   it("builds a default set the first time an entry's sets are loaded, and reuses it after", async () => {
@@ -89,12 +81,10 @@ describe('useMarkSetsStore', () => {
   })
 
   it('builds a new entry’s set from an empty document', async () => {
-    const entry = await entryRepository.create(
-      createEntryInput({
-        content: textContent('It rained.'),
-        authoring_trace: traceOfTyping(emptyDocument(), 'It rained.'),
-      }),
-    )
+    const entry = await seedEntry({
+      content: textContent('It rained.'),
+      authoring_trace: traceOfTyping(emptyDocument(), 'It rained.'),
+    })
     const store = useMarkSetsStore()
 
     await store.loadMarkSets(entry.id)
@@ -103,9 +93,7 @@ describe('useMarkSetsStore', () => {
   })
 
   it('has no set for an entry nothing was typed into', async () => {
-    const entry = await entryRepository.create(
-      createEntryInput({ content: textContent('Imported') }),
-    )
+    const entry = await seedEntry({ content: textContent('Imported') })
     const store = useMarkSetsStore()
 
     await store.loadMarkSets(entry.id)

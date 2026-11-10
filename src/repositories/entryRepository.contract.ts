@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { StaleVersionError } from '@/domain/entryValidation'
+import { seedEntry } from '@/testing/seedEntry'
 import { createEntryInput } from '@/types/entry'
 
 import type { EntryRepository } from './entryRepository'
@@ -23,65 +24,75 @@ export function runEntryRepositoryContract(
     })
 
     it('creates and retrieves a root entry', async () => {
-      const created = await repository.create(createEntryInput({ content: 'Hello Chronicle' }))
+      const [created] = await repository.createMany([
+        createEntryInput({ content: 'Hello Chronicle' }),
+      ])
 
-      expect(created.id).toBeTruthy()
-      expect(created.parent_id).toBeNull()
-      expect(created.relation_type).toBeNull()
+      expect(created?.id).toBeTruthy()
+      expect(created?.parent_id).toBeNull()
+      expect(created?.relation_type).toBeNull()
 
-      const fetched = await repository.getById(created.id)
+      const fetched = await repository.getById(created!.id)
       expect(fetched?.content).toBe('Hello Chronicle')
+    })
+
+    it('writes nothing from a batch when any entry in it is refused', async () => {
+      const root = await seedEntry({ content: 'One' }, repository)
+      const revision = (content: string) =>
+        createEntryInput({
+          content,
+          parent_id: root.id,
+          relation_type: 'revision',
+          base_version_id: root.id,
+        })
+
+      // The second is stale against the first, which the batch has written but not committed.
+      await expect(repository.createMany([revision('Two'), revision('Also two')])).rejects.toThrow(
+        StaleVersionError,
+      )
+
+      expect(await repository.listRevisions(root.id)).toEqual([])
     })
 
     it('lists root entries newest first without needing timestamps to differ', async () => {
       // Created back to back, so `created_at` is very likely identical. Ordering holds anyway
       // because ids are time-ordered and break the tie.
-      await repository.create(createEntryInput({ content: 'First' }))
-      await repository.create(createEntryInput({ content: 'Second' }))
+      await seedEntry({ content: 'First' }, repository)
+      await seedEntry({ content: 'Second' }, repository)
 
       const roots = await repository.listRootEntries()
 
       expect(roots.map((entry) => entry.content)).toEqual(['Second', 'First'])
     })
 
-    it('excludes revisions from listChildren so they cannot render as notes', async () => {
-      const parent = await repository.create(createEntryInput({ content: 'Root' }))
-      await repository.create(
-        createEntryInput({
-          content: 'Child note',
-          parent_id: parent.id,
-          relation_type: 'annotation',
-        }),
+    it('lists only revisions as versions, not the related entries beside them', async () => {
+      const parent = await seedEntry({ content: 'Root' }, repository)
+      await seedEntry(
+        { content: 'Child note', parent_id: parent.id, relation_type: 'annotation' },
+        repository,
       )
-      await repository.create(
-        createEntryInput({
+      await seedEntry(
+        {
           content: 'Reworded root',
           parent_id: parent.id,
           relation_type: 'revision',
           base_version_id: parent.id,
-        }),
+        },
+        repository,
       )
 
-      const children = await repository.listChildren(parent.id)
       const revisions = await repository.listRevisions(parent.id)
 
-      expect(children).toHaveLength(1)
-      expect(children[0]?.relation_type).toBe('annotation')
-      expect(revisions).toHaveLength(1)
-      expect(revisions[0]?.content).toBe('Reworded root')
+      expect(revisions.map((entry) => entry.content)).toEqual(['Reworded root'])
     })
 
     it('returns revisions oldest first, so the version chain folds in order', async () => {
-      const parent = await repository.create(createEntryInput({ content: 'Root' }))
+      const parent = await seedEntry({ content: 'Root' }, repository)
       let base = parent.id
       for (const content of ['Second', 'Third', 'Fourth']) {
-        const revision = await repository.create(
-          createEntryInput({
-            content,
-            parent_id: parent.id,
-            relation_type: 'revision',
-            base_version_id: base,
-          }),
+        const revision = await seedEntry(
+          { content, parent_id: parent.id, relation_type: 'revision', base_version_id: base },
+          repository,
         )
         base = revision.id
       }
@@ -92,16 +103,16 @@ export function runEntryRepositoryContract(
     })
 
     it('refuses a revision of a version that is no longer the latest, so versions never branch', async () => {
-      const root = await repository.create(createEntryInput({ content: 'One' }))
+      const root = await seedEntry({ content: 'One' }, repository)
       const revise = (content: string) =>
-        repository.create(
+        repository.createMany([
           createEntryInput({
             content,
             parent_id: root.id,
             relation_type: 'revision',
             base_version_id: root.id,
           }),
-        )
+        ])
 
       await revise('Two')
       // Written against version one too, as a second tab would have been.
@@ -113,64 +124,47 @@ export function runEntryRepositoryContract(
     })
 
     it('refuses a revision that names no version it replaces', async () => {
-      const root = await repository.create(createEntryInput({ content: 'One' }))
+      const root = await seedEntry({ content: 'One' }, repository)
 
       await expect(
-        repository.create(
+        repository.createMany([
           createEntryInput({ content: 'Two', parent_id: root.id, relation_type: 'revision' }),
-        ),
+        ]),
       ).rejects.toThrow('must name the version it replaces')
     })
 
     it('stores a copy, so mutating the input afterwards cannot rewrite history', async () => {
       const input = createEntryInput({ content: 'Root', metadata: { mood: 'calm' } })
-      const created = await repository.create(input)
+      const [created] = await repository.createMany([input])
 
       input.metadata.mood = 'frantic'
       input.media_refs.push('never-attached')
 
-      const fetched = await repository.getById(created.id)
+      const fetched = await repository.getById(created!.id)
 
       expect(fetched?.metadata).toEqual({ mood: 'calm' })
       expect(fetched?.media_refs).toEqual([])
     })
 
-    it('finds connections from either endpoint', async () => {
-      const from = await repository.create(createEntryInput({ content: 'A' }))
-      const to = await repository.create(createEntryInput({ content: 'B' }))
-      await repository.create(
-        createEntryInput({
-          content: 'These belong together',
-          parent_id: from.id,
-          target_id: to.id,
-          relation_type: 'connection',
-        }),
-      )
-
-      expect(await repository.listConnectionsFor(from.id)).toHaveLength(1)
-      expect(await repository.listConnectionsFor(to.id)).toHaveLength(1)
-    })
-
     it('collects a subtree plus connections pointing into it', async () => {
-      const root = await repository.create(createEntryInput({ content: 'Root' }))
-      const child = await repository.create(
-        createEntryInput({ content: 'Child', parent_id: root.id, relation_type: 'annotation' }),
+      const root = await seedEntry({ content: 'Root' }, repository)
+      const child = await seedEntry(
+        { content: 'Child', parent_id: root.id, relation_type: 'annotation' },
+        repository,
       )
-      await repository.create(
-        createEntryInput({
-          content: 'Grandchild',
-          parent_id: child.id,
-          relation_type: 'annotation',
-        }),
+      await seedEntry(
+        { content: 'Grandchild', parent_id: child.id, relation_type: 'annotation' },
+        repository,
       )
-      const outsider = await repository.create(createEntryInput({ content: 'Elsewhere' }))
-      await repository.create(
-        createEntryInput({
+      const outsider = await seedEntry({ content: 'Elsewhere' }, repository)
+      await seedEntry(
+        {
           content: 'Points at the root',
           parent_id: outsider.id,
           target_id: root.id,
           relation_type: 'connection',
-        }),
+        },
+        repository,
       )
 
       const descendants = await repository.listDescendants(root.id)
@@ -183,22 +177,24 @@ export function runEntryRepositoryContract(
     })
 
     it('follows an incoming connection’s own children too, not just the connection itself', async () => {
-      const root = await repository.create(createEntryInput({ content: 'Root' }))
-      const outsider = await repository.create(createEntryInput({ content: 'Elsewhere' }))
-      const connection = await repository.create(
-        createEntryInput({
+      const root = await seedEntry({ content: 'Root' }, repository)
+      const outsider = await seedEntry({ content: 'Elsewhere' }, repository)
+      const connection = await seedEntry(
+        {
           content: 'Points at the root',
           parent_id: outsider.id,
           target_id: root.id,
           relation_type: 'connection',
-        }),
+        },
+        repository,
       )
-      await repository.create(
-        createEntryInput({
+      await seedEntry(
+        {
           content: 'A note on that connection',
           parent_id: connection.id,
           relation_type: 'annotation',
-        }),
+        },
+        repository,
       )
 
       const descendants = await repository.listDescendants(root.id)
@@ -210,72 +206,73 @@ export function runEntryRepositoryContract(
 
     it('refuses a relation with nothing to relate to', async () => {
       await expect(
-        repository.create(
+        repository.createMany([
           createEntryInput({ content: 'Orphan note', relation_type: 'annotation' }),
-        ),
+        ]),
       ).rejects.toThrow(/requires a parent_id/)
     })
 
     it('refuses a revision of a revision', async () => {
-      const root = await repository.create(createEntryInput({ content: 'Root' }))
-      const revision = await repository.create(
-        createEntryInput({
+      const root = await seedEntry({ content: 'Root' }, repository)
+      const revision = await seedEntry(
+        {
           content: 'Reworded',
           parent_id: root.id,
           relation_type: 'revision',
           base_version_id: root.id,
-        }),
+        },
+        repository,
       )
 
       await expect(
-        repository.create(
+        repository.createMany([
           createEntryInput({
             content: 'Reworded again',
             parent_id: revision.id,
             relation_type: 'revision',
             base_version_id: revision.id,
           }),
-        ),
+        ]),
       ).rejects.toThrow(/cannot revise another revision/)
     })
 
     it('refuses a connection without a target and a target without a connection', async () => {
-      const root = await repository.create(createEntryInput({ content: 'Root' }))
+      const root = await seedEntry({ content: 'Root' }, repository)
 
       await expect(
-        repository.create(
+        repository.createMany([
           createEntryInput({
             content: 'Half a link',
             parent_id: root.id,
             relation_type: 'connection',
           }),
-        ),
+        ]),
       ).rejects.toThrow(/requires a target_id/)
 
       await expect(
-        repository.create(
+        repository.createMany([
           createEntryInput({
             content: 'Stray target',
             parent_id: root.id,
             target_id: root.id,
             relation_type: 'annotation',
           }),
-        ),
+        ]),
       ).rejects.toThrow(/Only connection entries/)
     })
 
     it('refuses a connection whose two endpoints are the same entry', async () => {
-      const root = await repository.create(createEntryInput({ content: 'Root' }))
+      const root = await seedEntry({ content: 'Root' }, repository)
 
       await expect(
-        repository.create(
+        repository.createMany([
           createEntryInput({
             content: 'Self link',
             parent_id: root.id,
             target_id: root.id,
             relation_type: 'connection',
           }),
-        ),
+        ]),
       ).rejects.toThrow(/two different entries/)
     })
   })

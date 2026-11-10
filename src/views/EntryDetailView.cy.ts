@@ -8,9 +8,10 @@ import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { serializeDocument, textContent } from '@/testing/documents'
 import { makeDraft, relatedTo } from '@/testing/draftFixtures'
+import { seedEntry } from '@/testing/seedEntry'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
-import { createEntryInput, emptyEntryDates, type Entry } from '@/types/entry'
+import { emptyEntryDates } from '@/types/entry'
 import { formatDate, formatDateline, formatTime } from '@/utils/format'
 import EntryDetailView from '@/views/EntryDetailView.vue'
 
@@ -29,19 +30,9 @@ function mountDetail(
   })
 }
 
-/**
- * Creates one entry in the active repository. Plain async rather than a command, so a test that
- * needs several — a parent, a related entry anchored to it, a revision over both — seeds them in one
- * `cy.then(async () => ...)` that yields what the test goes on to use, instead of a `.then()`
- * pyramid one level deeper per entry.
- */
-function seed(input: Parameters<typeof createEntryInput>[0]): Promise<Entry> {
-  return entryRepository.create(createEntryInput(input))
-}
-
 describe('EntryDetailView', () => {
   it('renders the entry’s own text', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seedEntry({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByText(PARENT_TEXT).should('be.visible')
@@ -49,7 +40,7 @@ describe('EntryDetailView', () => {
   })
 
   it('heads an untitled entry with its day and time, on its page or beside a related entry', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seedEntry({ content: PARENT_CONTENT })).then((parent) => {
       const createdAt = `Created at ${formatTime(parent.created_at)}`
       mountDetail(parent.id)
 
@@ -68,24 +59,26 @@ describe('EntryDetailView', () => {
   })
 
   it('shows the title once, heading the page or in the Title field while revising', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT, title: 'The Tahoe trip' })).then((parent) => {
-      mountDetail(parent.id)
+    cy.then(() => seedEntry({ content: PARENT_CONTENT, title: 'The Tahoe trip' })).then(
+      (parent) => {
+        mountDetail(parent.id)
 
-      cy.findByRole('heading', { name: 'The Tahoe trip' }).should('be.visible')
-      cy.findAllByText('The Tahoe trip').should('have.length', 1)
+        cy.findByRole('heading', { name: 'The Tahoe trip' }).should('be.visible')
+        cy.findAllByText('The Tahoe trip').should('have.length', 1)
 
-      cy.findByRole('button', { name: 'Revise entry' }).click()
+        cy.findByRole('button', { name: 'Revise entry' }).click()
 
-      cy.findByRole('heading', { level: 1, name: 'Revise entry' }).should('be.visible')
-      cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'The Tahoe trip')
-      cy.findByText('The Tahoe trip').should('not.exist')
-    })
+        cy.findByRole('heading', { level: 1, name: 'Revise entry' }).should('be.visible')
+        cy.findByRole('textbox', { name: 'Title' }).should('have.value', 'The Tahoe trip')
+        cy.findByText('The Tahoe trip').should('not.exist')
+      },
+    )
   })
 
   it('shows a related entry separately rather than spliced into the parent', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
-      await seed({
+      const parent = await seedEntry({ content: PARENT_CONTENT })
+      await seedEntry({
         content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
         relation_type: 'update',
@@ -101,10 +94,10 @@ describe('EntryDetailView', () => {
 
   it('describes which passage an anchored related entry is about', () => {
     cy.then(async () => {
-      const parent = await seed({
+      const parent = await seedEntry({
         content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'strike'),
       })
-      await seed({
+      await seedEntry({
         content: textContent('Wrong lake'),
         parent_id: parent.id,
         relation_type: 'update',
@@ -120,8 +113,8 @@ describe('EntryDetailView', () => {
 
   it('reports the version position once an entry has been revised', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
-      await seed({
+      const parent = await seedEntry({ content: PARENT_CONTENT })
+      await seedEntry({
         content: textContent('I went to Donner Lake with Dad'),
         parent_id: parent.id,
         relation_type: 'revision',
@@ -139,9 +132,9 @@ describe('EntryDetailView', () => {
 
   it('shows an incoming connection on the entry it points at', () => {
     cy.then(async () => {
-      const target = await seed({ content: textContent('Started the degree') })
-      const source = await seed({ content: textContent('Left my job') })
-      await seed({
+      const target = await seedEntry({ content: textContent('Started the degree') })
+      const source = await seedEntry({ content: textContent('Left my job') })
+      await seedEntry({
         content: textContent('One made the other possible'),
         title: 'led_to',
         parent_id: source.id,
@@ -158,8 +151,8 @@ describe('EntryDetailView', () => {
 
   it('shows a related entry card’s created date', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
-      const related = await seed({
+      const parent = await seedEntry({ content: PARENT_CONTENT })
+      const related = await seedEntry({
         content: textContent('It was actually Donner Lake'),
         parent_id: parent.id,
         relation_type: 'update',
@@ -174,9 +167,9 @@ describe('EntryDetailView', () => {
 
   it('opens the connection’s own page, not the far endpoint, when its card is clicked', () => {
     cy.then(async () => {
-      const target = await seed({ content: textContent('Started the degree') })
-      const source = await seed({ content: textContent('Left my job') })
-      const connection = await seed({
+      const target = await seedEntry({ content: textContent('Started the degree') })
+      const source = await seedEntry({ content: textContent('Left my job') })
+      const connection = await seedEntry({
         content: textContent('One made the other possible'),
         title: 'led_to',
         parent_id: source.id,
@@ -197,8 +190,11 @@ describe('EntryDetailView', () => {
 
   it('shows a breadcrumb back to the parent on a related entry’s own detail page', () => {
     cy.then(async () => {
-      const parent = await seed({ content: textContent('Left my job'), title: 'Career change' })
-      const related = await seed({
+      const parent = await seedEntry({
+        content: textContent('Left my job'),
+        title: 'Career change',
+      })
+      const related = await seedEntry({
         content: textContent('Started the degree'),
         parent_id: parent.id,
         relation_type: 'update',
@@ -218,9 +214,9 @@ describe('EntryDetailView', () => {
 
   it('shows a breadcrumb linking both sides on a connection’s own detail page', () => {
     cy.then(async () => {
-      const target = await seed({ content: textContent('Started the degree') })
-      const source = await seed({ content: textContent('Left my job') })
-      const connection = await seed({
+      const target = await seedEntry({ content: textContent('Started the degree') })
+      const source = await seedEntry({ content: textContent('Left my job') })
+      const connection = await seedEntry({
         content: textContent('One made the other possible'),
         title: 'led_to',
         parent_id: source.id,
@@ -253,7 +249,7 @@ describe('EntryDetailView', () => {
 
   it('shows the details the writer gave, alongside when the entry was created', () => {
     cy.then(() =>
-      seed({
+      seedEntry({
         content: PARENT_CONTENT,
         dates: {
           ...emptyEntryDates(),
@@ -277,8 +273,8 @@ describe('EntryDetailView', () => {
 
   it('offers the draft already in progress on an entry rather than a second one', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
-      const other = await seed({ content: textContent('A different day entirely') })
+      const parent = await seedEntry({ content: PARENT_CONTENT })
+      const other = await seedEntry({ content: textContent('A different day entirely') })
       return { parent, other }
     }).then(({ parent, other }) => {
       mountDetail(parent.id).then(({ wrapper }) => {
@@ -310,8 +306,8 @@ describe('EntryDetailView', () => {
 
   it('frees the entry when a revision is opened and left untouched', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
-      const other = await seed({ content: textContent('A different day entirely') })
+      const parent = await seedEntry({ content: PARENT_CONTENT })
+      const other = await seedEntry({ content: textContent('A different day entirely') })
       return { parent, other }
     }).then(({ parent, other }) => {
       mountDetail(parent.id).then(({ wrapper }) => {
@@ -335,8 +331,8 @@ describe('EntryDetailView', () => {
 
   it('frees the entry when a revision is changed back to its version and left', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
-      const other = await seed({ content: textContent('A different day entirely') })
+      const parent = await seedEntry({ content: PARENT_CONTENT })
+      const other = await seedEntry({ content: textContent('A different day entirely') })
       return { parent, other }
     }).then(({ parent, other }) => {
       mountDetail(parent.id).then(({ wrapper }) => {
@@ -361,8 +357,8 @@ describe('EntryDetailView', () => {
 
   it('frees the entry when a related entry is opened and left untouched', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
-      const other = await seed({ content: textContent('A different day entirely') })
+      const parent = await seedEntry({ content: PARENT_CONTENT })
+      const other = await seedEntry({ content: textContent('A different day entirely') })
       return { parent, other }
     }).then(({ parent, other }) => {
       mountDetail(parent.id).then(({ wrapper }) => {
@@ -387,7 +383,7 @@ describe('EntryDetailView', () => {
 
   it('shows a draft on the entry that will not reopen, and frees the entry once it is discarded', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
+      const parent = await seedEntry({ content: PARENT_CONTENT })
       await draftRepository.save({
         ...makeDraft('session-1', {
           entry: {
@@ -413,14 +409,14 @@ describe('EntryDetailView', () => {
   })
 
   it('turns a revision read-only, and says why, once its save is refused for a version saved since', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seedEntry({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
       cy.findByRole('button', { name: 'Revise entry' }).click()
       cy.findByRole('textbox', { name: 'Revised entry' }).type('{ctrl+end}, and Mom')
 
       // Only a race gets a second revision past the claim; saving one directly stands in for it.
       cy.then(() =>
-        seed({
+        seedEntry({
           content: textContent('I went to Donner Lake with Dad'),
           parent_id: parent.id,
           relation_type: 'revision',
@@ -443,7 +439,7 @@ describe('EntryDetailView', () => {
 
   it('reopens the related-entry draft it was linked to on both halves', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
+      const parent = await seedEntry({ content: PARENT_CONTENT })
       await draftRepository.save(
         makeDraft('session-1', {
           entry: { content: textContent('Wrong lake'), events: TYPED },
@@ -468,8 +464,8 @@ describe('EntryDetailView', () => {
     ]
 
     cy.then(async () => {
-      const parent = await seed({ content: withAnchorMark(PARENT_TEXT, 'sealed-1', 10, 20) })
-      await seed({
+      const parent = await seedEntry({ content: withAnchorMark(PARENT_TEXT, 'sealed-1', 10, 20) })
+      await seedEntry({
         content: textContent('Wrong lake'),
         parent_id: parent.id,
         relation_type: 'annotation',
@@ -499,7 +495,7 @@ describe('EntryDetailView', () => {
         }),
       )
       // A later version dropped "sealed-1", so the current document can't say it was sealed.
-      await seed({
+      await seedEntry({
         content: PARENT_CONTENT,
         parent_id: parent.id,
         relation_type: 'revision',
@@ -521,7 +517,7 @@ describe('EntryDetailView', () => {
 
   it('opens a revision it was linked to read-only, and says why, when the entry was revised since', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
+      const parent = await seedEntry({ content: PARENT_CONTENT })
       await draftRepository.save(
         makeDraft('session-1', {
           entry: {
@@ -533,7 +529,7 @@ describe('EntryDetailView', () => {
         }),
       )
       // Saved elsewhere after the draft began, so the draft no longer follows the latest version.
-      await seed({
+      await seedEntry({
         content: textContent('I went to Donner Lake with Dad'),
         parent_id: parent.id,
         relation_type: 'revision',
@@ -555,13 +551,13 @@ describe('EntryDetailView', () => {
   })
 
   it('shows the version another tab saved once this tab is returned to', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seedEntry({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
       cy.findByText(PARENT_TEXT).should('be.visible')
 
       // Saved in another tab while this one sat in the background.
       cy.then(() =>
-        seed({
+        seedEntry({
           content: textContent('I went to Donner Lake with Dad'),
           parent_id: parent.id,
           relation_type: 'revision',
@@ -578,7 +574,7 @@ describe('EntryDetailView', () => {
 
   it('offers the draft another tab has only just opened on an entry, before a word is typed', () => {
     cy.then(async () => {
-      const parent = await seed({ content: PARENT_CONTENT })
+      const parent = await seedEntry({ content: PARENT_CONTENT })
 
       // Another tab: its own stores over the same database, where Revise was clicked and nothing
       // typed yet.
@@ -601,10 +597,10 @@ describe('EntryDetailView', () => {
 
   it('keeps the text under an anchor as it was in a revision, and saves the rest', () => {
     cy.then(async () => {
-      const parent = await seed({
+      const parent = await seedEntry({
         content: withAnchorMark(PARENT_TEXT, 'anchor-1', 10, 20, 'comment'),
       })
-      await seed({
+      await seedEntry({
         content: textContent('Wonderful trip'),
         parent_id: parent.id,
         relation_type: 'annotation',
@@ -636,7 +632,7 @@ describe('EntryDetailView', () => {
 
   it('revises one detail, leaving the others and the text as they were', () => {
     cy.then(() =>
-      seed({
+      seedEntry({
         content: PARENT_CONTENT,
         dates: { ...emptyEntryDates(), occurred_at: '1994-06-11' },
         location: 'home',
@@ -658,7 +654,7 @@ describe('EntryDetailView', () => {
   })
 
   it('refuses a revision that changes nothing, and says so', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seedEntry({ content: PARENT_CONTENT })).then((parent) => {
       mountDetail(parent.id)
 
       cy.findByRole('button', { name: 'Revise entry' }).click()
@@ -669,7 +665,7 @@ describe('EntryDetailView', () => {
   })
 
   it('navigates to a dedicated screen to add a connection', () => {
-    cy.then(() => seed({ content: textContent('Left my job') })).then((source) => {
+    cy.then(() => seedEntry({ content: textContent('Left my job') })).then((source) => {
       const router = createTestRouter()
       mountDetail(source.id, { router })
 
@@ -682,7 +678,7 @@ describe('EntryDetailView', () => {
   })
 
   it('says why an entry can’t be shown when it fails to load', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seedEntry({ content: PARENT_CONTENT })).then((parent) => {
       cy.stub(entryRepository, 'listDescendants').rejects(new Error('listDescendants rejected'))
       mountDetail(parent.id)
 
@@ -691,7 +687,7 @@ describe('EntryDetailView', () => {
   })
 
   it('keeps a revision open, and says why, when its save fails', () => {
-    cy.then(() => seed({ content: PARENT_CONTENT })).then((parent) => {
+    cy.then(() => seedEntry({ content: PARENT_CONTENT })).then((parent) => {
       cy.stub(draftRepository, 'seal').rejects(new Error('seal rejected'))
       mountDetail(parent.id)
 

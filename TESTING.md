@@ -41,7 +41,7 @@ Tests are one design, judged together rather than file by file. There are three 
 
 **Component specs are the screen alone.** They mount the component under test. Storage runs real and isolated beneath it, as for every spec (see "Swap the repository" below), but it's the backend, out of scope, and is handled the way a request intercept handles one:
 
-- **Seed it** through the repository interface before mounting, with whatever the screen shows.
+- **Seed it** through the repository interface before mounting, with whatever the screen shows. Entries go in with `seedEntry` (`src/testing/`), through `createMany` as the app writes them.
 - **Fail it** by stubbing one repository method to reject, when what the screen shows for a failure is the point.
 - **Never read it back.** Assert through the UI and the component's own outputs — what it emits, where it navigates. What reached storage is a flow's to check. If a spec needs storage to see a result, first ask whether the screen should show it.
 

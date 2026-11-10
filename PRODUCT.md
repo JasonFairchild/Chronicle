@@ -247,6 +247,10 @@ The anchor menu (§4.4) is contextual so these have somewhere to land:
 
 - Anchoring to an image or caption. Images are block atoms, so this needs node-level anchor attributes rather than a mark.
 
+### Images
+
+- An image attached to the entry as a whole rather than placed in its text (§4.7): either standing apart from its versions, or added as a version of its own.
+
 ### Getting things in and out
 
 - Importing scanned journal pages or photos as an unfiled queue, turned into entries one at a time with your own context and dates — never bulk-creating entries nobody has read.

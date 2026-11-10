@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { docToPlainText } from '@/domain/entryDocument'
-import { buildEntryHistory, reconstructEntryState } from '@/domain/reconstructEntryState'
+import { reconstructEntryState } from '@/domain/reconstructEntryState'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
 import { emptyEntryDates, type Entry } from '@/types/entry'
@@ -71,6 +71,7 @@ describe('reconstructEntryState', () => {
     const result = reconstructEntryState('root-1', [root, first, second])
 
     expect(docToPlainText(result!.content)).toBe('Started learning guitar.')
+    expect(result?.version.total).toBe(1)
     // Newest first: a reader wants the latest word on what's happened at the top of the list.
     expect(result?.related_entries.map((related) => docToPlainText(related.entry.content))).toEqual(
       ['Played a whole song.', 'Learned first chord.'],
@@ -549,85 +550,5 @@ describe('reconstructEntryState', () => {
       relation_type: 'update',
       target_id: null,
     })
-  })
-})
-
-describe('buildEntryHistory', () => {
-  it('returns the original state first, then each revision', () => {
-    const root = makeEntry({ id: 'root-1', content: 'One' })
-    const revision = makeEntry({
-      id: 'revision-1',
-      parent_id: 'root-1',
-      relation_type: 'revision',
-      content: 'Two',
-      created_at: '2026-01-02T00:00:00.000Z',
-    })
-
-    const history = buildEntryHistory('root-1', [root, revision])
-
-    expect(history?.map((version) => docToPlainText(version.content))).toEqual(['One', 'Two'])
-    expect(history?.[0]?.revision_id).toBeNull()
-    expect(history?.[1]?.revision_id).toBe('revision-1')
-  })
-
-  it('records the author’s fields at each save point, beside the document', () => {
-    const root = makeEntry({
-      id: 'root-1',
-      content: 'One',
-      original_medium: 'Google Docs',
-      title: 'Lake Tahoe',
-    })
-    const revision = makeEntry({
-      id: 'revision-1',
-      parent_id: 'root-1',
-      relation_type: 'revision',
-      content: 'Two',
-      original_medium: 'paper journal',
-      title: 'Donner Lake',
-      created_at: '2026-01-02T00:00:00.000Z',
-    })
-
-    const history = buildEntryHistory('root-1', [root, revision])
-
-    expect(history?.map((version) => version.original_medium)).toEqual([
-      'Google Docs',
-      'paper journal',
-    ])
-    expect(history?.map((version) => version.title)).toEqual(['Lake Tahoe', 'Donner Lake'])
-  })
-
-  it('ignores annotations and updates, which never write content', () => {
-    const root = makeEntry({ id: 'root-1', content: 'One' })
-    const update = makeEntry({
-      id: 'update-1',
-      parent_id: 'root-1',
-      relation_type: 'update',
-      content: 'Not a version',
-      created_at: '2026-01-02T00:00:00.000Z',
-    })
-
-    expect(buildEntryHistory('root-1', [root, update])).toHaveLength(1)
-  })
-
-  it('has no chain to return for an entry that is unknown, or not yet written at asOf', () => {
-    const root = makeEntry({ id: 'root-1', content: 'One' })
-
-    expect(buildEntryHistory('missing', [root])).toBeNull()
-    expect(buildEntryHistory('root-1', [root], new Date('2025-12-31T00:00:00.000Z'))).toBeNull()
-  })
-
-  it('stops the chain at asOf, leaving later revisions out of it', () => {
-    const root = makeEntry({ id: 'root-1', content: 'One' })
-    const revision = makeEntry({
-      id: 'revision-1',
-      parent_id: 'root-1',
-      relation_type: 'revision',
-      content: 'Two',
-      created_at: '2026-01-05T00:00:00.000Z',
-    })
-
-    const history = buildEntryHistory('root-1', [root, revision], new Date('2026-01-03T00:00:00Z'))
-
-    expect(history?.map((version) => docToPlainText(version.content))).toEqual(['One'])
   })
 })

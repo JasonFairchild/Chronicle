@@ -39,17 +39,12 @@ export function runMediaRepositoryContract(
       const second = await repository.put(pngBlob())
 
       expect(first).not.toBe(second)
-      expect(await repository.list()).toHaveLength(2)
+      expect(await repository.get(first)).not.toBeNull()
+      expect(await repository.get(second)).not.toBeNull()
     })
 
-    it('deletes a blob and reports a missing one as null rather than throwing', async () => {
-      const id = await repository.put(pngBlob())
-      await repository.delete(id)
-
-      expect(await repository.get(id)).toBeNull()
+    it('reports a missing blob as null rather than throwing', async () => {
       expect(await repository.get('never-stored.png')).toBeNull()
-      // Deleting something already gone is the outcome the caller asked for.
-      await expect(repository.delete(id)).resolves.toBeUndefined()
     })
 
     it('falls back to a neutral type for bytes that are not a known image', async () => {

@@ -62,11 +62,13 @@ function buildIndex(entries: Entry[]): EntryIndex {
   return { byId, childrenOf, connectionsTo }
 }
 
-function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): EntryVersion[] | null {
-  const entry = index.byId.get(entryId)
-  if (!entry) return null
-  if (asOfIso && entry.created_at > asOfIso) return null
-
+/**
+ * The ordered version chain for one entry: its original content first, then each revision.
+ *
+ * Only revisions write content. Annotations, updates, and connections never do, which is what keeps
+ * a single fold coherent and lets a revision be applied without erasing a related entry.
+ */
+function historyFor(entry: Entry, index: EntryIndex, asOfIso?: string): EntryVersion[] {
   const versions: EntryVersion[] = [
     {
       revision_id: null,
@@ -75,7 +77,7 @@ function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): Entry
     },
   ]
 
-  const revisions = (index.childrenOf.get(entryId) ?? []).filter(
+  const revisions = (index.childrenOf.get(entry.id) ?? []).filter(
     (child) => child.relation_type === 'revision' && (!asOfIso || child.created_at <= asOfIso),
   )
 
@@ -90,21 +92,6 @@ function historyFor(entryId: string, index: EntryIndex, asOfIso?: string): Entry
   }
 
   return versions
-}
-
-/**
- * The ordered version chain for one entry: its original content first, then each revision.
- *
- * Only revisions write content. Annotations, updates, and connections never do, which is what keeps
- * a single fold coherent and lets a revision be applied without erasing a related entry.
- */
-export function buildEntryHistory(
-  entryId: string,
-  entries: Entry[],
-  asOf?: Date,
-): EntryVersion[] | null {
-  const index = buildIndex(entries)
-  return historyFor(entryId, index, asOf?.toISOString())
 }
 
 function hasVisibleChildren(entryId: string, walk: Walk): boolean {
@@ -203,9 +190,7 @@ function aggregate(entryId: string, walk: Walk, depth: number): AggregatedEntry 
   if (walk.asOfIso && entry.created_at > walk.asOfIso) return null
   if (walk.seen.has(entryId)) return null
 
-  const versions = historyFor(entryId, walk.index, walk.asOfIso)
-  if (!versions) return null
-
+  const versions = historyFor(entry, walk.index, walk.asOfIso)
   const current = versions[versions.length - 1]!
   const descendants = walk.index.childrenOf.get(entryId) ?? []
 

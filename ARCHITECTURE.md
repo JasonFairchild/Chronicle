@@ -53,7 +53,6 @@ flowchart TB
     direction LR
     RECON["<b>reconstructEntryState</b><br/>fold version chain · asOf<br/>read anchors · gather connections"]
     AGG["<b>AggregatedEntry</b><br/>current version i of n<br/>related_entries · connections"]
-    HIST["<b>buildEntryHistory</b><br/>EntryVersion[] · no UI yet"]
     DM["<b>deriveMarks</b>(events, policy)<br/>AuthoringMark[]"]
     BF["<b>buildFrames</b>(log, marks)<br/>replay.ts · ChangeSet"]
     MSS["<b>markSetsStore</b><br/>Default set built on first open"]
@@ -100,7 +99,6 @@ flowchart TB
   AGG ==> TL
   AGG ==> DV
   AGG --> NCV
-  T_ENTRIES --> HIST
   T_DRAFTS -->|"list(): DraftSnapshot[]"| DV2
   DV2 -->|"Resume: ?draft=session_id"| NEV
   DV2 --> DV

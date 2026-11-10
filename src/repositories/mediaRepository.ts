@@ -11,8 +11,6 @@ export interface MediaRepository {
   /** Stores the bytes and returns the id the document will refer to. */
   put(blob: Blob): Promise<string>
   get(id: string): Promise<Blob | null>
-  delete(id: string): Promise<void>
-  list(): Promise<string[]>
 }
 
 /** Extensions are the only place OPFS keeps a file's type, so both adapters share the map. */

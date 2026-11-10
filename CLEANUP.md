@@ -1,6 +1,6 @@
 # Cleanup after simplifying
 
-Status: planned 2026-11-07. Commits 1–4 done; commit 5 written, not yet committed.
+Status: planned 2026-11-07. Commits 1–5 done; commit 6 written, not yet committed.
 
 ## Context
 

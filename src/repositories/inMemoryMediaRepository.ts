@@ -20,12 +20,4 @@ export class InMemoryMediaRepository implements MediaRepository {
     const blob = this.blobs.get(id)
     return blob ? new Blob([blob], { type: mimeForMediaId(id) }) : null
   }
-
-  async delete(id: string): Promise<void> {
-    this.blobs.delete(id)
-  }
-
-  async list(): Promise<string[]> {
-    return [...this.blobs.keys()].sort()
-  }
 }

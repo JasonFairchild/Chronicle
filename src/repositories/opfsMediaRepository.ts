@@ -48,28 +48,4 @@ export class OpfsMediaRepository implements MediaRepository {
       throw error
     }
   }
-
-  async delete(id: string): Promise<void> {
-    const directory = await this.directory()
-
-    try {
-      await directory.removeEntry(id)
-    } catch (error) {
-      if (!isNotFound(error)) throw error // Already gone is the outcome the caller wanted.
-    }
-  }
-
-  async list(): Promise<string[]> {
-    const directory = await this.directory()
-    const ids: string[] = []
-
-    // lib.dom does not yet declare the async iterators OPFS directory handles actually ship
-    // with, so the shape is spelled out here rather than reached for untyped.
-    const listable = directory as FileSystemDirectoryHandle & {
-      keys(): AsyncIterableIterator<string>
-    }
-    for await (const name of listable.keys()) ids.push(name)
-
-    return ids.sort()
-  }
 }

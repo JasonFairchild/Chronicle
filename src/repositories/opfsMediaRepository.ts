@@ -1,6 +1,28 @@
 import { newId } from '@/utils/id'
 
-import { extensionForMime, type MediaRepository, mimeForMediaId } from './mediaRepository'
+import type { MediaRepository } from './mediaRepository'
+
+const MIME_EXTENSIONS: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+  'image/svg+xml': 'svg',
+}
+
+const EXTENSION_MIMES: Record<string, string> = Object.fromEntries(
+  Object.entries(MIME_EXTENSIONS).map(([mime, extension]) => [extension, mime]),
+)
+
+function extensionForMime(mime: string): string {
+  return MIME_EXTENSIONS[mime] ?? 'bin'
+}
+
+function mimeForMediaId(id: string): string {
+  const extension = id.slice(id.lastIndexOf('.') + 1)
+  return EXTENSION_MIMES[extension] ?? 'application/octet-stream'
+}
 
 function isNotFound(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'NotFoundError'

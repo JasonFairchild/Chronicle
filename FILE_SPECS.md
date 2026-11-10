@@ -17,7 +17,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - First, `useDraftSession`: its behavior is spread over four owners and needs a second Pinia to reach.
   - Then the flow cuts, since they're duplicates already.
   - Then files with real invariants nothing proves today: the read-only related draft, an emptied detail becoming `null`, the draft helpers, the layout width.
-  - Last, files whose behavior contracts or flows already reach in passing: `compareMarkSets`, the media MIME helpers, the route table.
+  - Last, files whose behavior adapter specs or flows already reach in passing: `compareMarkSets`, the route table.
 - **Before cutting a test, check coverage for lines only it reached** (TESTING.md, "Layers"). Run `npm run test:coverage` before the cut, note the source file's uncovered lines, and compare after. Coverage is Vitest only, so a Cypress mirror is cut together with its Browser Mode twin.
 - **Cutting means proving wiring, not deleting the scenario.**
   - An owner test that is part session behavior and part wiring is shrunk to the wiring: which session method a control calls, what the owner renders from the session, where it navigates, and the order its own handler does things in.
@@ -52,7 +52,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - `main.ts`: bootstrap, outside coverage.
   - `chronicleDatabase.ts`: each index is proven by the adapter query that needs it; a missing one throws.
   - `repositories/index.ts`: every spec runs through its setters.
-  - The type-only interface files (`entry`/`draft`/`markSetRepository.ts`): their contract.
+  - The type-only interface files (`entry`/`draft`/`markSet`/`mediaRepository.ts`): their contract, or for mark sets and media, their one adapter's spec.
   - `src/testing/`, `*.d.ts`, `main.css`: not app code.
   - `App.vue`: App.flow.
   - The four editor files: until Track B.
@@ -200,13 +200,10 @@ When a commit changes how a test is written, not just what it proves, grep the o
     - Source change: `loadRootEntries` rethrows, so `void store.loadRootEntries()` would leave an unhandled rejection that fails both runners. The call becomes `.catch(() => {})`, since `store.error` already says why, as DraftsView's `refresh` does.
     - Verify: both pairs.
 
-12. **`compareMarkSets` spec**, `src/types/markSet.test.ts`, mirroring `compareEntries` in `entry.test.ts`: by `created_at`, tied on `id`. The contract hits the tie only by chance.
+12. **`compareMarkSets` spec**, `src/types/markSet.test.ts`, mirroring `compareEntries` in `entry.test.ts`: by `created_at`, tied on `id`. The adapter spec hits the tie only by chance.
     - Verify: the new spec.
 
-13. **Media MIME helpers spec**, `src/repositories/mediaRepository.test.ts`.
-    - Every known type round-trips through `extensionForMime` → id → `mimeForMediaId`.
-    - An unknown type gives `bin`; an unknown extension gives `application/octet-stream`.
-    - Verify: the new spec.
+13. **Dropped: a media MIME helpers spec.** The helpers are private to `opfsMediaRepository.ts`, their one caller, and its spec proves a known type and the unknown fallback. Every known type round-tripping needs no case of its own: the reverse map is built from the forward one.
 
 14. **Route table spec**, `src/router/index.browser.test.ts`, browser-only, since `createWebHistory` reads `window` at import. Uses `createTestRouter()`, and `await router.push(...)`, because `resolve()` doesn't follow redirects:
     - `/` lands on `new-entry`

@@ -36,7 +36,7 @@ Consider one pass over every spec against TESTING.md's data rules, before going 
 6. **draftsStore.** Spec: `draftsStore.test`.
 7. **entriesStore.** Item 3 changes `inputsForDraft`. Spec: `entriesStore.test`.
 8. **The entry model.** `reconstructEntryState.ts`, `entryValidation.ts`. Item 3 changes connection gathering and `assertValidRelation`. Specs: `reconstructEntryState.test`, `entryValidation.test`.
-9. **Repository interfaces.** `entryRepository`, `draftRepository`, `markSetRepository`, `mediaRepository`. Specs: the four `.contract.ts`.
+9. **Repository interfaces.** `entryRepository`, `draftRepository`, `markSetRepository`, `mediaRepository`. Specs: the entry and draft `.contract.ts`, and the mark-set and media adapter specs.
 10. **Persistent adapters and the composition root.** `chronicleDatabase.ts`, `dexieEntryRepository`, `dexieDraftRepository`, `dexieMarkSetRepository`, `opfsMediaRepository`, `repositories/index.ts`. Specs: `dexie*.browser.test`, `opfsMediaRepository.browser.test`.
 
 ### Track B: the editor

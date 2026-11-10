@@ -21,9 +21,9 @@ How tests are written here and why. These apply to component and flow specs in *
 
 **Cypress should keep up with Vitest Browser Mode.** Every `.browser.test.ts` that mounts something has a `.cy.ts` mirror, the same as any other duplicated pair.
 
-**Contract suites hold the next adapter to what the current one does.** Each of the four repositories exports one: `entryRepository.contract.ts`, `draftRepository.contract.ts` and `markSetRepository.contract.ts` run against Dexie, and `mediaRepository.contract.ts` against OPFS. A replacement, such as the SQLite adapter (CHRONICLE_PLAN.md), passes the same suite, which is what makes "swap the storage backend by changing one line" provable rather than asserted. They are named `.contract.ts` precisely so no runner picks them up directly.
+**Contract suites hold the next adapter to what the current one does.** A repository gets one only when a second backend is planned for it: `entryRepository.contract.ts` and `draftRepository.contract.ts`, run against Dexie. The SQLite adapter (CHRONICLE_PLAN.md) passes the same suites, which is what makes "swap the storage backend by changing one line" provable rather than asserted. They are named `.contract.ts` precisely so no runner picks them up directly. Mark sets and media have none; their adapter's own spec proves them.
 
-They run in the browser project only, against real IndexedDB and a real origin private file system. Node specs run Dexie on `fake-indexeddb`, so a contract there would prove the fake rather than the adapter.
+They run in the browser project only, against real IndexedDB. Node specs run Dexie on `fake-indexeddb`, so a contract there would prove the fake rather than the adapter.
 
 ## Philosophy
 

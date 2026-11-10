@@ -12,26 +12,3 @@ export interface MediaRepository {
   put(blob: Blob): Promise<string>
   get(id: string): Promise<Blob | null>
 }
-
-/** Extensions are the only place OPFS keeps a file's type, so both adapters share the map. */
-const MIME_EXTENSIONS: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/gif': 'gif',
-  'image/webp': 'webp',
-  'image/avif': 'avif',
-  'image/svg+xml': 'svg',
-}
-
-const EXTENSION_MIMES: Record<string, string> = Object.fromEntries(
-  Object.entries(MIME_EXTENSIONS).map(([mime, extension]) => [extension, mime]),
-)
-
-export function extensionForMime(mime: string): string {
-  return MIME_EXTENSIONS[mime] ?? 'bin'
-}
-
-export function mimeForMediaId(id: string): string {
-  const extension = id.slice(id.lastIndexOf('.') + 1)
-  return EXTENSION_MIMES[extension] ?? 'application/octet-stream'
-}

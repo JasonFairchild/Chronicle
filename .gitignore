@@ -41,6 +41,9 @@ coverage/
 cypress/videos/
 cypress/screenshots/
 cypress/downloads/
+# Parallel runner (scripts/cypressParallel.ts): machine-local timings and per-worker scratch
+cypress/timingsWithOverhead.json
+cypress/.results-worker-*.json
 
 # Vitest
 __screenshots__/

@@ -1,4 +1,8 @@
+import { writeFileSync } from 'node:fs'
+
 import { defineConfig } from 'cypress'
+import cypressOnFix from 'cypress-on-fix'
+import cypressSplit from 'cypress-split'
 
 import viteConfig from './vite.config'
 
@@ -9,23 +13,30 @@ export default defineConfig({
       bundler: 'vite',
       viteConfig: {
         ...viteConfig,
-        // Well clear of 5173 and the ports Vite walks up to from it when they're taken. A dev
-        // server sitting on this one does not collide loudly: every spec fails identically with
-        // "Failed to fetch dynamically imported module" before any test runs, which reads exactly
-        // like the dep-cache race below and is nothing of the kind. `strictPort` does not help —
-        // it never fires, since Cypress is serving the specs rather than this port's listener.
+        // Clear of 5173 and the ports Vite walks up to. A dev server already on it fails every
+        // spec with "Failed to fetch dynamically imported module", and `strictPort` never fires.
         server: { port: 5199 },
-        // Cypress's own dep pre-bundle, kept out of the `node_modules/.vite` the dev server uses.
-        //
-        // Cypress builds a different resolved config from the same `vite.config.ts` — its own port,
-        // its own plugins — and Vite keys the optimizer cache on that config. Sharing one directory
-        // meant `npm run dev` and `npm run cy:run` invalidated each other in turn, so the first run
-        // after the other had used it re-optimized on start and served specs while it did. The
-        // in-flight import of the support file died as "Failed to fetch dynamically imported
-        // module", outside any test, failing every spec identically — and a second run, now warm,
-        // passed. Two caches, no shared state to fight over.
-        cacheDir: 'node_modules/.vite-cypress',
+        // Apart from the dev server's `node_modules/.vite`: Cypress adds its own plugins, which
+        // Vite hashes, so a shared cache was rebuilt at each switch and every spec served during
+        // the rebuild failed. The parallel runner gives each worker its own.
+        cacheDir: process.env.VITE_CACHE_DIR ?? 'node_modules/.vite-cypress',
       },
+    },
+    setupNodeEvents(cypressOn, config) {
+      // Cypress keeps only the last handler per event; cypress-split and the parallel runner both
+      // need `after:spec` and `after:run`.
+      const on = cypressOnFix(cypressOn)
+      cypressSplit(on, config) // Does nothing unless the parallel runner sets SPLIT.
+
+      const resultsFile = process.env.CY_PARALLEL_RESULTS_FILE
+      if (resultsFile) {
+        // The runner reads this line to time each spec's overhead as it finishes.
+        on('after:spec', (_spec, results) => {
+          process.stdout.write(`[cy-par] spec-done ${results.stats.duration}\n`)
+        })
+        on('after:run', (results) => writeFileSync(resultsFile, JSON.stringify(results)))
+      }
+      return config
     },
     viewportWidth: 800,
     viewportHeight: 800,

@@ -54,6 +54,7 @@ Open [http://localhost:5173](http://localhost:5173).
 | `npm run test:coverage`     | Both Vitest projects with coverage          |
 | `npm run cy`                | Cypress component test runner (interactive) |
 | `npm run cy:run`            | Cypress component tests (headless)          |
+| `npm run cy:par`            | Cypress component tests, 2 in parallel      |
 | `npm run typecheck`         | Type-check all project references (vue-tsc) |
 | `npm run lint`              | ESLint                                      |
 | `npm run lint:fix`          | ESLint with autofix                         |

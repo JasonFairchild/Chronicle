@@ -1,28 +1,23 @@
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
 import { DexieDraftRepository } from '@/repositories/dexieDraftRepository'
+import { DexieEntryRepository } from '@/repositories/dexieEntryRepository'
 import { runDraftRepositoryContract } from '@/repositories/draftRepository.contract'
 import { makeDraft } from '@/testing/draftFixtures'
-import { freshDraftRepository, freshEntryRepository } from '@/testing/realRepositories'
 
 // Real IndexedDB, via Playwright Chromium, for the same reason the entry adapter is proven here.
-// Drafts and entries share one database per test, as the composition root has them, so a seal is
-// one write; `realRepositories.ts` deletes it after.
+// Drafts and entries share one connection, as the composition root has them, so a seal is one
+// write.
+const database = new ChronicleDatabase()
 runDraftRepositoryContract('Dexie', () => ({
-  drafts: freshDraftRepository(),
-  entries: freshEntryRepository(),
+  drafts: new DexieDraftRepository(database),
+  entries: new DexieEntryRepository(database),
 }))
 
 describe('DexieDraftRepository persistence', () => {
   it('still holds an unsealed draft after the tab is closed and reopened', async () => {
-    const databaseName = `chronicle-drafts-persistence-${Date.now()}`
-    const beforeReload = new ChronicleDatabase(databaseName)
-    const afterReload = new ChronicleDatabase(databaseName) // Opens on first use, below.
-    // Through the connection left open, which a delete closes first. Registered before any
-    // assertion, so a failing one can't leave the database behind.
-    onTestFinished(() => afterReload.delete())
-
+    const beforeReload = new ChronicleDatabase()
     await new DexieDraftRepository(beforeReload).save(
       makeDraft('session-1', {
         entry: {
@@ -35,7 +30,7 @@ describe('DexieDraftRepository persistence', () => {
     // A fresh connection sharing no in-memory state with the first — the closest an automated
     // test gets to a crash mid-sentence.
     beforeReload.close()
-    const recovered = await new DexieDraftRepository(afterReload).getById('session-1')
+    const recovered = await new DexieDraftRepository(new ChronicleDatabase()).getById('session-1')
 
     expect(recovered?.entry.content).toBe('Never got round to finishing this')
     expect(recovered?.entry.events).toHaveLength(1)

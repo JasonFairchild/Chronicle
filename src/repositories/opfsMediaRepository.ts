@@ -37,11 +37,9 @@ function isNotFound(error: unknown): boolean {
  * is why `put` mints an id ending in one and `get` reads the type back out of it.
  */
 export class OpfsMediaRepository implements MediaRepository {
-  constructor(private directoryName = 'media') {}
-
   private async directory(): Promise<FileSystemDirectoryHandle> {
     const root = await navigator.storage.getDirectory()
-    return root.getDirectoryHandle(this.directoryName, { create: true })
+    return root.getDirectoryHandle('media', { create: true })
   }
 
   async put(blob: Blob): Promise<string> {

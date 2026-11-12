@@ -1,7 +1,6 @@
-import { createPinia } from 'pinia'
 import { render } from 'vitest-browser-vue'
 
-import { trackStoreActions } from '@/testing/storeActions'
+import { createTrackedPinia } from '@/testing/testStorage'
 
 /**
  * The one way Vitest Browser Mode specs mount a component — always a fresh Pinia, since every
@@ -17,14 +16,11 @@ export function renderComponent(
   component: Parameters<typeof render>[0],
   options: Parameters<typeof render>[1] = {},
 ): ReturnType<typeof render> {
-  const pinia = createPinia()
-  pinia.use(trackStoreActions)
-
   return render(component, {
     ...options,
     global: {
       ...options.global,
-      plugins: [pinia, ...(options.global?.plugins ?? [])],
+      plugins: [createTrackedPinia(), ...(options.global?.plugins ?? [])],
     },
   })
 }

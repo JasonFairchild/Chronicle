@@ -1,5 +1,5 @@
 import { Transform } from '@tiptap/pm/transform'
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { emptyDocument, type EntryDocument } from '@/domain/entryDocument'
@@ -10,6 +10,7 @@ import { markSetRepository } from '@/repositories'
 import { useMarkSetsStore } from '@/stores/markSetsStore'
 import { plainTextDocument, textContent } from '@/testing/documents'
 import { seedEntry } from '@/testing/seedEntry'
+import { createTrackedPinia } from '@/testing/testStorage'
 import type { AuthoringTrace } from '@/types/entry'
 
 /** A session that typed `typed` at the end of `base`, as one edit. */
@@ -34,7 +35,7 @@ function traceOfTyping(base: EntryDocument, typed: string): AuthoringTrace {
 
 describe('useMarkSetsStore', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    setActivePinia(createTrackedPinia())
   })
 
   /** A revision that finished "It rained" with " all day.", so its trace starts from that version. */

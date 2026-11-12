@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 
 import App from '@/App.vue'
 import { docToPlainText } from '@/domain/entryDocument'
@@ -7,6 +7,7 @@ import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { draftChangeTo, makeDraft } from '@/testing/draftFixtures'
 import { seedEntry } from '@/testing/seedEntry'
+import { createTrackedPinia } from '@/testing/testStorage'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -15,7 +16,7 @@ const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace'
  * them rather than the mounted app's.
  */
 function openOtherTab() {
-  setActivePinia(createPinia())
+  setActivePinia(createTrackedPinia())
   return useDraftsStore()
 }
 

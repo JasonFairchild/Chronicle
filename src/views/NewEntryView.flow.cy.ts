@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 
 import App from '@/App.vue'
 import { docToPlainText } from '@/domain/entryDocument'
@@ -7,6 +7,7 @@ import { useDraftsStore } from '@/stores/draftsStore'
 import { textContent } from '@/testing/documents'
 import { draftChangeTo, makeDraft } from '@/testing/draftFixtures'
 import { createTestRouter } from '@/testing/testRouter'
+import { createTrackedPinia } from '@/testing/testStorage'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -198,7 +199,7 @@ describe('NewEntryView flows', () => {
 
     // Another tab, with its own stores over the same database, writes the draft first.
     cy.then(async () => {
-      setActivePinia(createPinia())
+      setActivePinia(createTrackedPinia())
       const otherTab = useDraftsStore()
       await otherTab.resumeDraft('session-1')
       otherTab.recordChange('session-1', draftChangeTo('Half a thought, finished elsewhere'))

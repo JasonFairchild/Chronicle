@@ -39,8 +39,8 @@ export class ChronicleDatabase extends Dexie {
   draftEvents!: Table<StoredDraftEvent, [string, DraftDocumentRole, number]>
   markSets!: Table<MarkSet, string>
 
-  constructor(name = 'chronicle') {
-    super(name)
+  constructor() {
+    super('chronicle')
 
     // Version 1, and only the current schema, until a release has data to keep: before then local
     // data is test data, cleared rather than migrated (CLAUDE.md), so the number never moves. Dexie

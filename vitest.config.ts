@@ -11,6 +11,8 @@ export default mergeConfig(
   defineConfig({
     test: {
       globals: true,
+      // Specs share the composition root's repositories, so a stub must not outlive its test.
+      restoreMocks: true,
       coverage: {
         // Istanbul, not v8: v8 coverage needs Node's inspector, which Browser Mode's Playwright
         // tab doesn't expose, so it can't cover the `browser` project at all. Istanbul instruments

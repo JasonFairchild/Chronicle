@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import type { Router } from 'vue-router'
@@ -14,6 +14,7 @@ import { renderComponent } from '@/testing/renderComponent'
 import { seedEntry } from '@/testing/seedEntry'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
+import { createTrackedPinia } from '@/testing/testStorage'
 import { emptyEntryDates } from '@/types/entry'
 import { formatDate, formatDateline, formatTime } from '@/utils/format'
 import EntryDetailView from '@/views/EntryDetailView.vue'
@@ -546,7 +547,7 @@ describe('EntryDetailView (browser)', () => {
 
     // Another tab: its own stores over the same database, where Revise was clicked and nothing
     // typed yet.
-    setActivePinia(createPinia())
+    setActivePinia(createTrackedPinia())
     const aggregated = await useEntriesStore().getAggregatedEntry(parent.id)
     const save = vi.spyOn(draftRepository, 'save')
     useDraftsStore().beginDraft({ kind: 'revision', parent: aggregated! })

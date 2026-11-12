@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { docToPlainText } from '@/domain/entryDocument'
@@ -11,6 +11,7 @@ import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
 import { draftChangeTo, makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { seedEntry } from '@/testing/seedEntry'
+import { createTrackedPinia } from '@/testing/testStorage'
 import type { AggregatedEntry } from '@/types/entry'
 
 /** An entry already on record, as a session opened against it would find it. */
@@ -21,18 +22,17 @@ async function existingEntry(text: string): Promise<AggregatedEntry> {
 
 /** Another tab: its own stores over the same storage. */
 function anotherTab() {
-  setActivePinia(createPinia())
+  setActivePinia(createTrackedPinia())
   return useDraftsStore()
 }
 
 describe('useDraftsStore', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    setActivePinia(createTrackedPinia())
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    vi.restoreAllMocks()
   })
 
   describe('writing while the writer types', () => {

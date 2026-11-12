@@ -43,6 +43,18 @@ export default tseslint.config(
     },
   },
   {
+    // Only the writers `src/testing/testStorage.ts` drains may reach the composition root; any
+    // other could write into the next test unseen.
+    files: ['src/**/*.{ts,vue}'],
+    ignores: ['src/{stores,testing}/**', 'src/composables/useMedia.ts', 'src/**/*.{test,cy}.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { name: '@/repositories', message: 'Reach storage through a store or useMedia.' },
+      ],
+    },
+  },
+  {
     files: ['scripts/**'],
     rules: { 'no-console': 'off' },
   },

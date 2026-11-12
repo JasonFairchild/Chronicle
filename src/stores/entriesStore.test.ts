@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ANCHOR_MARK, docToPlainText, type EntryDocument } from '@/domain/entryDocument'
@@ -9,6 +9,7 @@ import { withAnchorMark } from '@/testing/anchorFixtures'
 import { plainTextDocument, serializeDocument, textContent } from '@/testing/documents'
 import { type DraftKind, makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { seedEntry } from '@/testing/seedEntry'
+import { createTrackedPinia } from '@/testing/testStorage'
 import type { Draft } from '@/types/draft'
 import type { Entry } from '@/types/entry'
 
@@ -53,7 +54,7 @@ async function sealDraft(draft: Draft): Promise<Entry> {
 
 describe('useEntriesStore', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    setActivePinia(createTrackedPinia())
   })
 
   it('loads the root timeline from the repository', async () => {

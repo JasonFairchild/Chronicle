@@ -5,12 +5,10 @@ import 'cypress-real-events'
 import '@/assets/main.css'
 
 import { type CyMountOptions, mount } from 'cypress/vue'
-import { createPinia } from 'pinia'
 import type { Router } from 'vue-router'
 
-import { disposeTestRepositories, freshRepositories } from '@/testing/realRepositories'
-import { settleStoreActions, trackStoreActions } from '@/testing/storeActions'
 import { createTestRouter } from '@/testing/testRouter'
+import { beginTest, createTrackedPinia, endTest } from '@/testing/testStorage'
 
 type MountOptions = CyMountOptions<unknown> & {
   /** When given, mounts behind a real router (real routes, in-memory history) already at this path. */
@@ -34,9 +32,7 @@ function mountWithRealStack(
   options: MountOptions = {},
 ): Cypress.Chainable {
   const { routePath, router = createTestRouter(), global, ...rest } = options
-  const pinia = createPinia()
-  pinia.use(trackStoreActions)
-  const plugins = [pinia, ...(global?.plugins ?? [])]
+  const plugins = [createTrackedPinia(), ...(global?.plugins ?? [])]
 
   if (routePath === undefined) {
     return mount(component, { ...rest, global: { ...global, plugins } })
@@ -49,18 +45,13 @@ function mountWithRealStack(
 
 Cypress.Commands.add('mount', mountWithRealStack)
 
-// Fresh real storage for every test, so none can fall through to the app's own database — see
-// `src/testing/realRepositories.ts`.
-beforeEach(() => {
-  freshRepositories()
-})
+beforeEach(beginTest)
 
 afterEach(async () => {
-  // `cy.mount` unmounts only after every `afterEach`, past the database's disposal, so unmount here
-  // and let a view's writes on unmount settle first. Its own unmount, later, is then harmless.
+  // `cy.mount` unmounts only after every `afterEach`, past the clear, so unmount here and let
+  // `endTest` drain a view's writes on unmount. Its own unmount, later, is then harmless.
   Cypress.vueWrapper?.unmount()
-  await settleStoreActions()
-  await disposeTestRepositories()
+  await endTest()
 })
 
 declare global {

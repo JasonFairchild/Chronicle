@@ -1,12 +1,15 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_MARK_POLICY } from '@/domain/marks'
+import { ChronicleDatabase } from '@/repositories/chronicleDatabase'
+import { DexieMarkSetRepository } from '@/repositories/dexieMarkSetRepository'
 import type { MarkSetRepository } from '@/repositories/markSetRepository'
-import { freshMarkSetRepository } from '@/testing/realRepositories'
 import type { CreateMarkSetInput } from '@/types/markSet'
 
-// Real IndexedDB, as for the other Dexie adapters; `realRepositories.ts` deletes it after. No
-// contract suite: the filter presets in CHRONICLE_PLAN.md remove mark sets rather than move them.
+// Real IndexedDB, as for the other Dexie adapters. No contract suite: the filter presets in
+// CHRONICLE_PLAN.md remove mark sets rather than move them.
+
+const database = new ChronicleDatabase()
 
 function makeInput(overrides: Partial<CreateMarkSetInput> = {}): CreateMarkSetInput {
   return {
@@ -20,11 +23,7 @@ function makeInput(overrides: Partial<CreateMarkSetInput> = {}): CreateMarkSetIn
 }
 
 describe('DexieMarkSetRepository', () => {
-  let repository: MarkSetRepository
-
-  beforeEach(() => {
-    repository = freshMarkSetRepository()
-  })
+  const repository: MarkSetRepository = new DexieMarkSetRepository(database)
 
   it('stores a set whole and reads it back, its policy patterns included', async () => {
     const input = makeInput({

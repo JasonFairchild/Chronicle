@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
@@ -10,6 +10,7 @@ import { textContent } from '@/testing/documents'
 import { draftChangeTo, makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { createTestRouter } from '@/testing/testRouter'
+import { createTrackedPinia } from '@/testing/testStorage'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -181,9 +182,13 @@ describe('NewEntryView flows (browser)', () => {
     await expect
       .element(screen.getByRole('textbox', { name: 'New entry' }))
       .toHaveTextContent('Half a thought')
+    // The page's first click counts as a tab return, so spend it before the other tab writes.
+    const adopt = vi.spyOn(useDraftsStore(), 'adoptChangesElsewhere')
+    await screen.getByRole('textbox', { name: 'New entry' }).click()
+    await Promise.all(adopt.mock.results.map((result) => result.value)) // The check focus started.
 
     // Another tab, with its own stores over the same database, writes the draft first.
-    setActivePinia(createPinia())
+    setActivePinia(createTrackedPinia())
     const otherTab = useDraftsStore()
     await otherTab.resumeDraft('session-1')
     otherTab.recordChange('session-1', draftChangeTo('Half a thought, finished elsewhere'))

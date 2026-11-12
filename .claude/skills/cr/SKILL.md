@@ -7,8 +7,8 @@ description: Getting uncommitted work in Chronicle ready to commit — review it
 
 Run when the user asks, not after every turn. The review can change the code, so verification follows it and the message is written last, about what survived. Report in order: findings and fixes, verification, then size and message.
 
-1. **Scope.** The commit is everything uncommitted unless the user says otherwise: `git diff HEAD`, plus untracked files. If it reads as more than one commit, propose the split before reviewing.
-2. **Review** by answering each question for this diff, with evidence. "Nothing" is an answer; skipping a question isn't. Ordered by importance, and so an answer that removes code comes before questions about that code. Scale the depth to the change, without being asked: a mechanical or small one (a rename, a call-site swap, a deleted wrapper) gets a line per question; anything else gets full answers. Say in one line which you chose and why.
+1. **Scope.** The commit is everything uncommitted unless the user says otherwise: `git diff HEAD`, plus untracked files. Propose a split before reviewing only when the work is very large, or part of it didn't stem from the rest; a fix found while doing the work belongs with it.
+2. **Review** by answering each question for this diff, with evidence. "Nothing" is an answer; skipping a question isn't. Ordered by importance, and so an answer that removes code comes before questions about that code. Scale the depth to the change, without being asked: a mechanical or small one (a rename, a call-site swap, a deleted wrapper) gets a line per question; anything else gets full answers. Only if you choose the abbreviated response, say why in one line.
 
    1. What goes beyond what was asked? Going further than a prompt states is often right; justify each such part, and drop only what has no reason to be there.
    2. Is it correct? Name the input, state or order of events most likely to break it (a second tab writing in between, a write landing mid-await, an empty or missing row) and say why it doesn't.

@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import type { Router } from 'vue-router'
 
 import { ANCHOR_MARK } from '@/domain/entryDocument'
@@ -11,6 +11,7 @@ import { makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { seedEntry } from '@/testing/seedEntry'
 import { selectTextRange } from '@/testing/selectTextRange'
 import { createTestRouter } from '@/testing/testRouter'
+import { createTrackedPinia } from '@/testing/testStorage'
 import { emptyEntryDates } from '@/types/entry'
 import { formatDate, formatDateline, formatTime } from '@/utils/format'
 import EntryDetailView from '@/views/EntryDetailView.vue'
@@ -578,7 +579,7 @@ describe('EntryDetailView', () => {
 
       // Another tab: its own stores over the same database, where Revise was clicked and nothing
       // typed yet.
-      setActivePinia(createPinia())
+      setActivePinia(createTrackedPinia())
       const aggregated = await useEntriesStore().getAggregatedEntry(parent.id)
       cy.spy(draftRepository, 'save').as('saveDraft')
       useDraftsStore().beginDraft({ kind: 'revision', parent: aggregated! })

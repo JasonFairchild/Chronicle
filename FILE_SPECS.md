@@ -51,7 +51,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
 - **No spec, with the reason noted in TESTING.md:**
   - `main.ts`: bootstrap, outside coverage.
   - `chronicleDatabase.ts`: each index is proven by the adapter query that needs it; a missing one throws.
-  - `repositories/index.ts`: every spec runs through its setters.
+  - `repositories/index.ts`: every spec runs on its repositories.
   - The type-only interface files (`entry`/`draft`/`markSet`/`mediaRepository.ts`): their contract, or for mark sets and media, their one adapter's spec.
   - `src/testing/`, `*.d.ts`, `main.css`: not app code.
   - `App.vue`: App.flow.
@@ -80,7 +80,7 @@ Every commit: `npm run typecheck`, each new test seen failing first (break the l
 When a commit changes how a test is written, not just what it proves, grep the other specs for the same pattern and add what turns up to "Applies beyond its file", without asking.
 
 1. **`useDraftSession` spec**, `src/composables/useDraftSession.test.ts`, node. Setup follows `draftsStore.test.ts`:
-   - `setActivePinia(createPinia())`, over the fresh storage `nodeSetup.ts` gives every node spec.
+   - `setActivePinia(createTrackedPinia())`, over the storage `nodeSetup.ts` empties for every node spec.
    - `anotherTab()` is a second Pinia over the same repositories.
    - A same-moment conflict comes from `draftRepository.save` throwing `DraftConflictError`. Gone and quiet reloads come from the first tab's `adoptChangesElsewhere()`.
    - Tests:

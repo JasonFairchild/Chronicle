@@ -28,7 +28,7 @@ Consider one pass over every spec against TESTING.md's data rules, before going 
 
 ### Track A: the entry and draft path
 
-1. **NewEntryView and the composer shell.** `NewEntryView.vue`, `EntryComposer.vue`, `EntryDetailsFields.vue`, `DraftElsewhereNotice.vue`, `useSealDraft.ts`, `router/draftQuery.ts`, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `nodeSetup`, `realRepositories`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair, `DraftElsewhereNotice` pair, `useSealDraft.test`.
+1. **NewEntryView and the composer shell.** `NewEntryView.vue`, `EntryComposer.vue`, `EntryDetailsFields.vue`, `DraftElsewhereNotice.vue`, `useSealDraft.ts`, `router/draftQuery.ts`, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `nodeSetup`, `testStorage`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair, `DraftElsewhereNotice` pair, `useSealDraft.test`.
 2. **App shell.** `main.ts`, `App.vue`, `AppLayout.vue`, `router/index.ts`, `useLayoutWidth.ts`, `useStoragePersistence.ts`, `useTabLifecycle.ts`. Specs: `App.flow` pair, `useStoragePersistence.test`.
 3. **Timeline and Drafts.** `TimelineView.vue`, `EntryList.vue`, `EntryCard.vue`, `DraftsView.vue`. Specs: `EntryCard` pair, `DraftsView` component and flow pairs.
 4. **EntryDetailView.** `EntryDetailView.vue`, `RelatedEntryComposer.vue`. Item 3 rewrites the breadcrumbs. Specs: `EntryDetailView` component and flow pairs.

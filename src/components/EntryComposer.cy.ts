@@ -1,10 +1,11 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 
 import EntryComposer from '@/components/EntryComposer.vue'
 import { useDraftSession } from '@/composables/useDraftSession'
 import { draftRepository } from '@/repositories'
 import { textContent } from '@/testing/documents'
 import { makeDraft } from '@/testing/draftFixtures'
+import { createTrackedPinia } from '@/testing/testStorage'
 import { emptyEntryDates } from '@/types/entry'
 import { formatTime } from '@/utils/format'
 
@@ -12,7 +13,7 @@ const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace'
 
 /** A new entry's session, begun the way a view begins one before mounting the composer. */
 function beginSession() {
-  setActivePinia(createPinia())
+  setActivePinia(createTrackedPinia())
   const session = useDraftSession()
   session.begin({ kind: 'new_root' })
   return session
@@ -35,7 +36,7 @@ describe('EntryComposer', () => {
         }),
         started_at: 'not a timestamp',
       })
-      setActivePinia(createPinia())
+      setActivePinia(createTrackedPinia())
       const session = useDraftSession()
       await session.resume('session-1')
       return session
@@ -79,7 +80,8 @@ describe('EntryComposer', () => {
   })
 
   it('keeps the title in place, disabled, and Bookmark disabled, while a save is in flight', () => {
-    cy.stub(draftRepository, 'seal').returns(new Promise<never>(() => {}))
+    let release!: (reason: Error) => void
+    cy.stub(draftRepository, 'seal').returns(new Promise<never>((_, reject) => (release = reject)))
     const session = beginSession()
     cy.mount(EntryComposer, {
       props: { session, label: 'New entry', saveLabel: 'Save entry' },
@@ -94,6 +96,7 @@ describe('EntryComposer', () => {
       .should('be.disabled')
       .and('have.value', 'Lake Tahoe')
     cy.findByRole('button', { name: 'Bookmark this moment' }).should('be.disabled')
+    cy.then(() => release(new Error('Released once the test has seen it in flight')))
   })
 
   it('bookmarks this moment of the draft, and says when', () => {

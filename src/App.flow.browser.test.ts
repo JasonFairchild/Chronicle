@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
@@ -11,6 +11,7 @@ import { draftChangeTo, makeDraft } from '@/testing/draftFixtures'
 import { renderComponent } from '@/testing/renderComponent'
 import { seedEntry } from '@/testing/seedEntry'
 import { createTestRouter } from '@/testing/testRouter'
+import { createTrackedPinia } from '@/testing/testStorage'
 
 const TYPED = [{ kind: 'edit' as const, at: 1_000, steps: [{ stepType: 'replace' }] }]
 
@@ -27,7 +28,7 @@ async function mountApp(path: string) {
  * them rather than the mounted app's.
  */
 function openOtherTab() {
-  setActivePinia(createPinia())
+  setActivePinia(createTrackedPinia())
   return useDraftsStore()
 }
 

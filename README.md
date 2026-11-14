@@ -42,29 +42,30 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ## Scripts
 
-| Command                     | Description                                 |
-| --------------------------- | ------------------------------------------- |
-| `npm run dev`               | Start Vite dev server                       |
-| `npm run build`             | Type-check and production build             |
-| `npm run preview`           | Preview production build                    |
-| `npm run test`              | Vitest unit project                         |
-| `npm run test:browser`      | Vitest browser project                      |
-| `npm run test:browser:open` | Vitest browser project, headed              |
-| `npm run test:watch`        | Vitest unit project in watch mode           |
-| `npm run test:coverage`     | Both Vitest projects with coverage          |
-| `npm run cy`                | Cypress component test runner (interactive) |
-| `npm run cy:run`            | Cypress component tests (headless)          |
-| `npm run cy:par`            | Cypress component tests, 2 in parallel      |
-| `npm run typecheck`         | Type-check all project references (vue-tsc) |
-| `npm run lint`              | ESLint                                      |
-| `npm run lint:fix`          | ESLint with autofix                         |
-| `npm run format`            | Prettier write                              |
-| `npm run format:check`      | Prettier check (no writes)                  |
-| `npm run verify`            | typecheck + lint + format:check             |
+| Command                     | Description                                   |
+| --------------------------- | --------------------------------------------- |
+| `npm run dev`               | Start Vite dev server                         |
+| `npm run build`             | Type-check and production build               |
+| `npm run preview`           | Preview production build                      |
+| `npm run test`              | Vitest unit project                           |
+| `npm run test:browser`      | Vitest browser project                        |
+| `npm run test:browser:open` | Vitest browser project, headed                |
+| `npm run test:watch`        | Vitest unit project in watch mode             |
+| `npm run test:coverage`     | Both Vitest projects with coverage            |
+| `npm run cy`                | Cypress component test runner (interactive)   |
+| `npm run cy:run`            | Cypress component tests (headless)            |
+| `npm run cy:par`            | Cypress component tests, 2 in parallel        |
+| `npm run typecheck`         | Type-check all project references (vue-tsc)   |
+| `npm run lint`              | ESLint                                        |
+| `npm run lint:fix`          | ESLint with autofix                           |
+| `npm run format`            | Prettier write                                |
+| `npm run format:check`      | Prettier check (no writes)                    |
+| `npm run unused`            | Unused files, exports and dependencies (knip) |
+| `npm run verify`            | typecheck + lint + format:check + unused      |
 
 ## Git hooks
 
-[Lefthook](https://lefthook.dev) is installed via the `prepare` script. On **pre-commit** it auto-formats staged files with Prettier (and re-stages them), lint-checks and type-checks, and runs the unit tests, and aborts the commit on any failure. ESLint runs **check-only** here — fix findings with `npm run lint:fix` and review the changes yourself. On **pre-push** it runs the Vitest browser tests and then Cypress. Skip with `LEFTHOOK=0 git commit …` when needed.
+[Lefthook](https://lefthook.dev) is installed via the `prepare` script. On **pre-commit** it auto-formats staged files with Prettier (and re-stages them), lint-checks and type-checks, runs the unit tests and the unused-code check (knip), and aborts the commit on any failure. ESLint runs **check-only** here — fix findings with `npm run lint:fix` and review the changes yourself. On **pre-push** it runs the Vitest browser tests and then Cypress. Skip with `LEFTHOOK=0 git commit …` when needed.
 
 ## Roadmap
 

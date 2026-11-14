@@ -7,9 +7,8 @@ import NewEntryView from '@/views/NewEntryView.vue'
 import TimelineView from '@/views/TimelineView.vue'
 
 /**
- * Exported separately from the router built below so tests can build their own router — real
- * routes, isolated in-memory history — instead of hand-copying a route subset. See
- * `src/testing/testRouter.ts`.
+ * @keep Tests build their own router on these, real routes on in-memory history, instead of
+ * hand-copying a subset (`src/testing/testRouter.ts`).
  */
 export const routes: RouteRecordRaw[] = [
   {

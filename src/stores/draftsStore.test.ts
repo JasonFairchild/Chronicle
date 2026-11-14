@@ -5,7 +5,7 @@ import { docToPlainText } from '@/domain/entryDocument'
 import { StaleVersionError } from '@/domain/entryValidation'
 import { draftRepository, entryRepository } from '@/repositories'
 import { DraftConflictError } from '@/repositories/draftRepository'
-import { DRAFT_FLUSH_MS, useDraftsStore } from '@/stores/draftsStore'
+import { useDraftsStore } from '@/stores/draftsStore'
 import { useEntriesStore } from '@/stores/entriesStore'
 import { withAnchorMark } from '@/testing/anchorFixtures'
 import { textContent } from '@/testing/documents'
@@ -13,6 +13,9 @@ import { draftChangeTo, makeDraft, relatedTo } from '@/testing/draftFixtures'
 import { seedEntry } from '@/testing/seedEntry'
 import { createTrackedPinia } from '@/testing/testStorage'
 import type { AggregatedEntry } from '@/types/entry'
+
+/** AUTHORING.md's "Draft safety" interval. Not imported, so a change to the store's fails here. */
+const FLUSH_MS = 300
 
 /** An entry already on record, as a session opened against it would find it. */
 async function existingEntry(text: string): Promise<AggregatedEntry> {
@@ -36,14 +39,14 @@ describe('useDraftsStore', () => {
   })
 
   describe('writing while the writer types', () => {
-    it('writes typing that never pauses every DRAFT_FLUSH_MS, rather than waiting for a pause', async () => {
+    it('writes typing that never pauses every 300 ms, rather than waiting for a pause', async () => {
       vi.useFakeTimers()
       const store = useDraftsStore()
       const sessionId = store.beginDraft({ kind: 'new_root' })
       const save = vi.spyOn(draftRepository, 'save')
 
       store.recordChange(sessionId, draftChangeTo('It rai'))
-      await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS - 1)
+      await vi.advanceTimersByTimeAsync(FLUSH_MS - 1)
       store.recordChange(sessionId, draftChangeTo('It rained'))
       expect(save).not.toHaveBeenCalled()
 
@@ -66,7 +69,7 @@ describe('useDraftsStore', () => {
       const save = vi.spyOn(draftRepository, 'save').mockRejectedValueOnce(new Error('Quota'))
 
       store.recordChange(sessionId, draftChangeTo('It rained all day.'))
-      await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+      await vi.advanceTimersByTimeAsync(FLUSH_MS)
 
       expect(save).toHaveBeenCalledTimes(1)
       expect(await draftRepository.getById(sessionId)).toBeNull()
@@ -89,12 +92,12 @@ describe('useDraftsStore', () => {
       const save = vi.spyOn(draftRepository, 'save')
 
       store.recordChange(sessionId, draftChangeTo('It rained all day.'))
-      await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+      await vi.advanceTimersByTimeAsync(FLUSH_MS)
       await save.mock.results[0]!.value
       expect(await draftRepository.getById(sessionId)).not.toBeNull()
 
       store.addMark(sessionId) // Nothing else pending: the bookmark alone must schedule a write.
-      await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+      await vi.advanceTimersByTimeAsync(FLUSH_MS)
       await save.mock.results[1]!.value
 
       const flushed = await draftRepository.getById(sessionId)
@@ -110,7 +113,7 @@ describe('useDraftsStore', () => {
       store.recordChange(sessionId, draftChangeTo('We drove up on Friday'))
       store.recordFields(sessionId, { title: 'Lake Tahoe' })
 
-      await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+      await vi.advanceTimersByTimeAsync(FLUSH_MS)
       await save.mock.results[0]!.value
 
       const flushed = await draftRepository.getById(sessionId)
@@ -239,7 +242,7 @@ describe('useDraftsStore', () => {
           return originalSave(draft)
         })
 
-        await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+        await vi.advanceTimersByTimeAsync(FLUSH_MS)
         // The flush's write is now in flight, awaiting `held`.
 
         const ending =
@@ -270,7 +273,7 @@ describe('useDraftsStore', () => {
       // Sealing cancels the scheduled flush, so a refusal has to schedule another.
       await expect(store.sealDraft(sessionId)).rejects.toThrow(StaleVersionError)
       const save = vi.spyOn(draftRepository, 'save')
-      await vi.advanceTimersByTimeAsync(DRAFT_FLUSH_MS)
+      await vi.advanceTimersByTimeAsync(FLUSH_MS)
 
       expect(save).toHaveBeenCalledOnce()
       await save.mock.results[0]!.value

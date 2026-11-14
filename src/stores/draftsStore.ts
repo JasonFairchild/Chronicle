@@ -28,7 +28,7 @@ import { useEntriesStore } from './entriesStore'
  * long enough that a fast typist is not writing to disk on every keystroke. Autosave, unrelated to
  * marks: flushing is about never losing work.
  */
-export const DRAFT_FLUSH_MS = 300
+const DRAFT_FLUSH_MS = 300
 
 /**
  * What a session starts from. Revising or relating to an entry starts from its aggregate, the

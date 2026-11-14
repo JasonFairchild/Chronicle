@@ -1,0 +1,17 @@
+// Run as `npm run unused`, in production mode: an export only specs or src/testing/ import is
+// unused. `/** @keep <why> */` keeps one on purpose, and fails the run once it gains a caller.
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // Built ahead of the history view and revision diff (PRODUCT.md §5.1, §5.2). Remove each once
+  // the app imports it: knip won't say, and an entry's own exports go unchecked.
+  "entry": [
+    "src/domain/documentDiff.ts!",
+    "src/editor/markFrames.ts!",
+    "src/editor/replay.ts!",
+    "src/stores/markSetsStore.ts!",
+  ],
+  "project": ["src/**/*.{ts,vue}!", "!src/testing/**!", "!src/**/*.contract.ts!"],
+  "tags": ["-keep"],
+  // @tiptap/vue-3/menus imports it without declaring it
+  "ignoreDependencies": ["@tiptap/extension-bubble-menu"],
+}

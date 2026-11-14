@@ -1,11 +1,11 @@
 // The unified Entry model. See ENTRY_MODEL.md for the reasoning behind these shapes.
 
 export type NarrativeRelation = 'annotation' | 'update'
-export type EdgeRelation = 'connection'
-export type VersionRelation = 'revision'
+type EdgeRelation = 'connection'
+type VersionRelation = 'revision'
 
 /** `connection` and `revision` are structural; `annotation`/`update` are a label only. */
-export type RelationType = NarrativeRelation | EdgeRelation | VersionRelation
+type RelationType = NarrativeRelation | EdgeRelation | VersionRelation
 
 export type RevisionMode = 'direct' | 'anchor'
 
@@ -41,7 +41,10 @@ export interface EditEvent extends Partial<ChangeSignals> {
   steps: unknown[]
 }
 
-/** A bookmark the writer asked for. */
+/**
+ * A bookmark the writer asked for.
+ * @keep A spec builds bookmark events of this shape.
+ */
 export interface ManualEvent {
   kind: 'manual'
   at: number
@@ -65,6 +68,7 @@ export interface EntryDates {
   occurred_time_note: string | null
 }
 
+/** @keep Specs start their fixtures' dates from it. */
 export function emptyEntryDates(): EntryDates {
   return {
     recorded_at: null,

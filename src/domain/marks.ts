@@ -4,7 +4,7 @@ import type { AuthoringEvent, EditEvent } from '@/types/entry'
 // "Marks"). Derived from the session's event log rather than decided while the writer
 // types, so a recorded session can be read under any policy, including one written later.
 
-export type MarkReason =
+type MarkReason =
   | 'pause'
   | 'paste'
   | 'media'

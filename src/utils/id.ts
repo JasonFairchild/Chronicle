@@ -1,7 +1,7 @@
 // Ids and timestamps for anything stored: entries, draft sessions, mark sets, media files.
 
 /** Which millisecond an id lands in, and its place within that millisecond. */
-export interface IdClock {
+interface IdClock {
   ms: number
   counter: number
 }
@@ -10,6 +10,7 @@ export interface IdClock {
  * Advances the clock by one id. The millisecond is a floor, not a straight clock read:
  * `compareEntries` ties on id, so a backwards clock adjustment or a counter overflow must never
  * emit an id that sorts before one already issued.
+ * @keep Its spec drives it directly, since `newId`'s clock is module state.
  */
 export function advanceIdClock(previous: IdClock, now: number): IdClock {
   const maxCounter = 0x0fff // 12 bits — the widest value the UUIDv7 rand_a field can hold.

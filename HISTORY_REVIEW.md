@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: nothing applied. Next: step 1, the unused-code check.
+Status: step 1 done. Next: step 2, the sealed-anchor table test.
 
 ## Context
 
@@ -22,12 +22,12 @@ A review of every past session that still exists, looking for the places where t
 
 knip as a dev dependency, in production mode, so specs and `src/testing/` don't count as users: an export only a spec imports is reported. An `npm run unused` script, run from `verify`.
 
-- **Code unused on purpose stays, tagged.** A custom tag, `/** @keep <why> */` with `"tags": ["-keep"]`, excludes an export, and the why is the tag's text. A file nobody imports yet goes in `ignoreFiles`, with its reason beside it in `knip.jsonc`, which allows comments. When a kept export gains a real caller, knip reports the tag as unneeded, so the allowlist can't outlive its reasons. Rejected: knip's `@internal`, which production mode exempts, because it excuses exactly what this check exists to find, source only specs run. Also rejected: commenting the code out, which drops it from typecheck, so it rots unseen.
+- **Code unused on purpose stays, tagged.** A custom tag, `/** @keep <why> */` with `"tags": ["-keep"]`, excludes an export, and the why is the tag's text. A file nobody imports yet goes in `entry`, with its reason beside it in `knip.jsonc`, which allows comments: its imports then count as used, unlike `ignoreFiles`. Neither is flagged once the file gains a caller, so the line is removed by hand. When a kept export gains a real caller, knip reports the tag as unneeded, so a tag can't outlive its reason. Rejected: knip's `@internal`, which production mode exempts, because it excuses exactly what this check exists to find, source only specs run. Also rejected: commenting the code out, which drops it from typecheck, so it rots unseen.
 - **The first run lists today's leftovers.** Each is deleted or tagged with the user, one at a time.
-- **Pre-push only once a run is clean,** as its own line in `lefthook.yml`, since pre-push doesn't run `verify`. Planted violation: a store export only its spec imports.
+- **Pre-commit once a run is clean,** in `scripts/checkStaged.ts` beside typecheck and the unit tests, since a run takes about 2s. Planted violation: a store export only its spec imports.
 - Needed: six episodes over five weeks. It lets cr's Q5 (S4) and TESTING's "Test the code the app runs" (D5) shrink, in steps 5 and 8.
 
-Not tried yet: whether knip's Vite, Vitest and Cypress plugins find every entry here without config. A missed entry is a false alarm, which is why the pre-push line waits for a clean run.
+Tried: knip's Vite, Vitest and Cypress plugins find every entry here without config.
 
 ### 2. The sealed-anchor table test (T1)
 
@@ -77,6 +77,7 @@ Where a plan lives (S8) lands with the docs move, in step 12, since its paths ex
 
 One pass, since text moves between the three. TESTING goes from 181 lines to about 140.
 
+- **Expected values imported from the code under test.** "State what a test expects", added to "Philosophy" with step 1, gets one pass over the specs. The unused-code check sees only exports no app file imports, so a constant the app imports too (`MEDIA_NODE`, the anchor mark names) is checked by hand.
 - **Tests are evidence (D4),** added to "Philosophy": "**A test is evidence of what the code does. It is a specification only where it states a sentence from PRODUCT.md, AUTHORING.md or ENTRY_MODEL.md.** Check behaviour against the doc, not against the test. Where the two disagree, or a test pins something nothing reads, raise it; don't conform to it." Step 14 changes "states a sentence" to "is tagged".
 - **Fail first, one home.** The "Use a fail first approach" bullet takes write-tests step 2's stronger wording ("It must fail on its assertion, for the reason the test names…", each claim seen failing). Step 2 becomes a pointer.
 - **No source for tests, one home (D5).** The "Test the code the app runs" bullet absorbs the Don't about changing source and loosening types, and the Don't goes. Then the bullet shrinks to what the unused-code check can't see: a loosened type, an optional field or parameter, an attribute.

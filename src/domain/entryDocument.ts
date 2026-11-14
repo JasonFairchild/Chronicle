@@ -11,7 +11,7 @@ import type { DocumentAnchor } from '@/types/entry'
 import { collectAnchors } from './anchors'
 
 /** A ProseMirror mark as it serializes to JSON. */
-export interface DocMark {
+interface DocMark {
   type: string
   attrs?: Record<string, unknown>
 }
@@ -46,7 +46,10 @@ export const ANCHOR_WORDING_MARK = 'anchorWording'
 /** Nodes that sit inside a line rather than starting one. */
 const INLINE_NODES = new Set(['text', 'hardBreak'])
 
-/** A blank body to start a session in. `isEmptyDocument` still reports this as empty. */
+/**
+ * A blank body to start a session in. `isEmptyDocument` still reports this as empty.
+ * @keep A spec starts a trace from it.
+ */
 export function emptyDocument(): EntryDocument {
   return { type: 'doc', content: [{ type: 'paragraph' }] }
 }

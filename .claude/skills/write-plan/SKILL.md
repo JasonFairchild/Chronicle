@@ -12,7 +12,7 @@ description: Planning a Chronicle change that spans more than a step or two — 
    - **Doubt about feasibility:** a spike by an agent in its own worktree, reported back and thrown away, so the user's working tree is untouched.
    - **Several areas not yet read:** parallel Explore agents, so the plan's context holds conclusions rather than file dumps.
 4. **Write it in this shape:**
-   - The title, then `Status:` — what's committed, updated as commits land, and `done YYYY-MM-DD` at the end.
+   - The title, then `Status:` — what's committed and any check by hand still to run, the manual check included, updated as each lands, and `done YYYY-MM-DD` at the end.
    - **Context:** why the change, in a few lines.
    - **Decisions**, each with its why, plus any rejected alternative someone would otherwise reopen.
    - **Commits**, in order, each green on its own: what goes in, and its Verify — the tier from CLAUDE.md's verify rule, with the specs it runs named.

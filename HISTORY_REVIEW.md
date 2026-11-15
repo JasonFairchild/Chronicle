@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: steps 1 and 2 committed. Next: step 3, listing a diff's multi-line comments.
+Status: steps 1 and 2 committed; step 3 written, uncommitted. Next: step 4, three lint rules.
 
 ## Context
 
@@ -35,7 +35,7 @@ In the `DocumentEditor` pair, on a document with a sealed anchor: every toolbar 
 
 ### 3. Listing a diff's multi-line comments (C2)
 
-A script in `scripts/` that prints each comment of more than one line that `git diff HEAD` adds to source. cr runs it before its comment question, and each one is cut to a line or justified in the handover. Planted violation: a six-line comment in a config file. Needed: the rule was missed in five batches. Lets cr's Q10 shrink (S6), and pairs with the new comment rule (D2).
+A script in `scripts/` that prints each comment that `git diff HEAD` adds to source, file by file, marking those of more than one line. Only uncommitted work, untracked files included: a comment is listed when any of its lines is new, so changing one line of an old comment lists it, and comments nobody touches wait for a repo-wide pass of their own. TypeScript's compiler finds the comments, so a `//` in a string isn't one, and Vue's SFC parser finds a template's; CSS is left out. cr runs it in its comment question: what repeats is cut, each marked one is cut to a line or kept, and what was kept is reported in a line per file or shared reason. Planted violation: a six-line comment in a config file. Needed: the rule was missed in five batches. Lets cr's Q10 shrink (S6), and pairs with the new comment rule (D2).
 
 ### 4. Three lint rules, one pass over `eslint.config.js`
 
@@ -55,7 +55,7 @@ Added words are bold.
 - **A guard's unseen ways in (S1), end of Q2:** "**Where the diff touches a guard on anchors or on draft safety, name a way in that the guard doesn't see, or say why there is none.**"
 - **Judged against the rule (S3), Q4:** "Does it keep CLAUDE.md's rules and landmarks**, judged against the rule and not against neighbouring code**?"
 - **Q5 after the unused-code check (S4).** Replace with: "Does anything in source exist for a spec that the unused-code check can't see: an optional field or parameter, an attribute, a wrapper element?"
-- **Q10 after the comment listing (S6).** Keep its first half: "Does any comment cite something that won't outlive the session?"
+- **Q10 after the comment listing (S6).** Drop its clause on length, which the listing covers: "Does any comment cite something that won't outlive the session, or repeat what another comment in the file (above all a nearby one) or a doc already says?", then the listing's sentences as they stand.
 
 ### 6. CLAUDE.md
 

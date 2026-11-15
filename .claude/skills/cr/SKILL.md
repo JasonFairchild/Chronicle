@@ -19,7 +19,7 @@ Run when the user asks, not after every turn. The review can change the code, so
    7. Is each new guard needed by the feature, or does it only cover a rare race? If the latter, is it the smallest backstop?
    8. Is each new or changed test at the right layer and in both runners (write-tests skill)? Was it seen to fail first, and seen again after any later change to what it checks or how it waits?
    9. Do the docs in CLAUDE.md's table that cover this area still match the code? Do the names and comments?
-   10. Does any comment cite something that won't outlive the session, or run longer than its code needs?
+   10. Does any comment cite something that won't outlive the session, run longer than its code needs, or repeat what another comment in the file (above all a nearby one) or a doc already says? `npm run comments` lists each comment the diff adds or changes, file by file, marking those of more than one line. Read each file's list together: cut what repeats, and cut each marked comment to a line or keep it. Report the marked ones kept in one line per file or shared reason, not per comment.
    11. Could the developer you're working with explain every line in an interview? Is anything clever that could be plain?
    12. What in this work was redone, and would a line in a doc have got it right the first time? Flag it for the user to decide; don't add it.
 

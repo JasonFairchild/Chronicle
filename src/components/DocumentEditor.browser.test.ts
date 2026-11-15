@@ -22,6 +22,21 @@ function paste(editorEl: Element, data: Record<string, string>): void {
   )
 }
 
+/** Neither runner has a first-class drop, so a hand-built one lands on the middle of `target`. */
+function drop(target: Element, text: string): void {
+  const dataTransfer = new DataTransfer()
+  dataTransfer.setData('text/plain', text)
+  const { left, top, width, height } = target.getBoundingClientRect()
+  target.dispatchEvent(
+    new DragEvent('drop', {
+      dataTransfer,
+      bubbles: true,
+      clientX: left + width / 2,
+      clientY: top + height / 2,
+    }),
+  )
+}
+
 describe('DocumentEditor (browser)', () => {
   let changes: DraftChange[]
 
@@ -200,24 +215,64 @@ describe('DocumentEditor (browser)', () => {
     expect(collectAnchors(latest.content)).toEqual([])
   })
 
-  it('keeps the text under an anchor as it was in a revision', async () => {
-    const screen = mountEditor({
-      content: withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20),
-    })
-    const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
-    await expect.element(editorLocator).toBeVisible()
-    editorLocator.element().focus()
+  it.each([
+    ['anchor mode', true],
+    ['a revision', false],
+  ] as const)(
+    'keeps a sealed anchor as it was in %s, through every toolbar control, a typed key, a paste and a drop',
+    async (_mode, anchorMode) => {
+      // "Emerald Bay" is 13-24 and its wording "Meeks Bay" 24-33. "Then home." ends at 51.
+      const sealed = JSON.parse(
+        withAnchorWording('We camped at Emerald Bay in June', 'sealed-1', 13, 24, 'Meeks Bay'),
+      ).content[0]
+      const screen = mountEditor({
+        anchorMode,
+        content: serializeDocument({
+          type: 'doc',
+          content: [sealed, { type: 'paragraph', content: [{ type: 'text', text: 'Then home.' }] }],
+        }),
+      })
+      const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
+      await expect.element(editorLocator).toBeVisible()
+      const editorEl = editorLocator.element()
+      editorEl.focus()
 
-    selectTextRange(editorLocator.element(), 12, 12)
-    await userEvent.keyboard('x')
-    // Typing that goes through, after the refused keystroke.
-    selectTextRange(editorLocator.element(), 29, 29)
-    await userEvent.keyboard('!')
+      /** Tries one way in, selected from inside the passage to inside the wording. */
+      async function attempt(way: string, act: () => unknown) {
+        selectTextRange(editorEl, 16, 28)
+        await act()
+        // Each is handled as it's dispatched, so a change it made would already be reported.
+        expect(JSON.parse(changes[changes.length - 1]!.content).content[0], way).toEqual(sealed)
+      }
 
-    const latest = changes[changes.length - 1]!
-    expect(docToPlainText(latest.content)).toBe('I went to Lake Tahoe with Dad!')
-    expect(collectAnchors(latest.content)).toMatchObject([{ passage: 'Lake Tahoe' }])
-  })
+      // Typing that goes through: a document to check, and something for Undo to undo.
+      selectTextRange(editorEl, 51, 51)
+      await userEvent.keyboard('!')
+
+      const toolbar = screen.getByRole('toolbar')
+      for (const button of toolbar.getByRole('button').all()) {
+        const label = button.element().getAttribute('aria-label')!
+        await attempt(label, async () => {
+          await button.click()
+          // Link's button only opens its field; applying an address is what changes the document.
+          if (label !== 'Link') return
+          await screen.getByLabelText('Link address').fill('https://example.com/rubicon')
+          await screen.getByRole('button', { name: 'Apply link' }).click()
+        })
+      }
+      // After the buttons: re-picking a paragraph's own style leaves an empty edit for Undo.
+      for (const select of toolbar.getByRole('combobox').all()) {
+        for (const { text } of (select.element() as HTMLSelectElement).options) {
+          await attempt(text, () => select.selectOptions(text))
+        }
+      }
+      await attempt('a typed key', () => userEvent.keyboard('x'))
+      await attempt('a paste', () => paste(editorEl, { 'text/plain': 'Rubicon Trail' }))
+      await attempt('a drop', () =>
+        drop(editorLocator.getByText('Emerald Bay').element(), 'Rubicon Trail'),
+      )
+    },
+  )
 
   it('reports every step it takes, so the sealed log replays to the document exactly', async () => {
     // Ending in a heading makes the editor append an empty paragraph on its own, the first time
@@ -380,14 +435,8 @@ describe('DocumentEditor (browser)', () => {
       const screen = mountAnchorEditor()
       const editorLocator = screen.getByRole('textbox', { name: 'New entry' })
       await expect.element(editorLocator).toBeVisible()
-      const dataTransfer = new DataTransfer()
-      dataTransfer.setData('text/plain', 'Donner Lake')
-      const { left, top } = editorLocator.element().querySelector('p')!.getBoundingClientRect()
 
-      // Neither runner has a first-class drop, so a hand-built one goes at the first line's start.
-      editorLocator
-        .element()
-        .dispatchEvent(new DragEvent('drop', { dataTransfer, clientX: left + 1, clientY: top + 1 }))
+      drop(editorLocator.getByText('I went to Lake Tahoe with Dad').element(), 'Donner Lake')
 
       // A drop is handled as it's dispatched, so a change it made would already be reported.
       expect(changes).toEqual([])

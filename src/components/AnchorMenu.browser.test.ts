@@ -109,6 +109,22 @@ describe('AnchorMenu (browser)', () => {
     await expect.element(highlight).not.toBeInTheDocument()
   })
 
+  it.each(['Highlight passage', 'Strike passage'])(
+    'leaves a sealed anchor, and the selection over it, as they were on %s',
+    async (name) => {
+      // "Lake Tahoe" is 10-20 and its wording "Donner Lake" 20-31.
+      const content = withAnchorWording(TEXT, 'sealed-1', 10, 20, 'Donner Lake')
+      const { screen, editor, body } = mountMenu(content, content)
+      const opened = editor.getJSON()
+
+      selectTextRange(body.element(), 12, 25)
+      await screen.getByRole('button', { name }).click()
+
+      expect(editor.getJSON()).toEqual(opened)
+      expect(document.getSelection()?.toString()).toBe('ke TahoeDonne')
+    },
+  )
+
   it('takes Tab from the document to its first button, and on through the rest', async () => {
     const { screen, body } = mountMenu(withAnchorWording(TEXT, 'anchor-1', 10, 20, 'Donner Lake'))
     const highlight = screen.getByRole('button', { name: 'Highlight passage' })

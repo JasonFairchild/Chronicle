@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: step 1 done. Next: step 2, the sealed-anchor table test.
+Status: steps 1 and 2 committed. Next: step 3, listing a diff's multi-line comments.
 
 ## Context
 

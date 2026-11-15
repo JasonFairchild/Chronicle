@@ -122,6 +122,23 @@ describe('AnchorMenu', () => {
     cy.findByRole('button', { name: 'Highlight passage' }).should('not.exist')
   })
 
+  for (const name of ['Highlight passage', 'Strike passage']) {
+    it(`leaves a sealed anchor, and the selection over it, as they were on ${name}`, () => {
+      // "Lake Tahoe" is 10-20 and its wording "Donner Lake" 20-31.
+      const content = withAnchorWording(TEXT, 'sealed-1', 10, 20, 'Donner Lake')
+      const editor = mountMenu(content, content)
+      const opened = editor.getJSON()
+
+      select(12, 25)
+      cy.findByRole('button', { name }).click()
+
+      cy.document().then((doc) => {
+        expect(editor.getJSON()).to.deep.equal(opened)
+        expect(doc.getSelection()?.toString()).to.equal('ke TahoeDonne')
+      })
+    })
+  }
+
   it('takes Tab from the document to its first button, and on through the rest', () => {
     mountMenu(withAnchorWording(TEXT, 'anchor-1', 10, 20, 'Donner Lake'))
 

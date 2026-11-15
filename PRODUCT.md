@@ -97,6 +97,7 @@ Two words are deliberately absent from the interface: "delete", in the sense of 
 - **Anchored text is locked.** Existing anchors show while you edit, but the text under one, its wording, its kind, and their formatting, inline or block (bold, a heading or list over its paragraph), can't change. Deleting an anchor whole is refused too; typing against its outer edges is still fine, and Clear formatting leaves anchors alone, since an anchor isn't formatting. A refused edit silently does nothing. An anchor is removed only by deliberately revising the related entry that placed it (§5.4), so it never goes missing by accident. The lock exists to enforce that order, so history only moves forward, not to make removing an anchor hard.
 - Until revising a related entry exists, a saved anchor can't be removed at all, which is acceptable while nobody relies on the app.
 - Open: saying why an edit over an anchor did nothing. Likely a message on hovering a locked anchor, or one shown when an edit is refused, with controls left enabled.
+- Open: hiding the anchor menu over a selection where none of its actions could do anything, as on a sealed anchor, once that message says why.
 
 ### 4.6 Connections
 

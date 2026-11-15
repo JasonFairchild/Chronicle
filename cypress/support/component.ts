@@ -45,9 +45,23 @@ function mountWithRealStack(
 
 Cypress.Commands.add('mount', mountWithRealStack)
 
+function isLastTest(test: Mocha.Runnable | undefined): boolean {
+  // The runner's own Mocha, missing from Cypress's types.
+  const { mocha } = Cypress as unknown as { mocha: { getRootSuite(): Mocha.Suite } }
+  let last: Mocha.Test | undefined
+  mocha.getRootSuite().eachTest((each) => {
+    last = each
+  })
+  return test === last
+}
+
 beforeEach(beginTest)
 
-afterEach(async () => {
+afterEach(async function () {
+  // In open mode Cypress leaves the last test's component up to use, and so does this, by skipping
+  // teardown. A rerun reloads the spec, and `beginTest` empties storage before its first test.
+  if (Cypress.config('isInteractive') && isLastTest(this.currentTest)) return
+
   // `cy.mount` unmounts only after every `afterEach`, past the clear, so unmount here and let
   // `endTest` drain a view's writes on unmount. Its own unmount, later, is then harmless.
   Cypress.vueWrapper?.unmount()

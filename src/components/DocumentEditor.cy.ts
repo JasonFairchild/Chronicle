@@ -32,6 +32,21 @@ function paste(editorEl: Element, data: Record<string, string>): void {
   )
 }
 
+/** Neither runner has a first-class drop, so a hand-built one lands on the middle of `target`. */
+function drop(target: Element, text: string): void {
+  const dataTransfer = new DataTransfer()
+  dataTransfer.setData('text/plain', text)
+  const { left, top, width, height } = target.getBoundingClientRect()
+  target.dispatchEvent(
+    new DragEvent('drop', {
+      dataTransfer,
+      bubbles: true,
+      clientX: left + width / 2,
+      clientY: top + height / 2,
+    }),
+  )
+}
+
 describe('DocumentEditor', () => {
   it('reports the document it holds along with the steps that produced it', () => {
     const onChange = cy.stub().as('change')
@@ -226,34 +241,83 @@ describe('DocumentEditor', () => {
     })
   })
 
-  it('keeps the text under an anchor as it was in a revision', () => {
-    const onChange = cy.stub().as('change')
+  for (const [mode, anchorMode] of [
+    ['anchor mode', true],
+    ['a revision', false],
+  ] as const) {
+    it(`keeps a sealed anchor as it was in ${mode}, through every toolbar control, a typed key, a paste and a drop`, () => {
+      const onChange = cy.stub().as('change')
+      // "Emerald Bay" is 13-24 and its wording "Meeks Bay" 24-33. "Then home." ends at 51.
+      const sealed = JSON.parse(
+        withAnchorWording('We camped at Emerald Bay in June', 'sealed-1', 13, 24, 'Meeks Bay'),
+      ).content[0]
 
-    cy.mount(DocumentEditor, {
-      props: {
-        label: 'New entry',
-        content: withAnchorMark('I went to Lake Tahoe with Dad', 'anchor-1', 10, 20),
-      },
-      attrs: { onChange },
-    })
+      cy.mount(DocumentEditor, {
+        props: {
+          label: 'New entry',
+          anchorMode,
+          content: serializeDocument({
+            type: 'doc',
+            content: [
+              sealed,
+              { type: 'paragraph', content: [{ type: 'text', text: 'Then home.' }] },
+            ],
+          }),
+        },
+        attrs: { onChange },
+      })
 
-    cy.findByRole('textbox', { name: 'New entry' }).then(($editor) => {
-      $editor[0]!.focus()
-      selectTextRange($editor[0]!, 12, 12)
-    })
-    cy.focused().type('x')
-    // Typing that goes through, after the refused keystroke.
-    cy.findByRole('textbox', { name: 'New entry' }).then(($editor) =>
-      selectTextRange($editor[0]!, 29, 29),
-    )
-    cy.focused().type('!')
+      function select(from: number, to: number) {
+        cy.findByRole('textbox', { name: 'New entry' }).then(($editor) => {
+          $editor[0]!.focus()
+          selectTextRange($editor[0]!, from, to)
+        })
+      }
 
-    cy.get('@change').then((stub) => {
-      const change = lastChange(stub)
-      expect(docToPlainText(change.content)).to.equal('I went to Lake Tahoe with Dad!')
-      expect(collectAnchors(change.content)[0]).to.include({ passage: 'Lake Tahoe' })
+      /** Tries one way in, selected from inside the passage to inside the wording. */
+      function attempt(way: string, act: () => void) {
+        select(16, 28)
+        act()
+        // Each is handled as it's dispatched, so a change it made would already be reported.
+        cy.get('@change').then((stub) => {
+          expect(JSON.parse(lastChange(stub).content).content[0], way).to.deep.equal(sealed)
+        })
+      }
+
+      // Typing that goes through: a document to check, and something for Undo to undo.
+      select(51, 51)
+      cy.focused().type('!')
+
+      cy.findByRole('toolbar')
+        .findAllByRole('button')
+        .each(($button) => {
+          const label = $button.attr('aria-label')!
+          attempt(label, () => {
+            cy.wrap($button).click()
+            // Link's button only opens its field; applying an address is what changes the document.
+            if (label !== 'Link') return
+            cy.findByLabelText('Link address').type('https://example.com/rubicon')
+            cy.findByRole('button', { name: 'Apply link' }).click()
+          })
+        })
+      // After the buttons: re-picking a paragraph's own style leaves an empty edit for Undo.
+      cy.findByRole('toolbar').then(($toolbar) => {
+        // jQuery's `find`, since a query fails on finding none, as in anchor mode.
+        for (const select of $toolbar.find('select').toArray() as HTMLSelectElement[]) {
+          for (const { text } of select.options) attempt(text, () => cy.wrap(select).select(text))
+        }
+      })
+      attempt('a typed key', () => cy.focused().type('x'))
+      attempt('a paste', () =>
+        cy
+          .findByRole('textbox', { name: 'New entry' })
+          .then(($editor) => paste($editor[0]!, { 'text/plain': 'Rubicon Trail' })),
+      )
+      attempt('a drop', () =>
+        cy.findByText('Emerald Bay').then(($passage) => drop($passage[0]!, 'Rubicon Trail')),
+      )
     })
-  })
+  }
 
   it('reports every step it takes, so the sealed log replays to the document exactly', () => {
     const onChange = cy.stub().as('change')
@@ -430,15 +494,8 @@ describe('DocumentEditor', () => {
       const onChange = cy.stub()
       mountAnchorEditor(onChange)
 
-      cy.findByRole('textbox', { name: 'New entry' }).then(($editor) => {
-        const dataTransfer = new DataTransfer()
-        dataTransfer.setData('text/plain', 'Donner Lake')
-        const { left, top } = $editor[0]!.querySelector('p')!.getBoundingClientRect()
-
-        // Neither runner has a first-class drop, so a hand-built one goes at the first line's start.
-        $editor[0]!.dispatchEvent(
-          new DragEvent('drop', { dataTransfer, clientX: left + 1, clientY: top + 1 }),
-        )
+      cy.findByText('I went to Lake Tahoe with Dad').then(($line) => {
+        drop($line[0]!, 'Donner Lake')
 
         // A drop is handled as it's dispatched, so a change it made would already be reported.
         expect(onChange.callCount).to.equal(0)

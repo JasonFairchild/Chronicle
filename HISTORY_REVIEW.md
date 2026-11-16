@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: steps 1 and 2 committed; step 3 written, uncommitted. Next: step 4, three lint rules.
+Status: steps 1–3 committed; step 4 written, uncommitted. Next: step 5, the cr skill.
 
 ## Context
 
@@ -37,13 +37,13 @@ In the `DocumentEditor` pair, on a document with a sealed anchor: every toolbar 
 
 A script in `scripts/` that prints each comment that `git diff HEAD` adds to source, file by file, marking those of more than one line. Only uncommitted work, untracked files included: a comment is listed when any of its lines is new, so changing one line of an old comment lists it, and comments nobody touches wait for a repo-wide pass of their own. TypeScript's compiler finds the comments, so a `//` in a string isn't one, and Vue's SFC parser finds a template's; CSS is left out. cr runs it in its comment question: what repeats is cut, each marked one is cut to a line or kept, and what was kept is reported in a line per file or shared reason. Planted violation: a six-line comment in a config file. Needed: the rule was missed in five batches. Lets cr's Q10 shrink (S6), and pairs with the new comment rule (D2).
 
-### 4. Three lint rules, one pass over `eslint.config.js`
+### 4. Two lint rules, one pass over `eslint.config.js`
 
 Each is seen red on its own planted violation.
 
-- **An empty `catch`, comment or not (C3),** by `no-restricted-syntax`. It fires on `useStoragePersistence.ts`, the one today, which then gets a reason in code or a disable saying why. Rare: one episode, three lines of config.
-- **No relative import into `src/testing/` (C4),** joining the existing `no-restricted-imports` block, since a second block for the same files replaces the first. Planted violation: one setup import rewritten as relative. Rare: two instances, the first silent for its whole life.
-- **No triple-slash references in specs (C9):** `@typescript-eslint/triple-slash-reference` with `types: 'never'` for spec files. Its default only reports a reference whose module the file also imports, so as configured today it misses TESTING's Don't, which then goes in step 8. Rare: it corrects one of the agent's habits.
+- **An empty `catch`, comment or not (C3): tried and reverted.** `no-empty` already fails a catch with nothing in it, so the rule only traded a comment for a disable directive, which reads worse.
+- **No relative import into `src/testing/` (C4),** a pattern in every `no-restricted-imports` block, since a later block naming the rule replaces an earlier one's options; inside `src/testing/` a sibling `./` import too. Planted violation: one setup import rewritten as relative. Rare: two instances, the first silent for its whole life.
+- **No triple-slash references outside declaration files (C9):** `@typescript-eslint/triple-slash-reference` with `types: 'never'`, every file but `*.d.ts`. Its default only reports a reference whose module the file also imports, so as configured before it missed TESTING's Don't, which then goes in step 8. It fired on `vitest.config.ts`, which now imports `defineConfig` from `vitest/config` instead. Rare: it corrects one of the agent's habits.
 
 ### 5. cr skill (`.claude/skills/cr/SKILL.md`)
 

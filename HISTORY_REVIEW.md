@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: steps 1–3 committed; step 4 written, uncommitted. Next: step 5, the cr skill.
+Status: steps 1–5 committed. Next: step 6, CLAUDE.md.
 
 ## Context
 
@@ -33,9 +33,11 @@ Tried: knip's Vite, Vitest and Cypress plugins find every entry here without con
 
 In the `DocumentEditor` pair, on a document with a sealed anchor: every toolbar button found in the rendered toolbar (`toolbarGroups` is a computed inside `EditorToolbar.vue`, not an export), a typed key, a paste and a drop, each leaving the anchors as they were. A new button joins the table without anyone remembering. Seen failing by breaking the guard for one way in. Needed: the costliest theme, and found by luck three times out of four.
 
+Manual check, done in Cypress's open browser on the state the test set up: seal an anchor, then try each toolbar button, a typed key, a paste and a drop on it. Its wording and highlight stay as they were.
+
 ### 3. Listing a diff's multi-line comments (C2)
 
-A script in `scripts/` that prints each comment that `git diff HEAD` adds to source, file by file, marking those of more than one line. Only uncommitted work, untracked files included: a comment is listed when any of its lines is new, so changing one line of an old comment lists it, and comments nobody touches wait for a repo-wide pass of their own. TypeScript's compiler finds the comments, so a `//` in a string isn't one, and Vue's SFC parser finds a template's; CSS is left out. cr runs it in its comment question: what repeats is cut, each marked one is cut to a line or kept, and what was kept is reported in a line per file or shared reason. Planted violation: a six-line comment in a config file. Needed: the rule was missed in five batches. Lets cr's Q10 shrink (S6), and pairs with the new comment rule (D2).
+A script in `scripts/` that prints each comment that `git diff HEAD` adds to source, file by file, marking those of more than one line. Only uncommitted work, untracked files included: a comment is listed when any of its lines is new, so changing one line of an old comment lists it, and comments nobody touches wait for a repo-wide pass of their own. TypeScript's compiler finds the comments, so a `//` in a string isn't one, and Vue's SFC parser finds a template's; CSS is left out. cr runs it in its comment question: what repeats is cut, each marked one is cut to a line or kept, and what was kept is reported in a line per file or shared reason. Planted violation: a six-line comment in a config file. Needed: the rule was missed in five batches. Lets cr's comment question shrink (S6), and pairs with the new comment rule (D2).
 
 ### 4. Two lint rules, one pass over `eslint.config.js`
 
@@ -47,15 +49,16 @@ Each is seen red on its own planted violation.
 
 ### 5. cr skill (`.claude/skills/cr/SKILL.md`)
 
-Added words are bold.
+As landed; the skill has the exact wording.
 
-- **A second definition of one fact (S2), Q3:** "…a helper parallel to an existing one**, a second definition of one fact — or pass data through a component that doesn't own it**? Should it reuse or unify with that instead?" The most episodes and rounds of any theme.
-- **Following a removed shape's readers (S5), Q6:** "Is there a smaller diff: something reused or deleted instead of added? **Where the change removes or replaces a shape, follow its readers for the branches, fallbacks, names and tests that only served it. Where it was meant to simplify, give net source lines first, and if they grew, say what the growth buys.**"
-- **The deleted-assertions question (S7, also C6), new before Q8:** "**Did any spec lose assertions?** For each one say which it is: moved (name where), the behaviour is gone (name it, and where the user decided it), or it pinned how and not what. A behaviour that goes needs the user's yes before the change, not in the handover." Renumbers 8 to 12. Rare and cheap, and the only item that would have caught a decided behaviour being removed. Its tier sentence waits for step 14.
-- **A guard's unseen ways in (S1), end of Q2:** "**Where the diff touches a guard on anchors or on draft safety, name a way in that the guard doesn't see, or say why there is none.**"
-- **Judged against the rule (S3), Q4:** "Does it keep CLAUDE.md's rules and landmarks**, judged against the rule and not against neighbouring code**?"
-- **Q5 after the unused-code check (S4).** Replace with: "Does anything in source exist for a spec that the unused-code check can't see: an optional field or parameter, an attribute, a wrapper element?"
-- **Q10 after the comment listing (S6).** Drop its clause on length, which the listing covers: "Does any comment cite something that won't outlive the session, or repeat what another comment in the file (above all a nearby one) or a doc already says?", then the listing's sentences as they stand.
+- **A second definition of one fact (S2), Q3:** its examples gain "a second definition of one fact — or pass data through a component that doesn't own it". The most episodes and rounds of any theme.
+- **Following what changed to its readers (S5), Q6:** for what only served the old form, a function now thin enough to inline included, and net source lines first where the change was meant to simplify. Widened from removed shapes to anything the diff changed.
+- **The deleted-assertions question (S7, also C6), new Q8,** answered per behaviour, without re-arguing one settled in the session. Rare and cheap, and the only item that would have caught a decided behaviour being removed. Its tier sentence waits for step 14.
+- **A guard's unseen ways in (S1), in the guard question (Q7)** rather than correctness: it fires where the diff changes an anchor or draft-safety guard, or adds a way to edit what one protects.
+- **Judged against the rule (S3), Q4.**
+- **Q5 after the unused-code check (S4):** only what knip can't see.
+- **Q11 after the comment listing (S6):** its clause on length goes.
+- **Beyond the review:** verify runs first, with `npm run verify` and the unit specs, as evidence for the review; a run named in a pasted handover counts; a question whose premise the diff lacks is skipped and its number listed, in place of a light review for small changes; a fresh agent, its own step, reviews everything but a mechanical change; the split proposal goes; the plan step updates Status at every commit, not only the last, and drops its memory pointer, which write-plan never creates; the note on comparing tests with owned ones moves to REVIEW.md.
 
 ### 6. CLAUDE.md
 
@@ -71,7 +74,8 @@ Where a plan lives (S8) lands with the docs move, in step 12, since its paths ex
 - **What the writer sees change (S9),** a new bullet in step 4 before Decisions: "**What the writer sees change:** before and after in PRODUCT.md's terms, or 'nothing'. A behaviour removed, an interim rule, and what deleted code was meant for are listed here, never among the decisions to check. A change to how writing feels (caret, spacing, focus) names a hands-on pass before review."
 - **Steps, not commits (S10).** Before: "**Commits**, in order, each green on its own: what goes in, and its Verify — …" After: "**Steps**, in order, each green on its own and reviewed unstaged: what goes in, and its Verify — … Suggest where commits could fall; the user decides from the diff."
 - **A rejected alternative is a judgement (S11),** step 3, after "…tell the user what it raised": "An alternative the agent rejected is recorded as its judgement, not as a decision."
-- **Status names the next step (S12).** This rewrites the Status line as changed on 2026-11-14. Now: "what's committed and any check by hand still to run, the manual check included, updated as each lands". _Draft:_ "the next step and any check by hand still to run, the manual check included; `git log` says what's committed". A plan's Status has drifted from `git log` four times.
+- **Status names the next step (S12).** This rewrites the Status line as changed on 2026-11-14. Now: "what's committed and any check by hand still to run, the manual check included, updated as each lands". _Draft:_ "the next step and any check by hand still to run, the manual check included; `git log` says what's committed". cr's plan step already keeps it current at each commit.
+- **A milestone's manual check sits in its step.** _Draft:_ the Manual check bullet ends "A long plan may add one at a milestone that later steps build on, written in that step." A plan's Status has drifted from `git log` four times.
 
 ### 8. TESTING.md, with the write-tests skill and `mechanics.md`
 
@@ -118,7 +122,7 @@ One pass, since text moves between the three. TESTING goes from 181 lines to abo
 - **`spikes/` becomes `docs/spikes/`,** still ignored.
 - **A new `docs/retros/`,** mostly ignored. `spikes/history-review/` is the first retro, so it can move there now or later.
 - CLAUDE.md and README.md stay at the root.
-- **Where a plan lives (S8),** a new first bullet in write-plan's step 4. _Draft:_ "**Where it lives.** In `docs/`, never `~/.claude/plans/`, and opened for the user. It starts in `docs/spikes/<name>/` (ignored). As soon as it's clear it will outlast a session or two, it moves to `docs/plans/` (tracked), linked from its CHRONICLE_PLAN.md item, and is deleted in the commit that finishes it." Step 1's tidy then covers `docs/spikes/` and `docs/plans/`, and cr's step 6 deletes a finished plan in `docs/plans/` where today it sets Status to done. Unchecked: whether plan mode's own plan file can be pointed at `docs/` by a setting; if not, the skill says the plan mode file only points to the real one. The one plan left in `~/.claude/plans/`, kept until the connections work is planned, moves to `docs/spikes/`.
+- **Where a plan lives (S8),** a new first bullet in write-plan's step 4. _Draft:_ "**Where it lives.** In `docs/`, never `~/.claude/plans/`, and opened for the user. It starts in `docs/spikes/<name>/` (ignored). As soon as it's clear it will outlast a session or two, it moves to `docs/plans/` (tracked), linked from its CHRONICLE_PLAN.md item, and is deleted in the commit that finishes it." Step 1's tidy then covers `docs/spikes/` and `docs/plans/`, and cr's plan step deletes a finished plan in `docs/plans/` where today it sets Status to done. Unchecked: whether plan mode's own plan file can be pointed at `docs/` by a setting; if not, the skill says the plan mode file only points to the real one. The one plan left in `~/.claude/plans/`, kept until the connections work is planned, moves to `docs/spikes/`.
 - **What follows from the move:** CLAUDE.md's table; the 11 relative links between docs, in 6 files; README.md's links and CHRONICLE_PLAN's link here; the one real path, `'ARCHITECTURE.md'` in `scripts/renderDiagram.ts`; the `.gitignore` and `eslint.config.js` ignores of `spikes`; run-app's `spikes/<name>/` paths; the memory that says where spike results go. All 63 mentions of a doc in `src`, `scripts` and `cypress` are bare names and survive.
 - **Why here and not last:** the docs and skill edits before it are done, so no pending text changes path. The steps after it run long, and they're worked out of these folders.
 - Verify: `npm run diagram`, `npm run format:check`, `npm run lint`, and a run-app flow from `docs/spikes/`.
@@ -155,7 +159,3 @@ Runs the review again over the sessions since a date, and writes into `docs/retr
 - Record memory changes, which git doesn't.
 - Count typed prompts without bare slash commands, and give lessons ids unique across runs.
 - Track mutation testing's score per file.
-
-## Manual check
-
-After step 2: in the running app, seal an anchor, then try each toolbar button, a typed key, a paste and a drop on it. Its wording and highlight stay as they were.

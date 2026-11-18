@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 
+/* Components take colors from these tokens, never hard-coded, so `.dark` can redefine them. */
 :root {
   --color-bg: #f8fafc;
   --color-bg-muted: #f1f5f9;
@@ -9,8 +10,7 @@
   --color-text-muted: #64748b;
   --color-accent: #2563eb;
   --color-accent-hover: #1d4ed8;
-  /* Failure text: a dead repository write, a rejected save. Its own token rather than a Tailwind
-     red, so the dark theme can lighten it the way every other color here is lightened. */
+  /* Failure text: a dead repository write, a rejected save. */
   --color-error: #dc2626;
   /* The visible :focus-visible ring on controls that suppress the browser's own outline, such as
      the editor surface and AnchorMenu's buttons. */

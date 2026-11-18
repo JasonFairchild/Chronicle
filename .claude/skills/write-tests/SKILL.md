@@ -11,5 +11,5 @@ TESTING.md is the authority; this is the order of work. Read TESTING.md's headin
 2. **See every new test fail before it passes.** Write it before the fix or feature; for code that already exists, break the code under test, run, and restore. It must fail on its assertion, for the reason the test names — not on setup, a wrong query, a timeout, or a crash on the way there. A test with more than one claim sees each one fail.
 3. **Write both runners.** A `.browser.test.ts` gets a `.cy.ts` mirror with the same cases, unless TESTING.md names a real obstacle. Read [mechanics.md](mechanics.md) first: where the runners differ, and setup that has bitten before.
 4. **Check every absence waits on a baseline** (TESTING.md, Don'ts).
-5. **Run the specs you touched,** as CLAUDE.md "Verify in tiers" says.
+5. **Run the specs you touched.**
 6. **Flag, don't write, new guidance.** If a test turns up something TESTING.md should say, name it in your reply for the user to consider; don't edit TESTING.md unasked.

@@ -134,9 +134,7 @@ function resolveRelatedEntries(
     })
   }
 
-  // `descendants` runs oldest-first — the order the version chain's own folding depends on — but a
-  // reader wants the newest related entry on top, so display order is reversed only here, after
-  // that folding is done.
+  // `descendants` stays oldest-first for the version chain; a reader wants the newest on top.
   return resolved.reverse()
 }
 
@@ -169,9 +167,6 @@ function resolveConnections(
     resolved.push({ entry, other_id: otherId, direction })
   }
 
-  // Same reasoning as `resolveRelatedEntries`: the merge above has to run oldest-first to break ties
-  // the same way `compareEntries` does everywhere else, but a reader wants the newest connection
-  // first.
   return resolved.reverse()
 }
 

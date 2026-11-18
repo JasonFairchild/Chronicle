@@ -15,7 +15,7 @@ description: Planning a Chronicle change that spans more than a step or two — 
    - The title, then `Status:` — what's committed and any check by hand still to run, the manual check included, updated as each lands, and `done YYYY-MM-DD` at the end.
    - **Context:** why the change, in a few lines.
    - **Decisions**, each with its why, plus any rejected alternative someone would otherwise reopen.
-   - **Commits**, in order, each green on its own: what goes in, and its Verify — the tier from CLAUDE.md's verify rule, with the specs it runs named.
+   - **Commits**, in order, each green on its own: what goes in, and its Verify — typecheck and the specs covering it, named.
    - **Manual check** at the end: what to do in the running app, and what should be seen. Not one per step; a long plan may add one at a milestone that later steps build on.
    - Throughout, cite code by name, never `file:line`: the next move of that code makes a line number stale.
 5. **Decisions that outlast the plan** go into the docs in the commits that make them, so the plan can be deleted without losing anything.

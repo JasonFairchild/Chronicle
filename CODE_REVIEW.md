@@ -26,6 +26,10 @@ Each unit lists its source, then the specs reviewed with it. **Verify:** each co
 
 Consider one pass over every spec against TESTING.md's data rules, before going on with the units: data shared between tests becomes each test's own, and a named value only one assertion reads becomes literals. Start with the `EntryDetailView` component pair, whose `PARENT_TEXT` about 20 tests share. Verify: the full component suites.
 
+### Early, ahead of Track A's order: question `reconstructEntryState`
+
+Before unit 8 reviews it as code, question what it's for. CLAUDE.md calls current state and state at time T, through it, core features: does that hold up? Today it builds the timeline's roots, `getAggregatedEntry` (EntryDetailView, DraftsView, useDraftSession, NewConnectionView), and `currentVersionId`, but no app caller passes `asOf`; only specs reach state at time T. What does each caller actually need from it, and is there a simpler shape that serves them? Whatever is decided changes CLAUDE.md's line, ENTRY_MODEL.md, or neither.
+
 ### Track A: the entry and draft path
 
 1. **NewEntryView and the composer shell.** `NewEntryView.vue`, `EntryComposer.vue`, `EntryDetailsFields.vue`, `DraftElsewhereNotice.vue`, `useSealDraft.ts`, `router/draftQuery.ts`, plus the detail-field lines `types/entry.ts` gained in d344040. Shared setup: `src/testing/` `browserSetup`, `nodeSetup`, `testStorage`, `renderComponent`, `testRouter`, `draftFixtures`, `documents`, and `cypress/support/component.ts`. Specs: `NewEntryView` component and flow pairs, `EntryComposer` pair, `DraftElsewhereNotice` pair, `useSealDraft.test`.
@@ -48,7 +52,7 @@ Consider one pass over every spec against TESTING.md's data rules, before going 
 
 ### Last: condense comments across the repo
 
-Once both tracks are done, one pass over every source file, cutting length first (CLAUDE.md: the non-obvious why, once, in proportion to its code).
+Once both tracks are done, one pass over every source file, cutting length first (CLAUDE.md's comment rules).
 
 - Heaviest at planning: `utils/format.ts` 39%, `anchorCommands.ts` 35%, `useDraftSession` 30%, `entriesStore` 24%.
 - Known repeat: "a property of the editor, not a rule the UI is trusted to follow" appears three times; ENTRY_MODEL.md says it once.

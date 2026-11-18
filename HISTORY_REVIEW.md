@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: steps 1–5 committed. Next: step 6, CLAUDE.md.
+Status: steps 1–6 committed, with the private instructions' trim from step 11. Next: step 7, write-plan.
 
 ## Context
 
@@ -66,6 +66,7 @@ As landed; the skill has the exact wording.
 - **Rules are decisions (D1),** opening "Rules": "**These rules are decisions, and they hold in two ways.** Intent holds: PRODUCT.md §2's promises and ENTRY_MODEL.md's two invariants change only when the user changes them. A design rule holds while its reason does, so it is written with its reason. When asked whether one is needed, or when changing what its reason names, check the reason against today's code before citing the rule. If it no longer holds, say so and make the case; never deviate silently."
 - **The landmark's expired reason (D3).** Before: "The domain layer reads documents as plain JSON, which keeps it node-testable." After: "The domain layer reads documents as plain JSON today; CHRONICLE_PLAN.md's 'One document model' replaces that."
 - **Optional (D3b):** add `anchorIndex.ts` to the landmark's list of files now, rather than with the document-model work.
+- **Beyond the review:** D1 says any rule may be questioned on its merits. Cut: the one-command rule; the stack line and "offline is non-negotiable" (README.md, PRODUCT.md §2); the write rule, held by `EntryRepository` having no update or delete; the non-destructive rule, ENTRY_MODEL's first invariant; `compareEntries` (now a hover note on `created_at`); Composition API and the repository layer (its lint fact joins the landmark); dark mode (now a note in `main.css`); small changes; the landmark's plain-JSON status line. "Tests alongside every feature" becomes the TESTING.md row. The verify tiers become one line on what the hooks run; cr, write-plan, debug and write-tests lose their pointers to the tiers, write-plan's a step early. Questioning `reconstructEntryState` goes into CODE_REVIEW.md. The rules left are grouped under four headings, most important first.
 
 ### 7. write-plan skill (`.claude/skills/write-plan/SKILL.md`)
 
@@ -112,6 +113,7 @@ One pass, since text moves between the three. TESTING goes from 181 lines to abo
 
 - **Two lines for the user's private instructions (D8, D9),** untracked, worded in the review.
 - **One memory trimmed (R5)** of a paragraph the private instructions already state.
+- **Beyond the review, done with step 6:** a trim pass over the private instructions. Cut: small changes, the guard line (cr's Q7), condensing comments, the coverage pass, the commit lines (`git commit` is denied in settings), and the memory section. The rework rule is shortened; "stage only when I ask" joins the review-then-stage line.
 - **CHRONICLE_PLAN's line on "TESTING.md's rules beyond drafts… the rest catch up as they're touched":** cut it. What remains is named already: CODE_REVIEW.md's pass over test data, and FILE_SPECS.md.
 - **CODE_REVIEW.md's Status** ("no review commits yet") rewritten in the form the Status rule (S12) sets, and its Context's counts (60 files, ~8,900 lines) cut, since they drift.
 

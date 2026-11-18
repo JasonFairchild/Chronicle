@@ -126,7 +126,7 @@ export function versionedFieldsOf(source: VersionedFields): VersionedFields {
 export interface Entry extends VersionedFields {
   /** UUIDv7 — sortable as text. */
   id: string
-  /** System-set, immutable. */
+  /** System-set, immutable. Ties within a millisecond, so sort with `compareEntries`. */
   created_at: string
   parent_id: string | null
   relation_type: RelationType | null

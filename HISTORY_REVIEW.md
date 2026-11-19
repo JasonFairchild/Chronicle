@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: steps 1–6 committed, with the private instructions' trim from step 11. Next: step 7, write-plan.
+Status: next, step 8 (TESTING.md, with the write-tests skill and `mechanics.md`). Step 11's trim of the private instructions is already in.
 
 ## Context
 

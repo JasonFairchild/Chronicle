@@ -24,7 +24,7 @@ Each unit lists its source, then the specs reviewed with it. **Verify:** each co
 
 ### First, when the review is next picked up: test data across the specs
 
-Consider one pass over every spec against TESTING.md's data rules, before going on with the units: data shared between tests becomes each test's own, and a named value only one assertion reads becomes literals. Start with the `EntryDetailView` component pair, whose `PARENT_TEXT` about 20 tests share. Verify: the full component suites.
+Consider one pass over every spec against TESTING.md's data rules, before going on with the units: data shared between tests becomes each test's own, and a named value TESTING.md §2 doesn't allow becomes literals. Start with the `EntryDetailView` component pair, whose `PARENT_TEXT` about 20 tests share. Verify: the full component suites.
 
 ### Early, ahead of Track A's order: question `reconstructEntryState`
 
@@ -66,7 +66,7 @@ Once both tracks are done, one pass over every source file, cutting length first
 Found in one unit and left for the unit that reviews the file.
 
 - **B1:** two EditorToolbar cases were cut from its pair as borderline, to decide when reviewing it: an empty Link address removes the link under the caret (`applyLink`'s `unsetLink` branch), and a pointerdown outside closes More (`handleDocumentPointerDown`). Both go untested until then.
-- **B4:** `AuthoringChange` makes `ChangeSignals` optional, but its one app caller passes them all. The looseness serves `traceRecorder.test.ts`, whose calls pass only the signal each case is about. Make them required, with a fixture in that spec, as `DraftChange` did (TESTING.md, Don'ts). The case against: the recorder stores signals sparsely, so "a missing signal reads as unset" may be the model, not a test convenience.
+- **B4:** `AuthoringChange` makes `ChangeSignals` optional, but its one app caller passes them all. The looseness serves `traceRecorder.test.ts`, whose calls pass only the signal each case is about. Make them required, with a fixture in that spec, as `DraftChange` did (TESTING.md §5). The case against: the recorder stores signals sparsely, so "a missing signal reads as unset" may be the model, not a test convenience.
 - **B4:** `buildFrames`'s `check` parameter exists only so a test can fail it. Proposed: keep it, as the smallest way to reach a build-time check that no real input easily trips. Confirm when reading `markFrames.ts`.
 
 ## Toward later plans

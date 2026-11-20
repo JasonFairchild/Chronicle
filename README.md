@@ -63,6 +63,8 @@ Open [http://localhost:5173](http://localhost:5173).
 | `npm run unused`            | Unused files, exports and dependencies (knip) |
 | `npm run verify`            | typecheck + lint + format:check + unused      |
 
+To run only the flow specs: `npm run cy:run -- --spec "src/**/*.flow.cy.ts"`, or `npm run test:browser -- .flow.`
+
 ## Git hooks
 
 [Lefthook](https://lefthook.dev) is installed via the `prepare` script. On **pre-commit** it auto-formats staged files with Prettier (and re-stages them), lint-checks and type-checks, runs the unit tests and the unused-code check (knip), and aborts the commit on any failure. ESLint runs **check-only** here — fix findings with `npm run lint:fix` and review the changes yourself. On **pre-push** it runs the Vitest browser tests and then Cypress. Skip with `LEFTHOOK=0 git commit …` when needed.

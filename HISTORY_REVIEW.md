@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: next, step 8 (TESTING.md, with the write-tests skill and `mechanics.md`). Step 11's trim of the private instructions is already in.
+Status: next, step 9 (the citations spike). Step 12's trim of the private instructions is already in.
 
 ## Context
 
@@ -53,7 +53,7 @@ As landed; the skill has the exact wording.
 
 - **A second definition of one fact (S2), Q3:** its examples gain "a second definition of one fact — or pass data through a component that doesn't own it". The most episodes and rounds of any theme.
 - **Following what changed to its readers (S5), Q6:** for what only served the old form, a function now thin enough to inline included, and net source lines first where the change was meant to simplify. Widened from removed shapes to anything the diff changed.
-- **The deleted-assertions question (S7, also C6), new Q8,** answered per behaviour, without re-arguing one settled in the session. Rare and cheap, and the only item that would have caught a decided behaviour being removed. Its tier sentence waits for step 14.
+- **The deleted-assertions question (S7, also C6), new Q8,** answered per behaviour, without re-arguing one settled in the session. Rare and cheap, and the only item that would have caught a decided behaviour being removed. Its tier sentence waits for step 15.
 - **A guard's unseen ways in (S1), in the guard question (Q7)** rather than correctness: it fires where the diff changes an anchor or draft-safety guard, or adds a way to edit what one protects.
 - **Judged against the rule (S3), Q4.**
 - **Q5 after the unused-code check (S4):** only what knip can't see.
@@ -70,7 +70,7 @@ As landed; the skill has the exact wording.
 
 ### 7. write-plan skill (`.claude/skills/write-plan/SKILL.md`)
 
-Where a plan lives (S8) lands with the docs move, in step 12, since its paths exist only then.
+Where a plan lives (S8) lands with the docs move, in step 13, since its paths exist only then.
 
 - **What the writer sees change (S9),** a new bullet in step 4 before Decisions: "**What the writer sees change:** before and after in PRODUCT.md's terms, or 'nothing'. A behaviour removed, an interim rule, and what deleted code was meant for are listed here, never among the decisions to check. A change to how writing feels (caret, spacing, focus) names a hands-on pass before review."
 - **Steps, not commits (S10).** Before: "**Commits**, in order, each green on its own: what goes in, and its Verify — …" After: "**Steps**, in order, each green on its own and reviewed unstaged: what goes in, and its Verify — … Suggest where commits could fall; the user decides from the diff."
@@ -80,36 +80,44 @@ Where a plan lives (S8) lands with the docs move, in step 12, since its paths ex
 
 ### 8. TESTING.md, with the write-tests skill and `mechanics.md`
 
-One pass, since text moves between the three. TESTING goes from 181 lines to about 140.
+As landed; the files have the exact wording. TESTING went from 181 lines to about 120.
 
-- **Expected values imported from the code under test.** "State what a test expects", added to "Philosophy" with step 1, gets one pass over the specs. The unused-code check sees only exports no app file imports, so a constant the app imports too (`MEDIA_NODE`, the anchor mark names) is checked by hand.
-- **Tests are evidence (D4),** added to "Philosophy": "**A test is evidence of what the code does. It is a specification only where it states a sentence from PRODUCT.md, AUTHORING.md or ENTRY_MODEL.md.** Check behaviour against the doc, not against the test. Where the two disagree, or a test pins something nothing reads, raise it; don't conform to it." Step 14 changes "states a sentence" to "is tagged".
-- **Fail first, one home.** The "Use a fail first approach" bullet takes write-tests step 2's stronger wording ("It must fail on its assertion, for the reason the test names…", each claim seen failing). Step 2 becomes a pointer.
-- **No source for tests, one home (D5).** The "Test the code the app runs" bullet absorbs the Don't about changing source and loosening types, and the Don't goes. Then the bullet shrinks to what the unused-code check can't see: a loosened type, an optional field or parameter, an attribute.
-- **Mirrored specs, one home.** _Draft:_ "**Component and flow specs are mirrored on purpose.** Every `.browser.test.ts` that mounts something has a `.cy.ts` with the same cases, to compare the two runners; flows pair the same way. Don't consolidate them." It replaces "Duplicate specs are intentional" and "Cypress should keep up…", and the intro drops its clause on duplication. write-tests step 3 points to it.
-- **Mount, one home.** The Don't "Don't import `mount` directly" and Setup's "Mount through the shared helper" say the same thing; the Don't stays.
-- **Cut "Formatting"** (12 lines). `.prettierrc` sets a print width of 100, so its "roughly 120" is already wrong, and its last sentence is in "Structure and naming".
-- **Cut "Running Cypress"** (3 lines). README.md's Scripts table has it.
-- **Move "Clearing local data by hand" to README.md** (12 lines), in step 10. It's a developer's procedure.
-- **Move "Known gaps" out** (5 lines). The first bullet merges into CHRONICLE_PLAN's "An end-to-end layer"; the second goes to FILE_SPECS.md, which already lists the read-only related draft.
-- **Coverage's second paragraph to two sentences.** _Draft:_ "`npm run test:coverage` runs both Vitest projects and writes `coverage/`. The provider is istanbul, since v8 can't instrument Browser Mode; Cypress isn't wired in yet."
-- **Move the mount paragraph and "Driving the editor" to `mechanics.md`.** "Don't import `mount` directly" is the one-line rule left behind.
-- **Move the habit Don'ts to write-tests:** `defineComponent` in component tests and removing an existing `.only`. The triple-slash one is gone with its lint rule (step 4). FILE_SPECS.md's commit 8 would amend the first, so the two are decided together.
-- **The placing question, one home.** write-tests step 1 becomes a pointer to "Layers".
-- `mechanics.md`'s "Import test helpers by alias" shrinks to a clause, now that lint holds it (step 4).
+- **Six numbered principles, then Layers.** Rules sit under the principle they serve, most important first: tests are evidence (D4), understood without leaving the file, each behavior proven once, proven to fail, the code the app runs, the user's perspective. Layers keeps the table of suffixes and each level's how. The Don'ts, queries, structure and setup sections are gone, and citations read "TESTING.md §N". Step 15 changes D4's "states a sentence" to "is tagged".
+- **Expected values imported from the code under test.** "State what a test expects" (§4), added with step 1, gets one pass over the specs. The unused-code check sees only exports no app file imports, so a constant the app imports too (`MEDIA_NODE`, the anchor mark names) is checked by hand.
+- **One home each:** no source for tests (D5) in §5, down to what the unused-code check can't see; fail first in a line of §4, with write-tests step 3 keeping what counts as a failure; the mirror in §3, now for every `.browser.test.ts`, mounted or not, while the adapters' mirrors wait on FILE_SPECS.md's `useTabLifecycle` trial.
+- **Moved to `mechanics.md`:** the mount paragraph, "Driving the editor", listeners in `attrs`, any Pinia a spec makes, fake trace steps, hiding a tab, and the accessible-name habit. "Import test helpers by alias" shrinks to a clause, now that lint holds it (step 4).
+- **Moved to write-tests:** the `defineComponent` and `.only` habits, and looking for a test that already reaches a state before adding one, with the coverage check before deleting one (step 1).
+- **Cut:** "Formatting", whose 120 columns `.prettierrc` contradicts; "Running Cypress", which README.md's Scripts table has, now with the flow-only filter; "Known gaps", into CHRONICLE_PLAN's "An end-to-end layer" and FILE_SPECS.md; and the storage mechanism `testStorage.ts` states.
+- **Still to move:** "Clearing local data by hand", to README.md in step 11.
+- **A write-docs skill** (`.claude/skills/write-docs/SKILL.md`), started here because every step from here edits docs: one home per rule, generic examples, code cited by name, gaps to plans, and the verify commands. write-plan keeps its line on citing by name, without the reason, as a checklist may, and write-tests step 7 keeps only where flagged guidance goes, since the private instructions hold the rule on flagging.
 
-### 9. One line each in ARCHITECTURE.md and PRODUCT.md
+### 9. Citations that resolve: a spike
+
+_Draft,_ beyond the review. Docs, skills and comments cite each other in prose: "TESTING.md §4", "PRODUCT.md §5.4", a bullet's bold lead in quotes. Nothing notices when one dangles, as when a renamed bullet in TESTING.md left FILE_SPECS.md citing it by its old words. If a citation were a link a check resolves, and its text showed on hover, a rule could live in one place and be cited everywhere else instead of copied. The spike finds out what that takes. Adopting it is a step of its own, drafted from what the spike finds.
+
+Next because every later step edits docs that cite each other, and step 13's move into `docs/` rewrites every path a link would carry. Each try runs against TESTING.md and what cites it, on copies in `spikes/citations/`:
+
+- **What VS Code does unaided.** Its built-in Markdown support: validating links to files and headings (`markdown.validate.enabled`), Find All References and Rename on a heading, updating links when a file moves, and what hovering a link shows.
+- **Citing below a heading.** A single bullet or table row needs an anchor of its own. Which forms survive Prettier and render on GitHub, such as an inline `<a id>` or an Obsidian-style `^id`, and which of them VS Code and the extensions below resolve.
+- **Hover previews,** which the user judges by hand: Foam's previews of wiki-links, and File Ref Tags and Wooref, both unchecked (whether they're maintained, and what each shows). Whether a hover works on a citation in a code comment as well as in a doc. Installing an extension is the user's call.
+- **A check that fails on a dangling citation,** for pre-commit beside the unused-code check. An existing tool (`remark-validate-links`) against a script in `scripts/`, which could also read citations in code comments and plain "§N" ones. Planted violation: a citation of a heading renamed away.
+- **Reading one snippet, for the agent.** A script printing only the cited section or bullet, say `npm run cite -- TESTING.md#4`, against reading the file or a grep with context. Kept only if it's cheaper in practice, not just in principle.
+- **The citation form,** decided from the above: a Markdown link, or a plain "§N" the check resolves; numbered ids, which read like PRODUCT.md's but break on reorder, or named ids, which survive it; and what step 13's move costs each, since relative links from `.claude/skills/` change with it.
+
+Reported in `spikes/citations/README.md`, opened in VS Code: what worked and what didn't, the recommended form and check, and a draft of the adoption step. Verify: the check's prototype seen red on its planted violation.
+
+### 10. One line each in ARCHITECTURE.md and PRODUCT.md
 
 - **The editor reports only its document (D7),** ending ARCHITECTURE's "Write" bullet: "`DocumentEditor` reports only its document. Anything else about the draft (title, details, bookmark, save state) lives in `EntryComposer`: a relay through the editor costs an emit, a handler and a wiring test at each host." The one declined line that was needed again.
 - **What was decided, not what the code does (D6),** a second bullet in PRODUCT's header: "This doc records what was decided. What the code happens to do is not a decision: before writing a behaviour found in code into any doc, ask whether it was meant."
 
-### 10. README.md
+### 11. README.md
 
 - **The plain-JSON sentence.** Before: "The domain layer reads documents as plain JSON, so this logic is pure and testable in node." _Draft:_ "This logic is pure functions over plain data, tested in node."
 - **The Testing paragraph.** Before: "Unit tests cover only what the UI can't reach — many-case pure logic, timing and races, fault injection —". _Draft:_ "Every source file has a spec of its own: components in both browser runners, everything else in node;". TESTING replaced the old rule on Oct 21.
-- **Take in "Clearing local data by hand"** from TESTING, after "Getting started".
+- **Take in "Clearing local data by hand"** from TESTING, after "Getting started", and delete it there. `chronicleDatabase.ts`'s comment citing TESTING.md for it cites README.md.
 
-### 11. The private instructions, memory, and the plan docs
+### 12. The private instructions, memory, and the plan docs
 
 - **Two lines for the user's private instructions (D8, D9),** untracked, worded in the review.
 - **One memory trimmed (R5)** of a paragraph the private instructions already state.
@@ -117,7 +125,7 @@ One pass, since text moves between the three. TESTING goes from 181 lines to abo
 - **CHRONICLE_PLAN's line on "TESTING.md's rules beyond drafts… the rest catch up as they're touched":** cut it. What remains is named already: CODE_REVIEW.md's pass over test data, and FILE_SPECS.md.
 - **CODE_REVIEW.md's Status** ("no review commits yet") rewritten in the form the Status rule (S12) sets, and its Context's counts (60 files, ~8,900 lines) cut, since they drift.
 
-### 12. Move the docs into `docs/` (R1), and where a plan lives (S8)
+### 13. Move the docs into `docs/` (R1), and where a plan lives (S8)
 
 - **Reference docs** (ARCHITECTURE, AUTHORING, ENTRY_MODEL, PRODUCT, TESTING, CHRONICLE_PLAN) into `docs/`, by `git mv`.
 - **Plan files** (CODE_REVIEW.md, FILE_SPECS.md, this one) into `docs/plans/`, tracked.
@@ -129,13 +137,13 @@ One pass, since text moves between the three. TESTING goes from 181 lines to abo
 - **Why here and not last:** the docs and skill edits before it are done, so no pending text changes path. The steps after it run long, and they're worked out of these folders.
 - Verify: `npm run diagram`, `npm run format:check`, `npm run lint`, and a run-app flow from `docs/spikes/`.
 
-### 13. Mutation testing (P2)
+### 14. Mutation testing (P2)
 
 - **Spike first,** in a worktree: Stryker's Vitest runner on `anchorGuard.ts` alone. Whether it works with this setup, and whether it can drive Browser Mode at all, are unchecked. If it can't, components are out of its reach.
 - **Then a periodic report,** not a gate, since each mutant reruns tests: `anchorGuard.ts`, `anchorIndex.ts`, `draftsStore.ts`, `reconstructEntryState.ts`. It should find the seven tests the review found couldn't fail, without anyone reading them. Each survivor gets a test or a reason.
 - **For the portfolio:** its setup and its first scores go in TESTING.md, next to coverage, and the retro skill tracks the score per file.
 
-### 14. The user's PRODUCT.md review, then the two tiers (P1)
+### 15. The user's PRODUCT.md review, then the two tiers (P1)
 
 - **The user reviews PRODUCT.md** against their vision first, at their pace. The tiers attach to the result.
 - **Then the line.** A specification test states one sentence from the docs, in the doc's words, and stays true under any redesign that keeps the behaviour; everything else is a correctness test, free to change with the design. Start narrow: PRODUCT §2's promises, AUTHORING's Draft safety table and ENTRY_MODEL's two invariants, with §4's built behaviours added once the narrow tier proves quiet. The cost of starting narrow: the coverage script below misses §4 gaps until then.
@@ -148,11 +156,11 @@ One pass, since text moves between the three. TESTING goes from 181 lines to abo
   - **The spec coverage script (C7):** lists each doc row in the tier that no tagged test states. It also does what naming tests in the Draft safety table (T2) would have, so the table stays as it is.
   - FILE_SPECS.md's 17 not-started commits (R4) are all correctness-tier work: keep, cut or reorder them, with mutation testing's report showing which missing specs matter.
 
-### 15. One scenario over two drivers (P3)
+### 16. One scenario over two drivers (P3)
 
-For the specification tier only, after step 14: a spike on `NewEntryView.flow`, written once over a Browser Mode driver and a Cypress driver. The diff between the drivers is the raw material for the runner write-up.
+For the specification tier only, after step 15: a spike on `NewEntryView.flow`, written once over a Browser Mode driver and a Cypress driver. The diff between the drivers is the raw material for the runner write-up.
 
-### 16. The retro skill
+### 17. The retro skill
 
 Runs the review again over the sessions since a date, and writes into `docs/retros/`. When it's written, it should:
 

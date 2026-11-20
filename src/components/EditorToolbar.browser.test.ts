@@ -253,7 +253,7 @@ describe('EditorToolbar (browser)', () => {
 
     await expect.poll(() => collectMediaRefs(editor.getJSON() as EntryDocument)).toHaveLength(1)
     const [mediaRef] = collectMediaRefs(editor.getJSON() as EntryDocument)
-    // Read back because storing is this toolbar's own output (TESTING.md, "Layers").
+    // Read back because storing is this toolbar's own output (TESTING.md, "Component specs").
     expect(await mediaRepository.get(mediaRef!)).not.toBeNull()
   })
 

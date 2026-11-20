@@ -273,7 +273,7 @@ describe('EditorToolbar', () => {
       .should((instance) =>
         expect(collectMediaRefs(instance.getJSON() as EntryDocument)).to.have.length(1),
       )
-      // Read back because storing is this toolbar's own output (TESTING.md, "Layers").
+      // Read back because storing is this toolbar's own output (TESTING.md, "Component specs").
       .then((instance) =>
         mediaRepository.get(collectMediaRefs(instance.getJSON() as EntryDocument)[0]!),
       )

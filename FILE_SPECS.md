@@ -18,24 +18,23 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - Then the flow cuts, since they're duplicates already.
   - Then files with real invariants nothing proves today: the read-only related draft, an emptied detail becoming `null`, the draft helpers, the layout width.
   - Last, files whose behavior adapter specs or flows already reach in passing: `compareMarkSets`, the route table.
-- **Before cutting a test, check coverage for lines only it reached** (TESTING.md, "Layers"). Run `npm run test:coverage` before the cut, note the source file's uncovered lines, and compare after. Coverage is Vitest only, so a Cypress mirror is cut together with its Browser Mode twin.
+- **Before cutting a test, check coverage for lines only it reached** (the write-tests skill, step 1). Run `npm run test:coverage` before the cut, note the source file's uncovered lines, and compare after. Coverage is Vitest only, so a Cypress mirror is cut together with its Browser Mode twin.
 - **Cutting means proving wiring, not deleting the scenario.**
   - An owner test that is part session behavior and part wiring is shrunk to the wiring: which session method a control calls, what the owner renders from the session, where it navigates, and the order its own handler does things in.
   - A test is deleted outright only when what remains is already owned elsewhere.
-  - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "A repository read doesn't retry").
+  - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "Flow specs").
 - **Editor files wait for Track B.** `extensions.ts` and `anchorCommands.ts` get their specs as Track B reviews them. `anchorIndex.ts`, `anchorGuard.ts` and `AnchorMenu.vue` already have theirs. DocumentEditor's specs stay as they are until then. What was learned, for Track B unit 2 in CODE_REVIEW.md:
   - Browser project alone, with a bare TipTap `Editor`.
   - Unproven today: `excludes: ''`, `Mod-Alt-s`, and the live region.
   - Rejected for now: a third Vitest project on happy-dom/jsdom. The browser project already runs these for real.
 - **App.vue: App.flow is its spec.** `useTabLifecycle` gets its own spec for the event mapping. App.flow keeps one test per direction as App's wiring.
-- **`useTabLifecycle`: browser-only spec with a host.** Its point is real `pagehide`/`visibilitychange`/`focus` events listened for in `onMounted`, which need a mounted instance and a browser.
-  - The spec mounts, through `renderComponent`, a host component that only calls the composable.
-  - There's no Cypress mirror, since nothing user-facing is mounted. This matches the Dexie and OPFS adapters.
-  - TESTING.md says otherwise today (non-components get a node spec; every mounting `.browser.test.ts` has a mirror; no `defineComponent` in component tests). So commit 8 amends it then, not later.
-  - Proposed line, to decide at that commit: _"A composable whose point is a browser's events or focus, needing a mounted instance, is proven in the browser project alone, through a host component that only calls it; the host is scaffolding, not the subject, so it has no Cypress mirror."_ Developer note: When we get to anything that actually implements this, I want to talk about it as I don't know that I fully agree.
+- **`useTabLifecycle`: a pair with a host.** Its point is real `pagehide`/`visibilitychange`/`focus` events listened for in `onMounted`, which need a mounted instance and a browser.
+  - Both specs mount a host component that only calls the composable, through `renderComponent` and `cy.mount`. TESTING.md pairs anything that needs a real browser, mounted or not.
+  - It's the trial for a Cypress mirror with nothing user-facing mounted. If the mirror shows nothing about the runners that the Browser Mode spec doesn't, raise it with the user before dropping it.
+  - The specs that mount nothing user-facing follow what it settles: the route table's (commit 14), and the Dexie and OPFS adapters', which have no mirrors yet (commit 16).
 - **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, its only caller.**
   - AppLayout provides through an exported `layoutWidthKey`. That's an app use, not a test entry point.
-  - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it (TESTING.md, Don'ts), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
+  - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it (TESTING.md §5), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
   - `useLayoutWidth` gets a node spec under `app.runWithContext()` with `app.provide(layoutWidthKey, …)`. Vue 3.5's `provide()` does nothing outside a component and only warns; `inject()` works under `runWithContext`.
   - EntryDetailView raising and lowering the width (its `relatedSession.isOpen` watch, and the reset in `onBeforeUnmount`) is that view's own code and is untested, so it gains a test in its pair.
   - Rejected: a browser host spec. The file has no lifecycle hooks and no browser API, and the spec would prove the plumbing while missing the view's behavior.
@@ -133,7 +132,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - read-only: the parent is display-only with its anchors, with no instructions or hint
      - a parent edit reaches `session.handleParentChange` (spy)
      - Add entry and Discard reach `onSave` and `onDiscard`
-   - Closes TESTING.md's second Known gap; that bullet goes.
+   - Closes a gap: the read-only state is covered today through `EntryComposer` alone.
    - Cuts: EntryDetailView "shows the parent's own title in the anchor-mode composer" moves here, and the page keeps only that it opens the composer.
    - Verify: the new pair and the EntryDetailView pair.
 
@@ -162,7 +161,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
    - Cuts: DraftsView "lists drafts newest first…" keeps one Resume `href` of four, as wiring.
    - Verify: the new spec and the DraftsView pair.
 
-8. **`useTabLifecycle` spec**, `src/composables/useTabLifecycle.browser.test.ts`, browser-only with a host. Amends TESTING.md as in Decisions.
+8. **`useTabLifecycle` pair**, `src/composables/useTabLifecycle.browser.test.ts` and its `.cy.ts`, with a host. Settles the mirror trial in Decisions.
    - Tests:
      - return fires on `focus` and on becoming visible, not on hiding
      - leave fires on `pagehide` and on hiding, not on showing
@@ -173,7 +172,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
      - "…when the tab is hidden" (159) duplicates `pagehide` at 144.
      - The notice wording at 113–115 goes, since NewEntryView keeps the notice check.
      - The draft label at 141 is DraftsView's.
-   - Verify: the new spec and the App.flow pair.
+   - Verify: the new pair and the App.flow pair.
 
 9. **`AppLayout` pair, plus `dismiss` in `useStoragePersistence`'s own spec.**
    - `useStoragePersistence.test.ts` gains: a dismissal hides the notice and is remembered across a reload (it reads the key at import). It's untested today, and AppLayout's spec mustn't be its only proof.
@@ -205,16 +204,16 @@ When a commit changes how a test is written, not just what it proves, grep the o
 
 13. **Dropped: a media MIME helpers spec.** The helpers are private to `opfsMediaRepository.ts`, their one caller, and its spec proves a known type and the unknown fallback. Every known type round-tripping needs no case of its own: the reverse map is built from the forward one.
 
-14. **Route table spec**, `src/router/index.browser.test.ts`, browser-only, since `createWebHistory` reads `window` at import. Uses `createTestRouter()`, and `await router.push(...)`, because `resolve()` doesn't follow redirects:
+14. **Route table spec**, `src/router/index.browser.test.ts`, in the browser since `createWebHistory` reads `window` at import, with a `.cy.ts` mirror if commit 8's earned its place. Uses `createTestRouter()`, and `await router.push(...)`, because `resolve()` doesn't follow redirects:
     - `/` lands on `new-entry`
     - `/entries/new` is `new-entry`, not an entry called "new"
     - `/entries/:id` passes `id` as a prop
     - Least value: every flow already leans on all three.
-    - Verify: the new spec.
+    - Verify: the new specs.
 
 15. **Dropped: a `useRovingTabindex` spec.** EditorToolbar is its only caller, and that pair proves it through the toolbar the app runs. The one case it planned that the pair lacks, the stop moving off a control once it's disabled, would go there.
 
-16. **Apply what's left under "Applies beyond its file."** It comes before the coverage pass, so coverage measures the finished specs.
+16. **Apply what's left under "Applies beyond its file," and mirror the adapter specs in Cypress if commit 8's mirror earned its place.** It comes before the coverage pass, so coverage measures the finished specs.
     - Verify: each spec it touched, in the runners that spec runs in.
 
 17. **Coverage pass.** `npm run test:coverage` over the whole suite. Any line the cuts left unreached either gets a test in the spec of the file it belongs to, or is judged a gap that TESTING.md's "Coverage" says doesn't earn one. Then the full component suites once (`npm run test:browser`, `npm run cy:run`), since the cuts touched shared views.

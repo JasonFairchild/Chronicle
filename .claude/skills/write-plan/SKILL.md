@@ -17,5 +17,5 @@ description: Planning a Chronicle change that spans more than a step or two — 
    - **What the writer sees change:** before and after in PRODUCT.md's terms, or "nothing". A behaviour removed, an interim rule, and what deleted code was meant for are listed here, never under Decisions. A change to how writing feels (caret, spacing, focus) names a hands-on pass before review.
    - **Decisions** that cover the whole plan, each with its why, then any rejected alternative someone would otherwise reopen. A decision that shapes one step sits in that step, led by **Decision:**.
    - **Steps**, in order, each green on its own and reviewed unstaged: what goes in, and its Verify — typecheck and the specs covering it, named, plus a manual check, where only the running app can show it: what to do and what to see.
-   - Throughout, cite code by name, never `file:line`: the next move of that code makes a line number stale.
+   - Throughout, cite code by name, never `file:line`.
 5. **Decisions that outlast the plan** go into the docs in the steps that make them, so the plan can be deleted without losing anything.

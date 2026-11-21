@@ -15,6 +15,8 @@ Every record is one immutable `Entry`; updates, annotations, connections, and re
 | CHRONICLE_PLAN.md | priorities and decided engineering work | planning or scoping work |
 | ARCHITECTURE.md | the one-page diagram of layers and flow; type names by stage | adding, removing or rerouting a store, table, repository or flow; naming a shared type |
 
+Follow a citation (`TESTING.md §4`, `AUTHORING.md, "Drafts"`) with `npm run cite -- '<ref>'`, which prints only what it lands on, rather than reading its file, unless you're changing that file.
+
 ## Rules
 
 **These rules are decisions, and any of them may be questioned on its merits.** PRODUCT.md §2's promises and ENTRY_MODEL.md's two invariants change only when the user changes them, but how the code serves them is open like everything else. A design rule holds while its reason does, so it is written with its reason. When a rule seems to cost more than it saves, when asked whether one is needed, or when changing what its reason names, check the reason against today's code. If it no longer holds, say so and make the case; never deviate silently.
@@ -23,7 +25,7 @@ Every record is one immutable `Entry`; updates, annotations, connections, and re
 
 - **No backward compatibility until we deliberately decide it's needed** — including entries in a browser's IndexedDB, which is all test data for now. Change a shape and update every call site, with no fallback for the old one. If old local data breaks, clear IndexedDB or reseed; don't migrate or tolerate it.
 - **Single-user app: make the common path work, and give a rare race the smallest backstop that holds** — an existing field or constraint before new machinery.
-- **Verify what's in scope; the hooks run the rest.** Pre-commit lints, typechecks, and runs every unit spec and the unused-code check; pre-push runs both component suites.
+- **Verify what's in scope; the hooks run the rest.** Pre-commit lints, typechecks, and runs every unit spec and the unused-code and citation checks; pre-push runs both component suites.
 
 ### Comments
 

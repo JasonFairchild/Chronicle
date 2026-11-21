@@ -102,7 +102,7 @@ function addAnchorMark(
   // that follows land at the same predictable spot — right after the last real character — no matter
   // exactly where the selection's edges fell. A selection that was nothing but whitespace has
   // nothing left to anchor. There's no user-facing way to widen or shrink an anchor's span once
-  // placed (PRODUCT.md §4.4) anyway, so trimming here costs no capability worth keeping.
+  // placed anyway, so trimming here costs no capability worth keeping.
   const untrimmed = state.doc.textBetween(raw.from, raw.to)
   const from = raw.from + (untrimmed.length - untrimmed.trimStart().length)
   const to = raw.to - (untrimmed.length - untrimmed.trimEnd().length)

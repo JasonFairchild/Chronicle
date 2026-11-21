@@ -1,7 +1,5 @@
-// Pre-commit typecheck, unit tests and unused-code check, judged on what's staged. When the tree
-// also holds unstaged or untracked changes, the index is exported to `.staged/` and checked there,
-// so a partial commit passes or fails on its own contents and the working tree is never touched.
-// `.staged/` sits in the repo so module resolution walks up to the real `node_modules`.
+// Judges only what's staged: with other changes in the tree, checks an export of the index, so the
+// tree is never touched. `.staged/` sits in the repo so module resolution finds `node_modules`.
 import { spawnSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 
@@ -29,7 +27,7 @@ if (!treeMatchesIndex) {
   console.warn(`Unstaged changes present: checking the staged snapshot in ${exportDir}/`)
 }
 
-const checks = ['npm run typecheck', 'npm test', unused]
+const checks = ['npm run typecheck', 'npm test', unused, 'npm run citations']
 const passed = checks.every((command) => run(command, cwd))
 if (cwd !== '.') rmSync(exportDir, { recursive: true, force: true })
 process.exit(passed ? 0 : 1)

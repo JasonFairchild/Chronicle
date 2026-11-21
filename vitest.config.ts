@@ -39,7 +39,7 @@ export default mergeConfig(
             fakeTimers: {
               toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
             },
-            include: ['src/**/*.{test,spec}.ts'],
+            include: ['src/**/*.{test,spec}.ts', 'scripts/**/*.test.ts'],
             exclude: ['src/**/*.browser.{test,spec}.ts'],
           },
         },

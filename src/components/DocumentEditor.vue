@@ -307,8 +307,7 @@ defineExpose({ focus })
 /*
   Interlinear presentation — dormant. `ANCHOR_MARKUP_MODE` above is hardcoded to 'inline', so
   `data-anchor-markup` never actually reaches 'interlinear' and none of the rules below ever match.
-  Kept rather than deleted for whenever there's a real display-setting to choose between the two
-  presentations (PRODUCT.md, "Making anchor ops unmistakable").
+  Kept rather than deleted, as `ANCHOR_MARKUP_MODE`'s note says.
 
   The idea: float the wording above a caret glyph left on the baseline, rather than trailing it. The
   caret is a `::before` on the `<ins>` rather than a DOM node, so it never becomes part of the

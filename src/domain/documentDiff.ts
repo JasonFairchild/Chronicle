@@ -3,14 +3,14 @@
 //
 // Compares `docToPlainText` of each, so wording a related entry proposed shows as the parent's
 // text, and a formatting-only revision produces no diff here, since words are all this compares.
-// PRODUCT.md §5.2 decides that change should still show, as formatting.
+// The product decides that change should still show, as formatting.
 //
 // Nothing here interprets authoring steps. A diff is a comparison of two outcomes — the same
 // reasoning `contentDelta` is built on — which is what lets it work between any two versions,
 // including ones whose steps were never captured or can no longer be replayed.
 //
 // Whether such a view should also show a parent's anchor ops alongside the words is an open product
-// question (PRODUCT.md §5.2) and deliberately not answered here.
+// question, deliberately not answered here.
 
 import { docToPlainText, type EntryDocument } from './entryDocument'
 

@@ -127,8 +127,8 @@ function resolveRelatedEntries(
     resolved.push({
       entry,
       relation_type: child.relation_type,
-      // Skipping is a backstop: the lock and the one-write seal leave none missing (ENTRY_MODEL.md,
-      // "Anchor resolution").
+      // Skipping is a backstop: the lock and the one-write seal leave none missing
+      // (ENTRY_MODEL.md#anchor-resolution).
       anchors: child.anchor_ids.flatMap((anchorId) => anchorsById.get(anchorId) ?? []),
       has_children: hasVisibleChildren(child.id, walk),
     })

@@ -70,7 +70,7 @@ interface ToolbarAction {
  *
  * Strikethrough is included: it is ordinary formatting here, distinct from an anchor-op strike (a
  * related entry retracting part of its parent) by its own presentation, not by being withheld from
- * the toolbar. See PRODUCT.md, "Making anchor ops unmistakable".
+ * the toolbar. See PRODUCT.md#unmistakable-anchors (§6.4).
  */
 interface ToolbarGroups {
   history: ToolbarAction[]

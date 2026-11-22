@@ -10,9 +10,8 @@ type RelationType = NarrativeRelation | EdgeRelation | VersionRelation
 export type RevisionMode = 'direct' | 'anchor'
 
 /**
- * The facts about one editor change that marks are derived from (AUTHORING.md, "Authoring
- * capture"). Stored rather than re-derived, since most need the document as it stood around the
- * change.
+ * The facts about one editor change that marks are derived from (AUTHORING.md#authoring-capture).
+ * Stored rather than re-derived, since most need the document as it stood around the change.
  */
 export interface ChangeSignals {
   /** Empty for a deletion or a pure formatting change. */
@@ -78,7 +77,7 @@ export function emptyEntryDates(): EntryDates {
   }
 }
 
-/** Everything a revision replaces. See ENTRY_MODEL.md, "Version chains". */
+/** Everything a revision replaces. See ENTRY_MODEL.md#version-chains. */
 export interface VersionedFields {
   dates: EntryDates
   /** A name the author reuses, not coordinates. */
@@ -221,7 +220,7 @@ export function createEntryInput(
   }
 }
 
-/** Total order every list and fold uses, tied on id (ENTRY_MODEL.md, "Fields"). */
+/** Total order every list and fold uses, tied on id (ENTRY_MODEL.md#fields). */
 export function compareEntries(a: Entry, b: Entry): number {
   return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 }

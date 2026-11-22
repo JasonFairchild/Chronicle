@@ -2,8 +2,8 @@
 // unused. `/** @keep <why> */` keeps one on purpose, and fails the run once it gains a caller.
 {
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
-  // Built ahead of the history view and revision diff (PRODUCT.md §5.1, §5.2). Remove each once
-  // the app imports it: knip won't say, and an entry's own exports go unchecked.
+  // Built ahead of PRODUCT.md#history-scrubber (§5.1) and PRODUCT.md#history-diff (§5.2), so not
+  // yet imported. Drop each once it is: knip won't say, and an entry's exports go unchecked.
   "entry": [
     "src/domain/documentDiff.ts!",
     "src/editor/markFrames.ts!",

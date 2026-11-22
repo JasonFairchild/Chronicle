@@ -37,7 +37,7 @@ type DraftOf<Doc> = {
   /** Shared by both documents' traces when sealing. */
   started_at: string
   updated_at: string
-  /** The stored write it follows, if any (AUTHORING.md, "Draft safety"). */
+  /** The stored write it follows, if any (AUTHORING.md#draft-safety). */
   write_id: string | null
   entry: Doc & DraftFields
 } & (
@@ -47,7 +47,7 @@ type DraftOf<Doc> = {
   | { kind: 'revision'; parent_id: string }
 )
 
-/** A writing session in progress; unlike an entry, it rewrites itself (AUTHORING.md, "Drafts"). */
+/** A writing session in progress; unlike an entry, it rewrites itself (AUTHORING.md#drafts). */
 export type Draft = DraftOf<DraftDocument>
 
 /**
@@ -65,9 +65,9 @@ export type DraftEvents = Record<DraftDocumentRole, AuthoringEvent[]>
 
 /**
  * The existing entries a draft could write a version of, each with the version it started from.
- * While one is outstanding, nothing else is offered that could revise the same entry (PRODUCT.md
- * §4.8). A connection revises nothing; a related entry revises its parent only once something is
- * anchored, but that can happen at any moment, so it counts.
+ * While one is outstanding, nothing else is offered that could revise the same entry
+ * (PRODUCT.md#drafts (§4.8)). A connection revises nothing; a related entry revises its parent
+ * only once something is anchored, but that can happen at any moment, so it counts.
  */
 export function versionsRevisedBy(
   draft: DraftSnapshot,

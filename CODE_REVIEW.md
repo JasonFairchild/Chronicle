@@ -22,7 +22,7 @@ CHRONICLE_PLAN.md priority 1: understand and own the existing code, refactoring 
 
 Each unit lists its source, then the specs reviewed with it. **Verify:** each commit runs `npm run typecheck` and the unit specs covering what it changed, and each unit ends with the browser and Cypress specs listed. A change to a store, a repository, the editor schema or `src/testing/` runs the full component suites.
 
-### First, when the review is next picked up: test data across the specs
+### <a id="spec-test-data"></a>First, when the review is next picked up: test data across the specs
 
 Consider one pass over every spec against TESTING.md's data rules, before going on with the units: data shared between tests becomes each test's own, and a named value TESTING.md §2 doesn't allow becomes literals. Start with the `EntryDetailView` component pair, whose `PARENT_TEXT` about 20 tests share. Verify: the full component suites.
 

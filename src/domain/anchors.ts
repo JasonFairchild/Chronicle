@@ -3,7 +3,7 @@
 // An anchor's position is a fact about the **parent's** document, so that is where it is stored: a
 // span op is a mark on the parent's text carrying `{ anchorId, kind }`, and a collapsed op is
 // wording: text carrying an `anchorWording` mark with `{ anchorId }`. A related entry keeps only the
-// ids (ENTRY_MODEL.md, "Related entries and anchors").
+// ids (ENTRY_MODEL.md#related-entries).
 //
 // So there is no stored offset to reinterpret and nothing to resolve positionally: the editor
 // maintains anchor positions the way it maintains everything else, and this module only reads the

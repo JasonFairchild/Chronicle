@@ -6,9 +6,9 @@ import EntryComposer from '@/components/EntryComposer.vue'
 import type { DraftSession } from '@/composables/useDraftSession'
 
 // The anchor-mode composer: the parent gaining provisional anchors on the left, the related
-// entry written in `EntryComposer` on the right, sealing atomically together (AUTHORING.md,
-// "Drafts"). The parent gets no fields: an anchor revision gains the anchors and nothing else
-// (PRODUCT.md §4.4).
+// entry written in `EntryComposer` on the right, sealing atomically together (AUTHORING.md#drafts).
+// The parent gets no fields: an anchor revision gains the anchors and nothing else
+// (PRODUCT.md#writing-related (§4.4)).
 //
 // Its own component though `EntryDetailView` is its only host: the two halves, and how each reads
 // when the draft is read-only, are one unit apart from that page's choice of what to show.

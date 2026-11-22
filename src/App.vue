@@ -3,7 +3,7 @@ import AppLayout from '@/components/AppLayout.vue'
 import { useTabCloseGuard, useTabLeave, useTabReturn } from '@/composables/useTabLifecycle'
 import { useDraftsStore } from '@/stores/draftsStore'
 
-// Listened for here, once, rather than by each composer. (AUTHORING.md, "Draft safety")
+// Listened for here, once, rather than by each composer. (AUTHORING.md#draft-safety)
 const drafts = useDraftsStore()
 
 useTabLeave(() => void drafts.flushAll())

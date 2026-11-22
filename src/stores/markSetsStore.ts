@@ -9,7 +9,7 @@ import type { MarkSet } from '@/types/markSet'
 import { useEntriesStore } from './entriesStore'
 
 /**
- * Mark sets for sealed entries (AUTHORING.md, "Mark sets"). A draft has none: its log is still
+ * Mark sets for sealed entries (AUTHORING.md#mark-sets). A draft has none: its log is still
  * growing, so it reads `deriveMarks` directly.
  */
 export const useMarkSetsStore = defineStore('markSets', () => {

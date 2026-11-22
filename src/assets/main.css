@@ -16,7 +16,7 @@
      the editor surface and AnchorMenu's buttons. */
   --color-focus-ring: #2563eb;
   /*
-    Anchor colors are the *system scheme* — the default of several (see ENTRY_MODEL.md, "Color"),
+    Anchor colors are the *system scheme* — the default of several (see ENTRY_MODEL.md#color),
     picked at render time from the op kind and never stored on the mark. Swapping schemes later is
     a change here and in the render, not a migration of history.
   */

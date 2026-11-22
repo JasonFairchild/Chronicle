@@ -4,7 +4,7 @@ import { ANCHOR_MARK, ANCHOR_WORDING_MARK } from '@/domain/entryDocument'
 import type { AnchorKind } from '@/types/entry'
 
 // Where each anchor is in a document: one reading, shared by the guard, the decorations and the
-// commands (ENTRY_MODEL.md, "Related entries and anchors").
+// commands (ENTRY_MODEL.md#related-entries).
 
 /** One text node carrying an anchor's mark. */
 export interface AnchorPiece {

@@ -4,7 +4,7 @@ import { ReplaceAroundStep, ReplaceStep } from '@tiptap/pm/transform'
 import { contentDelta, type EntryDocument } from '@/domain/entryDocument'
 import type { ChangeSignals } from '@/types/entry'
 
-// The signals of one editor change (AUTHORING.md, "Authoring capture"). In the editor layer because
+// The signals of one editor change (AUTHORING.md#authoring-capture). In the editor layer because
 // they read ProseMirror steps; pure, so a bare `EditorState` proves them without mounting anything.
 
 /** The text a change added, for the mark policy's punctuation and pattern checks. */
@@ -55,8 +55,8 @@ export function changeSignals(transaction: Transaction, after: EntryDocument): C
     removed_chars: removedTextOf(transaction),
     is_formatting: delta.sameText && delta.sameMedia && delta.sameAnchors,
     is_anchor_op: !delta.sameAnchors,
-    // ProseMirror stamps this on its own paste handling. A drop is `'drop'` (PRODUCT.md §4.10), and
-    // content inserted by a command, as an attached image is, carries none.
+    // ProseMirror's paste handling sets this. A drop is `'drop'` and an inserted image has none, so
+    // neither counts as a paste (PRODUCT.md#writing-history (§4.10)).
     is_paste: transaction.getMeta('uiEvent') === 'paste',
     media_changed: !delta.sameMedia,
   }

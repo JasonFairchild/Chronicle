@@ -1,11 +1,9 @@
 // The editor schema: node and mark types, and the extensions list assembled from them.
 //
-// The entry **body** only. A title is an ordinary `<input>` beside the editing surface and a plain
-// field on the entry, so no title node exists here or in the stored document (ENTRY_MODEL.md,
-// "Fields"). `entryDocument.ts` reads what this produces as plain JSON, which is what keeps the
-// flattening pure and node-testable. `anchorCommands.ts` is this module's companion, kept separate
-// so each file answers one question: what an anchor *is* (here) versus what a session *does* with
-// one (there).
+// The entry **body** only: a title is a plain field on the entry, edited in an `<input>` beside the
+// editor, so no title node exists here or in the stored document (ENTRY_MODEL.md#fields).
+// `entryDocument.ts` reads what this produces as plain JSON, which keeps its flattening pure and
+// node-testable. Here is what an anchor *is*; `anchorCommands.ts`, what a session *does* with one.
 
 import { Extension, type Extensions, Mark, mergeAttributes, Node } from '@tiptap/core'
 import { Fragment, type Node as ProseMirrorNode, Slice } from '@tiptap/pm/model'
@@ -69,7 +67,7 @@ const MediaImage = Node.create({
  * actually overlapping at the command level instead (`markAnchor`, `anchorCommands.ts`). The unique
  * `anchorId` is what stops ProseMirror from merging adjacent anchors into one.
  *
- * No color attribute: color is computed at render time (ENTRY_MODEL.md, "Color").
+ * No color attribute: color is computed at render time (ENTRY_MODEL.md#color).
  *
  * `clearable: false` keeps Clear formatting (`unsetAllMarks`) from removing it: an anchor isn't
  * formatting, and only the anchor controls may take one away.
@@ -240,7 +238,7 @@ export interface EntryExtensionOptions {
    * The document whose anchors the guard seals, when not the one the editor opens with. In anchor
    * mode, the document as it stood when this **session** began — for a resumed draft, the version
    * `Draft.parent.base_version_id` names — so the anchors placed since are this session's own. See
-   * AUTHORING.md, "Drafts".
+   * AUTHORING.md#drafts.
    */
   baseContent?: string
 }

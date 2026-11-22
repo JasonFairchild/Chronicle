@@ -21,7 +21,7 @@ export function serializeDocument(doc: EntryDocument): string {
 
 /**
  * Plain text as stored content. A title is never part of it: a title is a sibling field on the
- * entry (ENTRY_MODEL.md, "Fields").
+ * entry (ENTRY_MODEL.md#fields).
  */
 export function textContent(body: string): string {
   return serializeDocument(plainTextDocument(body))

@@ -27,7 +27,7 @@ const props = withDefaults(
      */
     displayOnly?: boolean
     /**
-     * The other creation experience (ENTRY_MODEL.md, "Two creation experiences, kept separate").
+     * The other creation experience (ENTRY_MODEL.md#revising-vs-relating).
      * The parent's own text can't change: typing becomes wording, the anchor menu
      * (`AnchorMenu.vue`) takes formatting's place, and the toolbar keeps only Undo and Redo.
      */
@@ -37,7 +37,7 @@ const props = withDefaults(
      * draft, the version `Draft.parent.base_version_id` names. Omitted for a fresh session, where `content` is already
      * that base. Read once, on mount, alongside `content`: it is what tells an anchor this session
      * placed before a reload apart from one an earlier related entry sealed, since both are simply
-     * *there* in the document a resumed editor mounts with (AUTHORING.md, "Drafts").
+     * *there* in the document a resumed editor mounts with (AUTHORING.md#drafts).
      */
     anchorBaseContent?: string
     /** Id of an element describing how to use this editor, wired to `aria-describedby`. */
@@ -70,7 +70,7 @@ let heldSteps: unknown[] = []
  * flow). Interlinear turned out to be tricky to get right — it wants to float "mainly placed with
  * the caret" without pushing or overlapping trailing text, which a first attempt didn't land — so
  * it's parked here rather than removed, for whenever there's a real display-setting to choose
- * between them (PRODUCT.md, "Making anchor ops unmistakable").
+ * between them (PRODUCT.md#unmistakable-anchors (§6.4)).
  */
 const ANCHOR_MARKUP_MODE: 'inline' | 'interlinear' = 'inline'
 
@@ -266,7 +266,7 @@ defineExpose({ focus })
 
 /*
   Anchor highlight colors come from the system scheme (main.css) rather than anything stored on
-  the mark — see ENTRY_MODEL.md, "Color". Comment and strike share the mark and differ only by the
+  the mark — see ENTRY_MODEL.md#color. Comment and strike share the mark and differ only by the
   `data-anchor-kind` attribute the mark renders.
 */
 :deep(.chronicle-document .chronicle-anchor) {

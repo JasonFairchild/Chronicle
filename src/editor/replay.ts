@@ -7,10 +7,10 @@ import type { AuthoringEvent } from '@/types/entry'
 
 import { entryExtensions } from './extensions'
 
-// Replays a session's event log into the documents it passed through (AUTHORING.md, "Authoring
-// capture"). In the editor layer because a step only means something against a schema, and this
-// uses the editor's own. A step that no longer applies, because the schema moved on, ends replay at
-// the last whole event reached: the loss is scrubbing, never words.
+// Replays a session's event log into the documents it passed through
+// (AUTHORING.md#authoring-capture). In the editor layer because a step only means something against
+// a schema, and this uses the editor's own. A step that no longer applies, because the schema moved
+// on, ends replay at the last whole event reached: the loss is scrubbing, never words.
 
 /** A trace's events with the base they apply to, which whoever replays them reads and passes in. */
 export interface ReplayLog {
@@ -48,10 +48,9 @@ export function applySteps(transform: Transform, steps: readonly unknown[]): boo
 }
 
 /**
- * The document after each of `indices` events, in one pass: 0 is the base, and `events.length` is
- * the finished document. `indices` must be ascending. Shorter than `indices` when replay stopped
- * early. Only specs call it for now: it's the keystroke replay that PRODUCT.md §6's "Zooming in on
- * the scrubber" would step through.
+ * The document after each of `indices` events, in one pass: 0 is the base, `events.length` the
+ * finished document. `indices` must be ascending; fewer come back if replay stops early. Only specs
+ * call it for now: it's the keystroke replay of PRODUCT.md#zoom-scrubber (§6.2.2).
  */
 export function documentsAt(log: ReplayLog, indices: readonly number[]): EntryDocument[] {
   const base = replayDocument(log.base_content)

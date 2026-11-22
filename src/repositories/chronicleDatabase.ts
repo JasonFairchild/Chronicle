@@ -42,10 +42,9 @@ export class ChronicleDatabase extends Dexie {
   constructor() {
     super('chronicle')
 
-    // Version 1, and only the current schema, until a release has data to keep: before then local
-    // data is test data, cleared rather than migrated (CLAUDE.md), so the number never moves. Dexie
-    // opens a browser installed at a higher number as it is, and patches in a table or index added
-    // here; any other change needs local data cleared (TESTING.md).
+    // Version 1, with only the current schema, while local data is test data, cleared rather than
+    // migrated (CLAUDE.md#no-backward-compat (§1.1)). Dexie still opens a higher installed version,
+    // adding any new table or index; anything else needs data cleared (TESTING.md#clearing-data).
     this.version(1).stores({
       // parent_id/target_id are never indexed for entries where they're null (roots have no
       // parent_id; only connections have a target_id) — that's correct, since every query for

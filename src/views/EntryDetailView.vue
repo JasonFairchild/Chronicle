@@ -66,7 +66,7 @@ const revisionSession = useDraftSession()
 
 /**
  * The open anchor-mode session, if a related entry is being composed against a passage. Mutually
- * exclusive with `revisionSession` (ENTRY_MODEL.md, "Two creation experiences, kept separate"):
+ * exclusive with `revisionSession` (ENTRY_MODEL.md#revising-vs-relating):
  * hiding each control while the other is open is what enforces that in the UI.
  */
 const relatedSession = useDraftSession()
@@ -74,7 +74,7 @@ const relatedSession = useDraftSession()
 /**
  * A draft that could revise this entry, left open earlier. While there is one, Revise and Create
  * related entry give way to resuming it, so two drafts never write versions against one start
- * (PRODUCT.md §4.8). Read off the drafts list, which saving or discarding a draft reloads.
+ * (PRODUCT.md#drafts (§4.8)). Read off the drafts list, which saving or discarding a draft reloads.
  */
 const outstandingDraft = computed<DraftSnapshot | null>(
   () =>
@@ -143,7 +143,7 @@ async function loadBreadcrumb(entry: AggregatedEntry): Promise<{ id: string; lab
   if (ids.length === 0) return []
 
   // The aggregated form, not the raw row: title folds through the version chain like the rest of
-  // the author-supplied fields (ENTRY_MODEL.md, "Version chains"), so reading the row directly
+  // the author-supplied fields (ENTRY_MODEL.md#version-chains), so reading the row directly
   // would show a stale or blank name for an entry a revision has since renamed.
   const found = await Promise.all(ids.map((id) => store.getAggregatedEntry(id)))
   return ids.flatMap((id, index) => {
@@ -272,7 +272,7 @@ async function saveRevision(): Promise<void> {
 
 /**
  * Opens an anchor-mode session: two documents, the parent gaining provisional anchors and the
- * related entry's own prose, sealing atomically together (AUTHORING.md, "Drafts").
+ * related entry's own prose, sealing atomically together (AUTHORING.md#drafts).
  *
  * Anchoring is optional within it. Marking nothing and simply writing produces a related entry
  * about this one at large, which is why there is one way in here rather than a separate form.

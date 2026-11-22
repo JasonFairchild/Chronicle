@@ -14,7 +14,7 @@ import { seedEntry } from '@/testing/seedEntry'
 import { createTrackedPinia } from '@/testing/testStorage'
 import type { AggregatedEntry } from '@/types/entry'
 
-/** AUTHORING.md's "Draft safety" interval. Not imported, so a change to the store's fails here. */
+/** The interval of AUTHORING.md#draft-safety, not imported, so a change to the store's fails here. */
 const FLUSH_MS = 300
 
 /** An entry already on record, as a session opened against it would find it. */

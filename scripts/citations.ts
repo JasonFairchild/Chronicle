@@ -5,11 +5,10 @@ import { basename, extname } from 'node:path'
 
 import { type Comment, fileComments } from './comments.ts'
 
-/** A heading or bold lead a citation can land on, with the lines it spans. */
+/** A heading, or a line with an id or a numbered rule, with the lines it spans. */
 interface Target {
-  /** `4` or `5.2`, from a numbered heading or lead. */
+  /** `4` or `5.2`, from a numbered heading or rule. */
   number?: string
-  title: string
   id?: string
   line: number
   /** Last line of the section or bullet, inclusive. */
@@ -29,13 +28,21 @@ interface Citation {
   /** A doc's bare name (`TESTING.md`), or a skill file's repo path. */
   doc: string
   number?: string
-  title?: string
   fragment?: string
-  /** The `§N` a link shows, which must match where its fragment lands. */
+  /**
+   * `id` is a link or a plain `DOC.md#id`; `prose`, a doc cited by `§N` or a quoted name, which the
+   * id form replaces; `bare`, a `§N` alone, in its own doc or as shorthand.
+   */
+  form: 'id' | 'prose' | 'bare'
+  /** The `§N` a link or a plain `DOC.md#id (§N)` shows, which must match where its fragment lands. */
   shownNumber?: string
   /** In a `/** *\/` note, which is read on hover away from the file, so may repeat a citation. */
   inHoverNote: boolean
   raw: string
+  /** What it lands on, once resolved. */
+  target?: Target
+  /** A shorthand `§N` beside no other doc, or several, so with no doc to read it against. */
+  shorthandUnresolved?: boolean
 }
 
 /** Text a file's citations can be in, with a way back from an offset to a file line. */
@@ -46,7 +53,14 @@ interface Passage {
 }
 
 export interface Problem {
-  kind: 'dangling' | 'stale number' | 'cited twice' | 'duplicate id' | 'prefix only'
+  kind:
+    | 'dangling'
+    | 'stale number'
+    | 'missing number'
+    | 'cited twice'
+    | 'duplicate id'
+    | 'prose citation'
+    | 'no id'
   file: string
   line: number
   detail: string
@@ -55,8 +69,6 @@ export interface Problem {
 export interface Report {
   citations: number
   problems: Problem[]
-  /** Citations matching only the start of a heading or lead: listed, not failed. */
-  prefixOnly: Problem[]
 }
 
 const codeExtensions = new Set(['.ts', '.vue', '.js', '.css', '.jsonc'])
@@ -69,7 +81,7 @@ function docKey(path: string): string | undefined {
   return undefined
 }
 
-/** A doc's headings and bold leads, each with the lines it spans and any id first on its line. */
+/** A doc's headings, ids and numbered rules, each with the lines it spans. */
 function targets(text: string): Target[] {
   const lines = text.split(/\r?\n/)
   const found: Target[] = []
@@ -78,29 +90,20 @@ function targets(text: string): Target[] {
   lines.forEach((line, i) => {
     if (line.startsWith('```')) fence = !fence
     if (fence) return
-    const heading =
-      /^(#{1,6})\s+(?:<a id="([^"]+)"><\/a>)?(?:(\d+(?:\.\d+)*)\.?\s+)?(.*?)(?:\s+—\s+.*)?\s*$/.exec(
-        line,
-      )
+    const heading = /^(#{1,6})\s+(?:<a id="([^"]+)"><\/a>)?(?:(\d+(?:\.\d+)*)\.?\s)?/.exec(line)
     if (heading) {
       headings.push({ level: heading[1].length, index: found.length })
-      found.push({
-        id: heading[2],
-        number: heading[3],
-        title: heading[4],
-        line: i + 1,
-        endLine: lines.length,
-      })
+      found.push({ id: heading[2], number: heading[3], line: i + 1, endLine: lines.length })
       return
     }
-    const lead =
-      /^\s*(?:[-*]\s+|\d+\.\s+)?(?:<a id="([^"]+)"><\/a>)?\*\*(?:(\d+(?:\.\d+)+)\s+)?(.+?)\*\*/.exec(
+    const rule =
+      /^\s*(?:[-*]\s+|\d+\.\s+)?(?:<a id="([^"]+)"><\/a>)?(?:\*\*(\d+(?:\.\d+)+) -\*\*)?/.exec(
         line,
-      )
-    if (!lead) return
+      )!
+    if (!rule[1] && !rule[2]) return
     let end = i + 1
     while (end < lines.length && /^\s{2,}\S/.test(lines[end])) end++
-    found.push({ id: lead[1], number: lead[2], title: lead[3], line: i + 1, endLine: end })
+    found.push({ id: rule[1], number: rule[2], line: i + 1, endLine: end })
   })
   headings.forEach(({ level, index }, n) => {
     const next = headings.slice(n + 1).find((h) => h.level <= level)
@@ -150,15 +153,17 @@ function passages(file: string, text: string): Passage[] {
 function passageCitations(file: string, passage: Passage, names: string[]): Citation[] {
   const alt = names.join('|')
   const isCode = codeExtensions.has(extname(file))
-  let body = passage.text
+  // A code span is an example of a citation, not one.
+  let body = passage.text.replace(/`[^`\n]*`/g, (span) => ' '.repeat(span.length))
   const found: Citation[] = []
   const add = (
     m: RegExpMatchArray,
-    cited: Omit<Citation, 'file' | 'line' | 'raw' | 'inHoverNote'>,
+    cited: Pick<Citation, 'doc' | 'number' | 'fragment' | 'shownNumber'>,
+    form: Citation['form'] = 'id',
   ) => {
     const line = passage.lineAt(m.index!)
     const raw = m[0].replace(/\s+/g, ' ')
-    found.push({ file, line, raw, inHoverNote: passage.hoverNote, ...cited })
+    found.push({ file, line, raw, inHoverNote: passage.hoverNote, form, ...cited })
   }
   // Each pattern blanks what it reads, so a looser one after it can't read the same text again.
   const read = (pattern: RegExp, each: (m: RegExpMatchArray) => void) => {
@@ -176,8 +181,8 @@ function passageCitations(file: string, passage: Passage, names: string[]): Cita
       shownNumber: new RegExp(section).exec(m[1])?.[1],
     }),
   )
-  read(new RegExp(String.raw`${doc}#([\w-]+)`, 'g'), (m) =>
-    add(m, { doc: m[1] ? `${m[1]}.md` : m[2], fragment: m[3] }),
+  read(new RegExp(String.raw`${doc}#([\w-]+)(?:\s+\(${section}\))?`, 'g'), (m) =>
+    add(m, { doc: m[1] ? `${m[1]}.md` : m[2], fragment: m[3], shownNumber: m[4] }),
   )
   const sections = new RegExp(
     String.raw`\b(${alt})(?:\.md)?(?:\]\([^)]*\))?(?:'s|,)?\s+((?:${section})(?:(?:,\s*|\s+and\s+)${section})*)`,
@@ -185,43 +190,56 @@ function passageCitations(file: string, passage: Passage, names: string[]): Cita
   )
   read(sections, (m) => {
     for (const each of m[2].matchAll(new RegExp(section, 'g')))
-      add(m, { doc: `${m[1]}.md`, number: each[1] })
+      add(m, { doc: `${m[1]}.md`, number: each[1] }, 'prose')
   })
-  read(new RegExp(String.raw`\b(${alt})(?:\.md)?(?:'s|,)\s+["“]([^"”\n]{2,80})["”]`, 'g'), (m) =>
-    add(m, { doc: `${m[1]}.md`, title: m[2] }),
+  read(new RegExp(String.raw`\b(${alt})(?:\.md)?(?:'s|,)\s+["“][^"”\n]{2,80}["”]`, 'g'), (m) =>
+    add(m, { doc: `${m[1]}.md` }, 'prose'),
   )
   const own = docKey(file)
-  if (own && !isCode) read(new RegExp(section, 'g'), (m) => add(m, { doc: own, number: m[1] }))
+  if (own && !isCode)
+    read(new RegExp(section, 'g'), (m) => add(m, { doc: own, number: m[1] }, 'bare'))
   return found
 }
 
-const normalize = (text: string) =>
-  text
-    .toLowerCase()
-    .replace(/[.:,]+$/, '')
-    .replace(/’/g, "'")
-    .trim()
-
-/** What a citation lands on; `loose` when only the start of a title matched. */
-function resolve(cited: Pick<Citation, 'number' | 'title' | 'fragment'>, all: Target[]) {
-  const hit = (target: Target | undefined, loose = false) => target && { target, loose }
-  if (cited.fragment) return hit(all.find((t) => t.id === cited.fragment))
-  if (cited.number) return hit(all.find((t) => t.number === cited.number))
-  const want = normalize(cited.title ?? '')
-  return (
-    hit(all.find((t) => normalize(t.title) === want)) ??
-    hit(
-      all.find((t) => normalize(t.title).startsWith(want)),
-      true,
-    )
-  )
+/** What a citation lands on, by its id or else its number. */
+function resolve(cited: Pick<Citation, 'number' | 'fragment'>, all: Target[]) {
+  if (cited.fragment) return all.find((t) => t.id === cited.fragment)
+  if (cited.number) return all.find((t) => t.number === cited.number)
+  return undefined
 }
 
-/** Every citation's problems across a repo, given as relative `/`-separated path → text. */
-export function checkCitations(files: Map<string, string>): Report {
-  const docs = readDocs(files)
+/** Every citation in one file with what it lands on, each shorthand read as the doc it stands for. */
+function resolvedCitations(path: string, text: string, docs: Map<string, Doc>): Citation[] {
+  const own = docKey(path)
+  const numbered = !!own && !!docs.get(own)?.targets.some((t) => t.number)
   const names = docNames(docs)
-  const report: Report = { citations: 0, problems: [], prefixOnly: [] }
+  const cited = passages(path, text).flatMap((p) => passageCitations(path, p, names))
+  for (const c of cited) {
+    // Shorthand: in a doc with no numbers of its own, a bare `§N` is the one other doc beside it.
+    if (c.form === 'bare' && !numbered) {
+      const beside = new Set(
+        cited.filter((o) => o.line === c.line && o.doc !== own).map((o) => o.doc),
+      )
+      c.shorthandUnresolved = beside.size !== 1
+      if (c.shorthandUnresolved) continue
+      c.doc = [...beside][0]
+    }
+    c.target = resolve(c, docs.get(c.doc)?.targets ?? [])
+  }
+  return cited
+}
+
+/**
+ * Every citation's problems across a repo, given as relative `/`-separated path → text, with its
+ * docs as committed at git HEAD in `gitHead`, which tells a bare `§N` a renumber left behind.
+ */
+export function checkCitations(
+  files: Map<string, string>,
+  gitHead = new Map<string, string>(),
+): Report {
+  const docs = readDocs(files)
+  const gitHeadDocs = readDocs(gitHead)
+  const report: Report = { citations: 0, problems: [] }
 
   for (const { path, targets } of docs.values()) {
     const seen = new Map<string, number>()
@@ -240,10 +258,14 @@ export function checkCitations(files: Map<string, string>): Report {
 
   for (const [path, text] of files) {
     const isCode = codeExtensions.has(extname(path))
-    // A plan quotes old wording on purpose.
-    if ((!isCode && extname(path) !== '.md') || /^Status:/m.test(text)) continue
+    if (!isCode && extname(path) !== '.md') continue
+    // A plan quotes old wording on purpose, so only its ids and links are checked.
+    const plan = /^Status:/m.test(text)
+    const lines = text.split(/\r?\n/)
+    const gitHeadLines = new Set(gitHead.get(path)?.split(/\r?\n/))
     const landed = new Map<string, number>()
-    for (const c of passages(path, text).flatMap((p) => passageCitations(path, p, names))) {
+    for (const c of resolvedCitations(path, text, docs)) {
+      if (plan && c.form !== 'id') continue
       report.citations++
       const problem = (kind: Problem['kind'], detail: string) => ({
         kind,
@@ -251,21 +273,48 @@ export function checkCitations(files: Map<string, string>): Report {
         line: c.line,
         detail,
       })
-      const r = resolve(c, docs.get(c.doc)?.targets ?? [])
-      if (!r) {
+      const { target } = c
+      if (c.shorthandUnresolved) {
+        report.problems.push(
+          problem('dangling', `${c.raw}, with no one other doc cited in its paragraph`),
+        )
+        continue
+      }
+      if (c.form === 'prose') {
+        const form = target?.id ? `: cite as ${c.doc}#${target.id}` : ''
+        report.problems.push(problem('prose citation', c.raw + form))
+        continue
+      }
+      // A changed line is trusted, since a renumber rewrites the numbers it cites in the same diff.
+      const was =
+        c.form === 'bare' && gitHeadLines.has(lines[c.line - 1])
+          ? resolve(c, gitHeadDocs.get(c.doc)?.targets ?? [])?.id
+          : undefined
+      if (was) {
+        const now = docs.get(c.doc)?.targets.find((t) => t.id === was)
+        if (now?.number !== c.number) {
+          const at = !now ? 'gone' : now.number ? `§${now.number}` : 'unnumbered'
+          report.problems.push(problem('stale number', `${c.raw} was ${was} at HEAD, now ${at}`))
+          continue
+        }
+      }
+      if (!target) {
         report.problems.push(problem('dangling', c.raw))
         continue
       }
-      if (c.shownNumber && c.shownNumber !== r.target.number)
+      if (c.form === 'bare' && !target.id)
+        report.problems.push(problem('no id', `${c.raw} lands on a target with no id`))
+      if (c.shownNumber && c.shownNumber !== target.number)
         report.problems.push(
           problem(
             'stale number',
-            `${c.raw} shows §${c.shownNumber}, lands on §${r.target.number ?? '(none)'}`,
+            `${c.raw} shows §${c.shownNumber}, lands on §${target.number ?? '(none)'}`,
           ),
         )
-      if (r.loose) report.prefixOnly.push(problem('prefix only', `${c.raw} ~ "${r.target.title}"`))
+      if (c.fragment && !c.shownNumber && target.number)
+        report.problems.push(problem('missing number', `${c.raw} lands on §${target.number}`))
       if (!isCode || c.inHoverNote) continue
-      const key = `${c.doc}:${r.target.line}`
+      const key = `${c.doc}:${target.line}`
       const first = landed.get(key)
       if (first) report.problems.push(problem('cited twice', `${c.raw}, also on line ${first}`))
       else landed.set(key, c.line)
@@ -280,13 +329,23 @@ export function citedText(
   citation: string,
 ): { doc: string; line: number; text: string } | undefined {
   const docs = readDocs(files)
-  const passage = { text: citation, lineAt: () => 1, hoverNote: false }
-  const [cited] = passageCitations('', passage, docNames(docs))
-  const doc = cited && docs.get(cited.doc)
-  const r = doc && resolve(cited, doc.targets)
-  if (!r) return undefined
-  const lines = doc.text.split(/\r?\n/).slice(r.target.line - 1, r.target.endLine)
-  return { doc: doc.path, line: r.target.line, text: lines.join('\n').trimEnd() }
+  const [cited] = resolvedCitations('', citation, docs)
+  const target = cited?.target
+  if (!target) return undefined
+  const doc = docs.get(cited.doc)!
+  const lines = doc.text.split(/\r?\n/).slice(target.line - 1, target.endLine)
+  return { doc: doc.path, line: target.line, text: lines.join('\n').trimEnd() }
+}
+
+/** The docs and skill files among `paths` as committed at HEAD, as path → text. */
+export function readGitHead(paths: Iterable<string>): Map<string, string> {
+  const gitHead = new Map<string, string>()
+  for (const path of [...paths].filter((p) => docKey(p))) {
+    // Git finds the repo from pre-commit's `.staged/` copy too, since that sits inside it.
+    const shown = spawnSync('git', ['show', `HEAD:${path}`], { encoding: 'utf8' })
+    if (shown.status === 0) gitHead.set(path, shown.stdout)
+  }
+  return gitHead
 }
 
 /** Every file a citation can be in or land on, under the working directory, as path → text. */

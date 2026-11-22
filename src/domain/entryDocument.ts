@@ -62,7 +62,7 @@ function isEntryDocument(value: unknown): value is EntryDocument {
 
 /**
  * Reads stored content as a document. `Entry.content` is always a real serialized document — see
- * CLAUDE.md, "No backward compatibility" — so invalid content is a real bug and throws rather than
+ * CLAUDE.md#no-backward-compat (§1.1) — so invalid content is a real bug and throws rather than
  * being silently reinterpreted.
  *
  * The empty string is the one exception, not a format to sniff: every session ref that will hold a

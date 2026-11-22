@@ -122,7 +122,7 @@ function addAnchorMark(
 
 /**
  * Turns a selection into an anchor, and keeps anchors exclusive: no two may cover overlapping
- * text, whoever placed them (PRODUCT.md §4.4).
+ * text, whoever placed them (PRODUCT.md#writing-related (§4.4)).
  *
  * A selection overlapping an anchor already there — its passage or its wording, in whole or in part
  * — never creates a new one; one that only meets its edge does. If it's this session's own, the

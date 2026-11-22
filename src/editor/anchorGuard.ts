@@ -8,7 +8,7 @@ import { ANCHOR_WORDING_MARK } from '@/domain/entryDocument'
 import { ANCHOR_EDIT_META } from './anchorCommands'
 import { anchorIndex } from './anchorIndex'
 
-// The guard on every editor's document (ENTRY_MODEL.md, "Two creation experiences"): a related
+// The guard on every editor's document (ENTRY_MODEL.md#revising-vs-relating): a related
 // entry never changes its parent's words, and a sealed anchor never changes at all. Pure, so a bare
 // `EditorState` proves it.
 //

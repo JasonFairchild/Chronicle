@@ -87,6 +87,20 @@ export default defineConfig(
     },
   },
   {
+    // A component spec proves the component it mounts, not one made up in setup.
+    files: ['src/**/*.{browser.test,cy}.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.name='defineComponent']",
+          message:
+            'Mount the component under test itself. A host whose only job is to call a composable is the exception.',
+        },
+      ],
+    },
+  },
+  {
     files: ['scripts/**'],
     rules: { 'no-console': 'off' },
   },

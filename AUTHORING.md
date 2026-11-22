@@ -2,7 +2,7 @@
 
 How a writing session is recorded, where it lives until it's saved, and how it is read back as marks and frames for the history view. The entries it seals into are [ENTRY_MODEL.md](./ENTRY_MODEL.md).
 
-## Authoring capture
+## <a id="authoring-capture"></a>Authoring capture
 
 A session is captured as ProseMirror **steps**, not repeated documents. A step is the smallest serializable description of a change: deleting a word is one step of about 45 bytes, and formatting is captured inherently. Steps serialize to JSON, apply to produce the next document, invert, and compose into a mapping that relocates positions across documents.
 
@@ -16,11 +16,11 @@ The session's end state is stored as a full snapshot and is authoritative. If a 
 
 **Signals are outcomes, not provenance.** `is_anchor_op` is set iff the document's set of anchor ids and kinds changed (`contentDelta`, `domain/entryDocument.ts`), so undo and redo count without reading transaction meta, and typing wording never does — it's typing, marked like prose. `is_paste` comes from ProseMirror's `uiEvent` meta, so a paste into wording counts and a drop or the image-attach path doesn't; `media_changed` from `!sameMedia`, so attaching and removing both count.
 
-One recorder captures every stream: in anchor mode the parent's provisional document and the related entry's prose are two `TraceRecorder` instances. Anchor mode limits what the _editor_ can produce (ENTRY_MODEL.md, "Two creation experiences, kept separate"), not how it's recorded.
+One recorder captures every stream: in anchor mode the parent's provisional document and the related entry's prose are two `TraceRecorder` instances. Anchor mode limits what the _editor_ can produce ([ENTRY_MODEL.md, "Revising vs relating"](ENTRY_MODEL.md#revising-vs-relating)), not how it's recorded.
 
 A trace belongs on any typed entry, not only revisions, so a first draft is captured the same way.
 
-## Marks
+## <a id="marks"></a>Marks
 
 **Durability and marks are separate jobs.** Every event is persisted, constantly, to never lose work; marks identify the moments worth stopping at when reviewing how something was written.
 
@@ -28,7 +28,7 @@ A trace belongs on any typed entry, not only revisions, so a first draft is capt
 
 `deletion` is judged in retrospect: a run of deletions is marked when it ends — at the next edit that removes nothing, the next deletion after a pause, a manual mark, or the end of the log — at the run's last deleting edit, so one mark covers everything removed in one go.
 
-## Mark sets
+## <a id="mark-sets"></a>Mark sets
 
 A mark set is one entry's session read under one policy: the policy, a name that is only a label, `base_content`, a copy of the trace's base kept as a cache so playback reads one row, and one **frame** per mark. It is what the history view plays.
 
@@ -49,7 +49,7 @@ interface MarkFrame extends AuthoringMark {
 
 Entries are permanent and append-only and receive only finished entries. A session in progress can't write there without rewriting one row per keystroke or creating thousands, so it accumulates in a separate **draft** store keyed by session. Mark sets are the third store, kept apart because they're derived and deletable, which no entry is.
 
-## Drafts
+## <a id="drafts"></a>Drafts
 
 The draft store is persisted through the same local-first layer as entries, flushing 300 ms after the first unsaved change, and so at that interval through continuous typing. This is autosave and unrelated to marks. Its event logs are append-only while the session runs; the only thing that disappears is the whole row, removed when it is sealed or discarded. The session is let go only once that removal lands, so a failed seal or discard leaves it open. Drafts are working space, not history.
 
@@ -82,11 +82,11 @@ type Draft = {
 
 **The draft carries every versioned field**, and its values are what gets sealed: unset for a new entry, copied from the current version for a revision, so whatever the writer leaves alone saves unchanged. `media_refs` is derived when sealing, and the parent's title isn't stored, since anchor mode never changes it.
 
-**Each document records the version it started from**, which sealing copies into the revision it writes, refused if stale (ENTRY_MODEL.md, "Version chains"). A change is measured from that version, not the current one, so a stale draft left unchanged holds no work. The parent's base version also says which anchors this session may still change, never stored as a list: `anchorsPlacedSince(base, current)` (`domain/anchors.ts`) reads the difference between it and `parent.content` on demand, so an anchor placed then undone leaves nothing to subtract, and it survives a reload, where `parent.content` alone can't tell this session's anchors from sealed ones.
+**Each document records the version it started from**, which sealing copies into the revision it writes, refused if stale ([ENTRY_MODEL.md, "Version chains"](ENTRY_MODEL.md#version-chains)). A change is measured from that version, not the current one, so a stale draft left unchanged holds no work. The parent's base version also says which anchors this session may still change, never stored as a list: `anchorsPlacedSince(base, current)` (`domain/anchors.ts`) reads the difference between it and `parent.content` on demand, so an anchor placed then undone leaves nothing to subtract, and it survives a reload, where `parent.content` alone can't tell this session's anchors from sealed ones.
 
 **A draft that could revise an entry is a claim** — a `revision`, or a `new_related` whose anchors revise the parent (`versionsRevisedBy`, `types/draft.ts`) — and the entry offers to resume it rather than start another. It is written when the session begins, so another tab sees it before anything is typed, and kept while the session is open however empty. Abandoning it removes it only if the stored draft holds no work (`draftHoldsWork`), judged on disk because another tab may have written since. A tab closed mid-session can't be relied on to finish a delete, so that draft stays; if its entry moves on meanwhile, reopening it says so (`useDraftSession`), and a save is refused regardless.
 
-## Draft safety
+## <a id="draft-safety"></a>Draft safety
 
 **Words can be lost, but never silently.** Disk is authoritative: resuming reads the stored draft, and a released session is dropped from memory once flushed. Each guard keeps a loss small or shows it:
 

@@ -1,5 +1,5 @@
 // What changed between two versions of an entry, as something a reader can see rather than as the
-// steps that produced it. See PRODUCT.md §5.2.
+// steps that produced it. See PRODUCT.md#history-diff (§5.2).
 //
 // Compares `docToPlainText` of each, so wording a related entry proposed shows as the parent's
 // text, and a formatting-only revision produces no diff here, since words are all this compares.
@@ -105,7 +105,7 @@ function align(a: string[], b: string[]): DiffSegment[] {
 
 /**
  * The diff between two plain strings, word by word. Public because the entry's title is plain text
- * living beside the document rather than inside it (ENTRY_MODEL.md, "Fields"), so renaming shows up
+ * living beside the document rather than inside it (ENTRY_MODEL.md#fields), so renaming shows up
  * here and not in `diffDocuments`.
  *
  * Words rather than characters: a reader comparing two versions of a sentence wants to see which

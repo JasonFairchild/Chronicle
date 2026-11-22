@@ -8,11 +8,11 @@ A related entry is not a note stapled to a parent. It is a set of **operations o
 
 ## Two invariants
 
-**No related entry or connection is ever destructive.** A related entry marks passages and adds wording, and never changes or removes the parent's own words; the guard enforces it ("Two creation experiences, kept separate"). A strike is presentational: the struck words stay. Content changes only through the version chain.
+**No related entry or connection is ever destructive.** A related entry marks passages and adds wording, and never changes or removes the parent's own words; the guard enforces it ("Revising vs relating"). A strike is presentational: the struck words stay. Content changes only through the version chain.
 
 **Timeline membership is a view filter, not a model fact.** Any entry may appear in a timeline; revisions in a filtered timeline are a legitimate view. Marks are not entries and never appear.
 
-## Related entries and anchors
+## <a id="related-entries"></a>Related entries and anchors
 
 A related entry doesn't store where it points; the parent's own document does, since a position is a fact about the parent. A span op (`comment`, `strike`) is an `anchor` **mark** on the parent's text carrying `{ anchorId, kind }`. Wording an op proposes (inserted wording, including a strike's replacement) is text in the parent's document carrying an `anchorWording` **mark**, `{ anchorId }`, right after its passage. Wording with no passage is a bare insertion, placed by where its text sits.
 
@@ -28,17 +28,17 @@ There is no `replace` op. "I would have written this differently" is a strike pl
 
 **Annotation and update are labels, not structure.** A related entry with a strike or proposed wording behaves like an update, one with only comments like an annotation; the difference falls out of what the user did. The labels drive icons, defaults, and filtering, never domain logic. Only `connection` and `revision` are structural.
 
-## Anchor resolution
+## <a id="anchor-resolution"></a>Anchor resolution
 
 `reconstructEntryState` (`domain/reconstructEntryState.ts`) looks up each of a related entry's `anchor_ids` in the document of the parent's version being viewed, and the document says what it covers. None is missing: the lock below keeps every sealed anchor in its parent's document, and a related entry is sealed in one write with the version that placed its anchors, so any version shown beside a related entry carries every anchor it names. The fold skips one that doesn't, a backstop for a row written outside the app. There is no fallback ladder, because there is no position to drift.
 
 Live editing needs no resolution: anchors are marks in the document being edited, so a revision renders them natively. Resolution is for a reader reconstructing what a related entry points at.
 
-## Two creation experiences, kept separate
+## <a id="revising-vs-relating"></a>Revising vs relating
 
 Revising an entry's own text and creating a related entry are modes that never mix in one sitting. Text mode is ordinary editing and cannot add anchors. Anchor mode (`DocumentEditor.vue`'s `anchor-mode` prop) allows only select-then-comment/strike and proposing wording at the caret.
 
-That makes "no related entry is destructive" hold by construction. A guard (`allowsEdit`, `editor/anchorGuard.ts`) runs as a `filterTransaction` in every editor, against a snapshot taken as the editor opens: each sealed anchor, from its first piece to its last, with the blocks around it. A change is refused unless each is still there exactly, so anchored text is locked in every editor (PRODUCT.md §4.5). In anchor mode it also refuses everything but typed bare text and deleting the session's own wording, letting anchor commands and undo through; a marker (`markTyped`, `editor/anchorCommands.ts`) then gives typed text its wording mark. The guard judges what a change did, never the caret or selection: Backspace just after a passage deletes inside it, and drop, paste, undo and IME change text away from the selection. Paste strips anchor marks in every editor, so a copy never carries an `anchor_id` somewhere new; the guard itself doesn't refuse a new anchor.
+That makes "no related entry is destructive" hold by construction. A guard (`allowsEdit`, `editor/anchorGuard.ts`) runs as a `filterTransaction` in every editor, against a snapshot taken as the editor opens: each sealed anchor, from its first piece to its last, with the blocks around it. A change is refused unless each is still there exactly, so anchored text is locked in every editor ([PRODUCT.md §4.5](PRODUCT.md#revising-entry)). In anchor mode it also refuses everything but typed bare text and deleting the session's own wording, letting anchor commands and undo through; a marker (`markTyped`, `editor/anchorCommands.ts`) then gives typed text its wording mark. The guard judges what a change did, never the caret or selection: Backspace just after a passage deletes inside it, and drop, paste, undo and IME change text away from the selection. Paste strips anchor marks in every editor, so a copy never carries an `anchor_id` somewhere new; the guard itself doesn't refuse a new anchor.
 
 What's sealed is the snapshot: in a revision, every anchor in the document it opens; in anchor mode, every anchor in the session's base, so those placed since are the session's own. A wrong base unlocks an earlier related entry's anchors, and the seal writes their removal into the parent's next version. The snapshot relies on an editor never being handed a new document in place: both composers key DocumentEditor on the session, so a new document is a new editor and a new snapshot.
 
@@ -46,11 +46,11 @@ An anchor-mode session edits two documents and seals atomically, via `EntryRepos
 
 **Annotation vs update is derived at seal time.** `relationTypeForAnchors` (`domain/anchors.ts`) reads the anchors the session placed: a `strike` or proposed wording makes an `update`; only `comment`s, or no anchors, make an `annotation`. So a `new_related` draft carries no `relation_type`.
 
-**Before sealing**, a session may return to, switch, or remove the anchors it placed (AUTHORING.md, "Drafts", says how it knows which). **After sealing, anchors are fixed** in every editor, by the guard above — append-only, like entries. Reopening a sealed related entry's anchors would be ordinary document steps on the parent and is possible in principle, and decided but not built (PRODUCT.md §5.4); it, not overlap, is the intended way to say something different about an anchored passage.
+**Before sealing**, a session may return to, switch, or remove the anchors it placed ([AUTHORING.md, "Drafts"](AUTHORING.md#drafts), says how it knows which). **After sealing, anchors are fixed** in every editor, by the guard above — append-only, like entries. Reopening a sealed related entry's anchors would be ordinary document steps on the parent and is possible in principle, and decided but not built ([PRODUCT.md §5.4](PRODUCT.md#revising-related)); it, not overlap, is the intended way to say something different about an anchored passage.
 
-**Color.** Never stored. It is computed at render time from the active scheme, the related entry, and the kind, so swapping schemes never touches history. The only scheme built is by kind (`--color-anchor-*` in `src/assets/main.css`); others are in PRODUCT.md §6.
+<a id="color"></a>**Color.** Never stored. It is computed at render time from the active scheme, the related entry, and the kind, so swapping schemes never touches history. The only scheme built is by kind (`--color-anchor-*` in `src/assets/main.css`); others are in [PRODUCT.md §6.4.3](PRODUCT.md#color-schemes).
 
-## Version chains
+## <a id="version-chains"></a>Version chains
 
 Each entry owns a linear chain: its own content is version one, frozen at creation, and its revisions are versions two onward. Current state is the last version at or before the viewing time, a plain fold. A revision's parent may not itself be a revision. A subtree's activity stream is derived by merging child chains on timestamp.
 
@@ -68,13 +68,13 @@ A connection is a directional edge: `parent_id` is the source, `target_id` the d
 
 **`parent_id` alone defines containment; `target_id` is gathered but never traversed.** Walking `target_id` as if it were a parent breaks three things: a related entry on a connection folds into both endpoints and counts twice; connections chain, so the walk can cycle, and a visited set makes the result depend on traversal order; and "an entry's subtree" stops being well defined. So a connection's children belong to the connection.
 
-PRODUCT.md §5.7 folds connections into related entries, with targets versioned like content; CHRONICLE_PLAN.md has the engineering.
+[PRODUCT.md §5.7](PRODUCT.md#connecting) folds connections into related entries, with targets versioned like content; CHRONICLE_PLAN.md has the engineering.
 
 ## Imports
 
 **An import produces media, not entries.** Scans land in the media store as an unfiled queue, and each becomes an entry only through a deliberate act where the user supplies context and dates. That settles `created_at` for imports: it is when the record entered Chronicle, so a batch shares one, and sorting by when things happened is what `occurred_at` and `recorded_at` are for. Within a batch, order falls to the id tiebreak — arbitrary but stable.
 
-## Fields
+## <a id="fields"></a>Fields
 
 ```ts
 type RelationType = 'annotation' | 'update' | 'connection' | 'revision'
@@ -174,7 +174,7 @@ Default depth is 2: a parent view shows immediate descendants and signals that d
 - **ProseMirror block ids as anchors.** Node attributes duplicate on split and vanish on merge, and give paragraph granularity where users want a sentence.
 - **Injecting repositories with Vue's `provide`/`inject`** in place of the composition root's module exports (`src/repositories/index.ts`). It would isolate app instances running side by side, which a single-user app doesn't have, and Pinia stores can only `inject` inside an active app. Revisit if that isolation is ever needed, or to give each spec a database of its own: deleting it would fence off its late writes, retiring most of teardown's drain (`src/testing/testStorage.ts`), at the cost of every store and `useMedia` injecting, and a way for specs to seed that test's instance.
 - **Several parents for one related entry.** It is `target_id` traversed as a parent, so it breaks what Connections lists: anything beneath it is reached twice from an entry above both parents, and an entry's subtree stops being well defined. Several targets, gathered and never traversed, let an entry be about several others without that.
-- **Moving a related entry to another parent.** Containment that changes over time makes every subtree depend on when it's read, and the entry's anchors stay in the first parent's document. A related entry stays about its parent for good (PRODUCT.md §5.4).
+- **Moving a related entry to another parent.** Containment that changes over time makes every subtree depend on when it's read, and the entry's anchors stay in the first parent's document. A related entry stays about its parent for good ([PRODUCT.md §5.4](PRODUCT.md#revising-related)).
 - **Anchors as offsets stored on the related entry**, resolved by a fallback ladder (exact position, mapped through steps, quote search, orphaned). Every failure traced to one cause — a fact about the parent's document stored somewhere else — and moving anchors into the parent deleted the ladder.
 - **Wording stored on the related entry**, so the parent only ever gains marks. A bare insertion still needs a node for its position, typing wording needs a field again, the parent at a time T needs each related entry's state at T, and wording loses its writing history.
 - **Wording as an atom node** whose attribute an `<input>` rewrote whole on each keystroke, built first. Its events recorded no deletions and missed paste, undo took back the whole box, and the history view could show only whole-wording frames.

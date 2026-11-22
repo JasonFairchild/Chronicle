@@ -6,7 +6,7 @@
 // it offers Highlight and Strike; with the caret on an anchor this session placed, that anchor's
 // kind pressed, and Remove. A bare insertion has no kind to switch. `applyAnchorKind`
 // (`editor/anchorCommands.ts`) decides what a kind button does, which keeps anchors exclusive
-// (PRODUCT.md §4.4).
+// (PRODUCT.md#writing-related (§4.4)).
 import { Highlighter, type LucideIcon, Strikethrough, Trash2 } from '@lucide/vue'
 import { type EditorState, TextSelection } from '@tiptap/pm/state'
 import type { Editor } from '@tiptap/vue-3'

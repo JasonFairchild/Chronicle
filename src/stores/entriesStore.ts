@@ -123,7 +123,7 @@ function revisionInput(
 /**
  * An anchor-mode seal: a parent revision carrying the new anchors, plus the related entry
  * referencing them. Written in one `createMany`, the pair can never land half-written
- * (AUTHORING.md, "Drafts").
+ * (AUTHORING.md#drafts).
  *
  * Whether it reads as an annotation or an update is derived from what was anchored rather than
  * asked for up front — see `relationTypeForAnchors`. `anchors` is likewise derived, by the
@@ -212,7 +212,7 @@ export const useEntriesStore = defineStore('entries', () => {
    * as much as a later revision, because both are links in the same chain.
    *
    * `parentTrace` is the parent document's own trace, present only for an anchor-mode
-   * `new_related` draft — see AUTHORING.md, "Drafts". It is a second, independent trace because the
+   * `new_related` draft — see AUTHORING.md#drafts. It is a second, independent trace because the
    * two are different documents with different authoring histories, sealed together.
    */
   async function inputsForDraft(

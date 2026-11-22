@@ -138,7 +138,7 @@ function startingSnapshot(
   }
 }
 
-/** Whether a draft holds an entry against other drafts while open (PRODUCT.md §4.8). */
+/** Whether a draft holds an entry against other drafts while open (PRODUCT.md#drafts (§4.8)). */
 function claimsEntry(draft: DraftSnapshot): boolean {
   return versionsRevisedBy(draft).length > 0
 }

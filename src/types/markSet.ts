@@ -3,7 +3,7 @@ import type { AuthoringMark, MarkPolicy } from '@/domain/marks'
 
 /**
  * Something a frame's view should point at, in ProseMirror positions within that frame's own
- * document — a ruler that never leaves the frame (AUTHORING.md, "Mark sets").
+ * document — a ruler that never leaves the frame (AUTHORING.md#mark-sets).
  */
 export interface FrameChange {
   kind: 'added' | 'removed' | 'formatted' | 'anchor'
@@ -38,7 +38,7 @@ export interface MarkSet {
 
 export type CreateMarkSetInput = Omit<MarkSet, 'id' | 'created_at'>
 
-/** Oldest first, tied on id as entries are (ENTRY_MODEL.md, "Fields"). */
+/** Oldest first, tied on id as entries are (ENTRY_MODEL.md#fields). */
 export function compareMarkSets(a: MarkSet, b: MarkSet): number {
   return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 }

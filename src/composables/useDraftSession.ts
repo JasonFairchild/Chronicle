@@ -60,8 +60,8 @@ export function useDraftSession() {
    */
   const parentBaseContent = ref('')
   // What the open draft is, and whether the entry it could revise has moved past the version it
-  // started from. A claim keeps that from happening (PRODUCT.md §4.8) all but in a race, so it is
-  // learned when the draft is reopened, or when a save is refused for it.
+  // started from. A claim keeps that from happening (PRODUCT.md#drafts (§4.8)) all but in a race,
+  // so it is learned when the draft is reopened, or when a save is refused for it.
   const kind = ref<DraftSnapshot['kind'] | null>(null)
   const stale = ref(false)
 

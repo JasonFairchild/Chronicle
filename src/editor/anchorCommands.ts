@@ -33,23 +33,6 @@ function sealedOf(state: EditorState): SealedAnchors {
   return SEALED_ANCHORS.getState(state)!
 }
 
-const ANCHOR_ANNOUNCE_META = 'chronicleAnchorAnnounce'
-
-/**
- * Attaches what the polite live region in `DocumentEditor` announces after an anchor command runs.
- * Carried on the transaction's own meta rather than returned from the command, so it reaches
- * `onUpdate` — the one place both a button click and a keyboard shortcut (`extensions.ts`) end up —
- * however the command was invoked.
- */
-function announce(transaction: Transaction, message: string): void {
-  transaction.setMeta(ANCHOR_ANNOUNCE_META, message)
-}
-
-/** Reads the announcement an anchor command attached to its transaction, if any. */
-export function readAnchorAnnouncement(transaction: Transaction): string | null {
-  return (transaction.getMeta(ANCHOR_ANNOUNCE_META) as string | undefined) ?? null
-}
-
 /**
  * The session's own anchor at `pos`, its passage and its wording both counting, edges included.
  * Where two touch, the one ending at `pos`, which text typed there joins (`markTyped`): the first in
@@ -62,11 +45,6 @@ export function ownAnchorAt(state: EditorState, pos: number): IndexedAnchor | nu
       (anchor) => !sealed.has(anchor.anchorId) && anchor.from <= pos && pos <= anchor.to,
     ) ?? null
   )
-}
-
-function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
-  transaction.setMeta(ANCHOR_EDIT_META, true)
-  editor.view.dispatch(transaction)
 }
 
 /**
@@ -83,6 +61,23 @@ function focusAnchor(editor: Editor, anchorId: string): boolean {
   )
   editor.view.focus()
   return true
+}
+
+const ANCHOR_ANNOUNCE_META = 'chronicleAnchorAnnounce'
+
+/**
+ * Attaches what the polite live region in `DocumentEditor` announces after an anchor command runs.
+ * Carried on the transaction's own meta rather than returned from the command, so it reaches
+ * `onUpdate` — the one place both a button click and a keyboard shortcut (`extensions.ts`) end up —
+ * however the command was invoked.
+ */
+function announce(transaction: Transaction, message: string): void {
+  transaction.setMeta(ANCHOR_ANNOUNCE_META, message)
+}
+
+function dispatchAnchorEdit(editor: Editor, transaction: Transaction): void {
+  transaction.setMeta(ANCHOR_EDIT_META, true)
+  editor.view.dispatch(transaction)
 }
 
 /**
@@ -209,6 +204,11 @@ export function removeAnchor(editor: Editor, anchorId: string): void {
 
   dispatchAnchorEdit(editor, transaction)
   editor.view.focus()
+}
+
+/** Reads the announcement an anchor command attached to its transaction, if any. */
+export function readAnchorAnnouncement(transaction: Transaction): string | null {
+  return (transaction.getMeta(ANCHOR_ANNOUNCE_META) as string | undefined) ?? null
 }
 
 /**

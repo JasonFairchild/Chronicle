@@ -1,6 +1,6 @@
 # Applying the history review
 
-Status: next, step 9c, helper order held by lint. Step 12's trim of the private instructions is already in.
+Status: next, step 9d, the citation hover. Step 12's trim of the private instructions is already in.
 
 ## Context
 
@@ -145,6 +145,7 @@ Then the rewrite, as its own diff:
 Surfaced during 9b: CLAUDE.md §3.1 now gives helper order, and says what lint doesn't catch, so it's held by review alone. Done after 9b is committed, before the hover.
 
 - **A local ESLint rule,** since no published one checks order of first use: in a module, setup scope or class, the helpers a function calls sit above it in the order it first calls them. Whether methods called through `this` come in is decided with the user, once a run shows what it flags. It holds many-case logic, so it gets a spec (TESTING.md §3.7).
+- **Decided with the user, from the first run's 37 findings:** a function exported, or listed in the object its scope returns, is no helper, since public ones are grouped by topic and gain callers that would each force a move. One still counts between a helper and its user, since the fix always moves the helper; only `readAnchorAnnouncement` sat there, and moved below the last command that announces. A helper first used by a plain statement keeps only its order, so factories sit above what they build. Specs are held too. Methods called through `this` stay out: few, and an adapter's follow its interface; checked by hand once, only `TraceRecorder`'s `events` getter moved, out from between `readClock` and its caller. "First uses" is the order the caller names them, not the order they run: neither fit the code better, and naming order is what the eye checks. A `let` holding a function is a slot, not a helper. A misplaced helper is reported once, against the longest run of its siblings already in order. Every remaining finding was a move, and is made. CLAUDE.md §3.1 now leads with what topic places, then helpers, and names the rule's file.
 - Verify: the rule's spec; `npm run lint` over the repo, each finding fixed or the rule narrowed, decided with the user.
 
 #### 9d. The citation hover

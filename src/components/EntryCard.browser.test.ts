@@ -13,6 +13,19 @@ const CREATED_AT = '2026-01-01T00:00:00.000Z'
 const LONG_TEXT =
   'A quiet morning, the fog still hanging low over the lake and everyone else still asleep'
 
+// Render functions, not template strings: Browser Mode's CJS Vue compiler warns on each one.
+async function mountCard(entry: AggregatedEntry, slots: Record<string, () => VNode> = {}) {
+  const router = createTestRouter()
+  await router.push('/')
+  await router.isReady()
+
+  return renderComponent(EntryCard, {
+    props: { entry },
+    slots,
+    global: { plugins: [router] },
+  })
+}
+
 function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEntry {
   return {
     id: 'entry-1',
@@ -33,19 +46,6 @@ function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEnt
     connections: [],
     ...overrides,
   }
-}
-
-// Render functions, not template strings: Browser Mode's CJS Vue compiler warns on each one.
-async function mountCard(entry: AggregatedEntry, slots: Record<string, () => VNode> = {}) {
-  const router = createTestRouter()
-  await router.push('/')
-  await router.isReady()
-
-  return renderComponent(EntryCard, {
-    props: { entry },
-    slots,
-    global: { plugins: [router] },
-  })
 }
 
 describe('EntryCard (browser)', () => {

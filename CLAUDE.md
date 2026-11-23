@@ -19,7 +19,7 @@ Follow a citation with `npm run cite -- '<ref>'`, which prints only what it land
 
 ## Rules
 
-**These rules are decisions, and any of them may be questioned on its merits.** The promises of [PRODUCT.md §2](PRODUCT.md#promises) and ENTRY_MODEL.md's two invariants change only when the user changes them, but how the code serves them is open like everything else. A design rule holds while its reason does, so it is written with its reason. When a rule seems to cost more than it saves, when asked whether one is needed, or when changing what its reason names, check the reason against today's code. If it no longer holds, say so and make the case; never deviate silently.
+**Every rule, here or in the docs above, is a decision, and may be questioned on its merits.** The promises of [PRODUCT.md §2](PRODUCT.md#promises) and ENTRY_MODEL.md's two invariants change only when the user changes them, but how the code serves them is open like everything else. A design rule holds while its reason does, so it is written with its reason. When a rule seems to cost more than it saves, when asked whether one is needed, or when changing what its reason names, check the reason against today's code. If it no longer holds, say so and make the case; never deviate silently.
 
 <a id="rework-to-rule"></a>**Turn rework into a rule, rarely.** When something gets redone (the user's correction, a review fix, a refactor, a test that failed for a design reason) or a doc left you guessing, flag a doc line only if it's knowledge about this project that a capable engineer wouldn't bring, and it would apply again to different work. Give the line and what it would have prevented; sharpening or cutting an existing line beats adding one. Most turns flag nothing, and you never add one yourself.
 
@@ -36,7 +36,7 @@ Follow a citation with `npm run cite -- '<ref>'`, which prints only what it land
 
 ### 3. Where code goes
 
-- **3.1 -** Files read top-down. A helper goes above its first caller, in the order that caller first uses them, so a file reads in the order its code runs; lint catches functions above callers, but not the order or class methods called through `this`. A store's or composable's helper that it doesn't return and that reads none of its state goes at module level, above it, so everything inside depends on that state. In a component, store or composable: setup first, then actions in the order they're used, teardown last unless it sits beside the setup it undoes; a `return` lists state, then actions, in file order.
+- <a id="top-down"></a>**3.1 -** Files read top-down. What a module exports, and a component's, store's or composable's actions, go where their topic puts them; in a component, store or composable, that's setup first, then actions in the order they're used, teardown last unless it sits beside the setup it undoes, and a `return` lists state, then actions, in file order. Every other function is a helper: it goes above its first caller, with no function between them but that caller's other helpers, in the order the caller first names them, so a file reads in the order its code runs. `scripts/lint/helperOrder.ts` holds this, except for class methods called through `this`. A store's or composable's helper that reads none of its state goes at module level, above it, so everything inside depends on that state.
 - **3.2 -** Types live by who uses them. Shapes that are stored or cross layers go in `src/types/`; a module's own inputs, outputs and errors live beside it.
 
 ### 4. UI

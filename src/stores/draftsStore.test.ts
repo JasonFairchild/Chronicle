@@ -17,16 +17,16 @@ import type { AggregatedEntry } from '@/types/entry'
 /** The interval of AUTHORING.md#draft-safety, not imported, so a change to the store's fails here. */
 const FLUSH_MS = 300
 
-/** An entry already on record, as a session opened against it would find it. */
-async function existingEntry(text: string): Promise<AggregatedEntry> {
-  const created = await seedEntry({ content: textContent(text) })
-  return (await useEntriesStore().getAggregatedEntry(created.id))!
-}
-
 /** Another tab: its own stores over the same storage. */
 function anotherTab() {
   setActivePinia(createTrackedPinia())
   return useDraftsStore()
+}
+
+/** An entry already on record, as a session opened against it would find it. */
+async function existingEntry(text: string): Promise<AggregatedEntry> {
+  const created = await seedEntry({ content: textContent(text) })
+  return (await useEntriesStore().getAggregatedEntry(created.id))!
 }
 
 describe('useDraftsStore', () => {

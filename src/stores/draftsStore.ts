@@ -83,6 +83,63 @@ interface ActiveSession {
   flushing: Promise<void>
 }
 
+function cancelFlush(entry: ActiveSession): void {
+  if (entry.timer === null) return
+
+  clearTimeout(entry.timer)
+  entry.timer = null
+}
+
+/** Runs work that may fail safely: a failure is logged with `recovery`, never thrown. */
+async function bestEffort(recovery: string, work: () => Promise<void>): Promise<void> {
+  try {
+    await work()
+  } catch (err) {
+    console.warn(recovery, err)
+  }
+}
+
+/** Holds a draft open: its snapshot, and a recorder per document carrying on from its log. */
+function open(draft: Draft): ActiveSession {
+  const recorderFor = (events: AuthoringEvent[]) => {
+    try {
+      return TraceRecorder.resume(draft.session_id, draft.started_at, events)
+    } catch {
+      throw new DraftUnreadableError(toSnapshot(draft))
+    }
+  }
+
+  return {
+    draft: toSnapshot(draft),
+    recorder: recorderFor(draft.entry.events),
+    parentRecorder: draft.kind === 'new_related' ? recorderFor(draft.parent.events) : null,
+    timer: null,
+    dirty: false,
+    flushing: Promise.resolve(),
+  }
+}
+
+/**
+ * Builds the whole draft from its snapshot and the recorders' live event logs — the one place
+ * those logs are read, right before something needs the whole draft. Keeping it out of the
+ * per-change paths matters because `TraceRecorder.events` hands back a defensive copy, so reading
+ * it on every keystroke would clone the entire log each time.
+ *
+ * Always fresh documents, never the snapshot's by reference, so a draft already handed to an
+ * in-flight `save()` can't be mutated out from under it.
+ */
+function materialize(entry: ActiveSession): Draft {
+  return withEvents(entry.draft, {
+    entry: entry.recorder.events,
+    parent: entry.parentRecorder?.events ?? [],
+  })
+}
+
+/** Whether a draft holds an entry against other drafts while open (PRODUCT.md#drafts (§4.8)). */
+function claimsEntry(draft: DraftSnapshot): boolean {
+  return versionsRevisedBy(draft).length > 0
+}
+
 /** An existing entry's document as a session finds it: its current version. */
 function startingDocument(entry: AggregatedEntry): Omit<DraftDocument, 'events'> {
   return {
@@ -135,63 +192,6 @@ function startingSnapshot(
         parent_id: start.parent.id,
         entry: { ...startingDocument(start.parent), ...draftFieldsOf(start.parent) },
       }
-  }
-}
-
-/** Whether a draft holds an entry against other drafts while open (PRODUCT.md#drafts (§4.8)). */
-function claimsEntry(draft: DraftSnapshot): boolean {
-  return versionsRevisedBy(draft).length > 0
-}
-
-/** Holds a draft open: its snapshot, and a recorder per document carrying on from its log. */
-function open(draft: Draft): ActiveSession {
-  const recorderFor = (events: AuthoringEvent[]) => {
-    try {
-      return TraceRecorder.resume(draft.session_id, draft.started_at, events)
-    } catch {
-      throw new DraftUnreadableError(toSnapshot(draft))
-    }
-  }
-
-  return {
-    draft: toSnapshot(draft),
-    recorder: recorderFor(draft.entry.events),
-    parentRecorder: draft.kind === 'new_related' ? recorderFor(draft.parent.events) : null,
-    timer: null,
-    dirty: false,
-    flushing: Promise.resolve(),
-  }
-}
-
-/**
- * Builds the whole draft from its snapshot and the recorders' live event logs — the one place
- * those logs are read, right before something needs the whole draft. Keeping it out of the
- * per-change paths matters because `TraceRecorder.events` hands back a defensive copy, so reading
- * it on every keystroke would clone the entire log each time.
- *
- * Always fresh documents, never the snapshot's by reference, so a draft already handed to an
- * in-flight `save()` can't be mutated out from under it.
- */
-function materialize(entry: ActiveSession): Draft {
-  return withEvents(entry.draft, {
-    entry: entry.recorder.events,
-    parent: entry.parentRecorder?.events ?? [],
-  })
-}
-
-function cancelFlush(entry: ActiveSession): void {
-  if (entry.timer === null) return
-
-  clearTimeout(entry.timer)
-  entry.timer = null
-}
-
-/** Runs work that may fail safely: a failure is logged with `recovery`, never thrown. */
-async function bestEffort(recovery: string, work: () => Promise<void>): Promise<void> {
-  try {
-    await work()
-  } catch (err) {
-    console.warn(recovery, err)
   }
 }
 

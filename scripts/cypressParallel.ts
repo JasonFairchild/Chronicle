@@ -100,10 +100,8 @@ if (specList.length > 0 && !hasGlob && threads > specList.length) {
   console.warn(`Capped threads from ${threads} to ${specList.length} (explicit spec count).`)
 }
 
-// Machine-local, ignored paths for timing-based spec distribution.
+// Machine-local, ignored path for timing-based spec distribution.
 const TIMINGS_FILE = 'cypress/timingsWithOverhead.json'
-const workerResultsFile = (i: number): string => `cypress/.results-worker-${i}.json`
-
 /** Per-spec overhead added to stored durations (see file header for rationale). */
 const SPEC_OVERHEAD_MS = 2000
 const timingsExist = fs.existsSync(TIMINGS_FILE)
@@ -133,8 +131,12 @@ const CYPRESS_ARGS = ['run', '--component', '--browser=chrome']
 
 let firstRunningLine = true
 
+/** Machine-local and ignored, like the timings file. */
+const workerResultsFile = (i: number): string => `cypress/.results-worker-${i}.json`
+
 // eslint-disable-next-line no-control-regex
 const ANSI_RE = /\u001B\[[0-9;]*m/g
+
 function stripAnsi(str: string): string {
   return str.replace(ANSI_RE, '')
 }

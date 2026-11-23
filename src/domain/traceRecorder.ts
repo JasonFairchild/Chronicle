@@ -34,6 +34,10 @@ export class TraceRecorder {
     this.lastReadAt = this.startedAtMs
   }
 
+  get events(): AuthoringEvent[] {
+    return [...this.recorded]
+  }
+
   /**
    * The clock, floored at the latest instant this recorder has already used. `Date.now` can step
    * backwards (an NTP correction, a resume from sleep); flooring keeps each event's `at` from
@@ -43,10 +47,6 @@ export class TraceRecorder {
   private readClock(): number {
     this.lastReadAt = Math.max(Date.now(), this.lastReadAt)
     return this.lastReadAt
-  }
-
-  get events(): AuthoringEvent[] {
-    return [...this.recorded]
   }
 
   /** Appends an edit, storing only the signals that are set. */

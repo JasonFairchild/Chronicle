@@ -93,6 +93,41 @@ export function createTrackedPinia(): Pinia {
   return pinia
 }
 
+let database: ChronicleDatabase | null = null
+
+/** Fails the hook it runs in if anything wrote after its test ended. */
+function reportLeaks(): void {
+  const found = leaks.splice(0)
+  if (found.length > 0) throw new Error(`Late writes reached storage:\n${found.join('\n')}`)
+}
+
+/** Empties every table through a connection of its own, and the media directory. */
+async function clearStorage(): Promise<void> {
+  // In node, a spec that never touched storage pays nothing.
+  if (database || (await Dexie.exists('chronicle'))) {
+    database ??= new ChronicleDatabase()
+    const db = database
+    await db.transaction('rw', db.tables, () =>
+      Promise.all(db.tables.map((table) => table.clear())),
+    )
+  }
+
+  if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) return
+  const root = await navigator.storage.getDirectory()
+  try {
+    await root.removeEntry('media', { recursive: true })
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === 'NotFoundError')) throw error
+  }
+}
+
+/** Before each test: empty storage, whatever the last test, file or aborted run left. */
+export async function beginTest(): Promise<void> {
+  reportLeaks()
+  await clearStorage()
+  betweenTests = false
+}
+
 /**
  * Resolves once nothing is left to write: every draft written now rather than on its timer, every
  * action and repository call settled. Repeats until a pass starts nothing, since each can start
@@ -126,41 +161,6 @@ async function drainWithin(): Promise<string[]> {
   const stuck = running.size > 0 ? [...running.values()] : ['work that kept starting more']
   running.clear()
   return stuck
-}
-
-let database: ChronicleDatabase | null = null
-
-/** Empties every table through a connection of its own, and the media directory. */
-async function clearStorage(): Promise<void> {
-  // In node, a spec that never touched storage pays nothing.
-  if (database || (await Dexie.exists('chronicle'))) {
-    database ??= new ChronicleDatabase()
-    const db = database
-    await db.transaction('rw', db.tables, () =>
-      Promise.all(db.tables.map((table) => table.clear())),
-    )
-  }
-
-  if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) return
-  const root = await navigator.storage.getDirectory()
-  try {
-    await root.removeEntry('media', { recursive: true })
-  } catch (error) {
-    if (!(error instanceof DOMException && error.name === 'NotFoundError')) throw error
-  }
-}
-
-/** Fails the hook it runs in if anything wrote after its test ended. */
-function reportLeaks(): void {
-  const found = leaks.splice(0)
-  if (found.length > 0) throw new Error(`Late writes reached storage:\n${found.join('\n')}`)
-}
-
-/** Before each test: empty storage, whatever the last test, file or aborted run left. */
-export async function beginTest(): Promise<void> {
-  reportLeaks()
-  await clearStorage()
-  betweenTests = false
 }
 
 /** After each test, once its component is unmounted: drain, retire its Pinias, then empty storage. */

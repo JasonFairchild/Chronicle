@@ -15,14 +15,6 @@ function lastChange(stub: unknown): DraftChange {
   return calls[calls.length - 1]![0]
 }
 
-/** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
-function replayAll(base: string, stub: unknown) {
-  const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z')
-  for (const [change] of (stub as { args: [DraftChange][] }).args) recorder.record(change)
-  const { events } = recorder.seal()!
-  return documentsAt({ base_content: base, events }, [events.length])
-}
-
 /** Neither runner has a first-class paste, so a hand-built one goes straight at the document. */
 function paste(editorEl: Element, data: Record<string, string>): void {
   const dataTransfer = new DataTransfer()
@@ -45,6 +37,14 @@ function drop(target: Element, text: string): void {
       clientY: top + height / 2,
     }),
   )
+}
+
+/** Seals every change reported into a trace, the way a draft does, and replays it to the end. */
+function replayAll(base: string, stub: unknown) {
+  const recorder = new TraceRecorder('session-1', '2026-09-22T10:00:00.000Z')
+  for (const [change] of (stub as { args: [DraftChange][] }).args) recorder.record(change)
+  const { events } = recorder.seal()!
+  return documentsAt({ base_content: base, events }, [events.length])
 }
 
 describe('DocumentEditor', () => {

@@ -6,6 +6,8 @@ import tseslint from 'typescript-eslint'
 import eslintConfigPrettier from 'eslint-config-prettier'
 import globals from 'globals'
 
+import helperOrder from './scripts/lint/helperOrder.ts'
+
 /** A relative path to a test helper loads a second copy, whose Pinia no setup file's teardown drains. */
 const testingByAlias = {
   regex: '^\\.{1,2}/(.*/)?testing(/|$)',
@@ -28,7 +30,10 @@ export default defineConfig(
         ...globals.node,
       },
     },
-    plugins: { 'simple-import-sort': simpleImportSort },
+    plugins: {
+      'simple-import-sort': simpleImportSort,
+      local: { rules: { 'helper-order': helperOrder } },
+    },
     rules: {
       'simple-import-sort/imports': 'error',
       'vue/multi-word-component-names': 'off',
@@ -38,6 +43,7 @@ export default defineConfig(
       ],
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       '@typescript-eslint/no-use-before-define': 'error',
+      'local/helper-order': 'error',
     },
   },
   {

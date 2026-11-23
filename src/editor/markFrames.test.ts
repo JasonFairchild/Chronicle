@@ -24,11 +24,6 @@ function record(...operations: ((transform: Transform) => void)[]): ReplayLog {
   return { base_content: base, events }
 }
 
-/** A mark after each of `indices` events. Frames don't read the reasons. */
-function marksAt(...indices: number[]): AuthoringMark[] {
-  return indices.map((index) => ({ at: index, index, reasons: ['manual'] }))
-}
-
 function typeAt(pos: number, text: string) {
   return (transform: Transform) => transform.insert(pos, transform.doc.type.schema.text(text))
 }
@@ -40,6 +35,11 @@ function deleteRange(from: number, to: number) {
 function bold(from: number, to: number) {
   return (transform: Transform) =>
     transform.addMark(from, to, transform.doc.type.schema.marks.bold.create())
+}
+
+/** A mark after each of `indices` events. Frames don't read the reasons. */
+function marksAt(...indices: number[]): AuthoringMark[] {
+  return indices.map((index) => ({ at: index, index, reasons: ['manual'] }))
 }
 
 /** "rained" as the passage, then "heavily" typed after it at 10–17 and marked as its wording. */

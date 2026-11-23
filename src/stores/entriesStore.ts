@@ -63,42 +63,6 @@ function fieldsFromDraft(entry: DraftSnapshot['entry']): VersionedFields {
 }
 
 /**
- * Whether a new version would change nothing a version holds. Documents compare by `sameDocument`,
- * so formatting alone is a change; `media_refs` follows from the document.
- */
-function sameVersion(a: VersionedFields, b: VersionedFields): boolean {
-  const dateKeys = Object.keys(a.dates) as (keyof EntryDates)[]
-
-  return (
-    sameDocument(a.content, b.content) &&
-    a.title === b.title &&
-    dateKeys.every((key) => a.dates[key] === b.dates[key]) &&
-    a.location === b.location &&
-    a.original_medium === b.original_medium &&
-    a.original_medium_note === b.original_medium_note &&
-    JSON.stringify(a.metadata) === JSON.stringify(b.metadata)
-  )
-}
-
-function rootInput(fields: VersionedFields, trace: AuthoringTrace | null): CreateEntryInput {
-  return createEntryInput({ ...fields, authoring_trace: trace })
-}
-
-function relatedInput(
-  fields: VersionedFields,
-  parentId: string,
-  relationType: NarrativeRelation,
-  extra: Partial<CreateEntryInput>,
-): CreateEntryInput {
-  return createEntryInput({
-    ...fields,
-    parent_id: parentId,
-    relation_type: relationType,
-    ...extra,
-  })
-}
-
-/**
  * A revision's `CreateEntryInput`. `fields` is the whole new version, not only what changed: a
  * version carries the author's dates, location, medium, and title as well as the document, and
  * the fold reads the newest one alone, so anything a revision leaves out would read as null.
@@ -117,6 +81,20 @@ function revisionInput(
     revision_mode: revisionMode,
     base_version_id: baseVersionId,
     authoring_trace: trace,
+  })
+}
+
+function relatedInput(
+  fields: VersionedFields,
+  parentId: string,
+  relationType: NarrativeRelation,
+  extra: Partial<CreateEntryInput>,
+): CreateEntryInput {
+  return createEntryInput({
+    ...fields,
+    parent_id: parentId,
+    relation_type: relationType,
+    ...extra,
   })
 }
 
@@ -159,6 +137,28 @@ function anchoredInputs(
       authoring_trace: trace,
     }),
   ]
+}
+
+/**
+ * Whether a new version would change nothing a version holds. Documents compare by `sameDocument`,
+ * so formatting alone is a change; `media_refs` follows from the document.
+ */
+function sameVersion(a: VersionedFields, b: VersionedFields): boolean {
+  const dateKeys = Object.keys(a.dates) as (keyof EntryDates)[]
+
+  return (
+    sameDocument(a.content, b.content) &&
+    a.title === b.title &&
+    dateKeys.every((key) => a.dates[key] === b.dates[key]) &&
+    a.location === b.location &&
+    a.original_medium === b.original_medium &&
+    a.original_medium_note === b.original_medium_note &&
+    JSON.stringify(a.metadata) === JSON.stringify(b.metadata)
+  )
+}
+
+function rootInput(fields: VersionedFields, trace: AuthoringTrace | null): CreateEntryInput {
+  return createEntryInput({ ...fields, authoring_trace: trace })
 }
 
 export const useEntriesStore = defineStore('entries', () => {

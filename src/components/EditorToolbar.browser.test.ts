@@ -17,10 +17,6 @@ import { plainTextDocument } from '@/testing/documents'
 import { renderComponent } from '@/testing/renderComponent'
 import { selectTextRange } from '@/testing/selectTextRange'
 
-function pngFile(): File {
-  return new File([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], 'lake.png', { type: 'image/png' })
-}
-
 /** A paragraph whose text from `from` to `to` carries `mark`. */
 function markedDocument(
   text: string,
@@ -41,6 +37,10 @@ function markedDocument(
       },
     ],
   }
+}
+
+function pngFile(): File {
+  return new File([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], 'lake.png', { type: 'image/png' })
 }
 
 describe('EditorToolbar (browser)', () => {

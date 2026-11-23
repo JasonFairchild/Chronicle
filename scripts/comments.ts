@@ -23,17 +23,6 @@ const scriptKinds: Record<string, ts.ScriptKind> = {
   '.jsonc': ts.ScriptKind.JSON,
 }
 
-/** CSS's comments between two offsets, by their lines in the whole text. */
-function cssComments(text: string, from = 0, to = text.length): Comment[] {
-  const line = (at: number) => text.slice(0, at).split('\n').length
-  return [...text.slice(from, to).matchAll(/\/\*[\s\S]*?\*\//g)].map((m) => ({
-    start: line(from + m.index),
-    end: line(from + m.index + m[0].length),
-    text: m[0],
-    ownLine: false,
-  }))
-}
-
 /** Every comment TypeScript finds beside a token, in order, with runs of `//` lines joined. */
 function comments(text: string, kind: ts.ScriptKind): Comment[] {
   const source = ts.createSourceFile('file', text, ts.ScriptTarget.Latest, true, kind)
@@ -63,6 +52,17 @@ function comments(text: string, kind: ts.ScriptKind): Comment[] {
     } else found.push(comment)
   }
   return found
+}
+
+/** CSS's comments between two offsets, by their lines in the whole text. */
+function cssComments(text: string, from = 0, to = text.length): Comment[] {
+  const line = (at: number) => text.slice(0, at).split('\n').length
+  return [...text.slice(from, to).matchAll(/\/\*[\s\S]*?\*\//g)].map((m) => ({
+    start: line(from + m.index),
+    end: line(from + m.index + m[0].length),
+    text: m[0],
+    ownLine: false,
+  }))
 }
 
 /** The part of a Vue template node this reads. */

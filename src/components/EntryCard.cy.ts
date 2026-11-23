@@ -8,6 +8,10 @@ const CREATED_AT = '2026-01-01T00:00:00.000Z'
 const LONG_TEXT =
   'A quiet morning, the fog still hanging low over the lake and everyone else still asleep'
 
+function mountCard(entry: AggregatedEntry, slots: Record<string, string> = {}): void {
+  cy.mount(EntryCard, { props: { entry }, slots, routePath: '/' })
+}
+
 function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEntry {
   return {
     id: 'entry-1',
@@ -28,10 +32,6 @@ function makeAggregated(overrides: Partial<AggregatedEntry> = {}): AggregatedEnt
     connections: [],
     ...overrides,
   }
-}
-
-function mountCard(entry: AggregatedEntry, slots: Record<string, string> = {}): void {
-  cy.mount(EntryCard, { props: { entry }, slots, routePath: '/' })
 }
 
 describe('EntryCard', () => {

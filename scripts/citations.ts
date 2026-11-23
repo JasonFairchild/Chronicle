@@ -156,6 +156,13 @@ function passageCitations(file: string, passage: Passage, names: string[]): Cita
   // A code span is an example of a citation, not one.
   let body = passage.text.replace(/`[^`\n]*`/g, (span) => ' '.repeat(span.length))
   const found: Citation[] = []
+  // Each pattern blanks what it reads, so a looser one after it can't read the same text again.
+  const read = (pattern: RegExp, each: (m: RegExpMatchArray) => void) => {
+    for (const m of [...body.matchAll(pattern)]) {
+      each(m)
+      body = body.slice(0, m.index) + ' '.repeat(m[0].length) + body.slice(m.index! + m[0].length)
+    }
+  }
   const add = (
     m: RegExpMatchArray,
     cited: Pick<Citation, 'doc' | 'number' | 'fragment' | 'shownNumber'>,
@@ -164,13 +171,6 @@ function passageCitations(file: string, passage: Passage, names: string[]): Cita
     const line = passage.lineAt(m.index!)
     const raw = m[0].replace(/\s+/g, ' ')
     found.push({ file, line, raw, inHoverNote: passage.hoverNote, form, ...cited })
-  }
-  // Each pattern blanks what it reads, so a looser one after it can't read the same text again.
-  const read = (pattern: RegExp, each: (m: RegExpMatchArray) => void) => {
-    for (const m of [...body.matchAll(pattern)]) {
-      each(m)
-      body = body.slice(0, m.index) + ' '.repeat(m[0].length) + body.slice(m.index! + m[0].length)
-    }
   }
   const doc = String.raw`(?:\b(${alt})\.md|(${skillFile}))`
   const section = String.raw`§\s?(\d+(?:\.\d+)*)`

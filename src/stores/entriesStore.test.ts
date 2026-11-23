@@ -18,15 +18,15 @@ function seedText(text: string): Promise<Entry> {
   return seedEntry({ content: textContent(text) })
 }
 
-/** A direct revision of `entry` saved straight to storage, as another tab's save would land. */
-function seedRevision(entry: Entry, text: string): Promise<Entry> {
-  return seedEntry({
-    content: textContent(text),
-    parent_id: entry.id,
-    relation_type: 'revision',
-    revision_mode: 'direct',
-    base_version_id: entry.id,
-  })
+/**
+ * Writes what sealing `draft` would, and the timeline catches up, without a draft store around it:
+ * that `seal` also removes the draft is the draft repository's contract.
+ */
+async function sealDraft(draft: Draft): Promise<Entry> {
+  const store = useEntriesStore()
+  const written = await entryRepository.createMany(await store.inputsForDraft(draft, null))
+  await store.showWritten(written)
+  return written[written.length - 1]!
 }
 
 /** A draft of `kind` holding `body`; a revision starts from its parent's first version. */
@@ -41,15 +41,15 @@ function draftFor(kind: DraftKind, body: string, title: string | null = null): D
   })
 }
 
-/**
- * Writes what sealing `draft` would, and the timeline catches up, without a draft store around it:
- * that `seal` also removes the draft is the draft repository's contract.
- */
-async function sealDraft(draft: Draft): Promise<Entry> {
-  const store = useEntriesStore()
-  const written = await entryRepository.createMany(await store.inputsForDraft(draft, null))
-  await store.showWritten(written)
-  return written[written.length - 1]!
+/** A direct revision of `entry` saved straight to storage, as another tab's save would land. */
+function seedRevision(entry: Entry, text: string): Promise<Entry> {
+  return seedEntry({
+    content: textContent(text),
+    parent_id: entry.id,
+    relation_type: 'revision',
+    revision_mode: 'direct',
+    base_version_id: entry.id,
+  })
 }
 
 describe('useEntriesStore', () => {

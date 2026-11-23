@@ -21,6 +21,7 @@
     "vitest.config.ts",
     "cypress.config.ts",
     "eslint.config.js",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "tools/**/*.ts"
   ]
 }

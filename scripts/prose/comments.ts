@@ -1,12 +1,26 @@
 // Finds a source file's comments through TypeScript's and Vue's own parsers, so a `//` in a string
-// isn't one. Shared by `npm run comments` and `npm run citations`.
+// isn't one. Shared by `npm run comments` and the citation resolver.
 import { extname } from 'node:path'
 
 import ts from 'typescript'
 import { parse } from 'vue/compiler-sfc'
 
+/** A spot in a file: its line counted from 1, as the check reports it, and column from 0, as an editor does. */
+export interface Place {
+  line: number
+  column: number
+}
+
+/** Where an offset into a text falls. */
+export function placeAt(text: string, offset: number): Place {
+  const line = text.slice(0, offset).split('\n').length
+  return { line, column: offset - text.lastIndexOf('\n', offset - 1) - 1 }
+}
+
 export interface Comment {
   start: number
+  /** Its first line's column. */
+  column: number
   end: number
   text: string
   /** A `//` comment with nothing before it on its line, which joins a run of them. */
@@ -41,6 +55,7 @@ function comments(text: string, kind: ts.ScriptKind): Comment[] {
     const before = text.slice(text.lastIndexOf('\n', pos - 1) + 1, pos)
     const comment = {
       start: line(pos),
+      column: before.length,
       end: line(end),
       text: text.slice(pos, end),
       ownLine: kind === ts.SyntaxKind.SingleLineCommentTrivia && before.trim() === '',
@@ -56,19 +71,17 @@ function comments(text: string, kind: ts.ScriptKind): Comment[] {
 
 /** CSS's comments between two offsets, by their lines in the whole text. */
 function cssComments(text: string, from = 0, to = text.length): Comment[] {
-  const line = (at: number) => text.slice(0, at).split('\n').length
-  return [...text.slice(from, to).matchAll(/\/\*[\s\S]*?\*\//g)].map((m) => ({
-    start: line(from + m.index),
-    end: line(from + m.index + m[0].length),
-    text: m[0],
-    ownLine: false,
-  }))
+  return [...text.slice(from, to).matchAll(/\/\*[\s\S]*?\*\//g)].map((m) => {
+    const { line, column } = placeAt(text, from + m.index)
+    const end = placeAt(text, from + m.index + m[0].length).line
+    return { start: line, column, end, text: m[0], ownLine: false }
+  })
 }
 
 /** The part of a Vue template node this reads. */
 interface TemplateNode {
   type: number
-  loc: { start: { line: number }; end: { line: number }; source: string }
+  loc: { start: { line: number; column: number }; end: { line: number }; source: string }
   children?: TemplateNode[]
 }
 
@@ -86,7 +99,14 @@ function vueComments(text: string): Comment[] {
   const found = comments(masked, ts.ScriptKind.TS)
   const visit = ({ type, loc, children = [] }: TemplateNode) => {
     if (type === templateComment) {
-      found.push({ start: loc.start.line, end: loc.end.line, text: loc.source, ownLine: false })
+      const { line, column } = loc.start
+      found.push({
+        start: line,
+        column: column - 1, // Vue counts from 1
+        end: loc.end.line,
+        text: loc.source,
+        ownLine: false,
+      })
     }
     for (const child of children) visit(child)
   }

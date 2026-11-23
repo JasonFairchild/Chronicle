@@ -5,7 +5,7 @@ description: Writing, changing, or reviewing any test in Chronicle — unit, Vit
 
 # Writing tests in Chronicle
 
-TESTING.md is the authority; this is the order of work. Read TESTING.md's headings, then the sections your change touches.
+TESTING.md is the authority; this is the order of work. Read TESTING.md whole: its principles each hold rules their headings don't name.
 
 1. **Look before adding or deleting a test.** Before adding one, extend a test that already reaches that state (TESTING.md#group-by-state (§2.4)), and look for what already covers the behavior at the other layers. Before deleting one because another now covers it, check coverage for lines only it reached: a test can exercise a path it never asserts.
 2. **Pick the layer** for anything new, and write it there (TESTING.md#proven-once (§3) and TESTING.md#layers).

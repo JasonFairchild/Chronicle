@@ -5,7 +5,7 @@ import { fileComments } from './comments.ts'
 describe('fileComments', () => {
   it('finds a comment beside code, but not one inside a string', () => {
     expect(fileComments('a.ts', "const a = '// not one'\n// one")).toEqual([
-      { start: 2, end: 2, text: '// one', ownLine: true },
+      { start: 2, column: 0, end: 2, text: '// one', ownLine: true },
     ])
   })
 
@@ -13,26 +13,26 @@ describe('fileComments', () => {
     const code = 'const a = 1 // trailing\n// first\n// second\nexport { a }'
 
     expect(fileComments('a.ts', code)).toEqual([
-      { start: 1, end: 1, text: '// trailing', ownLine: false },
-      { start: 2, end: 3, text: '// first\n// second', ownLine: true },
+      { start: 1, column: 12, end: 1, text: '// trailing', ownLine: false },
+      { start: 2, column: 0, end: 3, text: '// first\n// second', ownLine: true },
     ])
   })
 
   it('reads a block comment over all its lines', () => {
     expect(fileComments('a.js', '/**\n * Note.\n */\nexport {}')).toEqual([
-      { start: 1, end: 3, text: '/**\n * Note.\n */', ownLine: false },
+      { start: 1, column: 0, end: 3, text: '/**\n * Note.\n */', ownLine: false },
     ])
   })
 
   it('reads a comment in a JSONC config', () => {
     expect(fileComments('a.jsonc', '{\n  // note\n  "a": 1\n}')).toEqual([
-      { start: 2, end: 2, text: '// note', ownLine: true },
+      { start: 2, column: 2, end: 2, text: '// note', ownLine: true },
     ])
   })
 
-  it('reads a CSS file', () => {
-    expect(fileComments('a.css', '.a {}\n/* one\n   two */')).toEqual([
-      { start: 2, end: 3, text: '/* one\n   two */', ownLine: false },
+  it('reads a CSS file, an indented comment from its column', () => {
+    expect(fileComments('a.css', '.a {}\n  /* one\n   two */')).toEqual([
+      { start: 2, column: 2, end: 3, text: '/* one\n   two */', ownLine: false },
     ])
   })
 
@@ -51,9 +51,9 @@ describe('fileComments', () => {
     ].join('\n')
 
     expect(fileComments('A.vue', component)).toEqual([
-      { start: 2, end: 2, text: '<!-- in template -->', ownLine: false },
-      { start: 6, end: 6, text: '// in script', ownLine: true },
-      { start: 9, end: 9, text: '/* in style */', ownLine: false },
+      { start: 2, column: 2, end: 2, text: '<!-- in template -->', ownLine: false },
+      { start: 6, column: 0, end: 6, text: '// in script', ownLine: true },
+      { start: 9, column: 0, end: 9, text: '/* in style */', ownLine: false },
     ])
   })
 

@@ -1,0 +1,16 @@
+{
+  "name": "citation-hover",
+  "displayName": "Chronicle citation hover",
+  "description": "Hovering a citation shows what it cites; hovering a cited heading or rule lists what cites it.",
+  "publisher": "chronicle",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.146.0"
+  },
+  "main": "./extension.ts",
+  "activationEvents": [
+    "workspaceContains:scripts/prose/citations.ts"
+  ]
+}

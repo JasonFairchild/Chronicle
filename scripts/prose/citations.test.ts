@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { checkCitations, citedText } from './citations.ts'
+import { checkCitations, citedAt, citedText, citersOf } from './citations.ts'
 
 const repo = (files: Record<string, string>) => new Map(Object.entries(files))
 
@@ -62,7 +62,7 @@ describe('checkCitations', () => {
     ])
   })
 
-  it('resolves a bare number in its own doc, and fails one it lacks', () => {
+  it('resolves a short citation in its own doc, and fails one it lacks', () => {
     const own = '# Own\n\n## <a id="promises"></a>2. Promises\n\nSee §2, and §7.'
 
     expect(checkCitations(repo({ 'OWN.md': own }))).toEqual({
@@ -71,7 +71,7 @@ describe('checkCitations', () => {
     })
   })
 
-  it('resolves a bare number by the one other doc its paragraph cites, in a doc with no numbers', () => {
+  it('resolves a short citation by the one other doc its paragraph cites, in a doc with no numbers', () => {
     const notes = '[GUIDE.md §4](GUIDE.md#fail-first) leads, and §4.1 follows.\n\nAlone, §4.2.'
     const report = checkCitations(repo({ 'GUIDE.md': guide, 'NOTES.md': notes }))
 
@@ -88,13 +88,13 @@ describe('checkCitations', () => {
     })
   })
 
-  it('reads a link to its own doc by name as a link, not as shorthand', () => {
+  it('reads a link to its own doc by name as a link, not as a short citation', () => {
     const notes = '# Notes\n\n## <a id="later"></a>Later\n\nSee [NOTES.md](NOTES.md#later).'
 
     expect(checkCitations(repo({ 'NOTES.md': notes }))).toEqual({ citations: 1, problems: [] })
   })
 
-  it('fails a bare number whose paragraph cites two other docs', () => {
+  it('fails a short citation whose paragraph cites two other docs', () => {
     const other = '# Other\n\n## <a id="elsewhere"></a>Elsewhere'
     const notes = '[GUIDE.md §4](GUIDE.md#fail-first), [OTHER.md](OTHER.md#elsewhere), then §4.1.'
     const report = checkCitations(repo({ 'GUIDE.md': guide, 'OTHER.md': other, 'NOTES.md': notes }))
@@ -104,7 +104,7 @@ describe('checkCitations', () => {
     ])
   })
 
-  it('fails a bare number on a target with no id, which a renumber could not follow', () => {
+  it('fails a short citation on a target with no id, which a renumber could not follow', () => {
     const notes = '[GUIDE.md §4](GUIDE.md#fail-first) leads, and §4.2 follows.'
     const report = checkCitations(repo({ 'GUIDE.md': guide, 'NOTES.md': notes }))
 
@@ -113,7 +113,7 @@ describe('checkCitations', () => {
     ])
   })
 
-  describe('a bare number across a renumber since HEAD', () => {
+  describe('a short citation across a renumber since HEAD', () => {
     const before = [
       '- <a id="never-mock"></a>**4.1 -** Never mock what is in scope.',
       '- <a id="state-it"></a>**4.2 -** State what a test expects.',
@@ -338,5 +338,105 @@ describe('citedText', () => {
 
   it('returns nothing for a citation that lands nowhere', () => {
     expect(citedText(files, 'GUIDE.md#renamed-away')).toBeUndefined()
+  })
+})
+
+describe('citedAt', () => {
+  const at = (path: string, text: string, line: number, column: number) =>
+    citedAt(repo({ 'GUIDE.md': guide, [path]: text }), path, { line, column })
+
+  it('finds a link from its first character to its last, and not past it', () => {
+    const notes = 'See [GUIDE.md §4.1](GUIDE.md#never-mock) here.'
+
+    expect(at('NOTES.md', notes, 1, 4)).toMatchObject({
+      start: { line: 1, column: 4 },
+      end: { line: 1, column: 40 },
+      section: { doc: 'GUIDE.md', line: 5 },
+    })
+    expect(at('NOTES.md', notes, 1, 39)).toBeDefined()
+    expect(at('NOTES.md', notes, 1, 40)).toBeUndefined()
+  })
+
+  it('finds a citation in a comment trailing code by its column in the file', () => {
+    const code = 'const a = 1 // GUIDE.md#coverage\nexport { a }'
+
+    expect(at('src/a.ts', code, 1, 15)).toMatchObject({
+      start: { line: 1, column: 15 },
+      section: { line: 9 },
+    })
+    expect(at('src/a.ts', code, 1, 14)).toBeUndefined()
+  })
+
+  it('finds a citation broken across comment lines from either line', () => {
+    const code = '  // as GUIDE.md#never-mock\n  // (§4.1) says\nexport {}'
+    const spans = { start: { line: 1, column: 8 }, end: { line: 2, column: 11 } }
+
+    expect(at('src/b.ts', code, 1, 8)).toMatchObject(spans)
+    expect(at('src/b.ts', code, 2, 6)).toMatchObject(spans)
+  })
+
+  it('finds a citation that dangles, with no section to show', () => {
+    const found = at('NOTES.md', 'GUIDE.md#moved-off', 1, 0)
+
+    expect(found).toEqual({ start: { line: 1, column: 0 }, end: { line: 1, column: 18 } })
+  })
+
+  it('finds a short citation in its own doc', () => {
+    const own = '# Scope\n\n## <a id="limits"></a>3. Limits\n\nWithin §3.'
+
+    expect(citedAt(repo({ 'SCOPE.md': own }), 'SCOPE.md', { line: 5, column: 7 })).toEqual({
+      start: { line: 5, column: 7 },
+      end: { line: 5, column: 9 },
+      section: { doc: 'SCOPE.md', line: 3, text: '## <a id="limits"></a>3. Limits\n\nWithin §3.' },
+    })
+  })
+
+  it('reads a short citation against the one other doc its paragraph cites', () => {
+    const notes = '[GUIDE.md §4](GUIDE.md#fail-first) opens; §4.2 closes.'
+
+    expect(at('NOTES.md', notes, 1, 42)).toMatchObject({ section: { doc: 'GUIDE.md', line: 6 } })
+  })
+})
+
+describe('citersOf', () => {
+  it('lists every citation of a rule, from docs and code, hovered on its number', () => {
+    const files = repo({
+      'GUIDE.md': guide,
+      'NOTES.md': 'As [GUIDE.md §4.1](GUIDE.md#never-mock) says.',
+      'src/c.ts': '// GUIDE.md#never-mock (§4.1) holds here\nexport {}',
+    })
+
+    expect(citersOf(files, 'GUIDE.md', { line: 5, column: 27 })).toEqual({
+      leadEnd: 34,
+      citers: [
+        { file: 'NOTES.md', line: 1, raw: '[GUIDE.md §4.1](GUIDE.md#never-mock)' },
+        { file: 'src/c.ts', line: 1, raw: 'GUIDE.md#never-mock (§4.1)' },
+      ],
+    })
+  })
+
+  it("leaves a rule's text past its lead alone, but takes a heading's whole line", () => {
+    const code = '// GUIDE.md#never-mock (§4.1), unlike GUIDE.md#fail-first (§4)\nexport {}'
+    const files = repo({ 'GUIDE.md': guide, 'src/d.ts': code })
+
+    expect(citersOf(files, 'GUIDE.md', { line: 5, column: 34 })).toBeUndefined()
+    expect(citersOf(files, 'GUIDE.md', { line: 3, column: 50 })?.citers).toHaveLength(1)
+  })
+
+  it("takes an unnumbered rule's bold as its lead", () => {
+    const skill = '.claude/skills/x/SKILL.md'
+    const files = repo({
+      [skill]: '- <a id="mount-once"></a>**Mount once.** Per test.',
+      'src/e.ts': '// .claude/skills/x/SKILL.md#mount-once, as each test does\nexport {}',
+    })
+
+    expect(citersOf(files, skill, { line: 1, column: 38 })?.leadEnd).toBe(40)
+    expect(citersOf(files, skill, { line: 1, column: 40 })).toBeUndefined()
+  })
+
+  it('finds nothing on a rule nothing cites', () => {
+    expect(
+      citersOf(repo({ 'GUIDE.md': guide }), 'GUIDE.md', { line: 5, column: 27 }),
+    ).toBeUndefined()
   })
 })

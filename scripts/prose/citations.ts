@@ -1,9 +1,11 @@
 // Finds and resolves the citations between docs, skills and code comments.
 import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { basename, extname } from 'node:path'
+import { basename, extname, join } from 'node:path'
 
-import { type Comment, fileComments } from './comments.ts'
+import { type Comment, fileComments, type Place, placeAt } from './comments.ts'
+
+export type { Place }
 
 /** A heading, or a line with an id or a numbered rule, with the lines it spans. */
 interface Target {
@@ -13,6 +15,8 @@ interface Target {
   line: number
   /** Last line of the section or bullet, inclusive. */
   endLine: number
+  /** Where its lead ends on its line: a heading's whole line, or a rule's id and bold. */
+  leadEnd: number
 }
 
 /** A doc or skill file, under the name citations give it. */
@@ -22,18 +26,19 @@ interface Doc {
   targets: Target[]
 }
 
-interface Citation {
+interface Citation extends Place {
   file: string
-  line: number
+  /** Just past its last character. */
+  end: Place
   /** A doc's bare name (`TESTING.md`), or a skill file's repo path. */
   doc: string
   number?: string
   fragment?: string
   /**
-   * `id` is a link or a plain `DOC.md#id`; `prose`, a doc cited by `§N` or a quoted name, which the
-   * id form replaces; `bare`, a `§N` alone, in its own doc or as shorthand.
+   * `id` is a link or a plain `DOC.md#id`; `prose`, another doc named with a `§N` or a quoted title,
+   * which the check fails outside a plan; `short`, a `§N` alone, naming no doc.
    */
-  form: 'id' | 'prose' | 'bare'
+  form: 'id' | 'prose' | 'short'
   /** The `§N` a link or a plain `DOC.md#id (§N)` shows, which must match where its fragment lands. */
   shownNumber?: string
   /** In a `/** *\/` note, which is read on hover away from the file, so may repeat a citation. */
@@ -41,14 +46,14 @@ interface Citation {
   raw: string
   /** What it lands on, once resolved. */
   target?: Target
-  /** A shorthand `§N` beside no other doc, or several, so with no doc to read it against. */
-  shorthandUnresolved?: boolean
+  /** A short citation in a doc without numbers, beside no other doc or several, so naming none. */
+  shortUnresolved?: boolean
 }
 
-/** Text a file's citations can be in, with a way back from an offset to a file line. */
+/** Text a file's citations can be in, with a way back from an offset to its place in the file. */
 interface Passage {
   text: string
-  lineAt: (offset: number) => number
+  placeAt: (offset: number) => Place
   hoverNote: boolean
 }
 
@@ -72,6 +77,9 @@ export interface Report {
 }
 
 const codeExtensions = new Set(['.ts', '.vue', '.js', '.css', '.jsonc'])
+/** Whether a file can hold a citation or be cited. */
+export const citable = (path: string) =>
+  extname(path) === '.md' || codeExtensions.has(extname(path))
 const skillFile = String.raw`\.claude/skills/[\w-]+/[\w.-]+\.md`
 
 /** A doc's bare name, or a skill file's repo path, which is how citations name it. */
@@ -93,7 +101,8 @@ function targets(text: string): Target[] {
     const heading = /^(#{1,6})\s+(?:<a id="([^"]+)"><\/a>)?(?:(\d+(?:\.\d+)*)\.?\s)?/.exec(line)
     if (heading) {
       headings.push({ level: heading[1].length, index: found.length })
-      found.push({ id: heading[2], number: heading[3], line: i + 1, endLine: lines.length })
+      const [, , id, number] = heading
+      found.push({ id, number, line: i + 1, endLine: lines.length, leadEnd: line.length })
       return
     }
     const rule =
@@ -103,7 +112,10 @@ function targets(text: string): Target[] {
     if (!rule[1] && !rule[2]) return
     let end = i + 1
     while (end < lines.length && /^\s{2,}\S/.test(lines[end])) end++
-    found.push({ id: rule[1], number: rule[2], line: i + 1, endLine: end })
+    // An unnumbered rule's bold names it, as a number would.
+    const bold = rule[2] ? '' : (/^\*\*[^*\n]+\*\*/.exec(line.slice(rule[0].length))?.[0] ?? '')
+    const leadEnd = rule[0].length + bold.length
+    found.push({ id: rule[1], number: rule[2], line: i + 1, endLine: end, leadEnd })
   })
   headings.forEach(({ level, index }, n) => {
     const next = headings.slice(n + 1).find((h) => h.level <= level)
@@ -127,18 +139,25 @@ const docNames = (docs: Map<string, Doc>) =>
   [...docs.keys()].filter((key) => !key.includes('/')).map((key) => key.replace(/\.md$/, ''))
 
 /** A comment as a passage, with continuation lines joined so a citation across them reads whole. */
-function commentPassage({ start, text }: Comment): Passage {
-  const starts: number[] = []
+function commentPassage({ start, column, text }: Comment): Passage {
+  // Each line's offset in the joined text, and the file column its kept text starts at.
+  const starts: { at: number; column: number }[] = []
   let joined = ''
   for (const line of text.split(/\r?\n/)) {
     const continues = joined !== '' && /^\s*(\/\/|\*(?!\*))/.test(line)
     joined += continues ? ' ' : '\n'
-    starts.push(joined.length)
-    joined += line.replace(/^\s*(\/\/|\*(?!\*)|<!--)\s?/, '')
+    const kept = line.replace(/^\s*(\/\/|\*(?!\*)|<!--)\s?/, '')
+    // Only the first line starts partway along; the rest hold their file line from column 0.
+    const lineStart = starts.length ? 0 : column
+    starts.push({ at: joined.length, column: lineStart + line.length - kept.length })
+    joined += kept
   }
   return {
     text: joined,
-    lineAt: (offset) => start + starts.findLastIndex((at) => at <= offset),
+    placeAt: (offset) => {
+      const i = starts.findLastIndex(({ at }) => at <= offset)
+      return { line: start + i, column: starts[i].column + offset - starts[i].at }
+    },
     hoverNote: text.startsWith('/**'),
   }
 }
@@ -146,7 +165,7 @@ function commentPassage({ start, text }: Comment): Passage {
 /** Where a file's citations can be: a doc whole, or each of code's comments. */
 function passages(file: string, text: string): Passage[] {
   if (codeExtensions.has(extname(file))) return (fileComments(file, text) ?? []).map(commentPassage)
-  return [{ text, lineAt: (offset) => text.slice(0, offset).split('\n').length, hoverNote: false }]
+  return [{ text, placeAt: (offset) => placeAt(text, offset), hoverNote: false }]
 }
 
 /** Every citation in one passage of a file. `names` are the docs' bare names, without `.md`. */
@@ -168,9 +187,10 @@ function passageCitations(file: string, passage: Passage, names: string[]): Cita
     cited: Pick<Citation, 'doc' | 'number' | 'fragment' | 'shownNumber'>,
     form: Citation['form'] = 'id',
   ) => {
-    const line = passage.lineAt(m.index!)
+    const place = passage.placeAt(m.index!)
+    const end = passage.placeAt(m.index! + m[0].length)
     const raw = m[0].replace(/\s+/g, ' ')
-    found.push({ file, line, raw, inHoverNote: passage.hoverNote, form, ...cited })
+    found.push({ file, ...place, end, raw, inHoverNote: passage.hoverNote, form, ...cited })
   }
   const doc = String.raw`(?:\b(${alt})\.md|(${skillFile}))`
   const section = String.raw`§\s?(\d+(?:\.\d+)*)`
@@ -197,7 +217,7 @@ function passageCitations(file: string, passage: Passage, names: string[]): Cita
   )
   const own = docKey(file)
   if (own && !isCode)
-    read(new RegExp(section, 'g'), (m) => add(m, { doc: own, number: m[1] }, 'bare'))
+    read(new RegExp(section, 'g'), (m) => add(m, { doc: own, number: m[1] }, 'short'))
   return found
 }
 
@@ -208,20 +228,20 @@ function resolve(cited: Pick<Citation, 'number' | 'fragment'>, all: Target[]) {
   return undefined
 }
 
-/** Every citation in one file with what it lands on, each shorthand read as the doc it stands for. */
+/** Every citation in one file with what it lands on, each short one read against the doc it names. */
 function resolvedCitations(path: string, text: string, docs: Map<string, Doc>): Citation[] {
   const own = docKey(path)
   const numbered = !!own && !!docs.get(own)?.targets.some((t) => t.number)
   const names = docNames(docs)
   const cited = passages(path, text).flatMap((p) => passageCitations(path, p, names))
   for (const c of cited) {
-    // Shorthand: in a doc with no numbers of its own, a bare `§N` is the one other doc beside it.
-    if (c.form === 'bare' && !numbered) {
+    // In a doc with no numbers of its own, a short citation is the one other doc beside it.
+    if (c.form === 'short' && !numbered) {
       const beside = new Set(
         cited.filter((o) => o.line === c.line && o.doc !== own).map((o) => o.doc),
       )
-      c.shorthandUnresolved = beside.size !== 1
-      if (c.shorthandUnresolved) continue
+      c.shortUnresolved = beside.size !== 1
+      if (c.shortUnresolved) continue
       c.doc = [...beside][0]
     }
     c.target = resolve(c, docs.get(c.doc)?.targets ?? [])
@@ -231,7 +251,7 @@ function resolvedCitations(path: string, text: string, docs: Map<string, Doc>): 
 
 /**
  * Every citation's problems across a repo, given as relative `/`-separated path → text, with its
- * docs as committed at git HEAD in `gitHead`, which tells a bare `§N` a renumber left behind.
+ * docs as committed at git HEAD in `gitHead`, which tells a short citation a renumber left behind.
  */
 export function checkCitations(
   files: Map<string, string>,
@@ -257,8 +277,8 @@ export function checkCitations(
   }
 
   for (const [path, text] of files) {
+    if (!citable(path)) continue
     const isCode = codeExtensions.has(extname(path))
-    if (!isCode && extname(path) !== '.md') continue
     // A plan quotes old wording on purpose, so only its ids and links are checked.
     const plan = /^Status:/m.test(text)
     const lines = text.split(/\r?\n/)
@@ -274,7 +294,7 @@ export function checkCitations(
         detail,
       })
       const { target } = c
-      if (c.shorthandUnresolved) {
+      if (c.shortUnresolved) {
         report.problems.push(
           problem('dangling', `${c.raw}, with no one other doc cited in its paragraph`),
         )
@@ -287,7 +307,7 @@ export function checkCitations(
       }
       // A changed line is trusted, since a renumber rewrites the numbers it cites in the same diff.
       const was =
-        c.form === 'bare' && gitHeadLines.has(lines[c.line - 1])
+        c.form === 'short' && gitHeadLines.has(lines[c.line - 1])
           ? resolve(c, gitHeadDocs.get(c.doc)?.targets ?? [])?.id
           : undefined
       if (was) {
@@ -302,7 +322,7 @@ export function checkCitations(
         report.problems.push(problem('dangling', c.raw))
         continue
       }
-      if (c.form === 'bare' && !target.id)
+      if (c.form === 'short' && !target.id)
         report.problems.push(problem('no id', `${c.raw} lands on a target with no id`))
       if (c.shownNumber && c.shownNumber !== target.number)
         report.problems.push(
@@ -323,18 +343,67 @@ export function checkCitations(
   return report
 }
 
-/** The lines a citation lands on, read as the check reads one in a doc. */
-export function citedText(
-  files: Map<string, string>,
-  citation: string,
-): { doc: string; line: number; text: string } | undefined {
-  const docs = readDocs(files)
-  const [cited] = resolvedCitations('', citation, docs)
-  const target = cited?.target
-  if (!target) return undefined
-  const doc = docs.get(cited.doc)!
+/** What a citation lands on. */
+export interface Section {
+  doc: string
+  line: number
+  text: string
+}
+
+/** A target's lines, through the end of its section or bullet. */
+function section(doc: Doc, target: Target): Section {
   const lines = doc.text.split(/\r?\n/).slice(target.line - 1, target.endLine)
   return { doc: doc.path, line: target.line, text: lines.join('\n').trimEnd() }
+}
+
+/** The lines a citation lands on, read as the check reads one in a doc. */
+export function citedText(files: Map<string, string>, citation: string): Section | undefined {
+  const docs = readDocs(files)
+  const [cited] = resolvedCitations('', citation, docs)
+  if (!cited?.target) return undefined
+  return section(docs.get(cited.doc)!, cited.target)
+}
+
+const before = (a: Place, b: Place) => a.line < b.line || (a.line === b.line && a.column < b.column)
+
+/** A citation's span, and the section it lands on unless it dangles. */
+export interface Cited {
+  start: Place
+  end: Place
+  section?: Section
+}
+
+/** The citation over a place in one of `files`. */
+export function citedAt(files: Map<string, string>, path: string, at: Place): Cited | undefined {
+  const docs = readDocs(files)
+  const cited = resolvedCitations(path, files.get(path) ?? '', docs).find(
+    (c) => !before(at, c) && before(at, c.end),
+  )
+  if (!cited) return undefined
+  const { line, column, end, target } = cited
+  return { start: { line, column }, end, section: target && section(docs.get(cited.doc)!, target) }
+}
+
+/** Where a cited heading's or rule's lead ends on its line, and each place that cites it. */
+export interface Citers {
+  leadEnd: number
+  citers: { file: string; line: number; raw: string }[]
+}
+
+/** Every citation landing on the heading or rule whose lead holds a place in a doc, if any does. */
+export function citersOf(files: Map<string, string>, path: string, at: Place): Citers | undefined {
+  const docs = readDocs(files)
+  const key = docKey(path)
+  const target = key
+    ? docs.get(key)?.targets.find((t) => t.line === at.line && at.column < t.leadEnd)
+    : undefined
+  if (!target) return undefined
+  const citers = [...files]
+    .filter(([file]) => citable(file))
+    .flatMap(([file, text]) => resolvedCitations(file, text, docs))
+    .filter((c) => c.target === target)
+    .map(({ file, line, raw }) => ({ file, line, raw }))
+  return citers.length ? { leadEnd: target.leadEnd, citers } : undefined
 }
 
 /** The docs and skill files among `paths` as committed at HEAD, as path → text. */
@@ -348,25 +417,26 @@ export function readGitHead(paths: Iterable<string>): Map<string, string> {
   return gitHead
 }
 
-/** Every file a citation can be in or land on, under the working directory, as path → text. */
-export function readRepo(): Map<string, string> {
-  const wanted = (path: string) => extname(path) === '.md' || codeExtensions.has(extname(path))
+/** Every file a citation can be in or land on, under `root`, as path from `root` → text. */
+export function readRepo(root = '.'): Map<string, string> {
+  const at = (path: string) => join(root, path)
   let paths: string[]
-  if (existsSync('.git')) {
+  if (existsSync(at('.git'))) {
     // Through git, so a locally excluded private file isn't read.
     const listed = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
+      cwd: root,
       encoding: 'utf8',
     })
-    paths = listed.stdout.split('\n').filter((p) => p && existsSync(p))
+    paths = listed.stdout.split('\n').filter((p) => p && existsSync(at(p)))
   } else {
     // Pre-commit's `.staged/` copy has no `.git`, and holds only what's staged.
     const walk = (dir: string): string[] =>
-      readdirSync(dir).flatMap((name) => {
+      readdirSync(at(dir)).flatMap((name) => {
         const path = dir === '.' ? name : `${dir}/${name}`
         if (name === 'node_modules') return []
-        return statSync(path).isDirectory() ? walk(path) : [path]
+        return statSync(at(path)).isDirectory() ? walk(path) : [path]
       })
     paths = walk('.')
   }
-  return new Map(paths.filter(wanted).map((p) => [p, readFileSync(p, 'utf8')]))
+  return new Map(paths.filter(citable).map((p) => [p, readFileSync(at(p), 'utf8')]))
 }

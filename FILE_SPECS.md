@@ -22,7 +22,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
 - **Cutting means proving wiring, not deleting the scenario.**
   - An owner test that is part session behavior and part wiring is shrunk to the wiring: which session method a control calls, what the owner renders from the session, where it navigates, and the order its own handler does things in.
   - A test is deleted outright only when what remains is already owned elsewhere.
-  - A UI check placed before a repository read is a wait, not a duplicate, and stays (TESTING.md, "Flow specs").
+  - A UI check placed before a repository read is a wait, not a duplicate, and stays ([TESTING.md, "Flow specs"](TESTING.md#flow-specs)).
 - **Editor files wait for Track B.** `extensions.ts` and `anchorCommands.ts` get their specs as Track B reviews them. `anchorIndex.ts`, `anchorGuard.ts` and `AnchorMenu.vue` already have theirs. DocumentEditor's specs stay as they are until then. What was learned, for Track B unit 2 in CODE_REVIEW.md:
   - Browser project alone, with a bare TipTap `Editor`.
   - Unproven today: `excludes: ''`, `Mod-Alt-s`, and the live region.
@@ -34,7 +34,7 @@ It is independent of the review units: each commit stands alone, so a file's spe
   - The specs that mount nothing user-facing follow what it settles: the route table's (commit 14), and the Dexie and OPFS adapters', which have no mirrors yet (commit 16).
 - **`useLayoutWidth`: merge `provideLayoutWidth` into AppLayout, its only caller.**
   - AppLayout provides through an exported `layoutWidthKey`. That's an app use, not a test entry point.
-  - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it (TESTING.md §5), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
+  - `useLayoutWidth`'s fallback ref goes. It exists only so a view mounted bare in a test can call it ([TESTING.md §5.2](TESTING.md#test-only-source)), and AppLayout always provides. With no provider it throws, which only a wiring mistake reaches. EntryDetailView's mount helpers provide a width instead.
   - `useLayoutWidth` gets a node spec under `app.runWithContext()` with `app.provide(layoutWidthKey, …)`. Vue 3.5's `provide()` does nothing outside a component and only warns; `inject()` works under `runWithContext`.
   - EntryDetailView raising and lowering the width (its `relatedSession.isOpen` watch, and the reset in `onBeforeUnmount`) is that view's own code and is untested, so it gains a test in its pair.
   - Rejected: a browser host spec. The file has no lifecycle hooks and no browser API, and the spec would prove the plumbing while missing the view's behavior.
@@ -45,8 +45,8 @@ It is independent of the review units: each commit stands alone, so a file's spe
 - **EntryList and TimelineView each get a small pair. EntryList's `emptyMessage` prop is dropped:**
   - It came with the generated first commit (459b548), and nothing has ever passed it.
   - EntryDetailView renders its own cards rather than an EntryList.
-  - PRODUCT.md §5.6 has the timeline becoming visual, not a list.
-  - Its plausible use is "nothing matches these filters", which can come with the filters (CLAUDE.md, "No backward compatibility").
+  - [PRODUCT.md §5.6](PRODUCT.md#timeline-views) has the timeline becoming visual, not a list.
+  - Its plausible use is "nothing matches these filters", which can come with the filters ([CLAUDE.md §1.1](CLAUDE.md#no-backward-compat)).
 - **No spec, with the reason noted in TESTING.md:**
   - `main.ts`: bootstrap, outside coverage.
   - `chronicleDatabase.ts`: each index is proven by the adapter query that needs it; a missing one throws.
@@ -216,7 +216,7 @@ When a commit changes how a test is written, not just what it proves, grep the o
 16. **Apply what's left under "Applies beyond its file," and mirror the adapter specs in Cypress if commit 8's mirror earned its place.** It comes before the coverage pass, so coverage measures the finished specs.
     - Verify: each spec it touched, in the runners that spec runs in.
 
-17. **Coverage pass.** `npm run test:coverage` over the whole suite. Any line the cuts left unreached either gets a test in the spec of the file it belongs to, or is judged a gap that TESTING.md's "Coverage" says doesn't earn one. Then the full component suites once (`npm run test:browser`, `npm run cy:run`), since the cuts touched shared views.
+17. **Coverage pass.** `npm run test:coverage` over the whole suite. Any line the cuts left unreached either gets a test in the spec of the file it belongs to, or is judged a gap that [TESTING.md's "Coverage"](TESTING.md#coverage) says doesn't earn one. Then the full component suites once (`npm run test:browser`, `npm run cy:run`), since the cuts touched shared views.
     - Compare with the baseline taken 2026-10-23 (39 files, 431 tests):
 
       |              | Stmts             | Branch            | Funcs          | Lines             |

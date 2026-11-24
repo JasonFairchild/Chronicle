@@ -28,6 +28,7 @@ Follow a citation with `npm run cite -- '<ref>'`, which prints only what it land
 - <a id="no-backward-compat"></a>**1.1 -** No backward compatibility until we deliberately decide it's needed — including entries in a browser's IndexedDB, which is all test data for now. Change a shape and update every call site, with no fallback for the old one. If old local data breaks, clear IndexedDB or reseed; don't migrate or tolerate it.
 - <a id="smallest-backstop"></a>**1.2 -** Single-user app: make the common path work, and give a rare race the smallest backstop that holds — an existing field or constraint before new machinery.
 - **1.3 -** Verify what's in scope; the hooks run the rest. Pre-commit lints, typechecks, and runs every unit spec and the unused-code and citation checks; pre-push runs both component suites.
+- <a id="limits-are-decisions"></a>**1.4 -** A limit is a decision. A cap, cut-off, timeout, retry count or threshold that hides, truncates or delays something someone would notice is raised with the user before it lands, with what happens at the limit and why that number. One a doc, spec, library or platform already sets isn't new.
 
 ### 2. Comments
 

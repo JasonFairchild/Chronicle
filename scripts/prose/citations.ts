@@ -17,6 +17,8 @@ interface Target {
   endLine: number
   /** Where its lead ends on its line: a heading's whole line, or a rule's id and bold. */
   leadEnd: number
+  /** A heading's level, the title's being 1; a rule has none. */
+  level?: number
 }
 
 /** A doc or skill file, under the name citations give it. */
@@ -36,7 +38,7 @@ interface Citation extends Place {
   fragment?: string
   /**
    * `id` is a link or a plain `DOC.md#id`; `prose`, another doc named with a `§N` or a quoted title,
-   * which the check fails outside a plan; `short`, a `§N` alone, naming no doc.
+   * which the check fails; `short`, a `§N` alone, naming no doc.
    */
   form: 'id' | 'prose' | 'short'
   /** The `§N` a link or a plain `DOC.md#id (§N)` shows, which must match where its fragment lands. */
@@ -48,6 +50,8 @@ interface Citation extends Place {
   target?: Target
   /** A short citation in a doc without numbers, beside no other doc or several, so naming none. */
   shortUnresolved?: boolean
+  /** For a short citation in a doc with numbers, the other docs beside it with its number too. */
+  alsoIn?: string[]
 }
 
 /** Text a file's citations can be in, with a way back from an offset to its place in the file. */
@@ -66,6 +70,7 @@ export interface Problem {
     | 'duplicate id'
     | 'prose citation'
     | 'no id'
+    | 'ambiguous'
   file: string
   line: number
   detail: string
@@ -93,16 +98,15 @@ function docKey(path: string): string | undefined {
 function targets(text: string): Target[] {
   const lines = text.split(/\r?\n/)
   const found: Target[] = []
-  const headings: { level: number; index: number }[] = []
   let fence = false
   lines.forEach((line, i) => {
     if (line.startsWith('```')) fence = !fence
     if (fence) return
     const heading = /^(#{1,6})\s+(?:<a id="([^"]+)"><\/a>)?(?:(\d+(?:\.\d+)*)\.?\s)?/.exec(line)
     if (heading) {
-      headings.push({ level: heading[1].length, index: found.length })
-      const [, , id, number] = heading
-      found.push({ id, number, line: i + 1, endLine: lines.length, leadEnd: line.length })
+      const [, marks, id, number] = heading
+      const level = marks.length
+      found.push({ id, number, line: i + 1, endLine: lines.length, leadEnd: line.length, level })
       return
     }
     const rule =
@@ -110,16 +114,19 @@ function targets(text: string): Target[] {
         line,
       )!
     if (!rule[1] && !rule[2]) return
+    // Only lines indented past its own marker continue it, so a sibling sub-bullet doesn't.
+    const deeper = new RegExp(String.raw`^\s{${/^\s*/.exec(line)![0].length + 2},}\S`)
     let end = i + 1
-    while (end < lines.length && /^\s{2,}\S/.test(lines[end])) end++
+    while (end < lines.length && deeper.test(lines[end])) end++
     // An unnumbered rule's bold names it, as a number would.
     const bold = rule[2] ? '' : (/^\*\*[^*\n]+\*\*/.exec(line.slice(rule[0].length))?.[0] ?? '')
     const leadEnd = rule[0].length + bold.length
     found.push({ id: rule[1], number: rule[2], line: i + 1, endLine: end, leadEnd })
   })
-  headings.forEach(({ level, index }, n) => {
-    const next = headings.slice(n + 1).find((h) => h.level <= level)
-    if (next) found[index].endLine = found[next.index].line - 1
+  const headings = found.filter((t) => t.level)
+  headings.forEach((h, n) => {
+    const next = headings.slice(n + 1).find((o) => o.level! <= h.level!)
+    if (next) h.endLine = next.line - 1
   })
   return found
 }
@@ -234,17 +241,22 @@ function resolvedCitations(path: string, text: string, docs: Map<string, Doc>): 
   const numbered = !!own && !!docs.get(own)?.targets.some((t) => t.number)
   const names = docNames(docs)
   const cited = passages(path, text).flatMap((p) => passageCitations(path, p, names))
+  const targetsOf = (doc: string) => docs.get(doc)?.targets ?? []
   for (const c of cited) {
-    // In a doc with no numbers of its own, a short citation is the one other doc beside it.
-    if (c.form === 'short' && !numbered) {
+    if (c.form === 'short') {
       const beside = new Set(
         cited.filter((o) => o.line === c.line && o.doc !== own).map((o) => o.doc),
       )
-      c.shortUnresolved = beside.size !== 1
-      if (c.shortUnresolved) continue
-      c.doc = [...beside][0]
+      // In a doc with numbers it is its own; another doc beside it with that number may be meant.
+      if (numbered) c.alsoIn = [...beside].filter((doc) => resolve(c, targetsOf(doc)))
+      // In a doc with no numbers of its own, it is the one other doc beside it.
+      else {
+        c.shortUnresolved = beside.size !== 1
+        if (c.shortUnresolved) continue
+        c.doc = [...beside][0]
+      }
     }
-    c.target = resolve(c, docs.get(c.doc)?.targets ?? [])
+    c.target = resolve(c, targetsOf(c.doc))
   }
   return cited
 }
@@ -279,13 +291,10 @@ export function checkCitations(
   for (const [path, text] of files) {
     if (!citable(path)) continue
     const isCode = codeExtensions.has(extname(path))
-    // A plan quotes old wording on purpose, so only its ids and links are checked.
-    const plan = /^Status:/m.test(text)
     const lines = text.split(/\r?\n/)
     const gitHeadLines = new Set(gitHead.get(path)?.split(/\r?\n/))
     const landed = new Map<string, number>()
     for (const c of resolvedCitations(path, text, docs)) {
-      if (plan && c.form !== 'id') continue
       report.citations++
       const problem = (kind: Problem['kind'], detail: string) => ({
         kind,
@@ -320,6 +329,12 @@ export function checkCitations(
       }
       if (!target) {
         report.problems.push(problem('dangling', c.raw))
+        continue
+      }
+      if (c.alsoIn?.length) {
+        const docs = c.alsoIn.join(' and ')
+        const detail = `${c.raw} is also in ${docs}, cited beside it: cite the one meant by id`
+        report.problems.push(problem('ambiguous', detail))
         continue
       }
       if (c.form === 'short' && !target.id)
@@ -371,6 +386,13 @@ export interface Cited {
   start: Place
   end: Place
   section?: Section
+  /** For a cited rule, the heading or rule it sits in, so it's read in its place. */
+  context?: Section
+}
+
+/** The nearest target above one whose lines hold all of its own. */
+function container({ targets }: Doc, target: Target): Target | undefined {
+  return targets.slice(0, targets.indexOf(target)).findLast((t) => t.endLine >= target.endLine)
 }
 
 /** The citation over a place in one of `files`. */
@@ -381,7 +403,17 @@ export function citedAt(files: Map<string, string>, path: string, at: Place): Ci
   )
   if (!cited) return undefined
   const { line, column, end, target } = cited
-  return { start: { line, column }, end, section: target && section(docs.get(cited.doc)!, target) }
+  if (!target) return { start: { line, column }, end }
+  const doc = docs.get(cited.doc)!
+  // A heading's section already holds its rules, and the title's is the whole doc.
+  const around = target.level ? undefined : container(doc, target)
+  const context = around?.level === 1 ? undefined : around
+  return {
+    start: { line, column },
+    end,
+    section: section(doc, target),
+    context: context && section(doc, context),
+  }
 }
 
 /** Where a cited heading's or rule's lead ends on its line, and each place that cites it. */
@@ -404,6 +436,12 @@ export function citersOf(files: Map<string, string>, path: string, at: Place): C
     .filter((c) => c.target === target)
     .map(({ file, line, raw }) => ({ file, line, raw }))
   return citers.length ? { leadEnd: target.leadEnd, citers } : undefined
+}
+
+/** The line an id sits on in one of `files`, by its repo path, as a relative link finds it. */
+export function lineOfId(files: Map<string, string>, path: string, id: string): number | undefined {
+  const text = files.get(path)
+  return text === undefined ? undefined : targets(text).find((t) => t.id === id)?.line
 }
 
 /** The docs and skill files among `paths` as committed at HEAD, as path → text. */

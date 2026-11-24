@@ -1,0 +1,13 @@
+semi: false
+singleQuote: true
+trailingComma: all
+printWidth: 100
+overrides:
+  - files: '*.md'
+    options:
+      # The citation check reads a line as a paragraph; wrapping splits a short citation from the doc beside it.
+      proseWrap: never
+  - files: '*.jsonc'
+    options:
+      # VS Code's JSONC check warns on a trailing comma unless a schema allows one.
+      trailingComma: none

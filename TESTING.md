@@ -18,7 +18,7 @@ Tests show exactly how the app behaves, so they're where a reader learns its det
 - **2.2 -** Keep test data and helpers in the narrowest scope that uses them: what serves one test goes inside its `it`. Mount with only the props that scenario needs.
 - **2.3 -** One idea per test, at whatever size it takes. Longer tests are fine when they represent one coherent idea, such as select a passage, strike it, propose wording, save, and see it rendered. A test can equally be as small as one line of its file: a spy on one call across an unmount is how a component proves its `onBeforeUnmount`.
 - <a id="group-by-state"></a>**2.4 -** Group by where a test stands, not by what it claims. Before adding a test, look for one that already reaches that state, and extend it instead. Assertions at the same point on the same page belong in one test; split only where setup differs or the flow branches.
-- **2.5 -** Hard-code assertion values, and name one only rarely. A failure prints the value, and the reader should find that same value in the assertion it cites, not a name standing for it. Name a value only when tests must share it as one thing, which is rare, or when it's long enough that a name reads much better; otherwise the seed and the assertion each spell it out.
+- <a id="hard-code-values"></a>**2.5 -** Hard-code assertion values, and name one only rarely. A failure prints the value, and the reader should find that same value in the assertion it cites, not a name standing for it. Name a value only when tests must share it as one thing, which is rare, or when it's long enough that a name reads much better; otherwise the seed and the assertion each spell it out.
 - **2.6 -** Each test seeds its own data, in strings no other test in the file uses, so a value in a test or its failure plainly belongs to that test, and state leaked from another test fails an assertion rather than satisfying it. The Browser Mode and Cypress copies of one test share theirs.
 - **2.7 -** Name a fixture after what it builds: `makeDraft`, `draftChangeTo`.
 - **2.8 -** Imperative, concise test names. `shows the title`, not `should show the title`. Never lead with "should".
@@ -33,15 +33,15 @@ Tests are one design, judged together rather than file by file, at three levels.
 - **3.3 -** A file's users prove only their wiring of it. A component spec doesn't re-prove the store it runs on: the store's spec proves its fault handling, a failed write or a conflict, and the screen's proves what it shows for one. A flow leans on what each screen does along the way, such as where it navigates, without asserting it.
 - **3.4 -** Don't test child components. They get their own specs, or are treated as third party. Selecting or interacting with a child's elements as a means to an end is fine; asserting on behavior that belongs to the child is not.
 - **3.5 -** Where a parent only configures a child, assert the configuration, not its effect. A table's `striped` prop, say, darkens every other row: the table's own spec proves that once, and each parent proves it passes `striped` under the right conditions, not the row colors.
-- **3.6 -** The one deliberate duplicate is the mirror. A `.browser.test.ts` and its `.cy.ts` have the same cases, to compare the two runners: don't consolidate them.
-- **3.7 -** A script gets a spec when it holds many-case logic, as the citation resolver does; one that only glues other tools together, such as `checkStaged.ts` or `renderDiagram.ts`, is proven by running it.
+- <a id="mirror-specs"></a>**3.6 -** The one deliberate duplicate is the mirror. A `.browser.test.ts` and its `.cy.ts` have the same cases, to compare the two runners: don't consolidate them.
+- <a id="script-specs"></a>**3.7 -** A script gets a spec when it holds many-case logic, as the citation resolver does; one that only glues other tools together, such as `checkStaged.ts` or `renderDiagram.ts`, is proven by running it.
 
 ### <a id="fail-first"></a>4. A test must be proven to fail
 
 A test that passes whatever the code does proves nothing.
 
 - <a id="see-it-fail"></a>**4.1 -** See every new test fail before it passes, on its assertion and for the reason it names: not on setup, a wrong query, a timeout or a crash on the way there, and on each claim of a test that makes several. For code that already exists, break it, run, and restore.
-- **4.2 -** State what a test expects; import only what it feeds in. A value a test checks against (a timing, a limit, a label) is written in the test, from the doc that decides it. Imported from the code under test, it moves with the code, and the test can't fail. Fixtures, builders and the real route table are inputs, and may be shared.
+- <a id="expected-not-imported"></a>**4.2 -** State what a test expects; import only what it feeds in. A value a test checks against (a timing, a limit, a label) is written in the test, from the doc that decides it. Imported from the code under test, it moves with the code, and the test can't fail. Fixtures, builders and the real route table are inputs, and may be shared.
 - <a id="absence-baseline"></a>**4.3 -** Don't assert absence without a baseline: something the test waits on that is guaranteed to come at or after the point the unwanted thing would have appeared — the element seen before the action that removes it, a later UI state, another write through the same path, a spied action resolving. A red run against unfixed code is no substitute; an absence checked too early passes either way.
 
 ### 5. Run the code the app runs
@@ -84,7 +84,7 @@ They mount the component under test. Storage runs for real beneath it, but the s
 - **Fail it** by stubbing one repository method to reject, as an intercept would answer with a 500, when what the screen shows for a failure is the point.
 - <a id="never-read-back"></a>**Never read it back.** If a spec needs storage to see a result, first ask whether the screen should show it; what reached storage is a flow's to check. The exception is a unit whose job is storing, such as `useMedia`, or `EditorToolbar` storing an attached image: what it stores is its output, so its spec reads it back.
 
-### Flow specs
+### <a id="flow-specs"></a>Flow specs
 
 They mount `App` at a route and walk one path per user goal, across as many screens as it takes, checking where it ends — the saved entry on its page, a draft kept when the page is left. A flow sits beside the view its route starts on, whatever screens it passes through: a flow from `/entries/new` lives in `NewEntryView.flow.cy.ts`, and `App`'s own flows — tab return, flushing on leave — beside `App.vue`.
 
@@ -98,7 +98,7 @@ They prove a file's code directly: many cases as a table of inputs, and timing, 
 
 **A contract suite proves once what every implementation of an interface must do.** A repository gets one only once a second backend is planned for it, as entries and drafts have ([CLAUDE.md, "Landmarks"](CLAUDE.md#landmarks)); mark sets and media are proven by their one adapter's spec. Contracts run in the browser only: in node, Dexie runs on `fake-indexeddb`, so a contract would prove the fake rather than the adapter.
 
-## Coverage
+## <a id="coverage"></a>Coverage
 
 Coverage finds behaviors without a test; it isn't a line target. A gap earns a test when it guards an invariant or something an app user would notice: an `asOf` path, a guard that refuses a bad write, a fold over stored data that must terminate. It doesn't for a defensive early return, a branch reachable only through a type cast, or a view that only arranges its children.
 

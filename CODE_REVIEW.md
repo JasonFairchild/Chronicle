@@ -12,7 +12,7 @@ CHRONICLE_PLAN.md priority 1: understand and own the existing code, refactoring 
 - **Two tracks.** Track A is the entry and draft path through every layer; Track B is the editor. Track A comes first because it holds NewEntryView, the path every entry takes. Rejected: one pass with all screens first, which mixes the editor's internals into the entry path.
 - **A shared file is reviewed with the first screen that uses it.** EntryComposer and DraftElsewhereNotice go with NewEntryView, and later screens review only their wiring of them. Its own spec proves it (TESTING.md), so theirs prove only that wiring.
 - **Connections: read, don't polish.** NewConnectionView and its specs are skipped, since item 3 removes them. Connection-specific code elsewhere in Track A (`target_id`, the `connection` relation type, `new_connection`) is read for understanding only, because item 3 replaces it. A bug found there still gets fixed.
-- **Anchors are reviewed in full**: wording as marked text, and PRODUCT.md §5.4's lock.
+- **Anchors are reviewed in full**: wording as marked text, and the lock of [PRODUCT.md §4.5.4](PRODUCT.md#anchored-text-locked).
 - **Read the Browser Mode spec closely, and its Cypress mirror against it.** The pairs cover the same cases on purpose (TESTING.md), so the mirror is checked for drift (a case or assertion one has and the other lacks) rather than re-read from scratch. Shared test setup is reviewed in the first unit that runs it.
 - **An improvement lands when it's ready, whatever layer it's in.** Pure simplification or reduction usually lands at once, even in a file no unit has reached yet. **Carried inward** holds what's better left: a change that needs the inner file understood first, or one that would swell the change it was found in.
 - **What a unit produces.** Each refactor or fix is its own commit, green alone. A unit with nothing to change only moves Status on. Behavior questions go to PRODUCT.md, and engineering bigger than a review fix goes to CHRONICLE_PLAN.md.
@@ -24,7 +24,7 @@ Each unit lists its source, then the specs reviewed with it. **Verify:** each co
 
 ### <a id="spec-test-data"></a>First, when the review is next picked up: test data across the specs
 
-Consider one pass over every spec against TESTING.md's data rules, before going on with the units: data shared between tests becomes each test's own, and a named value TESTING.md §2 doesn't allow becomes literals. Start with the `EntryDetailView` component pair, whose `PARENT_TEXT` about 20 tests share. Verify: the full component suites.
+Consider one pass over every spec against TESTING.md's data rules, before going on with the units: data shared between tests becomes each test's own, and a named value [TESTING.md §2.5](TESTING.md#hard-code-values) doesn't allow becomes literals. Start with the `EntryDetailView` component pair, whose `PARENT_TEXT` about 20 tests share. Verify: the full component suites.
 
 ### Early, ahead of Track A's order: question `reconstructEntryState`
 
@@ -66,7 +66,7 @@ Once both tracks are done, one pass over every source file, cutting length first
 Found in one unit and left for the unit that reviews the file.
 
 - **B1:** two EditorToolbar cases were cut from its pair as borderline, to decide when reviewing it: an empty Link address removes the link under the caret (`applyLink`'s `unsetLink` branch), and a pointerdown outside closes More (`handleDocumentPointerDown`). Both go untested until then.
-- **B4:** `AuthoringChange` makes `ChangeSignals` optional, but its one app caller passes them all. The looseness serves `traceRecorder.test.ts`, whose calls pass only the signal each case is about. Make them required, with a fixture in that spec, as `DraftChange` did (TESTING.md §5). The case against: the recorder stores signals sparsely, so "a missing signal reads as unset" may be the model, not a test convenience.
+- **B4:** `AuthoringChange` makes `ChangeSignals` optional, but its one app caller passes them all. The looseness serves `traceRecorder.test.ts`, whose calls pass only the signal each case is about. Make them required, with a fixture in that spec, as `DraftChange` did ([TESTING.md §5.2](TESTING.md#test-only-source)). The case against: the recorder stores signals sparsely, so "a missing signal reads as unset" may be the model, not a test convenience.
 - **B4:** `buildFrames`'s `check` parameter exists only so a test can fail it. Proposed: keep it, as the smallest way to reach a build-time check that no real input easily trips. Confirm when reading `markFrames.ts`.
 
 ## Toward later plans

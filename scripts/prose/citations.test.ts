@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { checkCitations, citedAt, citedText, citersOf } from './citations.ts'
+import { checkCitations, citedAt, citedText, citersOf, lineOfId } from './citations.ts'
 
 const repo = (files: Record<string, string>) => new Map(Object.entries(files))
 
@@ -101,6 +101,25 @@ describe('checkCitations', () => {
 
     expect(report.problems.map((p) => p.detail)).toEqual([
       '§4.1, with no one other doc cited in its paragraph',
+    ])
+  })
+
+  it('fails a short citation in a numbered doc whose paragraph cites another doc with that number too', () => {
+    const own = [
+      '# Own',
+      '## <a id="steps"></a>4. Steps',
+      '## <a id="later"></a>5. Later',
+      '[GUIDE.md §4.1](GUIDE.md#never-mock) holds, then §4 and §5.',
+    ].join('\n')
+    const report = checkCitations(repo({ 'GUIDE.md': guide, 'OWN.md': own }))
+
+    expect(report.problems).toEqual([
+      {
+        kind: 'ambiguous',
+        file: 'OWN.md',
+        line: 4,
+        detail: '§4 is also in GUIDE.md, cited beside it: cite the one meant by id',
+      },
     ])
   })
 
@@ -279,14 +298,18 @@ describe('checkCitations', () => {
     ])
   })
 
-  it("checks only a plan's ids and links, since its prose quotes old wording", () => {
-    const plan =
-      '# A plan\n\nStatus: next, step 2.\n\nGUIDE.md, "Old wording", §9 and GUIDE.md#gone.'
+  it('checks a plan like any doc, since it cites what holds today', () => {
+    const plan = '# A plan\n\nStatus: next, step 2.\n\nGUIDE.md §4.1, then §9.'
 
-    expect(checkCitations(repo({ 'GUIDE.md': guide, 'PLAN.md': plan }))).toEqual({
-      citations: 1,
-      problems: [{ kind: 'dangling', file: 'PLAN.md', line: 5, detail: 'GUIDE.md#gone' }],
-    })
+    expect(checkCitations(repo({ 'GUIDE.md': guide, 'PLAN.md': plan })).problems).toEqual([
+      {
+        kind: 'prose citation',
+        file: 'PLAN.md',
+        line: 5,
+        detail: 'GUIDE.md §4.1: cite as GUIDE.md#never-mock',
+      },
+      { kind: 'dangling', file: 'PLAN.md', line: 5, detail: '§9' },
+    ])
   })
 })
 
@@ -375,6 +398,45 @@ describe('citedAt', () => {
     expect(at('src/b.ts', code, 2, 6)).toMatchObject(spans)
   })
 
+  it('gives a cited rule the section it sits in, and a cited heading none', () => {
+    const notes = 'GUIDE.md#never-mock (§4.1), within GUIDE.md#fail-first (§4).'
+
+    expect(at('NOTES.md', notes, 1, 0)).toMatchObject({
+      section: { line: 5 },
+      context: { doc: 'GUIDE.md', line: 3 },
+    })
+    const heading = at('NOTES.md', notes, 1, 40)
+    expect(heading?.section).toMatchObject({ line: 3 })
+    expect(heading?.context).toBeUndefined()
+  })
+
+  it("gives a nested rule its parent's lines as its context, not a sibling's", () => {
+    const skill = '.claude/skills/x/SKILL.md'
+    const outer = '- <a id="outer"></a>**Outer.** Holds.'
+    const first = '  - <a id="first"></a>**First.** Held.'
+    const second = '  - <a id="second"></a>**Second.** Held too.'
+    const files = repo({
+      [skill]: ['# X', '', outer, first, second].join('\n'),
+      'NOTES.md': `${skill}#second`,
+    })
+
+    expect(citedAt(files, 'NOTES.md', { line: 1, column: 0 })).toMatchObject({
+      section: { line: 5, text: second },
+      context: { doc: skill, line: 3, text: [outer, first, second].join('\n') },
+    })
+  })
+
+  it("gives a rule under the doc's title no context, since that would be the whole doc", () => {
+    const files = repo({
+      'SCOPE.md': '# Scope\n\n- <a id="local"></a>**Local.** Stays here.',
+      'NOTES.md': 'SCOPE.md#local',
+    })
+
+    const found = citedAt(files, 'NOTES.md', { line: 1, column: 0 })
+    expect(found?.section).toMatchObject({ line: 3 })
+    expect(found?.context).toBeUndefined()
+  })
+
   it('finds a citation that dangles, with no section to show', () => {
     const found = at('NOTES.md', 'GUIDE.md#moved-off', 1, 0)
 
@@ -438,5 +500,14 @@ describe('citersOf', () => {
     expect(
       citersOf(repo({ 'GUIDE.md': guide }), 'GUIDE.md', { line: 5, column: 27 }),
     ).toBeUndefined()
+  })
+})
+
+describe('lineOfId', () => {
+  it("finds an id's line in a file by its repo path, and nothing for an id it lacks", () => {
+    const files = repo({ 'docs/GUIDE.md': guide })
+
+    expect(lineOfId(files, 'docs/GUIDE.md', 'never-mock')).toBe(5)
+    expect(lineOfId(files, 'docs/GUIDE.md', 'renamed-away')).toBeUndefined()
   })
 })

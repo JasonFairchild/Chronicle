@@ -15,7 +15,7 @@ description: Planning a Chronicle change that spans more than a step or two — 
    - The title, then `Status:` — the next step and any manual check or hands-on pass still to run; `git log` says what's committed. `done YYYY-MM-DD` at the end.
    - **Context:** why the change, in a few lines.
    - **What the writer sees change:** before and after in PRODUCT.md's terms, or "nothing". A behaviour removed, an interim rule, and what deleted code was meant for are listed here, never under Decisions. A change to how writing feels (caret, spacing, focus) names a hands-on pass before review.
-   - **Decisions** that cover the whole plan, each with its why, then any rejected alternative someone would otherwise reopen. A decision that shapes one step sits in that step, led by **Decision:**.
+   - **Decisions** that cover the whole plan, each with its why, then any rejected alternative someone would otherwise reopen. A decision that shapes one step sits in that step, led by **Decision:**. A limit is one too, with its number (CLAUDE.md#limits-are-decisions (§1.4)).
    - **Steps**, in order, each green on its own and reviewed unstaged: what goes in, and its Verify — typecheck and the specs covering it, named, plus a manual check, where only the running app can show it: what to do and what to see.
    - A plan is a doc, so the write-docs skill holds throughout, as it does for any step that changes a doc.
 5. **Decisions that outlast the plan** go into the docs in the steps that make them, so the plan can be deleted without losing anything.

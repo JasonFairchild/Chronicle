@@ -1,7 +1,7 @@
 // Hovering a citation shows what it cites; hovering a cited heading or rule lists what cites it.
 // Installed from a .vsix away from the repo, so it loads the resolver from the repo it finds.
 import { existsSync } from 'node:fs'
-import { dirname, join, relative, sep } from 'node:path'
+import { dirname, join, posix, relative, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import * as vscode from 'vscode'
@@ -9,9 +9,9 @@ import * as vscode from 'vscode'
 import type * as Resolver from '../../scripts/prose/citations.ts'
 
 const resolverPath = 'scripts/prose/citations.ts'
-/** Past this, a section is cut, so a long one doesn't hide the line being read. */
-const maxLines = 40
-const maxCiters = 25
+
+/** The line an id sits on in a repo file, if it has it. */
+type LineOf = (path: string, id: string) => number | undefined
 
 /** The nearest folder above a file holding the resolver, so other projects are left alone. */
 function repoRoot(file: string): string | undefined {
@@ -23,23 +23,33 @@ function repoRoot(file: string): string | undefined {
 /** A resolver place as an editor position: its line counts from 0. */
 const position = ({ line, column }: Resolver.Place) => new vscode.Position(line - 1, column)
 
+/** A repo file, opened at a line if given: the only fragment VS Code reads on a file link. */
+const fileUri = (root: string, path: string, line?: number) =>
+  vscode.Uri.file(join(root, path)).with({ fragment: line ? `L${line}` : '' })
+
 /** A Markdown link opening a repo file at a line. */
 function lineLink(root: string, path: string, line: number): string {
-  const uri = vscode.Uri.file(join(root, path)).with({ fragment: `L${line}` })
-  return `[${path}:${line}](${uri.toString()})`
+  return `[${path}:${line}](${fileUri(root, path, line).toString()})`
 }
 
-/** Where a citation lands, linked, then the section itself. */
-function citedHover(root: string, cited: Resolver.Cited) {
+/** A section's relative links, outside code spans, made absolute, with an `#id` as its line. */
+function linksOpened(root: string, doc: string, text: string, lineOf: LineOf): string {
+  return text.replace(/`[^`\n]*`|\]\(([^)\s]+)\)/g, (match, href?: string) => {
+    if (!href || /^[a-z][\w+.-]*:/i.test(href)) return match
+    const [path, id] = href.split('#')
+    const file = path ? posix.join(posix.dirname(doc), path) : doc
+    return `](${fileUri(root, file, id ? lineOf(file, id) : undefined).toString()})`
+  })
+}
+
+/** Where a citation lands, linked, then the section itself, and a rule's context below it. */
+function citedHover(root: string, cited: Resolver.Cited, lineOf: LineOf) {
   const range = new vscode.Range(position(cited.start), position(cited.end))
-  const { section } = cited
+  const { section, context } = cited
   if (!section) return new vscode.Hover('This citation lands nowhere.', range)
-  const lines = section.text.split('\n')
+  const text = context ? `${section.text}\n\n---\n\n${context.text}` : section.text
   const md = new vscode.MarkdownString(`${lineLink(root, section.doc, section.line)}\n\n---\n\n`)
-  // So the section's own relative links open beside the doc they're written in.
-  md.baseUri = vscode.Uri.file(join(root, dirname(section.doc), '/'))
-  md.appendMarkdown(lines.slice(0, maxLines).join('\n'))
-  if (lines.length > maxLines) md.appendMarkdown(`\n\n*…${lines.length - maxLines} more lines*`)
+  md.appendMarkdown(linksOpened(root, section.doc, text, lineOf))
   return new vscode.Hover(md, range)
 }
 
@@ -49,9 +59,7 @@ function citersHover(root: string, line: number, { leadEnd, citers }: Resolver.C
   const md = new vscode.MarkdownString(
     `**Cited from ${citers.length} place${citers.length === 1 ? '' : 's'}**\n\n`,
   )
-  for (const c of citers.slice(0, maxCiters))
-    md.appendMarkdown(`- ${lineLink(root, c.file, c.line)} \`${c.raw}\`\n`)
-  if (citers.length > maxCiters) md.appendMarkdown(`- *…${citers.length - maxCiters} more*\n`)
+  for (const c of citers) md.appendMarkdown(`- ${lineLink(root, c.file, c.line)} \`${c.raw}\`\n`)
   return new vscode.Hover(md, range)
 }
 
@@ -67,7 +75,7 @@ async function provideHover(document: vscode.TextDocument, cursor: vscode.Positi
   files.set(path, document.getText()) // unsaved edits included
   const at = { line: cursor.line + 1, column: cursor.character }
   const cited = resolver.citedAt(files, path, at)
-  if (cited) return citedHover(root, cited)
+  if (cited) return citedHover(root, cited, (file, id) => resolver.lineOfId(files, file, id))
   const citers = resolver.citersOf(files, path, at)
   return citers && citersHover(root, at.line, citers)
 }

@@ -7,7 +7,7 @@ import { type Comment, fileComments, type Place, placeAt } from './comments.ts'
 
 export type { Place }
 
-/** A heading, or a line with an id or a numbered rule, with the lines it spans. */
+/** Anything a citation can land on, cited or not: a heading, or a rule with an id or a number. */
 interface Target {
   /** `4` or `5.2`, from a numbered heading or rule. */
   number?: string
@@ -15,6 +15,8 @@ interface Target {
   line: number
   /** Last line of the section or bullet, inclusive. */
   endLine: number
+  /** Where its lead starts on its line, past a heading's marks or a rule's bullet. */
+  leadStart: number
   /** Where its lead ends on its line: a heading's whole line, or a rule's id and bold. */
   leadEnd: number
   /** A heading's level, the title's being 1; a rule has none. */
@@ -102,11 +104,13 @@ function targets(text: string): Target[] {
   lines.forEach((line, i) => {
     if (line.startsWith('```')) fence = !fence
     if (fence) return
+    const leadStart = /^\s*(?:#{1,6}\s+|[-*]\s+|\d+\.\s+)?/.exec(line)![0].length
     const heading = /^(#{1,6})\s+(?:<a id="([^"]+)"><\/a>)?(?:(\d+(?:\.\d+)*)\.?\s)?/.exec(line)
     if (heading) {
       const [, marks, id, number] = heading
       const level = marks.length
-      found.push({ id, number, line: i + 1, endLine: lines.length, leadEnd: line.length, level })
+      const leadEnd = line.length
+      found.push({ id, number, line: i + 1, endLine: lines.length, leadStart, leadEnd, level })
       return
     }
     const rule =
@@ -121,7 +125,7 @@ function targets(text: string): Target[] {
     // An unnumbered rule's bold names it, as a number would.
     const bold = rule[2] ? '' : (/^\*\*[^*\n]+\*\*/.exec(line.slice(rule[0].length))?.[0] ?? '')
     const leadEnd = rule[0].length + bold.length
-    found.push({ id: rule[1], number: rule[2], line: i + 1, endLine: end, leadEnd })
+    found.push({ id: rule[1], number: rule[2], line: i + 1, endLine: end, leadStart, leadEnd })
   })
   const headings = found.filter((t) => t.level)
   headings.forEach((h, n) => {
@@ -140,10 +144,6 @@ function readDocs(files: Map<string, string>): Map<string, Doc> {
   }
   return docs
 }
-
-/** The docs' bare names, without `.md`; a skill file is cited by its path. */
-const docNames = (docs: Map<string, Doc>) =>
-  [...docs.keys()].filter((key) => !key.includes('/')).map((key) => key.replace(/\.md$/, ''))
 
 /** A comment as a passage, with continuation lines joined so a citation across them reads whole. */
 function commentPassage({ start, column, text }: Comment): Passage {
@@ -228,6 +228,24 @@ function passageCitations(file: string, passage: Passage, names: string[]): Cita
   return found
 }
 
+/** Each file's citations as found, by path, with the text and docs' names they came from. */
+const found = new Map<string, { text: string; names: string; citations: Citation[] }>()
+
+/** A file's citations unresolved, read again only once its text or the docs' names change. */
+function foundCitations(path: string, text: string, names: string[]): Citation[] {
+  // A doc added or gone changes what reads as a citation, in every file.
+  const key = names.join('|')
+  const kept = found.get(path)
+  if (kept?.text === text && kept.names === key) return kept.citations
+  const citations = passages(path, text).flatMap((p) => passageCitations(path, p, names))
+  found.set(path, { text, names: key, citations })
+  return citations
+}
+
+/** The docs' bare names, without `.md`; a skill file is cited by its path. */
+const docNames = (docs: Map<string, Doc>) =>
+  [...docs.keys()].filter((key) => !key.includes('/')).map((key) => key.replace(/\.md$/, ''))
+
 /** What a citation lands on, by its id or else its number. */
 function resolve(cited: Pick<Citation, 'number' | 'fragment'>, all: Target[]) {
   if (cited.fragment) return all.find((t) => t.id === cited.fragment)
@@ -239,8 +257,8 @@ function resolve(cited: Pick<Citation, 'number' | 'fragment'>, all: Target[]) {
 function resolvedCitations(path: string, text: string, docs: Map<string, Doc>): Citation[] {
   const own = docKey(path)
   const numbered = !!own && !!docs.get(own)?.targets.some((t) => t.number)
-  const names = docNames(docs)
-  const cited = passages(path, text).flatMap((p) => passageCitations(path, p, names))
+  // Resolving writes on each, so it works on copies and the kept parse stays as found.
+  const cited = foundCitations(path, text, docNames(docs)).map((c) => ({ ...c }))
   const targetsOf = (doc: string) => docs.get(doc)?.targets ?? []
   for (const c of cited) {
     if (c.form === 'short') {
@@ -379,16 +397,24 @@ export function citedText(files: Map<string, string>, citation: string): Section
   return section(docs.get(cited.doc)!, cited.target)
 }
 
-const before = (a: Place, b: Place) => a.line < b.line || (a.line === b.line && a.column < b.column)
-
-/** A citation's span, and the section it lands on unless it dangles. */
-export interface Cited {
+/** A stretch of a file, from its first character to just past its last. */
+export interface Span {
   start: Place
   end: Place
+}
+
+/** A citation's span, and the section it lands on unless it dangles. */
+export interface Cited extends Span {
   section?: Section
   /** For a cited rule, the heading or rule it sits in, so it's read in its place. */
   context?: Section
 }
+
+const before = (a: Place, b: Place) => a.line < b.line || (a.line === b.line && a.column < b.column)
+
+const within = (at: Place, { start, end }: Span) => !before(at, start) && before(at, end)
+
+const spanOf = ({ line, column, end }: Citation): Span => ({ start: { line, column }, end })
 
 /** The nearest target above one whose lines hold all of its own. */
 function container({ targets }: Doc, target: Target): Target | undefined {
@@ -398,45 +424,65 @@ function container({ targets }: Doc, target: Target): Target | undefined {
 /** The citation over a place in one of `files`. */
 export function citedAt(files: Map<string, string>, path: string, at: Place): Cited | undefined {
   const docs = readDocs(files)
-  const cited = resolvedCitations(path, files.get(path) ?? '', docs).find(
-    (c) => !before(at, c) && before(at, c.end),
+  const cited = resolvedCitations(path, files.get(path) ?? '', docs).find((c) =>
+    within(at, spanOf(c)),
   )
   if (!cited) return undefined
-  const { line, column, end, target } = cited
-  if (!target) return { start: { line, column }, end }
+  const { target } = cited
+  if (!target) return spanOf(cited)
   const doc = docs.get(cited.doc)!
   // A heading's section already holds its rules, and the title's is the whole doc.
   const around = target.level ? undefined : container(doc, target)
   const context = around?.level === 1 ? undefined : around
   return {
-    start: { line, column },
-    end,
+    ...spanOf(cited),
     section: section(doc, target),
     context: context && section(doc, context),
   }
 }
 
-/** Where a cited heading's or rule's lead ends on its line, and each place that cites it. */
+/** Where every citation in one of `files` sits, whether it lands or dangles. */
+export function citationSpans(files: Map<string, string>, path: string): Span[] {
+  const names = docNames(readDocs(files))
+  return foundCitations(path, files.get(path) ?? '', names).map(spanOf)
+}
+
+/** Where a cited heading's or rule's lead sits, and each place that cites it. */
 export interface Citers {
-  leadEnd: number
+  lead: Span
   citers: { file: string; line: number; raw: string }[]
 }
 
-/** Every citation landing on the heading or rule whose lead holds a place in a doc, if any does. */
-export function citersOf(files: Map<string, string>, path: string, at: Place): Citers | undefined {
-  const docs = readDocs(files)
-  const key = docKey(path)
-  const target = key
-    ? docs.get(key)?.targets.find((t) => t.line === at.line && at.column < t.leadEnd)
-    : undefined
-  if (!target) return undefined
-  const citers = [...files]
+/** Every citation in a repo, each with what it lands on. */
+const everyCitation = (files: Map<string, string>, docs: Map<string, Doc>) =>
+  [...files]
     .filter(([file]) => citable(file))
     .flatMap(([file, text]) => resolvedCitations(file, text, docs))
-    .filter((c) => c.target === target)
-    .map(({ file, line, raw }) => ({ file, line, raw }))
-  return citers.length ? { leadEnd: target.leadEnd, citers } : undefined
+
+/** Where a target's lead sits on its line. */
+const leadOf = ({ line, leadStart, leadEnd }: Target): Span => ({
+  start: { line, column: leadStart },
+  end: { line, column: leadEnd },
+})
+
+/** Each heading or rule in a doc that something cites, with its lead and its citers. */
+export function citersIn(files: Map<string, string>, path: string): Citers[] {
+  const docs = readDocs(files)
+  const key = docKey(path)
+  const doc = key ? docs.get(key) : undefined
+  if (!doc) return []
+  const all = everyCitation(files, docs)
+  return doc.targets
+    .map((t) => ({
+      lead: leadOf(t),
+      citers: all.filter((c) => c.target === t).map(({ file, line, raw }) => ({ file, line, raw })),
+    }))
+    .filter(({ citers }) => citers.length)
 }
+
+/** The cited heading or rule whose lead holds a place in a doc, with its citers, if any. */
+export const citersOf = (files: Map<string, string>, path: string, at: Place) =>
+  citersIn(files, path).find(({ lead }) => within(at, lead))
 
 /** The line an id sits on in one of `files`, by its repo path, as a relative link finds it. */
 export function lineOfId(files: Map<string, string>, path: string, id: string): number | undefined {

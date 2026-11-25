@@ -1,7 +1,7 @@
 {
   "name": "citation-hover",
   "displayName": "Chronicle citation hover",
-  "description": "Hovering a citation shows what it cites; hovering a cited heading or rule lists what cites it.",
+  "description": "Underlines each citation, showing what it cites on hover and opening it on Ctrl+click or F12; a cited heading or rule is dotted, its hover listing what cites it.",
   "publisher": "chronicle",
   "version": "0.0.1",
   "private": true,

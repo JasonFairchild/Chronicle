@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { checkCitations, citedAt, citedText, citersOf, lineOfId } from './citations.ts'
+import {
+  checkCitations,
+  citationSpans,
+  citedAt,
+  citedText,
+  citersIn,
+  citersOf,
+  lineOfId,
+} from './citations.ts'
 
 const repo = (files: Record<string, string>) => new Map(Object.entries(files))
 
@@ -460,6 +468,17 @@ describe('citedAt', () => {
   })
 })
 
+describe('citationSpans', () => {
+  it('spans every citation in a file, whether it lands or dangles', () => {
+    const notes = 'As GUIDE.md#never-mock (§4.1), not GUIDE.md#moved-off.'
+
+    expect(citationSpans(repo({ 'GUIDE.md': guide, 'NOTES.md': notes }), 'NOTES.md')).toEqual([
+      { start: { line: 1, column: 3 }, end: { line: 1, column: 29 } },
+      { start: { line: 1, column: 35 }, end: { line: 1, column: 53 } },
+    ])
+  })
+})
+
 describe('citersOf', () => {
   it('lists every citation of a rule, from docs and code, hovered on its number', () => {
     const files = repo({
@@ -469,7 +488,7 @@ describe('citersOf', () => {
     })
 
     expect(citersOf(files, 'GUIDE.md', { line: 5, column: 27 })).toEqual({
-      leadEnd: 34,
+      lead: { start: { line: 5, column: 2 }, end: { line: 5, column: 34 } },
       citers: [
         { file: 'NOTES.md', line: 1, raw: '[GUIDE.md §4.1](GUIDE.md#never-mock)' },
         { file: 'src/c.ts', line: 1, raw: 'GUIDE.md#never-mock (§4.1)' },
@@ -477,11 +496,13 @@ describe('citersOf', () => {
     })
   })
 
-  it("leaves a rule's text past its lead alone, but takes a heading's whole line", () => {
+  it("leaves a rule's bullet and text past its lead alone, and a heading's marks", () => {
     const code = '// GUIDE.md#never-mock (§4.1), unlike GUIDE.md#fail-first (§4)\nexport {}'
     const files = repo({ 'GUIDE.md': guide, 'src/d.ts': code })
 
+    expect(citersOf(files, 'GUIDE.md', { line: 5, column: 1 })).toBeUndefined()
     expect(citersOf(files, 'GUIDE.md', { line: 5, column: 34 })).toBeUndefined()
+    expect(citersOf(files, 'GUIDE.md', { line: 3, column: 2 })).toBeUndefined()
     expect(citersOf(files, 'GUIDE.md', { line: 3, column: 50 })?.citers).toHaveLength(1)
   })
 
@@ -492,7 +513,7 @@ describe('citersOf', () => {
       'src/e.ts': '// .claude/skills/x/SKILL.md#mount-once, as each test does\nexport {}',
     })
 
-    expect(citersOf(files, skill, { line: 1, column: 38 })?.leadEnd).toBe(40)
+    expect(citersOf(files, skill, { line: 1, column: 38 })?.lead.end.column).toBe(40)
     expect(citersOf(files, skill, { line: 1, column: 40 })).toBeUndefined()
   })
 
@@ -500,6 +521,50 @@ describe('citersOf', () => {
     expect(
       citersOf(repo({ 'GUIDE.md': guide }), 'GUIDE.md', { line: 5, column: 27 }),
     ).toBeUndefined()
+  })
+})
+
+describe('citersIn', () => {
+  it('lists each cited heading or rule with its lead and citers, and none nothing cites', () => {
+    const code = '// GUIDE.md#never-mock (§4.1), and GUIDE.md#coverage\nexport {}'
+    const files = repo({ 'GUIDE.md': guide, 'src/f.ts': code })
+
+    expect(citersIn(files, 'GUIDE.md')).toEqual([
+      {
+        lead: { start: { line: 5, column: 2 }, end: { line: 5, column: 34 } },
+        citers: [{ file: 'src/f.ts', line: 1, raw: 'GUIDE.md#never-mock (§4.1)' }],
+      },
+      {
+        lead: { start: { line: 9, column: 3 }, end: { line: 9, column: 32 } },
+        citers: [{ file: 'src/f.ts', line: 1, raw: 'GUIDE.md#coverage' }],
+      },
+    ])
+  })
+})
+
+describe('a repo edited between asks', () => {
+  it("drops a heading's citers once its doc renames it, though they are unchanged", () => {
+    const citer = '// PLAN.md#ship-it, before release\nexport {}'
+    const before = repo({ 'PLAN.md': '# Plan\n\n## <a id="ship-it"></a>Ship', 'src/g.ts': citer })
+    const after = repo({ 'PLAN.md': '# Plan\n\n## <a id="ship-later"></a>Ship', 'src/g.ts': citer })
+
+    expect(citersOf(before, 'PLAN.md', { line: 3, column: 3 })?.citers).toHaveLength(1)
+    expect(citersOf(after, 'PLAN.md', { line: 3, column: 3 })).toBeUndefined()
+    expect(citedAt(after, 'src/g.ts', { line: 1, column: 3 })).toEqual({
+      start: { line: 1, column: 3 },
+      end: { line: 1, column: 18 },
+    })
+  })
+
+  it('reads a citation of a doc added since the last ask, in a file that is unchanged', () => {
+    const notes = 'Ships per RELEASE.md#cut-day.'
+    const release = '# Release\n\n- <a id="cut-day"></a>**Cut day.** Tuesdays.'
+    const place = { line: 1, column: 10 }
+
+    expect(citedAt(repo({ 'NOTES.md': notes }), 'NOTES.md', place)).toBeUndefined()
+    expect(
+      citedAt(repo({ 'NOTES.md': notes, 'RELEASE.md': release }), 'NOTES.md', place),
+    ).toMatchObject({ section: { doc: 'RELEASE.md', line: 3 } })
   })
 })
 

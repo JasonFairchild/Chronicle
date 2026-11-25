@@ -93,7 +93,7 @@ Open [http://localhost:5173](http://localhost:5173).
 
 To run only the flow specs: `npm run cy:run -- --spec "src/**/*.flow.cy.ts"`, or `npm run test:browser -- .flow.`
 
-The citation hover (`tools/citation-hover/`) shows what a citation cites in VS Code, and on a cited heading or rule, what cites it. Install it with `npm run hover:package`, then in VS Code's Extensions tab, near the top, click **…** ("Views and More Actions...") › **Install from VSIX…** on `node_modules/.tmp/citation-hover.vsix`. It runs the repo's own resolver, so a change there needs only **Developer: Reload Window**; a change to the extension needs packaging again.
+The citation hover (`tools/citation-hover/`) underlines each citation in VS Code: hover it to see what it cites, and open that with Ctrl+click, F12, or Alt+F12 to peek. A cited heading or rule is underlined dotted, and hovering it lists what cites it. Install it with `npm run hover:package`, then in VS Code's Extensions tab, near the top, click **…** ("Views and More Actions...") › **Install from VSIX…** on `node_modules/.tmp/citation-hover.vsix`. It runs the repo's own resolver, so a change there needs only **Developer: Reload Window**; a change to the extension needs packaging again.
 
 ## Git hooks
 

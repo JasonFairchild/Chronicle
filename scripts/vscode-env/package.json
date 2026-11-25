@@ -1,0 +1,6 @@
+{
+  "name": "vscode-env",
+  "private": true,
+  "type": "module",
+  "exports": "./vscodeEnv.ts"
+}

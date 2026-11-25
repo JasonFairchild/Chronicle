@@ -122,10 +122,9 @@ console.log(
   `[cypress-parallel] threads=${effectiveThreads}${specList.length > 0 ? ` specs=${specList.length}` : ''}${timingsExist ? ` (timing-balanced, +${seconds(SPEC_OVERHEAD_MS)} overhead/spec)` : ''} (vite cache: ${viteCache})`,
 )
 
-// Spawned directly rather than through `npm run cy:run`: Node refuses to spawn a `.cmd` shim
-// without a shell, and the script's `set ELECTRON_RUN_AS_NODE=&&` is a cmd-ism done below instead.
-// Beside its package.json: Cypress exports no path to its CLI.
+// Spawned directly, not through `npm run cy:run`: Node won't spawn a `.cmd` shim without a shell.
 const require = createRequire(import.meta.url)
+/** Beside its package.json: Cypress exports no path to its CLI. */
 const CYPRESS_BIN = path.join(path.dirname(require.resolve('cypress/package.json')), 'bin/cypress')
 const CYPRESS_ARGS = ['run', '--component', '--browser=chrome']
 
@@ -164,8 +163,6 @@ function runWorker(splitIndex: number) {
     // Structured results for the end-of-run report.
     CY_PARALLEL_RESULTS_FILE: workerResultsFile(splitIndex),
   }
-  // Set by Electron hosts such as VS Code; Cypress is Electron, and would start as plain Node.
-  delete env.ELECTRON_RUN_AS_NODE
 
   const child = spawn(process.execPath, [CYPRESS_BIN, ...CYPRESS_ARGS, ...cypressExtraArgs], {
     env,

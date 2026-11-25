@@ -1,7 +1,8 @@
 /**
  * Selects a character range inside a rendered document editor and lets ProseMirror pick the
- * change up the same way it would a real drag-select: through the browser's own `selectionchange`
- * event, which its view already listens for.
+ * change up the same way it would a real drag-select: focused first, as the press starting a drag
+ * does, since ProseMirror ignores an unfocused editor's selection, then through the browser's own
+ * `selectionchange` event, which its view already listens for.
  *
  * Walks every text node under the editor in document order rather than assuming the content is one
  * text node — true for a freshly-seeded paragraph, false the moment a mark splits it into siblings
@@ -13,7 +14,12 @@
  * Shared between `DocumentEditor` and `EntryDetailView` specs in both runners, since none of them
  * has any other way to drive a ProseMirror selection without a real mouse.
  */
-export function selectTextRange(editorEl: Element, from: number, to: number): void {
+export function selectTextRange(
+  editorEl: HTMLElement | SVGElement,
+  from: number,
+  to: number,
+): void {
+  editorEl.focus()
   const doc = editorEl.ownerDocument
   const walker = doc.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) =>

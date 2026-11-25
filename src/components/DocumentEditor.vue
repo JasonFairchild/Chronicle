@@ -108,7 +108,7 @@ const editor = useEditor({
       // A contenteditable div has no implicit role, so it is spelled out here rather than left to
       // a test id: this is the field a person types into and it should say so.
       ...(props.displayOnly
-        ? {}
+        ? { role: 'none' } // Over TipTap's default "textbox": there's nothing here to type into.
         : { role: 'textbox', 'aria-multiline': 'true', 'aria-label': props.label }),
       // The anchor-mode modifier keeps the selection visibly painted even once focus leaves the
       // editor for a menu control — see the `::selection` rule below, and `AnchorMenu`'s own
